@@ -1,4 +1,4 @@
-# AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform# AxisForge — Shaft–Bearing–Gear System Analysis Platform
+# AxisForge — Shaft–Bearing–Gear System Analysis Platform
 
 > **Alternative names considered:**
 > - **AxisForge** — *forging mechanical systems through rigorous analysis* ✓ **(selected)**

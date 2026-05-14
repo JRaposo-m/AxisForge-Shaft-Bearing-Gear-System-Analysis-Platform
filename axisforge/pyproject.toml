@@ -22,9 +22,10 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["axisforge*"]
+include = ["core*", "solvers*", "integrations*", "selectors*", "reports*"]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-v"
 

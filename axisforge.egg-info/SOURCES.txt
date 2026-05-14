@@ -1,7 +1,0 @@
-README.md
-pyproject.toml
-axisforge.egg-info/PKG-INFO
-axisforge.egg-info/SOURCES.txt
-axisforge.egg-info/dependency_links.txt
-axisforge.egg-info/requires.txt
-axisforge.egg-info/top_level.txt

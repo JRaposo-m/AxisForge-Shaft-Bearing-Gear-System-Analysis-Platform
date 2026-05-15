@@ -1,12 +1,5 @@
 # AxisForge — Shaft–Bearing–Gear System Analysis Platform
 
-> **Alternative names considered:**
-> - **AxisForge** — *forging mechanical systems through rigorous analysis* ✓ **(selected)**
-> - **ShaftLab** — direct, descriptive, laboratory-grade connotation
-> - **RotorCore** — emphasis on rotating machinery and structural core
-> - **MechAxis** — mechanical axis analysis, clean and professional
-> - **DrivelineAE** — analysis & engineering of drivetrain systems
-
 ---
 
 ## Executive Summary
@@ -54,85 +47,95 @@ AxisForge addresses this by maintaining a single parametric model of the mechani
 axisforge/
 │
 ├── core/                          # Domain model — system entities and data structures
-│   ├── __init__.py
-│   ├── shaft.py                   # Shaft, ShaftSection
-│   ├── components.py              # Bearing, GearElement, Pulley, Coupling
-│   ├── loads.py                   # RadialLoad, AxialLoad, ExternalMoment, TorqueLoad
+│   ├── __init__.py                # Package marker (__version__ = "0.1.0")
+│   ├── shaft.py                   # Shoulder, ShaftSection, Shaft
+│   ├── components.py              # Bearing, BearingType, GearElement
+│   ├── loads.py                   # RadialLoad, AxialLoad, TorqueLoad, ExternalMoment, LoadPlane
 │   ├── system.py                  # MechanicalSystem — top-level assembly container
-│   └── tolerances.py              # Fit and tolerance data structures (ISO 286)
+│   ├── materials.py               # Material, embedded library (S355, 42CrMo4, AISI 1045, AISI 4340)
+│   └── tolerances.py              # Fit and tolerance data structures (ISO 286) — Phase 3
 │
 ├── solvers/                       # Analytical engines — stateless, independently testable
 │   ├── __init__.py
-│   ├── statics.py                 # Reaction forces, shear and bending moment diagrams
-│   ├── torsion.py                 # Torsional load distribution along shaft
-│   ├── stress.py                  # Combined stress state, fatigue criteria (Goodman, ASME-Elliptic)
-│   ├── deflection.py              # Shaft deflection and slope (Euler–Bernoulli beam, FEM-1D)
-│   ├── bearing_life.py            # L10 life, C/P ratio, static safety (ISO 281)
-│   └── critical_speed.py          # (Phase 4) Lateral critical speed estimation
+│   ├── statics.py                 # StaticsSolver — reactions, V(x), M(x), T(x) — Phase 1
+│   ├── stress.py                  # StressSolver — combined stress, Goodman, ASME-Elliptic — Phase 1
+│   ├── bearing_life.py            # BearingLifeSolver — L10, C/P, static safety (ISO 281) — Phase 1
+│   └── critical_speed.py          # (Phase 5) Lateral critical speed estimation
+│
+├── models/                        # Result dataclasses — output of solvers
+│   ├── __init__.py
+│   ├── statics_result.py          # StaticsResult — Phase 1
+│   ├── stress_result.py           # StressResult, CriticalSection — Phase 1
+│   ├── bearing_result.py          # BearingLifeResult — Phase 1
+│   └── system_report.py           # Aggregator of all results — Phase 1
 │
 ├── integrations/                  # External module adapters
 │   ├── __init__.py
 │   ├── gearpie_adapter.py         # GEARpie → AxisForge load and geometry interface
-│   └── skf_connector.py          # SKF catalogue query and bearing data retrieval
+│   └── skf_connector.py           # SKF catalogue query and bearing data retrieval — Phase 3
 │
 ├── database/                      # Structured data — catalogues and material libraries
-│   ├── skf_bearings.db            # SQLite: SKF rolling bearing catalogue (C, C0, geometry)
-│   ├── materials.db               # SQLite: steel grades (E, σ_y, σ_u, S-N data)
-│   ├── fits_iso286.csv            # ISO 286 tolerance tables
+│   ├── skf_bearings.db            # SQLite: SKF rolling bearing catalogue — Phase 3
+│   ├── fits_iso286.csv            # ISO 286 tolerance tables — Phase 3
 │   └── schema/
-│       ├── bearings_schema.sql
-│       └── materials_schema.sql
+│       └── bearings_schema.sql
 │
-├── ui/                            # PySide6 graphical interface
+├── ui/                            # PySide6 graphical interface — Phase 2
 │   ├── __init__.py
-│   ├── main_window.py             # Application shell, menu bar, layout manager
-│   ├── shaft_canvas.py            # Interactive schematic rendering (matplotlib/pyqtgraph)
-│   ├── component_panel.py         # Hierarchical component tree (QTreeWidget)
-│   ├── properties_panel.py        # Context-sensitive property editor (QFormLayout)
-│   ├── results_panel.py           # Tabbed results: diagrams, tables, bearing summary
+│   ├── main_window.py
+│   ├── shaft_canvas.py
+│   ├── component_panel.py
+│   ├── properties_panel.py
+│   ├── results_panel.py
 │   ├── dialogs/
-│   │   ├── bearing_selector.py    # Guided bearing selection dialog
-│   │   ├── gear_import.py         # GEARpie result import wizard
-│   │   └── section_editor.py     # Shaft section geometry editor
+│   │   ├── bearing_selector.py
+│   │   ├── gear_import.py
+│   │   └── section_editor.py
 │   └── widgets/
-│       ├── diagram_widget.py      # Shear/bending/torsion diagram renderer
-│       └── bmd_plot.py            # Bending moment diagram with matplotlib
+│       ├── diagram_widget.py
+│       └── bmd_plot.py
 │
-├── selectors/                     # Decision-support logic (rule-based, Phase 3–4)
+├── selectors/                     # Decision-support logic — Phase 3–4
 │   ├── __init__.py
-│   ├── bearing_selector.py        # Filter catalogue by load, speed, space constraints
-│   ├── arrangement_advisor.py     # (Phase 4) Fixed/floating, O/X arrangement logic
-│   ├── lubrication_advisor.py     # (Phase 4) Grease/oil selection, relubrication interval
-│   └── failure_assessor.py        # (Phase 3+) Failure Likelihood Assessment — deterministic scoring
+│   ├── bearing_selector.py
+│   ├── arrangement_advisor.py     # Phase 4
+│   ├── lubrication_advisor.py     # Phase 4
+│   └── failure_assessor.py        # Phase 3+
 │
-├── reports/                       # Output generation
+├── reports/                       # Output generation — Phase 3
 │   ├── __init__.py
-│   ├── report_generator.py        # Structured PDF/HTML report builder
+│   ├── report_generator.py
 │   └── templates/
 │       └── standard_report.html
 │
 ├── tests/                         # Unit and integration tests (pytest)
-│   ├── test_statics.py
-│   ├── test_bearing_life.py
-│   ├── test_stress.py
-│   ├── test_gearpie_adapter.py
-│   ├── test_failure_assessor.py
+│   ├── conftest.py                # Global fixtures
+│   ├── test_core/
+│   │   ├── test_shaft.py
+│   │   ├── test_components.py
+│   │   ├── test_loads.py
+│   │   ├── test_materials.py
+│   │   └── test_system.py
+│   ├── test_solvers/
+│   │   ├── test_statics.py        # Phase 1 — in progress
+│   │   ├── test_stress.py         # Phase 1 — planned
+│   │   └── test_bearing_life.py   # Phase 1 — planned
+│   ├── test_integrations/
+│   │   └── test_gearpie_adapter.py
 │   └── fixtures/
-│       └── sample_systems.py      # Validated reference cases
+│       ├── sample_systems.py
+│       └── expected_results.py
 │
 ├── docs/                          # Technical documentation
 │   ├── theory/
-│   │   ├── shaft_analysis.md      # Governing equations, assumptions, references
-│   │   ├── bearing_life.md        # ISO 281 implementation notes
-│   │   ├── stress_criteria.md     # Fatigue criteria derivation
-│   │   └── failure_assessment.md  # FLA scoring model, failure mode catalogue, driver weights
-│   └── api/                       # Auto-generated (sphinx or mkdocs)
+│   │   ├── shaft_analysis.md
+│   │   ├── bearing_life.md
+│   │   ├── stress_criteria.md
+│   │   └── failure_assessment.md
+│   └── api/
 │
-├── scripts/
-│   └── populate_skf_db.py         # One-time database population from CSV source
-│
-├── main.py                        # Application entry point
-├── config.py                      # Global paths, units, solver tolerances
+├── axisforge_cli.py               # CLI entry point (Phase 1 deliverable)
+├── config.py                      # Global constants: SOLVER_RESOLUTION, TOL_GEOMETRY_mm, etc.
 ├── requirements.txt
 ├── pyproject.toml
 └── README.md
@@ -144,63 +147,115 @@ axisforge/
 
 ### `core/shaft.py`
 
-**`ShaftSection`**
-Represents a single cylindrical segment of a shaft.
+**`Shoulder`**
+Geometric transition between two adjacent shaft sections (diameter step with fillet).
 
 | Attribute | Type | Description |
 |---|---|---|
-| `length` | float | Axial length of the section [mm] |
+| `fillet_radius` | float | Fillet radius r [mm] |
+| `diameter_large` | float | Larger diameter D [mm] |
+| `diameter_small` | float | Smaller diameter d [mm] |
+
+Derived properties: `r_over_d`, `D_over_d` — used for Peterson interpolation.
+
+**`ShaftSection`**
+Represents a single uniform cylindrical segment of a shaft.
+
+| Attribute | Type | Description |
+|---|---|---|
+| `length` | float | Axial length [mm] |
 | `diameter` | float | Outer diameter [mm] |
 | `inner_diameter` | float | Inner diameter (hollow); 0.0 for solid [mm] |
-| `material_id` | str | Reference to `materials.db` |
-| `shoulder_left` | `Shoulder \| None` | Geometry of left-side shoulder transition |
-| `shoulder_right` | `Shoulder \| None` | Geometry of right-side shoulder transition |
-| `surface_finish` | float | Ra value [μm]; used for fatigue correction factor Kₐ |
+| `material_id` | str | Reference to `core/materials.py` embedded library |
+| `surface_finish_ra` | float | Ra [μm]; used for Marin factor kₐ |
+| `shoulder_left` | `Shoulder \| None` | Left-side shoulder transition |
+| `shoulder_right` | `Shoulder \| None` | Right-side shoulder transition |
+| `label` | str | Optional human-readable identifier |
+
+Derived properties: `radius`, `area`, `second_moment_of_area`, `polar_moment`, `section_modulus`, `polar_section_modulus`, `is_hollow`.
 
 **`Shaft`**
 Ordered collection of `ShaftSection` objects representing the complete shaft.
 
-| Method | Returns | Description |
+| Method / Property | Returns | Description |
 |---|---|---|
-| `total_length()` | float | Sum of all section lengths |
-| `axial_position(section_index)` | float | Absolute start position of a section from datum [mm] |
-| `section_at(x)` | `ShaftSection` | Returns the section containing axial coordinate x |
-| `second_moment_of_area(x)` | float | I(x) [mm⁴] at position x; accounts for hollow/solid geometry |
-| `polar_moment(x)` | float | J(x) [mm⁴] for torsional calculations |
-| `validate()` | `list[str]` | Returns list of geometry errors or empty list if valid |
+| `add_section(section)` | None | Appends a section to the right end |
+| `total_length` | float | Sum of all section lengths [mm] |
+| `n_sections` | int | Number of sections |
+| `axial_start(index)` | float | Absolute start position of section[index] [mm] |
+| `axial_end(index)` | float | Absolute end position of section[index] [mm] |
+| `section_at(x)` | `tuple[ShaftSection, int]` | Section and index containing coordinate x (right-hand rule at boundaries) |
+| `diameter_at(x)` | float | Outer diameter at x [mm] |
+| `I_at(x)` | float | Second moment of area at x [mm⁴] |
+| `J_at(x)` | float | Polar moment at x [mm⁴] |
+| `W_at(x)` | float | Bending section modulus at x [mm³] |
+| `Wt_at(x)` | float | Polar section modulus at x [mm³] |
+| `shoulders()` | `list[tuple[float, Shoulder]]` | All shoulders with their axial positions |
+| `validate()` | `list[str]` | Geometry errors; empty list if valid |
+| `validate_or_raise()` | None | Raises `ValueError` if invalid |
 
 ---
 
 ### `core/components.py`
 
 **`Bearing`**
-Defines a rolling bearing placed on the shaft at a specified axial position.
+Rolling bearing placed on the shaft at a specified axial position.
 
 | Attribute | Type | Description |
 |---|---|---|
 | `position` | float | Axial position from shaft datum [mm] |
-| `bearing_id` | str | SKF designation (e.g., `"6210"`) or `None` if unselected |
-| `bearing_type` | `BearingType` | Enum: DEEP_GROOVE_BALL, CYLINDRICAL_ROLLER, ANGULAR_CONTACT, TAPER_ROLLER, SPHERICAL_ROLLER |
-| `arrangement` | `str` | `"fixed"` or `"floating"` |
-| `preload` | float | Axial preload [N]; 0.0 for unpretensioned |
-| `catalogue_data` | `BearingData \| None` | Populated after database query |
+| `designation` | str | SKF designation (e.g., `"6210"`); optional in Phase 1 |
+| `bearing_type` | `BearingType` | Enum: `DEEP_GROOVE_BALL`, `ANGULAR_CONTACT_BALL`, `CYLINDRICAL_ROLLER`, `TAPER_ROLLER`, `SPHERICAL_ROLLER` |
+| `C` | float | Basic dynamic load rating [N] |
+| `C0` | float | Basic static load rating [N] |
+| `arrangement` | str | `"fixed"` or `"floating"` |
+| `contact_angle` | float | α [°]; 0 for radial DGBB |
+| `X` | float | Radial load factor (Phase 1: 1.0) |
+| `Y` | float | Axial load factor (Phase 1: 0.0) |
+| `label` | str | Optional identifier |
+
+Derived properties: `has_catalogue_data`, `life_exponent` (3.0 for ball, 10/3 for roller).
 
 **`GearElement`**
-Represents a gear (or sprocket/pulley) transmitting torque and radial/axial forces into the shaft.
+Gear transmitting forces and torque into the shaft.
 
 | Attribute | Type | Description |
 |---|---|---|
 | `position` | float | Axial position [mm] |
-| `gearpie_result` | `dict \| None` | Imported GEARpie result dictionary |
-| `tangential_force` | float | Wt [N]; computed from GEARpie or user-specified |
+| `tangential_force` | float | Wt [N] |
 | `radial_force` | float | Wr [N] |
-| `axial_force` | float | Wa [N] |
-| `pressure_angle` | float | Normal pressure angle [°] |
-| `helix_angle` | float | [°]; 0 for spur gears |
-| `pitch_diameter` | float | d [mm]; used to compute torque from tangential force |
+| `axial_force` | float | Wa [N]; 0 for spur gears |
+| `pitch_diameter` | float | d [mm]; used to compute torque from Wt |
+| `torque` | float | T [N·mm]; auto-computed from Wt×d/2 if zero and d > 0 |
+| `pressure_angle` | float | αₙ [°] |
+| `helix_angle` | float | β [°]; 0 for spur gears |
+| `label` | str | Optional identifier |
 
-**`RadialLoad` / `AxialLoad` / `ExternalMoment`**
-Point loads applied at a specified axial position. Used for belt tensions, imbalance forces, and externally applied moments.
+Derived properties: `is_helical`, `resultant_transverse_force`.
+
+**`TorqueLoad` / `RadialLoad` / `AxialLoad` / `ExternalMoment`**
+Point loads applied at a specified axial position. All defined in `core/loads.py`.
+
+---
+
+### `core/materials.py`
+
+**`Material`** — frozen dataclass.
+
+| Attribute | Type | Description |
+|---|---|---|
+| `material_id` | str | Unique identifier |
+| `Sut` | float | Ultimate tensile strength [MPa] |
+| `Sy` | float | Yield strength [MPa] |
+| `E` | float | Young's modulus [GPa] |
+| `density` | float | Density [kg/m³] |
+| `Se_base` | float \| None | Specimen endurance limit [MPa]; if None, computed as min(0.5×Sut, 700) |
+
+Derived properties: `endurance_limit` (applies Shigley §6-2 rule), `shear_yield_strength` (0.577×Sy).
+
+**Embedded library:** `S355`, `CrMo42` (42CrMo4), `AISI_1045`, `AISI_4340`.
+
+**Helper functions:** `get_material(material_id)`, `available_materials()`.
 
 ---
 
@@ -209,309 +264,187 @@ Point loads applied at a specified axial position. Used for belt tensions, imbal
 **`MechanicalSystem`**
 Top-level container representing one shaft with all its components and loads.
 
-| Method | Returns | Description |
+| Method / Property | Returns | Description |
 |---|---|---|
-| `add_bearing(bearing)` | None | Registers a bearing; enforces minimum two-support constraint |
+| `add_bearing(bearing)` | None | Registers a bearing; enforces position within shaft |
 | `add_gear(gear)` | None | Registers a gear element |
 | `add_load(load)` | None | Registers any point load or moment |
-| `validate()` | `list[str]` | System-level consistency checks before solving |
-| `get_support_positions()` | `list[float]` | Returns axial positions of all bearing supports |
-| `get_load_vector()` | `dict` | Aggregated loads by position and direction |
+| `bearings` | `list[Bearing]` | Sorted by axial position |
+| `gears` | `list[GearElement]` | Sorted by axial position |
+| `support_positions` | `list[float]` | Axial positions of all bearings |
+| `radial_loads_xz` | `list[RadialLoad]` | Filtered by plane |
+| `radial_loads_yz` | `list[RadialLoad]` | Filtered by plane |
+| `axial_loads` | `list[AxialLoad]` | — |
+| `torque_loads` | `list[TorqueLoad]` | — |
+| `external_moments` | `list[ExternalMoment]` | — |
+| `validate()` | `list[str]` | System-level consistency checks |
+| `validate_or_raise()` | None | Raises `ValueError` if invalid |
 
 ---
 
-### `solvers/statics.py`
+### `solvers/statics.py` *(Phase 1 — in progress)*
 
 **`StaticsSolver`**
-Computes bearing reactions and internal force/moment distributions for a statically determinate or indeterminate shaft (two-support case handled analytically; multi-support via influence coefficients).
+Computes bearing reactions and internal force/moment distributions. Two-support shaft handled analytically in two independent planes (XZ and YZ).
 
 | Method | Returns | Description |
 |---|---|---|
-| `solve(system)` | `StaticsResult` | Computes reactions in XZ and YZ planes separately |
-| `shear_diagram(result, plane)` | `np.ndarray` | Shear force V(x) sampled at solver resolution |
-| `bending_moment_diagram(result, plane)` | `np.ndarray` | M(x) in specified plane |
-| `resultant_moment(result)` | `np.ndarray` | M_res(x) = √(Mxz² + Myz²) |
+| `solve(system)` | `StaticsResult` | Full analysis: reactions + discretised diagrams |
 
-`StaticsResult` dataclass contains reactions at each bearing, plus discretised V(x), M(x), T(x) arrays.
+`StaticsResult` (in `models/statics_result.py`) contains: `x`, `V_xz`, `V_yz`, `M_xz`, `M_yz`, `M_res`, `T`, `axial_force`, `reactions`.
 
 ---
 
-### `solvers/stress.py`
+### `solvers/stress.py` *(Phase 1 — planned)*
 
 **`StressSolver`**
 Computes nominal and corrected stresses at critical cross-sections; evaluates fatigue safety factors.
 
 | Method | Returns | Description |
 |---|---|---|
-| `critical_sections(system, statics_result)` | `list[CrossSection]` | Identifies shoulders, keyways, press fits as stress raisers |
-| `von_mises_stress(section)` | float | σ_eq at section centroid [MPa] |
-| `safety_factor_goodman(section, material)` | float | Modified Goodman fatigue safety factor |
-| `safety_factor_asme(section, material)` | float | ASME Elliptic criterion |
+| `solve(system, statics_result, material)` | `StressResult` | Full stress analysis at all critical sections |
 
-Stress concentration factors (Kt, Kf) are computed from Peterson curves implemented as interpolating functions against geometry ratios (r/d, D/d).
+Stress concentration factors (Kt, Kf) computed from Peterson curves interpolated against r/d and D/d.
 
 ---
 
-### `solvers/bearing_life.py`
+### `solvers/bearing_life.py` *(Phase 1 — planned)*
 
 **`BearingLifeSolver`**
 Implements ISO 281 L10 life calculation and static safety verification.
 
 | Method | Returns | Description |
 |---|---|---|
-| `equivalent_dynamic_load(bearing, reactions)` | float | P = X·Fr + Y·Fa [N] |
-| `L10_life(bearing, P)` | float | Basic rating life [10⁶ revolutions] |
-| `L10h_life(bearing, P, speed)` | float | Rating life in operating hours [h] |
-| `static_safety_factor(bearing, reactions)` | float | S₀ = C₀ / P₀ |
+| `solve_bearing(bearing, Fr, Fa, speed_rpm, design_life_hours)` | `BearingLifeResult` | L10h, S₀, C/P for a single bearing |
+| `extract_bearing_forces(statics_result, system)` | `dict` | Fr and Fa per bearing from StaticsResult |
+
+Phase 1 uses X=1, Y=0 (radial-dominant simplification). Documented as known limitation.
 
 ---
 
-### `integrations/gearpie_adapter.py`
+### `integrations/gearpie_adapter.py` *(Phase 1 — planned)*
 
 **`GEARpieAdapter`**
-Translates GEARpie output (gear geometry and load data) into `GearElement` instances compatible with AxisForge's solver pipeline.
+Translates GEARpie output files into `GearElement` instances.
 
 | Method | Returns | Description |
 |---|---|---|
-| `load_from_file(path)` | `dict` | Parses GEARpie JSON/CSV result file |
-| `to_gear_element(data, position)` | `GearElement` | Builds AxisForge `GearElement` from GEARpie payload |
-| `extract_forces(data)` | `tuple[float, float, float]` | Returns (Wt, Wr, Wa) in Newtons |
-| `validate_compatibility(data)` | `list[str]` | Checks for required fields and unit consistency |
+| `load(path, axial_position, label)` | `GEARpieImportResult` | Parses JSON or CSV; validates fields and physical consistency |
+
+Supported formats: JSON (preferred), CSV (legacy). Validates Wt/Wr/Wa consistency against gear geometry.
 
 ---
 
-### `selectors/bearing_selector.py`
+### `selectors/bearing_selector.py` *(Phase 3)*
 
 **`BearingSelector`**
-Queries the SKF catalogue database and returns feasible bearing candidates ranked by L10 life, given geometric and load constraints.
-
-| Method | Returns | Description |
-|---|---|---|
-| `query(bore, load_P, speed, L10h_target)` | `list[BearingData]` | Returns bearings meeting constraints, sorted by margin |
-| `filter_by_type(candidates, bearing_type)` | `list[BearingData]` | Narrows candidates by type |
-| `recommend(candidates, system_context)` | `BearingData` | (Phase 4) Applies arrangement and space heuristics |
+Queries the SKF catalogue database and returns feasible bearing candidates ranked by L10 life.
 
 ---
 
-### `reports/report_generator.py`
+### `reports/report_generator.py` *(Phase 3)*
 
 **`ReportGenerator`**
-Assembles a structured calculation report from solver results. Output formats: HTML (primary), PDF via `weasyprint`.
-
-| Method | Returns | Description |
-|---|---|---|
-| `build(system, results)` | `ReportDocument` | Aggregates all results into a structured document object |
-| `export_html(doc, path)` | None | Renders report to HTML file |
-| `export_pdf(doc, path)` | None | Renders report to PDF via weasyprint |
-
-The report includes: system geometry summary, reaction forces table, shear/bending/torsion diagrams, stress summary at critical sections, bearing L10 table, failure assessment summary, and a section for engineering observations.
+Assembles a structured calculation report from solver results. Output: HTML (primary), PDF via `weasyprint`.
 
 ---
 
-### `selectors/failure_assessor.py`
-
-**`FailureModeResult`**
-Dataclass carrying the full output of a single failure mode evaluation.
-
-| Field | Type | Description |
-|---|---|---|
-| `mode_id` | str | Failure mode identifier (e.g., `"F01"`) |
-| `mode_name` | str | Human-readable name (e.g., `"Rolling Contact Fatigue"`) |
-| `component` | str | Affected component and position (e.g., `"Bearing 6210 at x=150 mm"`) |
-| `score` | float | Normalised risk score [0.0–1.0] |
-| `risk_class` | str | `"LOW"` / `"MEDIUM"` / `"HIGH"` |
-| `drivers` | `list[DriverContribution]` | Individual driver values and weighted contributions |
-| `recommendation` | str | Plain-language corrective action |
-
-**`DriverContribution`**
-Represents the contribution of a single risk driver to a failure mode score.
-
-| Field | Type | Description |
-|---|---|---|
-| `name` | str | Driver name (e.g., `"C/P ratio"`) |
-| `raw_value` | float | Value as computed by the relevant solver |
-| `normalized_value` | float | f(raw_value) ∈ [0.0, 1.0] via piecewise linear map |
-| `weight` | float | Configured weight for this driver within the failure mode |
-| `contribution` | float | `weight × normalized_value` |
+### `selectors/failure_assessor.py` *(Phase 3+)*
 
 **`FailureLikelihoodAssessor`**
-Orchestrates evaluation of all applicable failure modes for a given system state.
-
-| Method | Returns | Description |
-|---|---|---|
-| `assess(system, statics_result, stress_result, bearing_results, user_inputs)` | `list[FailureModeResult]` | Evaluates all registered failure modes; returns list sorted by descending score |
-| `assess_bearing(bearing_result, user_inputs)` | `list[FailureModeResult]` | Evaluates only bearing-related modes for a single bearing position |
-| `summary(results)` | `dict` | Returns highest risk class per component for dashboard display |
-
-**Scoring model:**
-
-Each failure mode Fᵢ is evaluated as a weighted sum of normalised driver scores:
+Deterministic multi-criteria scoring engine. Each failure mode is evaluated as:
 
 ```
 score(Fᵢ) = Σ [ wⱼ × fⱼ(xⱼ) ]   for j = 1..N_drivers
 ```
 
-Risk classification thresholds:
+Risk classification:
 
-| Score range | Risk class |
+| Score | Risk class |
 |---|---|
 | < 0.25 | LOW |
 | 0.25 – 0.60 | MEDIUM |
 | > 0.60 | HIGH |
 
-**Supported failure modes:**
-
-| ID | Failure Mode | Component | Available from Phase |
-|---|---|---|---|
-| F01 | Rolling Contact Fatigue (RCF) | Bearing | 3 |
-| F02 | Static Overload | Bearing | 2 |
-| F03 | Lubrication Starvation | Bearing | 4 |
-| F04 | Contamination Fatigue | Bearing | 4 |
-| F05 | False Brinelling | Bearing | 4 |
-| F06 | Shaft Bending Fatigue | Shaft | 2 |
-| F07 | Shoulder Stress Concentration | Shaft | 2 |
-| F08 | Gear Tooth Pitting | Gear | 3 |
-| F09 | Gear Micropitting | Gear | 4 |
-| F10 | Gear Scuffing | Gear | 4 |
-| F11 | Misalignment Sensitivity | System | 4 |
-| F12 | Thermal Degradation | Bearing | 5 |
-
-**Key driver definitions:**
-
-*F01 — Rolling Contact Fatigue:*
-
-| Driver | Source | Weight |
-|---|---|---|
-| C/P ratio | `BearingLifeSolver` | 0.45 |
-| L10h margin vs. target | `BearingLifeSolver` | 0.35 |
-| Contamination class η_c (user input) | Manual | 0.20 |
-
-*F06 — Shaft Bending Fatigue:*
-
-| Driver | Source | Weight |
-|---|---|---|
-| Goodman safety factor nf | `StressSolver` | 0.50 |
-| Fatigue stress concentration Kf | `StressSolver` | 0.30 |
-| Mean-to-alternating stress ratio σm/σa | `StressSolver` | 0.20 |
-
-*F03 — Lubrication Starvation (Phase 4):*
-
-| Driver | Source | Weight |
-|---|---|---|
-| EHL film parameter Λ = h_min / R_composite | `LubricationAdvisor` | 0.55 |
-| Speed ratio n / n_lim | Catalogue data | 0.25 |
-| Operating temperature margin vs. grease limit | User input | 0.20 |
-
-The Λ parameter is computed using the Hamrock–Dowson minimum film thickness equation. Regime classification: Λ > 3.0 → full-film EHL; 1.5–3.0 → mixed; 1.0–1.5 → partial boundary; < 1.0 → boundary lubrication.
-
-**GUI output (Results panel — "Failure Assessment" tab):**
-
-```
-FAILURE LIKELIHOOD ASSESSMENT
-System: Shaft S1 — 1450 rpm, 5 000 N·m
-
-Failure Mode                  Score   Risk     Priority
-─────────────────────────────────────────────────────────
-RCF — Bearing 6210 (pos. A)   0.71    HIGH        1
-Lubrication Starvation (A)    0.58    MEDIUM      2
-Shaft Bending Fatigue         0.31    MEDIUM      3
-Gear Tooth Pitting (z1)       0.28    MEDIUM      4
-Static Overload (pos. B)      0.12    LOW         5
-Shoulder Fatigue (§2)         0.09    LOW         6
-
-⚠ HIGH risk — Bearing pos. A: C/P = 1.8 (target > 3.0).
-  Review bearing selection or reduce applied load.
-```
-
-Clicking any row expands a driver breakdown table showing individual raw values, normalised scores, weights, and contributions — making the scoring logic fully transparent.
+Supported failure modes and availability by phase — see `docs/theory/failure_assessment.md`.
 
 ---
 
+## Phase Roadmap
+
 ### Phase 1 — Core Solver Foundation *(months 1–3)*
 
-**Goal:** A working, validated solver pipeline with no GUI dependency.
+**Goal:** Validated solver pipeline, no GUI dependency.
 
-- [ ] Implement `Shaft`, `ShaftSection`, `MechanicalSystem`, `Bearing`, `GearElement`, `Load` data structures
-- [ ] Implement `StaticsSolver`: reactions and V(x), M(x), T(x) diagrams for two-bearing shaft
-- [ ] Implement `StressSolver`: von Mises, Goodman, stress concentrations at shoulders and keyways
-- [ ] Implement `BearingLifeSolver`: ISO 281 L10 and static safety factor
-- [ ] Implement `GEARpieAdapter`: import and validate GEARpie results
-- [ ] Unit tests for all solvers against hand-calculated reference cases
-- [ ] Validate against at least two textbook examples (Shigley, or equivalent)
+- [x] `Shaft`, `ShaftSection`, `Shoulder` — geometry model
+- [x] `Bearing`, `BearingType`, `GearElement` — components
+- [x] `RadialLoad`, `AxialLoad`, `TorqueLoad`, `ExternalMoment` — loads
+- [x] `MechanicalSystem` — top-level container with validation
+- [x] `Material`, embedded library (S355, 42CrMo4, AISI 1045, AISI 4340)
+- [x] Full test suite for `core/` — 209 tests, 98% coverage
+- [ ] `StaticsSolver` — reactions, V(x), M(x), T(x)
+- [ ] `StressSolver` — von Mises, Goodman, ASME-Elliptic, Kf at shoulders
+- [ ] `BearingLifeSolver` — ISO 281 L10h, static safety factor S₀
+- [ ] `GEARpieAdapter` — JSON/CSV import, force extraction, consistency validation
+- [ ] `axisforge_cli.py` — CLI demonstrating full pipeline
 
-**Deliverable:** CLI script demonstrating full analysis of a defined shaft system, printing results to terminal.
+**Deliverable:** CLI script printing full analysis of a defined shaft system.
 
 ---
 
 ### Phase 2 — Base GUI *(months 3–5)*
 
-**Goal:** A functional PySide6 interface allowing interactive system definition and result visualisation.
+**Goal:** Functional PySide6 interface for interactive system definition and result visualisation.
 
-- [ ] Main window layout: canvas (centre), component panel (left), properties panel (right), results (bottom/tab)
-- [ ] Shaft schematic canvas: rendered from `MechanicalSystem` state; supports zoom, click-to-select
-- [ ] Component panel: `QTreeWidget` listing shaft sections, bearings, gears, loads
-- [ ] Properties panel: `QFormLayout` driven by selected component type; editable fields with validation
-- [ ] Results panel: tabbed view for shear/bending diagrams, bearing L10 table, stress summary
-- [ ] Real-time update: solver called on model change; results refresh automatically
-- [ ] GEARpie import wizard: file picker, field mapping, preview before insertion
+- [ ] Main window layout: canvas, component panel, properties panel, results tabs
+- [ ] Shaft schematic canvas
+- [ ] Real-time solver update on model change
+- [ ] GEARpie import wizard
 
-**Deliverable:** Desktop application capable of defining a shaft system and viewing all Phase 1 analysis results graphically.
+**Deliverable:** Desktop application visualising all Phase 1 analysis results.
 
 ---
 
-### Phase 3 — SKF Catalogue Integration + Failure Assessment Foundation *(months 5–7)*
+### Phase 3 — SKF Catalogue + Failure Assessment Foundation *(months 5–7)*
 
-**Goal:** Bearing selection from a structured, queryable SKF catalogue database; first failure mode evaluations active.
+**Goal:** Database-driven bearing selection; first failure mode evaluations.
 
-- [ ] Build SQLite schema for rolling bearing data: `designation`, `bore`, `OD`, `width`, `C`, `C0`, `speed_limit_grease`, `bearing_type`
-- [ ] Populate database from publicly available SKF catalogue data (manual curation or structured CSV import)
-- [ ] Implement `BearingSelector.query()`: filter by bore diameter, load rating requirement, speed
-- [ ] Bearing selection dialog in GUI: displays ranked candidates, allows manual override
-- [ ] Store selected bearing designation on `Bearing` object; recalculate L10 immediately
-- [ ] Visual indicator in component panel: green/amber/red bearing health status icons
-- [ ] Implement `FailureLikelihoodAssessor` framework: scoring infrastructure, `FailureModeResult`, `DriverContribution` dataclasses
-- [ ] Activate Phase-2-available failure modes: F01 (RCF), F02 (Static Overload), F06 (Shaft Bending Fatigue), F07 (Shoulder Fatigue), F08 (Gear Tooth Pitting)
-- [ ] "Failure Assessment" tab in results panel: ranked table with risk classes and driver breakdown on click
-
-**Deliverable:** End-to-end workflow from system definition → analysis → bearing selection from catalogue → updated L10 results → first failure risk summary.
+- [ ] SQLite schema and population for SKF rolling bearing data
+- [ ] `BearingSelector.query()` — filter by bore, load, speed
+- [ ] `FailureLikelihoodAssessor` framework — F01, F02, F06, F07, F08
+- [ ] Failure Assessment tab in results panel
 
 ---
 
-### Phase 4 — Design Recommendation Engine + Full Failure Assessment *(months 7–10)*
+### Phase 4 — Recommendation Engine + Full FLA *(months 7–10)*
 
-**Goal:** Complete rule-based intelligence layer covering arrangement, fits, lubrication, and all supported failure modes.
+**Goal:** Complete rule-based engineering guidance layer.
 
-- [ ] Bearing arrangement advisor: fixed/floating, O-arrangement, X-arrangement selection logic based on axial load pattern and thermal expansion expectations
-- [ ] Fit advisor: shaft and housing tolerance recommendations per ISO 286, conditioned on rotation and load type
-- [ ] `LubricationAdvisor`: grease vs. oil selection (AGMA 9005 viscosity tables), re-lubrication interval (SKF model), NLGI grade recommendation
-- [ ] Implement EHL film parameter Λ (Hamrock–Dowson); classify lubrication regime per bearing
-- [ ] Activate remaining failure modes: F03 (Lubrication Starvation), F04 (Contamination Fatigue), F05 (False Brinelling), F09 (Gear Micropitting), F10 (Gear Scuffing), F11 (Misalignment Sensitivity)
-- [ ] Warning and recommendation system: design checker flags safety factors below threshold, suggests corrective actions with engineering rationale
-- [ ] Structured output in results panel: "Recommendations" tab with rationale text alongside numerical results
-- [ ] Report generation: structured HTML/PDF calculation report including FLA summary table
-
-**Deliverable:** System that moves from pure calculation output to integrated engineering guidance — covering bearing selection, arrangement, lubrication, and quantified risk per failure mode.
+- [ ] Bearing arrangement advisor (fixed/floating, O/X)
+- [ ] Fit advisor (ISO 286)
+- [ ] `LubricationAdvisor` — EHL film parameter Λ, grease/oil selection
+- [ ] Remaining failure modes: F03, F04, F05, F09, F10, F11
+- [ ] HTML/PDF report generation
 
 ---
 
-### Phase 5 — Expansion *(beyond month 10)*
+### Phase 5 — Expansions *(beyond month 10)*
 
-The following expansions are architecturally anticipated but explicitly out of scope for initial development:
+Architecturally anticipated but out of initial scope:
 
-- **Multi-shaft gearbox assembly**: multiple `MechanicalSystem` instances connected through gear pairs
-- **1D FEM deflection solver**: replace analytical beam solver for complex, multi-section shafts
-- **Thermal model**: steady-state bearing temperature estimation; influence on lubrication viscosity and life correction factor
-- **Fatigue life under variable loading**: Palmgren–Miner cumulative damage; load spectrum input
-- **Export to standard formats**: shaft geometry export for FEA pre-processing (neutral format)
-- **Parametric study runner**: vary one parameter across a range; plot result sensitivities
+- Multi-shaft gearbox assembly
+- 1D FEM deflection solver
+- Thermal model
+- Fatigue life under variable loading (Palmgren–Miner)
+- Parametric study runner
 
 ---
 
 ## Minimum Viable Product (MVP)
 
-The MVP is the output of Phase 1 and Phase 2 combined. It is defined by strict boundary conditions.
+The MVP is the combined output of Phase 1 and Phase 2.
 
-### In scope for MVP
+### In scope
 
 - Single horizontal shaft, two bearing supports (statically determinate)
 - Shaft defined by up to 10 cylindrical sections with constant diameter per section
@@ -520,7 +453,7 @@ The MVP is the output of Phase 1 and Phase 2 combined. It is defined by strict b
 - GEARpie result import and force extraction
 - Static analysis: bearing reactions, V(x), M(x), T(x)
 - Stress analysis: combined bending + torsion at shoulder cross-sections; Goodman safety factor
-- Bearing life: ISO 281 L10h for user-specified C and n (manual catalogue entry, not yet database-driven)
+- Bearing life: ISO 281 L10h for manually entered C and n
 - PySide6 GUI: shaft schematic, component tree, properties panel, results with diagrams
 - JSON-based project save/load
 
@@ -528,62 +461,54 @@ The MVP is the output of Phase 1 and Phase 2 combined. It is defined by strict b
 
 | Feature | Reason |
 |---|---|
-| Multi-bearing indeterminate systems (>2 supports) | Requires deflection solver and compatibility equations |
-| SKF catalogue database | Phase 3 scope |
-| Shaft deflection calculation | Phase 4 / FEM scope |
-| Gear geometry design | Handled by GEARpie separately |
-| Failure Likelihood Assessment | Phase 3 scope (framework) |
-| Lubrication advisor and Λ parameter | Phase 4 scope |
+| Multi-bearing indeterminate systems (>2 supports) | Requires deflection solver |
+| SKF catalogue database | Phase 3 |
+| Shaft deflection calculation | Phase 4 / FEM |
+| Gear geometry design | Handled by GEARpie |
+| Failure Likelihood Assessment | Phase 3 |
+| Lubrication advisor | Phase 4 |
 | Critical speed analysis | Phase 5 |
 | Report generation | Phase 3/4 |
 | Thermal analysis | Phase 5 |
-| Tapered or splined shaft sections | Phase 3 |
 
 ---
 
 ## Incremental Development Strategy
 
-The architecture is designed to support isolated, incremental development without cross-module blocking.
-
 **Principle 1 — Solvers are independent of the GUI.**
-All solvers accept data model objects and return result objects. They can be developed, tested, and validated entirely via `pytest` before any GUI work begins. The GUI is a consumer of solver outputs, not a participant in computation.
+Solvers accept data model objects and return result dataclasses. Fully testable via pytest before any GUI work.
 
 **Principle 2 — Data model is the integration boundary.**
-`core/` defines the domain entities that all other modules depend on. Stabilising the data model early (Phase 1) prevents downstream refactoring. Changes to solvers, GUI, or database do not propagate back to `core/` unless a domain concept changes.
+`core/` defines the domain entities all other modules depend on. Stable since end of Phase 1 week 2.
 
 **Principle 3 — Each component position is a single float.**
-All axial positioning is by coordinate, not by section index. This decouples component placement from shaft discretisation and makes interpolation, plotting, and solver sampling straightforward.
+All axial positioning by coordinate (mm from datum), not section index.
 
 **Principle 4 — GEARpie integration is encapsulated.**
-The `GEARpieAdapter` is the only module that knows GEARpie's output format. If GEARpie's output schema changes, only the adapter changes.
+`GEARpieAdapter` is the only module that knows GEARpie's output format.
 
 **Principle 5 — Database is optional until Phase 3.**
-Bearings in Phase 1–2 can be defined with manually entered C and C0 values. The database is a query optimisation, not a structural dependency.
+Phase 1–2: C and C0 entered manually. Database is a query optimisation, not a structural dependency.
 
 **Development order per session:**
 1. Write the data structure
-2. Write the solver logic
-3. Write the unit test with a hand-calculated reference
+2. Write the test with a hand-calculated reference (TDD)
+3. Write the solver logic until tests pass
 4. Only then connect to GUI
 
 ---
 
 ## Quality Criteria
 
-### Modularility
-Each module has one clearly stated responsibility. Imports flow inward (`ui` → `core`, `solvers` → `core`). No circular dependencies. `core/` has zero external library dependencies beyond Python standard library and NumPy.
+**Modularity:** Imports flow inward (`ui` → `solvers` → `core`). No circular dependencies. `core/` has zero external library dependencies beyond NumPy and stdlib.
 
-### Testability
-Every solver function is a pure function: given the same input objects, it returns the same result. No global state, no GUI calls inside solvers. Test coverage target: ≥ 90% for `solvers/` and `core/`. Tests must include at least one textbook-validated reference case per solver.
+**Testability:** Every solver is a pure function. No global state, no GUI calls inside solvers. Coverage target: ≥ 90% for `solvers/` and `core/`. At least one textbook-validated reference case per solver.
 
-### Physical Validity
-All calculations include inline references to the governing standard or equation (ISO 281, ISO 6336, Shigley §n.m, etc.) in docstrings. Any simplifying assumption is documented explicitly. Results outside physically plausible ranges trigger warnings, not silent acceptance.
+**Physical validity:** All calculations reference the governing standard or equation in docstrings. Simplifying assumptions documented explicitly.
 
-### Scalability
-Adding a new solver (e.g., critical speed) requires: one new file in `solvers/`, one new result dataclass, one new tab in the results panel. No changes to existing solvers, data model, or tests.
+**Scalability:** Adding a solver requires one new file in `solvers/`, one result dataclass, one new tab in the results panel. No changes to existing modules.
 
-### Numerical robustness
-Solvers use NumPy throughout. Shaft discretisation uses a fixed resolution (default 1000 points/m, configurable in `config.py`). Division-by-zero and degenerate geometry cases (zero-length section, zero-diameter section) are caught at `validate()` time, before solvers are called.
+**Numerical robustness:** NumPy throughout. Shaft discretisation resolution configurable in `config.py`. Degenerate geometry caught at `validate()` time before solvers are called.
 
 ---
 
@@ -595,21 +520,22 @@ cd axisforge
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python main.py
+python axisforge_cli.py          # Phase 1 CLI
+# python main.py                 # Phase 2+ GUI
 ```
 
 **Runtime dependencies:**
 
 | Package | Version | Purpose |
 |---|---|---|
-| `PySide6` | ≥ 6.6 | GUI framework |
 | `numpy` | ≥ 1.26 | Numerical computation |
-| `matplotlib` | ≥ 3.8 | Diagram rendering |
 | `scipy` | ≥ 1.12 | Integration, interpolation |
-| `pandas` | ≥ 2.1 | Data handling (catalogue queries) |
+| `PySide6` | ≥ 6.6 | GUI framework (Phase 2+) |
+| `matplotlib` | ≥ 3.8 | Diagram rendering (Phase 2+) |
+| `pandas` | ≥ 2.1 | Catalogue queries (Phase 3+) |
 | `weasyprint` | ≥ 61 | PDF report output (Phase 3+) |
 
-**Development dependencies** (in `requirements-dev.txt`):
+**Development dependencies:**
 
 ```
 pytest
@@ -623,19 +549,24 @@ mypy
 ## Testing
 
 ```bash
-pytest tests/ -v
-pytest tests/ --cov=axisforge --cov-report=term-missing
+# Run all tests
+python -m pytest tests/ -v
+
+# With coverage
+python -m pytest tests/ --cov=core --cov=solvers --cov-report=term-missing
 ```
 
-Reference validation cases are defined in `tests/fixtures/sample_systems.py`. Each fixture documents its source (textbook, chapter, example number) and the expected result values against which the solver is compared.
+Current status: 209 tests, 98% coverage (`core/` complete).
+
+Validation cases are documented in `tests/fixtures/expected_results.py` with source, chapter, example number, and expected values.
 
 ---
 
 ## GEARpie Integration
 
-GEARpie operates as an independent module. AxisForge does not call GEARpie functions directly; it reads GEARpie output files via `GEARpieAdapter`. This ensures that changes to GEARpie's internal implementation do not affect AxisForge stability.
+GEARpie operates as an independent module. AxisForge reads GEARpie output files via `GEARpieAdapter` — it never calls GEARpie functions directly. If GEARpie's output schema changes, only `integrations/gearpie_adapter.py` requires modification.
 
-The expected GEARpie export format (JSON) is documented in `docs/api/gearpie_interface.md`. If GEARpie's output format changes, only `integrations/gearpie_adapter.py` requires modification.
+Supported format: JSON (preferred), CSV (legacy). Interface specification: `docs/api/gearpie_interface.md`.
 
 ---
 
@@ -643,7 +574,7 @@ The expected GEARpie export format (JSON) is documented in `docs/api/gearpie_int
 
 | Phase | Status |
 |---|---|
-| Phase 1 — Core Solver | 🔲 In development |
+| Phase 1 — Core Solver | 🟡 In progress — `core/` complete, solvers next |
 | Phase 2 — Base GUI | 🔲 Planned |
 | Phase 3 — SKF Catalogue + FLA Foundation | 🔲 Planned |
 | Phase 4 — Recommendation Engine + Full FLA | 🔲 Planned |
@@ -670,7 +601,6 @@ GEARpie is integrated as a separately licensed subsystem. Refer to its own licen
 - Shigley, J.E., Budynas, R.G., Nisbett, J.K. — *Mechanical Engineering Design*, 10th ed.
 - SKF General Catalogue — *Rolling Bearings*, publication 10000 EN
 - SKF — *Bearing Failures and Their Causes*, publication PUB PT 01
-- SKF — *Bearing Maintenance Handbook*
 - Peterson, R.E. — *Stress Concentration Factors*, 3rd ed.
 - Harris, T.A., Kotzalas, M.N. — *Rolling Bearing Analysis*, 5th ed.
 - Stachowiak, G.W., Batchelor, A.W. — *Engineering Tribology*, 4th ed.

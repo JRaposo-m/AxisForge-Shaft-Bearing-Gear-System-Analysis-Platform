@@ -1,2 +1,2 @@
-# core/__init__.py
+# models/__init__.py
 __version__ = "0.1.0"

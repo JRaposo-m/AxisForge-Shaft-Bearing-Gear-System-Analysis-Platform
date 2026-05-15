@@ -124,14 +124,13 @@ def section_with_invalid_shoulder():
 def three_section_shaft():
     """
     Simple 3-section shaft (total length 400mm):
-      §1: L=100, d=40  (shoulder_right r=2mm)
-      §2: L=200, d=50  (shoulder_left and shoulder_right r=2mm)
-      §3: L=100, d=40  (shoulder_left r=2mm)
+      §1: L=100, d=40
+      §2: L=200, d=50  (shoulder_left r=2mm, shoulder_right r=2mm)
+      §3: L=100, d=40
     """
     shaft = Shaft(name="three_section")
     shaft.add_section(ShaftSection(
         length=100.0, diameter=40.0, label="§1",
-        shoulder_right=Shoulder(fillet_radius=2.0, diameter_large=50.0, diameter_small=40.0),
     ))
     shaft.add_section(ShaftSection(
         length=200.0, diameter=50.0, label="§2",
@@ -140,7 +139,6 @@ def three_section_shaft():
     ))
     shaft.add_section(ShaftSection(
         length=100.0, diameter=40.0, label="§3",
-        shoulder_left=Shoulder(fillet_radius=2.0, diameter_large=50.0, diameter_small=40.0),
     ))
     return shaft
 
@@ -306,3 +304,19 @@ def system_with_external_moment(three_section_shaft):
         plane=LoadPlane.YZ, label="M_ext",
     ))
     return system
+    
+
+@pytest.fixture
+def shigley_ex3_6():
+    """
+    Shigley Ex. 3-6 — simply-supported beam, off-centre point load.
+    xA=0, xB=600mm, F=5000N (YZ) at x=200mm.
+    R_A=3333.3N, R_B=1666.7N, M_max=666667 N·mm at x=200mm.
+    """
+    shaft = Shaft(name="shigley_ex3_6")
+    shaft.add_section(ShaftSection(length=600.0, diameter=50.0))
+    system = MechanicalSystem(shaft=shaft, speed_rpm=0.0, name="Shigley_Ex3_6")
+    system.add_bearing(Bearing(position=0.0, C=1.0, C0=1.0, arrangement="fixed", label="A"))
+    system.add_bearing(Bearing(position=600.0, C=1.0, C0=1.0, arrangement="floating", label="B"))
+    system.add_load(RadialLoad(position=200.0, magnitude=5000.0, plane=LoadPlane.YZ))
+    return system    

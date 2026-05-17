@@ -229,7 +229,7 @@ def simple_system(three_section_shaft, skf_6210_fixed, skf_6210_floating):
 
     Hand-calculated reactions (span = 300mm, gear at midspan):
       R_A_xz = R_B_xz = 1750 N
-      R_A_yz = R_B_yz = 637 N
+      R_A_xy = R_B_xy = 637 N
     """
     system = MechanicalSystem(
         shaft=three_section_shaft,
@@ -257,8 +257,8 @@ def simple_system_central_load(three_section_shaft):
     System with a single central radial load (no gear, no torque).
     Used for pure static equilibrium tests.
 
-    Load: F=5000N in YZ plane at x=200mm (midspan of 50–350 span).
-    Expected reactions: R_A_yz = R_B_yz = 2500N (symmetric).
+    Load: F=5000N in XY plane at x=200mm (midspan of 50–350 span).
+    Expected reactions: R_A_xy = R_B_xy = 2500N (symmetric).
     """
     system = MechanicalSystem(
         shaft=three_section_shaft,
@@ -275,7 +275,7 @@ def simple_system_central_load(three_section_shaft):
     ))
     system.add_load(RadialLoad(
         position=200.0, magnitude=5000.0,
-        plane=LoadPlane.YZ, label="F_central",
+        plane=LoadPlane.XY, label="F_central",
     ))
     return system
 
@@ -301,7 +301,7 @@ def system_with_external_moment(three_section_shaft):
     ))
     system.add_load(ExternalMoment(
         position=200.0, magnitude=50_000.0,
-        plane=LoadPlane.YZ, label="M_ext",
+        plane=LoadPlane.XY, label="M_ext",
     ))
     return system
     
@@ -310,7 +310,7 @@ def system_with_external_moment(three_section_shaft):
 def shigley_ex3_6():
     """
     Shigley Ex. 3-6 — simply-supported beam, off-centre point load.
-    xA=0, xB=600mm, F=5000N (YZ) at x=200mm.
+    xA=0, xB=600mm, F=5000N (XY) at x=200mm.
     R_A=3333.3N, R_B=1666.7N, M_max=666667 N·mm at x=200mm.
     """
     shaft = Shaft(name="shigley_ex3_6")
@@ -318,5 +318,5 @@ def shigley_ex3_6():
     system = MechanicalSystem(shaft=shaft, speed_rpm=0.0, name="Shigley_Ex3_6")
     system.add_bearing(Bearing(position=0.0, C=1.0, C0=1.0, arrangement="fixed", label="A"))
     system.add_bearing(Bearing(position=600.0, C=1.0, C0=1.0, arrangement="floating", label="B"))
-    system.add_load(RadialLoad(position=200.0, magnitude=5000.0, plane=LoadPlane.YZ))
+    system.add_load(RadialLoad(position=200.0, magnitude=5000.0, plane=LoadPlane.XY))
     return system    

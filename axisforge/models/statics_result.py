@@ -25,17 +25,17 @@ class StaticsResult:
     Coordinate convention:
       x     : axial coordinate from datum (left end) [mm]
       XZ    : horizontal plane
-      YZ    : vertical plane (gravity direction)
-      Positive forces: downward (YZ), forward (XZ) by external load convention.
+      XY    : vertical plane (gravity direction)
+      Positive forces: downward (XY), forward (XZ) by external load convention.
       Reactions: sign determined mathematically by equilibrium.
 
     All arrays have shape (N,) where N = SOLVER_RESOLUTION.
     """
     x: np.ndarray = field(compare=False)            # axial axis [mm]
     V_xz: np.ndarray = field(compare=False)         # shear force, XZ plane [N]
-    V_yz: np.ndarray = field(compare=False)         # shear force, YZ plane [N]
+    V_xy: np.ndarray = field(compare=False)         # shear force, XY plane [N]
     M_xz: np.ndarray = field(compare=False)         # bending moment, XZ plane [N·mm]
-    M_yz: np.ndarray = field(compare=False)         # bending moment, YZ plane [N·mm]
+    M_xy: np.ndarray = field(compare=False)         # bending moment, XY plane [N·mm]
     M_res: np.ndarray = field(compare=False)        # resultant bending moment [N·mm]
     T: np.ndarray = field(compare=False)            # torsion [N·mm]
     axial_force: np.ndarray = field(compare=False)  # axial force Fa(x) [N]
@@ -43,9 +43,9 @@ class StaticsResult:
 
     # reactions dict keys:
     #   "A_xz"  : reaction at bearing A, XZ plane [N]
-    #   "A_yz"  : reaction at bearing A, YZ plane [N]
+    #   "A_xy"  : reaction at bearing A, XY plane [N]
     #   "B_xz"  : reaction at bearing B, XZ plane [N]
-    #   "B_yz"  : reaction at bearing B, YZ plane [N]
+    #   "B_xy"  : reaction at bearing B, XY plane [N]
     #   "axial" : axial reaction at fixed support [N]
 
     @property
@@ -53,8 +53,8 @@ class StaticsResult:
         return float(np.max(np.abs(self.M_xz)))
 
     @property
-    def M_yz_max(self) -> float:
-        return float(np.max(np.abs(self.M_yz)))
+    def M_xy_max(self) -> float:
+        return float(np.max(np.abs(self.M_xy)))
 
     @property
     def M_res_max(self) -> float:

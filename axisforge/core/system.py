@@ -133,11 +133,11 @@ class MechanicalSystem:
         ]
 
     @property
-    def radial_loads_yz(self) -> list[RadialLoad]:
+    def radial_loads_xy(self) -> list[RadialLoad]:
         from .loads import LoadPlane
         return [
             l for l in self._loads
-            if isinstance(l, RadialLoad) and l.plane == LoadPlane.YZ
+            if isinstance(l, RadialLoad) and l.plane == LoadPlane.XY
         ]
 
     @property

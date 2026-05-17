@@ -68,7 +68,7 @@ class TestAddComponents:
 
     def test_add_load_radial(self):
         system = _valid_system()
-        system.add_load(RadialLoad(position=200.0, magnitude=5000.0, plane=LoadPlane.YZ))
+        system.add_load(RadialLoad(position=200.0, magnitude=5000.0, plane=LoadPlane.XY))
         assert len(system.loads) == 1
 
     def test_add_multiple_loads(self):
@@ -104,14 +104,14 @@ class TestLoadFilters:
     def test_radial_loads_xz(self):
         system = _valid_system()
         system.add_load(RadialLoad(position=100.0, magnitude=1000.0, plane=LoadPlane.XZ))
-        system.add_load(RadialLoad(position=200.0, magnitude=2000.0, plane=LoadPlane.YZ))
+        system.add_load(RadialLoad(position=200.0, magnitude=2000.0, plane=LoadPlane.XY))
         assert len(system.radial_loads_xz) == 1
         assert system.radial_loads_xz[0].plane == LoadPlane.XZ
 
-    def test_radial_loads_yz(self):
+    def test_radial_loads_xy(self):
         system = _valid_system()
-        system.add_load(RadialLoad(position=200.0, magnitude=3000.0, plane=LoadPlane.YZ))
-        assert len(system.radial_loads_yz) == 1
+        system.add_load(RadialLoad(position=200.0, magnitude=3000.0, plane=LoadPlane.XY))
+        assert len(system.radial_loads_xy) == 1
 
     def test_axial_loads(self):
         system = _valid_system()
@@ -127,10 +127,10 @@ class TestLoadFilters:
         """external_moments property must return only ExternalMoment loads."""
         system = _valid_system()
         system.add_load(ExternalMoment(
-            position=200.0, magnitude=50_000.0, plane=LoadPlane.YZ, label="M1"
+            position=200.0, magnitude=50_000.0, plane=LoadPlane.XY, label="M1"
         ))
         system.add_load(RadialLoad(
-            position=100.0, magnitude=1000.0, plane=LoadPlane.YZ
+            position=100.0, magnitude=1000.0, plane=LoadPlane.XY
         ))
         moments = system.external_moments
         assert len(moments) == 1

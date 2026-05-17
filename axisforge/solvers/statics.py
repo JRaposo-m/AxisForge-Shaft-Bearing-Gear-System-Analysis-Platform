@@ -4,11 +4,11 @@ StaticsSolver — static analysis of a two-support shaft.
 
 Formulation:
   Euler-Bernoulli beam, two simple supports (bearings A and B).
-  Analysis performed independently in XZ and YZ planes.
-  Results combined vectorially: M_res = sqrt(M_xz² + M_yz²).
+  Analysis performed independently in XZ and XY planes.
+  Results combined vectorially: M_res = sqrt(M_xz² + M_xy²).
 
 Sign convention (documented explicitly):
-  Applied loads:  positive = downward in YZ, forward in XZ (per external load convention).
+  Applied loads:  positive = downward in XY, forward in XZ (per external load convention).
   Reactions:      sign is determined by equilibrium equations; not forced positive.
   Torsion:        accumulates left-to-right; positive = counter-clockwise from +x.
 
@@ -72,7 +72,7 @@ class StaticsSolver:
 
         # ── Collect loads by plane ──────────────────────────────────────────
         radial_xz = self._collect_radial(system, LoadPlane.XZ)
-        radial_yz = self._collect_radial(system, LoadPlane.YZ)
+        radial_xy = self._collect_radial(system, LoadPlane.XY)
         axial_loads = list(system.axial_loads)
         torque_loads = list(system.torque_loads)
 
@@ -80,8 +80,8 @@ class StaticsSolver:
         for gear in system.gears:
             # Wt → XZ plane (tangential, in-plane horizontal)
             radial_xz.append((gear.position, gear.tangential_force))
-            # Wr → YZ plane (radial, in-plane vertical)
-            radial_yz.append((gear.position, gear.radial_force))
+            # Wr → XY plane (radial, in-plane vertical)
+            radial_xy.append((gear.position, gear.radial_force))
             if gear.axial_force != 0.0:
                 axial_loads.append(AxialLoad(position=gear.position, magnitude=gear.axial_force))
             if gear.torque != 0.0:
@@ -99,41 +99,41 @@ class StaticsSolver:
 
         # ── Solve equilibrium in each plane ─────────────────────────────────
         R_A_xz, R_B_xz = self._equilibrium(radial_xz, xA, xB)
-        R_A_yz, R_B_yz = self._equilibrium(radial_yz, xA, xB)
+        R_A_xy, R_B_xy = self._equilibrium(radial_xy, xA, xB)
         R_axial = -sum(a.magnitude for a in axial_loads)
 
         # ── Assemble point-force lists (reactions + applied) ────────────────
         all_xz: list[tuple[float, float]] = [(xA, R_A_xz), (xB, R_B_xz)] + radial_xz
-        all_yz: list[tuple[float, float]] = [(xA, R_A_yz), (xB, R_B_yz)] + radial_yz
+        all_xy: list[tuple[float, float]] = [(xA, R_A_xy), (xB, R_B_xy)] + radial_xy
 
         # ── Discretise ──────────────────────────────────────────────────────
         x = np.linspace(0.0, system.shaft.total_length, SOLVER_RESOLUTION)
 
         V_xz = self._shear_diagram(x, all_xz)
-        V_yz = self._shear_diagram(x, all_yz)
+        V_xy = self._shear_diagram(x, all_xy)
         M_xz = self._moment_diagram(x, all_xz)
-        M_yz = self._moment_diagram(x, all_yz)
-        M_res = np.sqrt(M_xz ** 2 + M_yz ** 2)
+        M_xy = self._moment_diagram(x, all_xy)
+        M_res = np.sqrt(M_xz ** 2 + M_xy ** 2)
         T = self._torsion_diagram(x, torque_loads)
         Fa = self._axial_diagram(x, axial_loads, R_axial, xA)
 
         # ── Internal consistency check ───────────────────────────────────────
-        self._validate_result(M_xz, M_yz, xA, xB, x)
+        self._validate_result(M_xz, M_xy, xA, xB, x)
 
         reactions = {
             "A_xz": R_A_xz,
-            "A_yz": R_A_yz,
+            "A_xy": R_A_xy,
             "B_xz": R_B_xz,
-            "B_yz": R_B_yz,
+            "B_xy": R_B_xy,
             "axial": R_axial,
         }
 
         return StaticsResult(
             x=x,
             V_xz=V_xz,
-            V_yz=V_yz,
+            V_xy=V_xy,
             M_xz=M_xz,
-            M_yz=M_yz,
+            M_xy=M_xy,
             M_res=M_res,
             T=T,
             axial_force=Fa,
@@ -253,7 +253,7 @@ class StaticsSolver:
     def _validate_result(
         self,
         M_xz: np.ndarray,
-        M_yz: np.ndarray,
+        M_xy: np.ndarray,
         xA: float,
         xB: float,
         x: np.ndarray,
@@ -274,7 +274,7 @@ class StaticsSolver:
         idx_A = int(np.argmin(np.abs(x - xA)))
         idx_B = int(np.argmin(np.abs(x - xB)))
 
-        for plane_name, M in [("XZ", M_xz), ("YZ", M_yz)]:
+        for plane_name, M in [("XZ", M_xz), ("XY", M_xy)]:
             M_at_A = float(M[idx_A])
             M_at_B = float(M[idx_B])
             if abs(M_at_A) > tol:

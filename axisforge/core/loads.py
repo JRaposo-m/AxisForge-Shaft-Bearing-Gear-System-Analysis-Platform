@@ -19,11 +19,11 @@ class LoadPlane(Enum):
     Plane in which a transverse load acts.
 
     XZ — horizontal plane (tangential gear forces are assigned here by default)
-    YZ — vertical plane (radial gear forces, gravity)
+    XY — vertical plane (radial gear forces, gravity)
     AXIAL — along shaft axis (helical gear thrust, axial preload)
     """
     XZ = auto()
-    YZ = auto()
+    XY = auto()
     AXIAL = auto()
 
 
@@ -39,7 +39,7 @@ class RadialLoad:
     magnitude : float
         Force magnitude [N]. Pass absolute value; sign convention handled by solver.
     plane : LoadPlane
-        XZ or YZ — the plane in which the force acts.
+        XZ or XY — the plane in which the force acts.
     label : str
         Optional identifier.
     """
@@ -128,7 +128,7 @@ class ExternalMoment:
     magnitude : float
         Moment [N·mm]. Sign encodes direction per right-hand rule.
     plane : LoadPlane
-        XZ or YZ — the plane in which the moment acts.
+        XZ or XY — the plane in which the moment acts.
     label : str
         Optional identifier.
     """

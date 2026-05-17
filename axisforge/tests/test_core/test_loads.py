@@ -12,11 +12,11 @@ from core.loads import (
 class TestLoadPlane:
     def test_enum_values_exist(self):
         assert LoadPlane.XZ
-        assert LoadPlane.YZ
+        assert LoadPlane.XY
         assert LoadPlane.AXIAL
 
-    def test_xz_yz_are_different(self):
-        assert LoadPlane.XZ != LoadPlane.YZ
+    def test_xz_xy_are_different(self):
+        assert LoadPlane.XZ != LoadPlane.XY
 
 
 class TestRadialLoad:
@@ -27,13 +27,13 @@ class TestRadialLoad:
         assert l.magnitude == 5000.0
         assert l.plane == LoadPlane.XZ
 
-    def test_valid_creation_yz(self):
-        l = RadialLoad(position=200.0, magnitude=3000.0, plane=LoadPlane.YZ, label="F1")
+    def test_valid_creation_xy(self):
+        l = RadialLoad(position=200.0, magnitude=3000.0, plane=LoadPlane.XY, label="F1")
         assert l.label == "F1"
 
     def test_raises_negative_position(self):
         with pytest.raises(ValueError, match="negative"):
-            RadialLoad(position=-1.0, magnitude=1000.0, plane=LoadPlane.YZ)
+            RadialLoad(position=-1.0, magnitude=1000.0, plane=LoadPlane.XY)
 
     def test_raises_axial_plane(self):
         with pytest.raises(ValueError, match="AXIAL"):
@@ -45,7 +45,7 @@ class TestRadialLoad:
 
     def test_zero_magnitude_valid(self):
         """Zero load is valid — solver will sum it without effect."""
-        l = RadialLoad(position=100.0, magnitude=0.0, plane=LoadPlane.YZ)
+        l = RadialLoad(position=100.0, magnitude=0.0, plane=LoadPlane.XY)
         assert l.magnitude == 0.0
 
     def test_negative_magnitude_valid(self):
@@ -100,13 +100,13 @@ class TestExternalMoment:
         m = ExternalMoment(position=50.0, magnitude=10_000.0, plane=LoadPlane.XZ)
         assert m.plane == LoadPlane.XZ
 
-    def test_valid_creation_yz(self):
-        m = ExternalMoment(position=100.0, magnitude=5_000.0, plane=LoadPlane.YZ)
+    def test_valid_creation_xy(self):
+        m = ExternalMoment(position=100.0, magnitude=5_000.0, plane=LoadPlane.XY)
         assert m.magnitude == 5_000.0
 
     def test_raises_negative_position(self):
         with pytest.raises(ValueError, match="negative"):
-            ExternalMoment(position=-1.0, magnitude=1000.0, plane=LoadPlane.YZ)
+            ExternalMoment(position=-1.0, magnitude=1000.0, plane=LoadPlane.XY)
 
     def test_raises_axial_plane(self):
         with pytest.raises(ValueError, match="AXIAL"):

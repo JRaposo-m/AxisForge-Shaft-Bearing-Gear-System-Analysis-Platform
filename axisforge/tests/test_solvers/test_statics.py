@@ -34,18 +34,18 @@ TOLERANCE_REL = 0.005           # 0.5%
 class TestStaticsSolverEquilibrium:
     """Global force and moment equilibrium checks — must hold for any valid system."""
 
-    def test_reactions_sum_to_zero_yz(self, simple_system):
+    def test_reactions_sum_to_zero_xy(self, simple_system):
         """
         ΣFy = 0: sum of ALL forces (reactions + applied) = 0.
         Applied Wr = +1274 N (downward). Reactions are negative (upward).
-        R_A_yz + R_B_yz + Wr = 0.
+        R_A_xy + R_B_xy + Wr = 0.
         """
         solver = StaticsSolver()
         result = solver.solve(simple_system)
         r = result.reactions
-        total = r["A_yz"] + r["B_yz"] + 1274.0
+        total = r["A_xy"] + r["B_xy"] + 1274.0
         assert abs(total) < TOLERANCE_FORCE_N, (
-            f"YZ force equilibrium violated: ΣFy = {total:.4f} N"
+            f"XY force equilibrium violated: ΣFy = {total:.4f} N"
         )
 
     def test_reactions_sum_to_zero_xz(self, simple_system):
@@ -58,13 +58,13 @@ class TestStaticsSolverEquilibrium:
             f"XZ force equilibrium violated: ΣFx = {total:.4f} N"
         )
 
-    def test_symmetric_load_symmetric_reactions_yz(self, simple_system_central_load):
+    def test_symmetric_load_symmetric_reactions_xy(self, simple_system_central_load):
         """Load at midspan → |R_A| = |R_B| (symmetric)."""
         solver = StaticsSolver()
         result = solver.solve(simple_system_central_load)
         r = result.reactions
         # Both reactions oppose the downward load — magnitude should be equal
-        assert pytest.approx(abs(r["A_yz"]), rel=TOLERANCE_REL) == abs(r["B_yz"])
+        assert pytest.approx(abs(r["A_xy"]), rel=TOLERANCE_REL) == abs(r["B_xy"])
 
     def test_symmetric_gear_symmetric_reactions_xz(self, simple_system):
         """Gear at midspan → R_A_xz = R_B_xz (symmetric XZ)."""
@@ -73,20 +73,20 @@ class TestStaticsSolverEquilibrium:
         r = result.reactions
         assert pytest.approx(abs(r["A_xz"]), rel=TOLERANCE_REL) == abs(r["B_xz"])
 
-    def test_symmetric_gear_symmetric_reactions_yz(self, simple_system):
-        """Gear at midspan → |R_A_yz| = |R_B_yz|."""
+    def test_symmetric_gear_symmetric_reactions_xy(self, simple_system):
+        """Gear at midspan → |R_A_xy| = |R_B_xy|."""
         solver = StaticsSolver()
         result = solver.solve(simple_system)
         r = result.reactions
-        assert pytest.approx(abs(r["A_yz"]), rel=TOLERANCE_REL) == abs(r["B_yz"])
+        assert pytest.approx(abs(r["A_xy"]), rel=TOLERANCE_REL) == abs(r["B_xy"])
 
-    def test_reactions_correct_magnitude_yz(self, simple_system_central_load):
+    def test_reactions_correct_magnitude_xy(self, simple_system_central_load):
         """F=5000N at midspan (150mm from each 300mm-span support) → R = 2500N each."""
         solver = StaticsSolver()
         result = solver.solve(simple_system_central_load)
         r = result.reactions
-        assert pytest.approx(abs(r["A_yz"]), rel=TOLERANCE_REL) == 2500.0
-        assert pytest.approx(abs(r["B_yz"]), rel=TOLERANCE_REL) == 2500.0
+        assert pytest.approx(abs(r["A_xy"]), rel=TOLERANCE_REL) == 2500.0
+        assert pytest.approx(abs(r["B_xy"]), rel=TOLERANCE_REL) == 2500.0
 
     def test_no_axial_load_zero_axial_reaction(self, simple_system_central_load):
         """No axial forces → axial reaction = 0."""
@@ -120,18 +120,18 @@ class TestStaticsSolverDiagrams:
         result = solver.solve(simple_system)
         n = len(result.x)
         assert len(result.V_xz) == n
-        assert len(result.V_yz) == n
+        assert len(result.V_xy) == n
         assert len(result.M_xz) == n
-        assert len(result.M_yz) == n
+        assert len(result.M_xy) == n
         assert len(result.M_res) == n
         assert len(result.T) == n
         assert len(result.axial_force) == n
 
     def test_M_res_equals_sqrt_sum_squares(self, simple_system):
-        """M_res must equal sqrt(M_xz² + M_yz²) at every point."""
+        """M_res must equal sqrt(M_xz² + M_xy²) at every point."""
         solver = StaticsSolver()
         result = solver.solve(simple_system)
-        expected = np.sqrt(result.M_xz ** 2 + result.M_yz ** 2)
+        expected = np.sqrt(result.M_xz ** 2 + result.M_xy ** 2)
         np.testing.assert_allclose(result.M_res, expected, rtol=1e-9, atol=1e-6)
 
     def test_moment_zero_at_support_A(self, simple_system):
@@ -140,8 +140,8 @@ class TestStaticsSolverDiagrams:
         result = solver.solve(simple_system)
         xA = 50.0
         idx = np.argmin(np.abs(result.x - xA))
-        assert abs(result.M_yz[idx]) < TOLERANCE_BOUNDARY, (
-            f"M_yz at xA={xA}: {result.M_yz[idx]:.2f} N·mm (should be ≈ 0)"
+        assert abs(result.M_xy[idx]) < TOLERANCE_BOUNDARY, (
+            f"M_xy at xA={xA}: {result.M_xy[idx]:.2f} N·mm (should be ≈ 0)"
         )
         assert abs(result.M_xz[idx]) < TOLERANCE_BOUNDARY
 
@@ -151,7 +151,7 @@ class TestStaticsSolverDiagrams:
         result = solver.solve(simple_system)
         xB = 350.0
         idx = np.argmin(np.abs(result.x - xB))
-        assert abs(result.M_yz[idx]) < TOLERANCE_BOUNDARY
+        assert abs(result.M_xy[idx]) < TOLERANCE_BOUNDARY
         assert abs(result.M_xz[idx]) < TOLERANCE_BOUNDARY
 
     def test_moment_max_near_gear_position(self, simple_system):
@@ -210,7 +210,7 @@ class TestStaticsSolverDiagrams:
         # Before any load (x before first support): shear = 0 for pure textbook case
         # This test confirms the sign convention is consistent.
         # R_A should be the first force in the diagram.
-        assert abs(result.reactions["A_yz"]) > 0.0  # reaction exists
+        assert abs(result.reactions["A_xy"]) > 0.0  # reaction exists
 
     def test_no_torque_system_torsion_zero_everywhere(self, simple_system_central_load):
         """System with no torque loads → T(x) = 0 everywhere."""
@@ -288,14 +288,14 @@ class TestStaticsSolverValidationCases:
         solver = StaticsSolver()
         result = solver.solve(shigley_ex3_6)
         expected_R_A = 3333.3
-        assert pytest.approx(abs(result.reactions["A_yz"]), rel=TOLERANCE_REL) == expected_R_A
+        assert pytest.approx(abs(result.reactions["A_xy"]), rel=TOLERANCE_REL) == expected_R_A
 
     def test_shigley_ex3_6_reaction_B(self, shigley_ex3_6):
         """Shigley Ex. 3-6: R_B = 1666.7 N."""
         solver = StaticsSolver()
         result = solver.solve(shigley_ex3_6)
         expected_R_B = 1666.7
-        assert pytest.approx(abs(result.reactions["B_yz"]), rel=TOLERANCE_REL) == expected_R_B
+        assert pytest.approx(abs(result.reactions["B_xy"]), rel=TOLERANCE_REL) == expected_R_B
 
     def test_shigley_ex3_6_moment_max(self, shigley_ex3_6):
         """
@@ -305,13 +305,13 @@ class TestStaticsSolverValidationCases:
         solver = StaticsSolver()
         result = solver.solve(shigley_ex3_6)
         expected_M_max = 666_667.0
-        assert pytest.approx(result.M_yz_max, rel=TOLERANCE_REL) == expected_M_max
+        assert pytest.approx(result.M_xy_max, rel=TOLERANCE_REL) == expected_M_max
 
-    def test_shigley_ex3_6_M_yz_max_position(self, shigley_ex3_6):
-        """M_yz maximum must occur near x=200mm."""
+    def test_shigley_ex3_6_M_xy_max_position(self, shigley_ex3_6):
+        """M_xy maximum must occur near x=200mm."""
         solver = StaticsSolver()
         result = solver.solve(shigley_ex3_6)
-        idx_max = np.argmax(np.abs(result.M_yz))
+        idx_max = np.argmax(np.abs(result.M_xy))
         x_max = result.x[idx_max]
         assert 195.0 < x_max < 205.0, f"Expected M_max near x=200mm, got x={x_max:.1f}mm"
 
@@ -320,7 +320,7 @@ class TestStaticsSolverValidationCases:
         solver = StaticsSolver()
         result = solver.solve(shigley_ex3_6)
         r = result.reactions
-        total_force = r["A_yz"] + r["B_yz"] + 5000.0
+        total_force = r["A_xy"] + r["B_xy"] + 5000.0
         assert abs(total_force) < TOLERANCE_FORCE_N
 
     def test_simple_system_reaction_A_xz(self, simple_system):
@@ -337,29 +337,29 @@ class TestStaticsSolverValidationCases:
         result = solver.solve(simple_system)
         assert pytest.approx(abs(result.reactions["B_xz"]), rel=TOLERANCE_REL) == 1750.0
 
-    def test_simple_system_reaction_A_yz(self, simple_system):
-        """Wr=1274N at midspan → R_A_yz = R_B_yz = 637N."""
+    def test_simple_system_reaction_A_xy(self, simple_system):
+        """Wr=1274N at midspan → R_A_xy = R_B_xy = 637N."""
         solver = StaticsSolver()
         result = solver.solve(simple_system)
-        assert pytest.approx(abs(result.reactions["A_yz"]), rel=TOLERANCE_REL) == 637.0
+        assert pytest.approx(abs(result.reactions["A_xy"]), rel=TOLERANCE_REL) == 637.0
 
-    def test_simple_system_reaction_B_yz(self, simple_system):
+    def test_simple_system_reaction_B_xy(self, simple_system):
         solver = StaticsSolver()
         result = solver.solve(simple_system)
-        assert pytest.approx(abs(result.reactions["B_yz"]), rel=TOLERANCE_REL) == 637.0
+        assert pytest.approx(abs(result.reactions["B_xy"]), rel=TOLERANCE_REL) == 637.0
 
     def test_simple_system_M_res_max_magnitude(self, simple_system):
         """
         M_res_max at x=200mm:
           M_xz = 1750 × 150 = 262500 N·mm
-          M_yz =  637 × 150 =  95550 N·mm
+          M_xy =  637 × 150 =  95550 N·mm
           M_res = sqrt(262500² + 95550²) ≈ 278413 N·mm
         """
         solver = StaticsSolver()
         result = solver.solve(simple_system)
         M_xz_expected = 1750.0 * 150.0      # = 262500
-        M_yz_expected = 637.0 * 150.0       # = 95550
-        M_res_expected = np.sqrt(M_xz_expected**2 + M_yz_expected**2)
+        M_xy_expected = 637.0 * 150.0       # = 95550
+        M_res_expected = np.sqrt(M_xz_expected**2 + M_xy_expected**2)
         assert pytest.approx(result.M_res_max, rel=0.01) == M_res_expected
 
     def test_simple_system_torsion_magnitude(self, simple_system):
@@ -382,11 +382,11 @@ class TestStaticsSolverValidationCases:
         system = MechanicalSystem(shaft=shaft, speed_rpm=0.0)
         system._bearings.append(Bearing(position=0.0, C=1.0, C0=1.0, arrangement="fixed", label="A"))
         system._bearings.append(Bearing(position=500.0, C=1.0, C0=1.0, arrangement="floating", label="B"))
-        system.add_load(RadialLoad(position=100.0, magnitude=4000.0, plane=LoadPlane.YZ))
+        system.add_load(RadialLoad(position=100.0, magnitude=4000.0, plane=LoadPlane.XY))
         solver = StaticsSolver()
         result = solver.solve(system)
-        assert pytest.approx(abs(result.reactions["A_yz"]), rel=TOLERANCE_REL) == 3200.0
-        assert pytest.approx(abs(result.reactions["B_yz"]), rel=TOLERANCE_REL) == 800.0
+        assert pytest.approx(abs(result.reactions["A_xy"]), rel=TOLERANCE_REL) == 3200.0
+        assert pytest.approx(abs(result.reactions["B_xy"]), rel=TOLERANCE_REL) == 800.0
 
 
 # ─── TestStaticsSolverEdgeCases ───────────────────────────────────────────────
@@ -431,8 +431,8 @@ class TestStaticsSolverEdgeCases:
         with pytest.raises(RuntimeError, match="Boundary condition violated"):
             solver._validate_result(M_bad, M_zero, xA=50.0, xB=350.0, x=x)
 
-    def test_validate_result_raises_on_bad_boundary_M_yz(self):
-        """_validate_result raises RuntimeError when |M_yz(xA)| > tolerance."""
+    def test_validate_result_raises_on_bad_boundary_M_xy(self):
+        """_validate_result raises RuntimeError when |M_xy(xA)| > tolerance."""
         solver = StaticsSolver()
         x = np.linspace(0.0, 400.0, 1000)
         M_bad = np.ones_like(x) * 10000.0

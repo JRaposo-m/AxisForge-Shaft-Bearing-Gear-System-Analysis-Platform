@@ -49,6 +49,14 @@ class StaticsResult:
     #   "axial" : axial reaction at fixed support [N]
 
     @property
+    def V_xz_max(self) -> float:
+        return float(np.max(np.abs(self.V_xz)))
+
+    @property
+    def V_xy_max(self) -> float:
+        return float(np.max(np.abs(self.V_xy)))
+
+    @property
     def M_xz_max(self) -> float:
         return float(np.max(np.abs(self.M_xz)))
 

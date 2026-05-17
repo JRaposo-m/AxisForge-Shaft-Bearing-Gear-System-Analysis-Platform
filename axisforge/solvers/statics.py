@@ -12,6 +12,12 @@ Sign convention (documented explicitly):
   Reactions:      sign is determined by equilibrium equations; not forced positive.
   Torsion:        accumulates left-to-right; positive = counter-clockwise from +x.
 
+ExternalMoment sign convention:
+  A pure couple M₀ at position pos contributes no net force (ΣF unchanged).
+  In ΣM_A: enters as −M₀ → R_B = +M₀/L, R_A = −M₀/L (verified: M(xB)=0 ✓).
+  In moment diagram: step of +M₀ for x ≥ pos (no moment arm).
+  Derivation: M(x<pos) = R_A×x; M(x≥pos) = R_A×x + M₀; M(L) = −M₀ + M₀ = 0.
+
 Restrictions:
   - Exactly 2 bearings (Phase 1). Statically determinate.
   - No GUI imports. No database calls. No global state.
@@ -22,7 +28,7 @@ import warnings
 import numpy as np
 
 from core.system import MechanicalSystem
-from core.loads import RadialLoad, AxialLoad, TorqueLoad, ExternalMoment, LoadPlane
+from core.loads import AxialLoad, TorqueLoad, ExternalMoment, LoadPlane
 from models.statics_result import StaticsResult
 from config import SOLVER_RESOLUTION, BOUNDARY_MOMENT_TOLERANCE
 
@@ -71,10 +77,17 @@ class StaticsSolver:
             )
 
         # ── Collect loads by plane ──────────────────────────────────────────
-        radial_xz = self._collect_radial(system, LoadPlane.XZ)
-        radial_xy = self._collect_radial(system, LoadPlane.XY)
+        # Use system properties directly — avoids duplicating RadialLoad filtering logic.
+        radial_xz: list[tuple[float, float]] = [
+            (l.position, l.magnitude) for l in system.radial_loads_xz
+        ]
+        radial_xy: list[tuple[float, float]] = [
+            (l.position, l.magnitude) for l in system.radial_loads_xy
+        ]
         axial_loads = list(system.axial_loads)
         torque_loads = list(system.torque_loads)
+        ext_moments_xz = [m for m in system.external_moments if m.plane == LoadPlane.XZ]
+        ext_moments_xy = [m for m in system.external_moments if m.plane == LoadPlane.XY]
 
         # ── Decompose GearElements into equivalent point loads ──────────────
         for gear in system.gears:
@@ -87,6 +100,24 @@ class StaticsSolver:
             if gear.torque != 0.0:
                 torque_loads.append(TorqueLoad(position=gear.position, magnitude=gear.torque))
 
+        # ── Warn for loads applied outside bearing span (overhang) ──────────
+        all_positions = (
+            [p for p, _ in radial_xz]
+            + [p for p, _ in radial_xy]
+            + [a.position for a in axial_loads]
+            + [t.position for t in torque_loads]
+            + [m.position for m in ext_moments_xz]
+            + [m.position for m in ext_moments_xy]
+        )
+        overhang = sorted({p for p in all_positions if p < xA or p > xB})
+        if overhang:
+            warnings.warn(
+                f"Load(s) applied outside bearing span [{xA:.1f}, {xB:.1f}] mm "
+                f"at x = {overhang}. Overhang loads cause M ≠ 0 at supports — "
+                f"_validate_result will raise RuntimeError. Phase 1 does not support overhang.",
+                stacklevel=2,
+            )
+
         # ── Warn if torque is unbalanced ────────────────────────────────────
         total_torque = sum(t.magnitude for t in torque_loads)
         if abs(total_torque) > 1.0:
@@ -98,8 +129,8 @@ class StaticsSolver:
             )
 
         # ── Solve equilibrium in each plane ─────────────────────────────────
-        R_A_xz, R_B_xz = self._equilibrium(radial_xz, xA, xB)
-        R_A_xy, R_B_xy = self._equilibrium(radial_xy, xA, xB)
+        R_A_xz, R_B_xz = self._equilibrium(radial_xz, xA, xB, ext_moments_xz)
+        R_A_xy, R_B_xy = self._equilibrium(radial_xy, xA, xB, ext_moments_xy)
         R_axial = -sum(a.magnitude for a in axial_loads)
 
         # ── Assemble point-force lists (reactions + applied) ────────────────
@@ -111,8 +142,8 @@ class StaticsSolver:
 
         V_xz = self._shear_diagram(x, all_xz)
         V_xy = self._shear_diagram(x, all_xy)
-        M_xz = self._moment_diagram(x, all_xz)
-        M_xy = self._moment_diagram(x, all_xy)
+        M_xz = self._moment_diagram(x, all_xz) + self._moment_external_diagram(x, ext_moments_xz)
+        M_xy = self._moment_diagram(x, all_xy) + self._moment_external_diagram(x, ext_moments_xy)
         M_res = np.sqrt(M_xz ** 2 + M_xy ** 2)
         T = self._torsion_diagram(x, torque_loads)
         Fa = self._axial_diagram(x, axial_loads, R_axial, xA)
@@ -142,42 +173,61 @@ class StaticsSolver:
 
     # ── Private methods ───────────────────────────────────────────────────────
 
-    def _collect_radial(
-        self, system: MechanicalSystem, plane: LoadPlane
-    ) -> list[tuple[float, float]]:
-        """Extract (position, magnitude) pairs for RadialLoad in a given plane."""
-        return [
-            (load.position, load.magnitude)
-            for load in system.loads
-            if isinstance(load, RadialLoad) and load.plane == plane
-        ]
-
     def _equilibrium(
         self,
         loads: list[tuple[float, float]],
         xA: float,
         xB: float,
+        external_moments: list[ExternalMoment] | None = None,
     ) -> tuple[float, float]:
         """
         Solve static equilibrium for two pin supports at xA and xB.
 
         Args:
-            loads: list of (position, magnitude) — applied external loads only,
+            loads: list of (position, magnitude) — applied radial loads only,
                    NOT including reactions.
             xA, xB: support positions [mm].
+            external_moments: list of ExternalMoment loads (pure couples, no net force).
 
         Returns:
             (R_A, R_B): reactions at A and B. Signs determined by equilibrium.
 
         Method:
-            ΣM_A = 0 → R_B = -Σ(F_i × (x_i - xA)) / (xB - xA)
-            ΣF   = 0 → R_A = -ΣF_i - R_B
+            ΣM_A = 0 → R_B×L + Σ(F_i×(xi−xA)) − Σ(M₀_j) = 0
+            Note: external moments enter with NEGATIVE sign in ΣM_A.
+            Derivation: for CCW couple M₀, correct equilibrium gives R_B = M₀/L,
+            requiring the term (−M₀) in the moment sum.
+
+            ΣF = 0 → R_A = −ΣF_i − R_B   (couples don't contribute to ΣF)
         """
+        if external_moments is None:
+            external_moments = []
         span = xB - xA
         moment_about_A = sum(F * (x - xA) for x, F in loads)
+        moment_about_A -= sum(m.magnitude for m in external_moments)
         R_B = -moment_about_A / span
         R_A = -sum(F for _, F in loads) - R_B
         return R_A, R_B
+
+    def _moment_external_diagram(
+        self,
+        x: np.ndarray,
+        external_moments: list[ExternalMoment],
+    ) -> np.ndarray:
+        """
+        M(x) contribution from external moment couples.
+
+        A pure couple M₀ at position pos causes a step jump of +M₀ in the
+        bending moment diagram at x = pos. There is no moment arm — the
+        couple acts instantaneously. This is added to the point-force
+        moment diagram from _moment_diagram.
+
+        Convention: x >= pos (inclusive), consistent with _shear_diagram.
+        """
+        M = np.zeros_like(x)
+        for m in external_moments:
+            M += np.where(x >= m.position, m.magnitude, 0.0)
+        return M
 
     def _shear_diagram(
         self,

@@ -714,7 +714,7 @@ class StressSolver:
         ny         = self._yielding_factor(Kf, Ma, Kfs, Tm, d, material.Sy)
 
         # Langer check: static yield governs if ny < nf_goodman
-        langer_ok = ny >= nf_goodman
+        langer_ok = True if not math.isfinite(nf_goodman) else (ny >= nf_goodman)
         if not langer_ok:
             warnings.warn(
                 f"Langer check at x={x:.1f} mm: ny={ny:.3f} < nf_goodman={nf_goodman:.3f}. "

@@ -391,3 +391,261 @@ class TestHelicalGearQualitative:
     def test_eps_beta_nonzero_without_face_width(self, helical_geometry):
         """εβ = 0 when b not supplied (default b=0)."""
         assert helical_geometry.eps_beta == 0.0
+
+
+# ===========================================================================
+# Profile Shift Validation — Real GEARpie Reports
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# C14 — Spur gear with profile shift
+# m=4.5, z1=16, z2=24, α=20°, β=0°, x1=0.1817, x2=0.1715, al=91.5mm
+# T1=200 N·m  →  Ft=5464.5N, Fr=2256.6N, Fa=0N, εα=1.46
+# Source: GEARpie report C14 (real case)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def c14_geometry(solver):
+    """C14 spur gear with profile shift — al=91.5mm supplied directly."""
+    return solver.compute_geometry(
+        mn=4.5, z1=16, z2=24,
+        alpha_n_deg=20.0, beta_deg=0.0,
+        al=91.5,
+        x1=0.1817, x2=0.1715,
+    )
+
+@pytest.fixture
+def c14_forces(solver, c14_geometry):
+    return solver.compute_forces(T1_Nm=200.0, geometry=c14_geometry)
+
+
+class TestC14ProfileShiftSpur:
+    """Validation against real GEARpie C14 report — spur gear with profile shift."""
+
+    def test_tangential_force(self, c14_forces):
+        """Ft=5464.5 N — GEARpie report C14."""
+        np.testing.assert_allclose(c14_forces.Ft, 5464.5, rtol=0.005)
+
+    def test_radial_force(self, c14_forces):
+        """Fr=2256.6 N — GEARpie report C14."""
+        np.testing.assert_allclose(c14_forces.Fr, 2256.6, rtol=0.005)
+
+    def test_axial_force_zero_spur(self, c14_forces):
+        """Fa=0 N — spur gear."""
+        assert c14_forces.Fa == 0.0
+
+    def test_contact_ratio_eps_alpha(self, c14_geometry):
+        """εα=1.46 — GEARpie report C14."""
+        np.testing.assert_allclose(c14_geometry.eps_alpha, 1.46, rtol=0.005)
+
+    def test_working_centre_distance(self, c14_geometry):
+        """al=91.5mm — supplied directly."""
+        np.testing.assert_allclose(c14_geometry.al, 91.5, rtol=1e-9)
+
+    def test_working_pressure_angle(self, c14_geometry):
+        """αtw≈22.44° — derived from al and profile shift."""
+        np.testing.assert_allclose(c14_geometry.alpha_tw_deg, 22.44, atol=0.05)
+
+    def test_tip_diameter_pinion(self, c14_geometry):
+        """da1 = 2 × 41.318 = 82.636 mm — GEARpie report C14."""
+        np.testing.assert_allclose(c14_geometry.da1, 82.636, atol=0.05)
+
+    def test_tip_diameter_wheel(self, c14_geometry):
+        """da2 = 2 × 59.272 = 118.544 mm — GEARpie report C14."""
+        np.testing.assert_allclose(c14_geometry.da2, 118.544, atol=0.05)
+
+    def test_root_diameter_pinion(self, c14_geometry):
+        """df1 = 2 × 31.193 = 62.386 mm — GEARpie report C14."""
+        np.testing.assert_allclose(c14_geometry.df1, 62.386, atol=0.05)
+
+    def test_profile_shift_stored(self, c14_geometry):
+        """x1 and x2 stored correctly."""
+        np.testing.assert_allclose(c14_geometry.x1, 0.1817, rtol=1e-6)
+        np.testing.assert_allclose(c14_geometry.x2, 0.1715, rtol=1e-6)
+
+    def test_reference_diameters(self, c14_geometry):
+        """d1=72mm, d2=108mm (module × teeth, no shift effect on reference)."""
+        np.testing.assert_allclose(c14_geometry.d1, 4.5 * 16, rtol=1e-9)
+        np.testing.assert_allclose(c14_geometry.d2, 4.5 * 24, rtol=1e-9)
+
+    def test_standard_centre_distance(self, c14_geometry):
+        """a=90.0mm (reference, before profile shift)."""
+        np.testing.assert_allclose(c14_geometry.a, 90.0, rtol=1e-9)
+
+    def test_involute_consistency(self, c14_geometry):
+        """
+        inv(αtw) from al must equal inv(αt) + 2·tan(α)·(x1+x2)/(z1+z2).
+        Verifies that al and x1+x2 are geometrically consistent.
+        """
+        alpha_t  = math.radians(c14_geometry.alpha_t_deg)
+        alpha_tw = math.radians(c14_geometry.alpha_tw_deg)
+        alpha_n  = math.radians(c14_geometry.alpha_n_deg)
+        inv_from_al = math.tan(alpha_tw) - alpha_tw
+        inv_from_x  = (math.tan(alpha_t) - alpha_t
+                       + 2 * math.tan(alpha_n) * (c14_geometry.x1 + c14_geometry.x2)
+                       / (c14_geometry.z1 + c14_geometry.z2))
+        np.testing.assert_allclose(inv_from_al, inv_from_x, atol=1e-5)
+
+    def test_gear_element_consistency(self, solver, c14_geometry, c14_forces):
+        """GearElement torque check must pass (deviation < 2%)."""
+        ge = solver.to_gear_element(100.0, c14_forces, c14_geometry, label="C14")
+        expected = ge.tangential_force * ge.pitch_diameter / 2.0
+        deviation = abs(ge.torque - expected) / max(expected, 1.0)
+        assert deviation < 0.02
+
+
+# ---------------------------------------------------------------------------
+# H501 — Helical gear with profile shift
+# m=3.5, z1=20, z2=30, α=20°, β=15°, x1=0.1809, x2=0.0891, al=91.5mm
+# T1=100 N·m  →  Ft=2732.2N, Fr=1110.3N, Fa=739.5N, εα=1.46
+# Source: GEARpie report H501 (real case)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def h501_geometry(solver):
+    """H501 helical gear with profile shift — al=91.5mm supplied directly."""
+    return solver.compute_geometry(
+        mn=3.5, z1=20, z2=30,
+        alpha_n_deg=20.0, beta_deg=15.0,
+        al=91.5,
+        x1=0.1809, x2=0.0891,
+    )
+
+@pytest.fixture
+def h501_forces(solver, h501_geometry):
+    return solver.compute_forces(T1_Nm=100.0, geometry=h501_geometry)
+
+
+class TestH501ProfileShiftHelical:
+    """Validation against real GEARpie H501 report — helical gear with profile shift."""
+
+    def test_tangential_force(self, h501_forces):
+        """Ft=2732.2 N — GEARpie report H501."""
+        np.testing.assert_allclose(h501_forces.Ft, 2732.2, rtol=0.005)
+
+    def test_radial_force(self, h501_forces):
+        """Fr=1110.3 N — GEARpie report H501."""
+        np.testing.assert_allclose(h501_forces.Fr, 1110.3, rtol=0.005)
+
+    def test_axial_force(self, h501_forces):
+        """Fa=739.5 N — GEARpie report H501."""
+        np.testing.assert_allclose(h501_forces.Fa, 739.5, rtol=0.005)
+
+    def test_contact_ratio_eps_alpha(self, h501_geometry):
+        """εα=1.46 — GEARpie report H501. rtol=0.01: εα sensitive to da rounding."""
+        np.testing.assert_allclose(h501_geometry.eps_alpha, 1.46, rtol=0.01)
+
+    def test_base_pitch_transverse(self, h501_geometry):
+        """p_bt=10.652mm — GEARpie report H501."""
+        np.testing.assert_allclose(h501_geometry.p_bt, 10.652, rtol=0.005)
+
+    def test_working_pressure_angle(self, h501_geometry):
+        """αtw≈22.11° — derived from al."""
+        np.testing.assert_allclose(h501_geometry.alpha_tw_deg, 22.11, atol=0.05)
+
+    def test_tip_diameter_pinion(self, h501_geometry):
+        """da1 ≈ 80.67 mm — GEARpie report H501.
+        Tolerance 0.1mm: GEARpie uses slightly different haP convention for helical gears.
+        """
+        np.testing.assert_allclose(h501_geometry.da1, 80.672, atol=0.1)
+
+    def test_tip_diameter_wheel(self, h501_geometry):
+        """da2 ≈ 116.26 mm — GEARpie report H501. Tolerance 0.1mm."""
+        np.testing.assert_allclose(h501_geometry.da2, 116.264, atol=0.1)
+
+    def test_root_diameter_pinion(self, h501_geometry):
+        """df1 ≈ 64.99 mm — GEARpie report H501. Tolerance 0.1mm."""
+        np.testing.assert_allclose(h501_geometry.df1, 64.986, atol=0.1)
+
+    def test_profile_shift_stored(self, h501_geometry):
+        np.testing.assert_allclose(h501_geometry.x1, 0.1809, rtol=1e-6)
+        np.testing.assert_allclose(h501_geometry.x2, 0.0891, rtol=1e-6)
+
+    def test_is_helical(self, h501_geometry):
+        assert h501_geometry.is_spur is False
+
+    def test_beta_b_positive(self, h501_geometry):
+        assert h501_geometry.beta_b_deg > 0.0
+
+    def test_involute_consistency(self, h501_geometry):
+        """inv(αtw) from al matches involute equation with x1+x2."""
+        alpha_t  = math.radians(h501_geometry.alpha_t_deg)
+        alpha_tw = math.radians(h501_geometry.alpha_tw_deg)
+        alpha_n  = math.radians(h501_geometry.alpha_n_deg)
+        inv_from_al = math.tan(alpha_tw) - alpha_tw
+        inv_from_x  = (math.tan(alpha_t) - alpha_t
+                       + 2 * math.tan(alpha_n) * (h501_geometry.x1 + h501_geometry.x2)
+                       / (h501_geometry.z1 + h501_geometry.z2))
+        np.testing.assert_allclose(inv_from_al, inv_from_x, atol=1e-5)
+
+    def test_force_triangle(self, h501_forces):
+        """Fn_base = sqrt(Ft² + Fr² + Fa²)."""
+        Fn_check = math.sqrt(
+            h501_forces.Ft**2 + h501_forces.Fr**2 + h501_forces.Fa**2
+        )
+        np.testing.assert_allclose(h501_forces.Fn, Fn_check, rtol=0.005)
+
+    def test_gear_element_consistency(self, solver, h501_geometry, h501_forces):
+        """GearElement torque check must pass (deviation < 2%)."""
+        ge = solver.to_gear_element(150.0, h501_forces, h501_geometry, label="H501")
+        expected = ge.tangential_force * ge.pitch_diameter / 2.0
+        deviation = abs(ge.torque - expected) / max(expected, 1.0)
+        assert deviation < 0.02
+
+
+# ---------------------------------------------------------------------------
+# al=None — compute from involute equation (brentq)
+# ---------------------------------------------------------------------------
+
+class TestComputeAlFromInvolute:
+    """When al is not supplied, GearSolver solves for al via brentq."""
+
+    def test_al_none_spur_no_shift(self, solver):
+        """x=0, al=None → al = a_standard."""
+        geo = solver.compute_geometry(
+            mn=2.0, z1=20, z2=60,
+            alpha_n_deg=20.0, beta_deg=0.0,
+            al=None, x1=0.0, x2=0.0,
+        )
+        np.testing.assert_allclose(geo.al, geo.a, rtol=1e-6)
+
+    def test_al_none_with_profile_shift_greater_than_standard(self, solver):
+        """x1+x2 > 0 → al > a_standard."""
+        geo = solver.compute_geometry(
+            mn=4.5, z1=16, z2=24,
+            alpha_n_deg=20.0, beta_deg=0.0,
+            al=None, x1=0.1817, x2=0.1715,
+        )
+        assert geo.al > geo.a
+
+    def test_al_none_c14_matches_supplied_al(self, solver):
+        """al=None with C14 x values must give al≈91.5mm."""
+        geo = solver.compute_geometry(
+            mn=4.5, z1=16, z2=24,
+            alpha_n_deg=20.0, beta_deg=0.0,
+            al=None, x1=0.1817, x2=0.1715,
+        )
+        np.testing.assert_allclose(geo.al, 91.5, rtol=0.001)
+
+    def test_al_none_h501_matches_supplied_al(self, solver):
+        """al=None with H501 x values must give al≈91.5mm."""
+        geo = solver.compute_geometry(
+            mn=3.5, z1=20, z2=30,
+            alpha_n_deg=20.0, beta_deg=15.0,
+            al=None, x1=0.1809, x2=0.0891,
+        )
+        np.testing.assert_allclose(geo.al, 91.5, rtol=0.001)
+
+    def test_al_none_x_zero_helical(self, solver):
+        """x=0, helical — al=None → al = a_standard."""
+        geo_none = solver.compute_geometry(
+            mn=3.5, z1=20, z2=30,
+            alpha_n_deg=20.0, beta_deg=15.0,
+            al=None, x1=0.0, x2=0.0,
+        )
+        geo_a = solver.compute_geometry(
+            mn=3.5, z1=20, z2=30,
+            alpha_n_deg=20.0, beta_deg=15.0,
+            al=geo_none.a, x1=0.0, x2=0.0,
+        )
+        np.testing.assert_allclose(geo_none.al, geo_a.al, rtol=1e-6)

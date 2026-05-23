@@ -10,8 +10,8 @@ Phase 4+:  DeflectionSolver, CriticalSpeedSolver (not yet implemented).
 
 from solvers.shaft.statics import StaticsSolver
 from solvers.shaft.static_failure import StaticFailureSolver
-from solvers.shaft.stress import (
-    StressSolver,
+from solvers.shaft.stress import StressSolver
+from solvers.shaft.utils import (
     # Marin factor helpers — exposed for testing and transparency
     ka_surface_finish,
     kb_size,

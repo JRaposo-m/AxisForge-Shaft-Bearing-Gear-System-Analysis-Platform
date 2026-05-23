@@ -94,7 +94,7 @@ S355 = Material(
     Sy=355.0,
     E=210.0,
     density=7850.0,
-    description="EN 10025-2 S355 — structural/shaft steel",
+    description="EN 10025-2 S355 — structural steel",
 )
 
 # Heat-treatable alloy steel — DIN 42CrMo4 (common transmission shafts)

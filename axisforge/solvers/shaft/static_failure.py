@@ -1,4 +1,4 @@
-# solvers/static_failure.py
+# solvers/shaft/static_failure.py
 """
 StaticFailureSolver — static failure analysis for ductile materials.
 

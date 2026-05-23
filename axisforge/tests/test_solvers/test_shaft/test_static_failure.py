@@ -1,4 +1,4 @@
-# tests/test_solvers/test_static_failure.py
+# tests/test_solvers/test_shaft/test_static_failure.py
 """
 Tests for StaticFailureSolver — static failure analysis, ductile materials.
 
@@ -35,7 +35,7 @@ from core.shaft import Shaft, ShaftSection, Shoulder
 from core.components import Bearing, GearElement
 from core.system import MechanicalSystem
 from models.static_failure_result import StaticFailureResult, StaticFailureSection
-from solvers.static_failure import StaticFailureSolver
+from solvers.shaft.static_failure import StaticFailureSolver
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +248,7 @@ class TestStaticFailureSolverIntegration:
         system = self._make_system(3500.0, 1274.0, 175_000.0)
         material = _make_material_sy(500.0)
         solver = StaticFailureSolver()
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         statics = StaticsSolver().solve(system)
         result = solver.solve(system, statics, material)
         assert isinstance(result, StaticFailureResult)
@@ -257,7 +257,7 @@ class TestStaticFailureSolverIntegration:
         """governing_n must be non-decreasing (most critical = index 0)."""
         system = self._make_system(3500.0, 1274.0, 175_000.0)
         material = _make_material_sy(500.0)
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         statics = StaticsSolver().solve(system)
         result = StaticFailureSolver().solve(system, statics, material)
         ns = [s.governing_n for s in result.sections]
@@ -266,7 +266,7 @@ class TestStaticFailureSolverIntegration:
     def test_material_id_and_sy_stored(self):
         mat = _make_material_sy(400.0)
         system = self._make_system(3500.0, 1274.0, 175_000.0)
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         statics = StaticsSolver().solve(system)
         result = StaticFailureSolver().solve(system, statics, mat)
         assert result.material_id == mat.material_id
@@ -286,7 +286,7 @@ class TestStaticFailureSolverIntegration:
                                    arrangement="fixed", label="A"))
         system.add_bearing(Bearing(position=400.0, C=1.0, C0=1.0,
                                    arrangement="floating", label="B"))
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         statics = StaticsSolver().solve(system)
         result = StaticFailureSolver().solve(system, statics, _make_material_sy(300.0))
         for s in result.sections:
@@ -304,7 +304,7 @@ class TestStaticFailureSolverIntegration:
             shaft_d=20.0,
         )
         material = _make_material_sy(200.0)
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         statics = StaticsSolver().solve(system)
         result = StaticFailureSolver().solve(system, statics, material)
         assert result.any_yielded, "Expected at least one yielded section"
@@ -317,7 +317,7 @@ class TestStaticFailureSolverIntegration:
         """
         system = self._make_system(3500.0, 1274.0, 175_000.0)
         material = _make_material_sy(355.0)
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         statics = StaticsSolver().solve(system)
         result = StaticFailureSolver().solve(system, statics, material)
         for s in result.sections:
@@ -329,7 +329,7 @@ class TestStaticFailureSolverIntegration:
         """governing_theory must be 'DE', 'MSS', or 'equal'."""
         system = self._make_system(3500.0, 1274.0, 175_000.0)
         material = _make_material_sy(500.0)
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         statics = StaticsSolver().solve(system)
         result = StaticFailureSolver().solve(system, statics, material)
         for s in result.sections:
@@ -343,7 +343,7 @@ class TestStaticFailureSolverIntegration:
         system = MechanicalSystem(shaft=shaft, speed_rpm=0.0)
         system.add_bearing(Bearing(position=0.0, C=1.0, C0=1.0,
                                    arrangement="fixed", label="A"))
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         with pytest.raises(ValueError):
             StaticsSolver().solve(system)
 
@@ -383,7 +383,7 @@ class TestStaticFailureSolverIntegration:
             position=200.0, tangential_force=3500.0, radial_force=0.0,
             pitch_diameter=100.0,
         ))
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         statics = StaticsSolver().solve(system)
         result = StaticFailureSolver().solve(system, statics, _make_material_sy(500.0))
 

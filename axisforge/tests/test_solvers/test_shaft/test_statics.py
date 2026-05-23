@@ -1,4 +1,4 @@
-# tests/test_solvers/test_statics.py
+# tests/test_solvers/test_shaft/test_statics.py
 """
 StaticsSolver test suite — written BEFORE solver implementation (TDD).
 
@@ -20,7 +20,7 @@ from core.shaft import Shaft, ShaftSection
 from core.components import Bearing, GearElement
 from core.loads import RadialLoad, TorqueLoad, LoadPlane
 from core.system import MechanicalSystem
-from solvers.statics import StaticsSolver
+from solvers.shaft.statics import StaticsSolver
 from models.statics_result import StaticsResult
 
 TOLERANCE_FORCE_N = 1.0

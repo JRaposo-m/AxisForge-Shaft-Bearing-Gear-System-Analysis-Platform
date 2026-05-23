@@ -403,7 +403,7 @@ class TestShigleyEx7_1_SolverIntegration:
         nf_goodman ≈ 1.63 ± 5%.
         Source: Shigley Ex. 7-1, p. 363. Tolerance accounts for Kt interpolation.
         """
-        from solvers.stress import StressSolver
+        from solvers.shaft.stress import StressSolver
         result = StressSolver().solve(
             system_ex71, statics_ex71, material_ex71,
             finish="machined", reliability_percent=99.0,
@@ -420,7 +420,7 @@ class TestShigleyEx7_1_SolverIntegration:
         nf_asme ≈ 1.88 ± 5%.
         Source: Shigley Ex. 7-1, p. 363.
         """
-        from solvers.stress import StressSolver
+        from solvers.shaft.stress import StressSolver
         result = StressSolver().solve(
             system_ex71, statics_ex71, material_ex71,
             finish="machined", reliability_percent=99.0,
@@ -436,7 +436,7 @@ class TestShigleyEx7_1_SolverIntegration:
         ny ≈ 4.50 ± 5%.
         Source: Shigley Ex. 7-1 part (b), p. 363.
         """
-        from solvers.stress import StressSolver
+        from solvers.shaft.stress import StressSolver
         result = StressSolver().solve(
             system_ex71, statics_ex71, material_ex71,
             finish="machined", reliability_percent=99.0,
@@ -449,7 +449,7 @@ class TestShigleyEx7_1_SolverIntegration:
 
     def test_asme_greater_than_goodman(self, system_ex71, statics_ex71, material_ex71):
         """DE-ASME ≥ DE-Goodman. Shigley §6-11."""
-        from solvers.stress import StressSolver
+        from solvers.shaft.stress import StressSolver
         result = StressSolver().solve(
             system_ex71, statics_ex71, material_ex71,
             finish="machined", reliability_percent=99.0,
@@ -692,7 +692,7 @@ class TestShigleyEx7_1_MarinFactors:
         Shigley Eq. 6-19, Tab. 6-2 (machined): a=2.70, b=-0.265.
         Source: Ex. 7-1 solution, p. 363.
         """
-        from solvers.stress import ka_surface_finish
+        from solvers.shaft.stress import ka_surface_finish
         Sut_MPa = 105.0 * KPSI_TO_MPA   # 723.9 MPa
         ka = ka_surface_finish(Sut_MPa, "machined")
         assert ka == pytest.approx(0.787, rel=self.RTOL), (
@@ -705,7 +705,7 @@ class TestShigleyEx7_1_MarinFactors:
         Shigley Eq. 6-20, d=1.1 in = 27.94 mm (range 51mm > d > 2.79mm).
         Source: Ex. 7-1 solution, p. 363.
         """
-        from solvers.stress import kb_size
+        from solvers.shaft.stress import kb_size
         d_mm = 1.100 * IN_TO_MM   # 27.94 mm
         kb = kb_size(d_mm)
         assert kb == pytest.approx(0.870, rel=self.RTOL), (
@@ -718,7 +718,7 @@ class TestShigleyEx7_1_MarinFactors:
         Shigley Table 6-6.
         Source: Ex. 7-1 solution, p. 363.
         """
-        from solvers.stress import ke_reliability
+        from solvers.shaft.stress import ke_reliability
         ke = ke_reliability(99.0)
         assert ke == pytest.approx(0.814, rel=self.RTOL), (
             f"ke: got {ke:.4f}, expected 0.814 (Shigley Tab. 6-6)"

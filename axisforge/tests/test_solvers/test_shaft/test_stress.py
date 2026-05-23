@@ -23,7 +23,7 @@ VALIDATION TARGETS (Shigley 10th ed.):
 import pytest
 import numpy as np
 
-from solvers.stress import (
+from solvers.shaft.stress import (
     ka_surface_finish,
     kb_size,
     kc_load,

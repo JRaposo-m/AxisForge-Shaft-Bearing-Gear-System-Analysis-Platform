@@ -1,5 +1,5 @@
 """
-tests/test_solvers/test_stress_solve.py
+tests/test_solvers/test_shaft/test_stress_solve.py
 Validation tests for StressSolver.solve() — Phase 1 implementation.
 
 Reference: Shigley's MED, 10th ed., §7-4.
@@ -63,7 +63,7 @@ from core.components import Bearing
 from core.system import MechanicalSystem
 from models.statics_result import StaticsResult
 from models.stress_result import StressRaiserType, StressResult
-from solvers.stress import (
+from solvers.shaft.stress import (
     StressSolver,
     ka_surface_finish,
     kb_size,

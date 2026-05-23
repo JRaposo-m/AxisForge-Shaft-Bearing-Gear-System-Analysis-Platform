@@ -1,4 +1,4 @@
-# solvers/statics.py
+# solvers/shaft/statics.py
 """
 StaticsSolver — static analysis of a two-support shaft.
 

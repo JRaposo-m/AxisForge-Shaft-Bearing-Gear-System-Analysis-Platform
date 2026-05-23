@@ -33,7 +33,7 @@ from core.components import Bearing, BearingType
 from core.loads import LoadPlane
 from core.system import MechanicalSystem
 from models.bearing_result import BearingLifeResult
-from solvers.bearing_life import BearingLifeSolver
+from solvers.bearings.bearing_life import BearingLifeSolver
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -342,20 +342,20 @@ class TestExtractBearingForces:
     """
 
     def test_returns_dict_with_two_keys(self, solver, simple_system):
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         sr = StaticsSolver().solve(simple_system)
         forces = solver.extract_bearing_forces(sr, simple_system)
         assert len(forces) == 2
 
     def test_keys_are_bearing_labels(self, solver, simple_system):
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         sr = StaticsSolver().solve(simple_system)
         forces = solver.extract_bearing_forces(sr, simple_system)
         assert "A" in forces
         assert "B" in forces
 
     def test_Fr_A_symmetric(self, solver, simple_system):
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         sr = StaticsSolver().solve(simple_system)
         forces = solver.extract_bearing_forces(sr, simple_system)
         Fr_A, _ = forces["A"]
@@ -363,7 +363,7 @@ class TestExtractBearingForces:
         assert math.isclose(Fr_A, expected, rel_tol=0.01)  # 1% — reactions are symmetric
 
     def test_Fr_B_symmetric(self, solver, simple_system):
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         sr = StaticsSolver().solve(simple_system)
         forces = solver.extract_bearing_forces(sr, simple_system)
         _, _ = forces["A"]
@@ -373,7 +373,7 @@ class TestExtractBearingForces:
 
     def test_Fa_zero_no_axial_gear(self, solver, simple_system):
         """Gear has axial_force=0 → Fa_A=Fa_B=0."""
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         sr = StaticsSolver().solve(simple_system)
         forces = solver.extract_bearing_forces(sr, simple_system)
         _, Fa_A = forces["A"]
@@ -388,7 +388,7 @@ class TestExtractBearingForces:
         from core.components import Bearing, BearingType
         from core.loads import AxialLoad
         from core.system import MechanicalSystem
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
 
         system = MechanicalSystem(shaft=three_section_shaft, speed_rpm=1450.0)
         system.add_bearing(Bearing(position=50.0, C=35_000.0, C0=22_000.0,
@@ -410,7 +410,7 @@ class TestExtractBearingForces:
         from core.components import Bearing
         from core.loads import AxialLoad
         from core.system import MechanicalSystem
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
 
         system = MechanicalSystem(shaft=three_section_shaft, speed_rpm=1450.0)
         system.add_bearing(Bearing(position=50.0, C=35_000.0, C0=22_000.0,
@@ -430,7 +430,7 @@ class TestExtractBearingForces:
         from core.components import Bearing
         from core.loads import AxialLoad
         from core.system import MechanicalSystem
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
 
         system = MechanicalSystem(shaft=three_section_shaft, speed_rpm=1450.0)
         system.add_bearing(Bearing(position=50.0, C=35_000.0, C0=22_000.0,
@@ -475,7 +475,7 @@ class TestIntegration:
     """
 
     def test_full_pipeline_meets_static_safety(self, solver, simple_system):
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         sr = StaticsSolver().solve(simple_system)
         forces = solver.extract_bearing_forces(sr, simple_system)
         bearings = {b.label: b for b in simple_system.bearings}
@@ -488,7 +488,7 @@ class TestIntegration:
             assert result.meets_static_safety is True
 
     def test_full_pipeline_result_type(self, solver, simple_system):
-        from solvers.statics import StaticsSolver
+        from solvers.shaft.statics import StaticsSolver
         sr = StaticsSolver().solve(simple_system)
         forces = solver.extract_bearing_forces(sr, simple_system)
         bearings = {b.label: b for b in simple_system.bearings}

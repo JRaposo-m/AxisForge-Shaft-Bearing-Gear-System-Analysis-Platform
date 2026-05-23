@@ -1,8 +1,8 @@
-# tests/test_solvers/test_statics_external_moment.py
+# tests/test_solvers/test_shaft/test_statics_external_moment.py
 """
 Tests for ExternalMoment handling in StaticsSolver.
 
-Mathematical derivation (documented in solvers/statics.py):
+Mathematical derivation (documented in solvers/shaft/statics.py):
   For a CCW couple M0 at position pos (xA=0, xB=L, no forces):
     R_B = +M0/L  (upward),  R_A = -M0/L  (downward)
     M(x<pos)  = R_A * x           = -(M0/L) * x
@@ -50,7 +50,7 @@ from core.shaft import Shaft, ShaftSection
 from core.components import Bearing
 from core.loads import ExternalMoment, RadialLoad, LoadPlane
 from core.system import MechanicalSystem
-from solvers.statics import StaticsSolver
+from solvers.shaft.statics import StaticsSolver
 from models.statics_result import StaticsResult
 
 TOLERANCE_REL = 0.005

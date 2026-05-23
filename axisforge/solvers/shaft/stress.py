@@ -1,5 +1,5 @@
 """
-solvers/stress.py
+solvers/shaft/stress.py
 StressSolver — combined stress, Goodman, ASME-Elliptic — Phase 1.
 
 Formulation:

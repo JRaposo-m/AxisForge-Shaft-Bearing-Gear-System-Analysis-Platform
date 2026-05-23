@@ -18,7 +18,7 @@ import warnings
 import numpy as np
 import pytest
 
-from solvers.gear_solver import GearSolver
+from solvers.gears.gear_solver import GearSolver
 from models.gear_result import GearGeometryResult, GearForceResult
 from core.components import GearElement
 

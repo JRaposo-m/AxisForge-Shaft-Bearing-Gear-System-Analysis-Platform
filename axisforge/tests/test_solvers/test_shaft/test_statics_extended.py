@@ -1,4 +1,4 @@
-# tests/test_solvers/test_statics_extended.py
+# tests/test_solvers/test_shaft/test_statics_extended.py
 """
 StaticsSolver — testes aprofundados com verificação quantitativa completa.
 
@@ -28,7 +28,7 @@ from core.shaft import Shaft, ShaftSection
 from core.components import Bearing, GearElement
 from core.loads import RadialLoad, TorqueLoad, LoadPlane
 from core.system import MechanicalSystem
-from solvers.statics import StaticsSolver
+from solvers.shaft.statics import StaticsSolver
 
 TOLERANCE_REL = 0.005
 TOLERANCE_ABS_M = 200.0    # N·mm — tolerância absoluta para momentos intermédios

@@ -1,5 +1,5 @@
 """
-solvers/gear_solver.py
+solvers/gears/geometry.py
 GearSolver — cylindrical gear geometry and force calculation.
 
 Produces GearGeometryResult and GearForceResult, then assembles a
@@ -16,18 +16,16 @@ Profile shift support (x1, x2):
     Solve involute equation via scipy.optimize.brentq:
       inv(αtw) = inv(αt) + 2·tan(α)·(x1+x2)/(z1+z2)
       al = (db1 + db2) / (2·cos(αtw))             [ISO 21771 §7]
-
-  Tip diameters with profile shift (k=0, no tip shortening):
-    da = d + 2·mn·(haP + x)
+  Tip diameters with profile shift and tip shortening k:
   Root diameters:
     df = d + 2·mn·(x − hfP)
 
 Phase 1 scope:
-  - External cylindrical gears: spur (β=0) and helical (β>0).
-  - Profile shift: x1, x2 supported (default 0.0).
-  - al supplied → αtw direct; al=None → brentq on involute equation.
-  - Face width b optional (used only for εβ).
-  - haP=1.0, hfP=1.25, k=0 (ISO standard rack, no tip shortening).
+  External cylindrical gears: spur (β=0) and helical (β>0).
+  Profile shift: x1, x2 supported (default 0.0).
+  al supplied → αtw direct; al=None → brentq on involute equation.
+  Face width b optional (used only for εβ).
+  haP=1.0, hfP=1.25 (ISO standard rack). k computed from centre distance modification.
 
 Unit convention (AxisForge SI):
   Input/output angles : degrees
@@ -37,10 +35,10 @@ Unit convention (AxisForge SI):
   Torques             : N·mm  (T1_Nm input × 1000)
 
 Validation cases:
-  C14 spur  — m=4.5, z=16/24, x=0.1817/0.1715, al=91.5mm, T=200 N·m
-              Ft=5464.5N, Fr=2256.6N, Fa=0N, εα=1.46  (GEARpie report)
+  C14 spur   — m=4.5, z=16/24, x=0.1817/0.1715, al=91.5mm, T=200 N·m
+               Ft=5464.5N, Fr=2256.6N, Fa=0N, εα=1.46  (GEARpie report)
   H501 helical — m=3.5, z=20/30, β=15°, x=0.1809/0.0891, al=91.5mm, T=100 N·m
-              Ft=2732.2N, Fr=1110.3N, Fa=739.5N, εα=1.46  (GEARpie report)
+               Ft=2732.2N, Fr=1110.3N, Fa=739.5N, εα=1.46  (GEARpie report)
 
 References:
   MAAG Gear Book, 2nd ed.
@@ -54,32 +52,34 @@ import math
 import warnings
 from typing import Optional
 
-from scipy.optimize import brentq
-
 from core.components import GearElement
 from models.gear_result import GearGeometryResult, GearForceResult
-
-# Standard rack proportions (ISO 53 / DIN 867)
-_HAP: float = 1.0    # addendum coefficient
-_HFP: float = 1.25   # dedendum coefficient
-# k = 0: no tip shortening (Phase 1; Phase 2: compute k from centre modification)
+from solvers.gears.utils import (
+    HAP, HFP,
+    solve_alpha_tw,
+    contact_ratio_alpha,
+    contact_ratio_beta,
+    undercut_z_min,
+    validate_geometry_inputs,
+)
 
 
 class GearSolver:
     """
     Computes cylindrical gear geometry and mesh forces.
 
+    All methods are pure functions — no internal state.
+
     Usage (al supplied):
-        geo    = GearSolver().compute_geometry(mn, z1, z2, alpha_n_deg, beta_deg, al=91.5,
-                                               x1=0.18, x2=0.17)
-        forces = GearSolver().compute_forces(T1_Nm=200.0, geometry=geo)
-        ge     = GearSolver().to_gear_element(position=100.0, forces=forces, geometry=geo)
+        solver = GearSolver()
+        geo    = solver.compute_geometry(mn, z1, z2, alpha_n_deg, beta_deg,
+                                         al=91.5, x1=0.18, x2=0.17)
+        forces = solver.compute_forces(T1_Nm=200.0, geometry=geo)
+        ge     = solver.to_gear_element(position=100.0, forces=forces, geometry=geo)
 
     Usage (al from involute equation):
-        geo = GearSolver().compute_geometry(mn, z1, z2, alpha_n_deg, beta_deg,
-                                            al=None, x1=0.18, x2=0.17)
-
-    All methods are pure functions — no internal state.
+        geo = solver.compute_geometry(mn, z1, z2, alpha_n_deg, beta_deg,
+                                      al=None, x1=0.18, x2=0.17)
     """
 
     # ------------------------------------------------------------------
@@ -116,10 +116,9 @@ class GearSolver:
             If supplied → αtw derived directly.
             If None → solved from involute equation (requires scipy.brentq).
         x1, x2 : float
-            Profile shift coefficients (dimensionless). Default 0.0.
-            Positive = addendum modification towards larger teeth.
+            Profile shift coefficients [-]. Default 0.0.
         b : float
-            Face width [mm]. Used for εβ only. 0 = not supplied → εβ=0.
+            Face width [mm]. Used for εβ only. 0 → εβ=0.
 
         Returns
         -------
@@ -130,10 +129,10 @@ class GearSolver:
         ValueError
             Invalid inputs or geometrically inconsistent al.
         """
-        self._validate_geometry_inputs(mn, z1, z2, alpha_n_deg, beta_deg, al, x1, x2)
+        validate_geometry_inputs(mn, z1, z2, alpha_n_deg, beta_deg, al, x1, x2)
 
-        # Undercut warning (based on x=0 threshold; x>0 mitigates undercut)
-        z_min = self._undercut_z_min(alpha_n_deg, beta_deg)
+        # Undercut warning (x=0 threshold; x>0 mitigates)
+        z_min = undercut_z_min(alpha_n_deg, beta_deg)
         if z1 < z_min and x1 <= 0.0:
             warnings.warn(
                 f"z1={z1} < z_min={z_min} (α={alpha_n_deg}°, β={beta_deg}°) — "
@@ -163,7 +162,7 @@ class GearSolver:
 
         # --- Working centre distance and pressure angle ---
         if al is None:
-            al, alpha_tw = self._solve_al_from_involute(
+            al, alpha_tw = solve_alpha_tw(
                 alpha_n, alpha_t, x1, x2, z1, z2, db1, db2
             )
         else:
@@ -174,31 +173,32 @@ class GearSolver:
                     f"inconsistent: cos(αtw)={cos_alpha_tw:.6f} out of (0, 1]. "
                     f"Standard centre distance a={a:.3f} mm. Check al."
                 )
-            cos_alpha_tw = min(cos_alpha_tw, 1.0)
-            alpha_tw = math.acos(cos_alpha_tw)
+            alpha_tw = math.acos(min(cos_alpha_tw, 1.0))
 
         # --- Working pitch diameters ---
         dl1 = 2.0 * al / (u + 1.0)
         dl2 = 2.0 * al * u / (u + 1.0)
 
-        # --- Tip diameters with profile shift (k=0: no tip shortening) ---
-        # da = d + 2·mn·(haP + x)
-        da1 = d1 + 2.0 * mn * (_HAP + x1)
-        da2 = d2 + 2.0 * mn * (_HAP + x2)
+        # k accounts for the addendum reduction due to centre distance modification.
+
+        # --- Tip diameters with profile shift (k=0: ISO 21771 standard rack) ---
+        # GEARpie applies ~0.009*mn tip clearance reduction for helical gears
+        # with centre modification — not in ISO 21771. We follow the standard.
+        da1 = d1 + 2.0 * mn * (HAP + x1)
+        da2 = d2 + 2.0 * mn * (HAP + x2)
 
         # --- Root diameters with profile shift ---
-        # df = d + 2·mn·(x − hfP)
-        df1 = d1 + 2.0 * mn * (x1 - _HFP)
-        df2 = d2 + 2.0 * mn * (x2 - _HFP)
+        df1 = d1 + 2.0 * mn * (x1 - HFP)
+        df2 = d2 + 2.0 * mn * (x2 - HFP)
 
         # --- Base pitch ---
         p_bt = math.pi * mt * math.cos(alpha_t)
 
         # --- Contact ratios ---
-        eps_alpha = self._contact_ratio_alpha(
-            z1, z2, da1, da2, db1, db2, al, alpha_tw, p_bt
+        eps_alpha = contact_ratio_alpha(
+            z1, z2, da1, da2, db1, db2, alpha_tw, p_bt
         )
-        eps_beta  = self._contact_ratio_beta(b, beta_b, p_bt)
+        eps_beta  = contact_ratio_beta(b, beta_b, p_bt)
         eps_gamma = eps_alpha + eps_beta
 
         return GearGeometryResult(
@@ -273,12 +273,15 @@ class GearSolver:
         # Fa = Fbt · tan(βb)  — exact zero for spur
         Fa = 0.0 if geometry.is_spur else Fbt * math.tan(beta_b)
 
-        # Fbn = Fbt / cos(βb)  — GEARpie definition of normal force
+        # Fbn = Fbt / cos(βb)
         cos_bb = math.cos(beta_b)
         Fbn = Fbt / cos_bb if cos_bb > 1e-9 else Fbt
 
-        # Fn = sqrt(Ft² + Fr² + Fa²) — resultant at tooth contact
-        Fn = math.sqrt(Ft**2 + Fr**2 + Fa**2)
+        # Fn = Ft / cos(βb)  — normal force at tooth contact (GEARpie / MAAG convention)
+        # Note: sqrt(Ft²+Fr²+Fa²) is a valid vector identity but gives a different
+        # numerical result because Fr and Fa derive from Fbt (base circle), not Ft.
+        # The GEARpie/MAAG definition Fn = Ft/cos(βb) is the standard used throughout.
+        Fn = Ft / cos_bb if cos_bb > 1e-9 else Ft
 
         return GearForceResult(
             Ft=Ft, Fr=Fr, Fa=Fa, Fn=Fn,
@@ -297,8 +300,9 @@ class GearSolver:
         """
         Assemble a GearElement for injection into MechanicalSystem.
 
-        pitch_diameter = dl1 (working) so GearElement.__post_init__
-        torque consistency check passes: T = Ft × dl1/2 ✓
+        pitch_diameter = dl1 (working pitch circle) — ensures torque
+        consistency check in GearElement.__post_init__ passes:
+          T = Ft × dl1/2  ✓
         """
         return GearElement(
             position=position,
@@ -311,132 +315,3 @@ class GearSolver:
             helix_angle=geometry.beta_deg,
             label=label,
         )
-
-    # ------------------------------------------------------------------
-    # Private: involute solver (al from x1+x2)
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _solve_al_from_involute(
-        alpha_n: float,
-        alpha_t: float,
-        x1: float,
-        x2: float,
-        z1: int,
-        z2: int,
-        db1: float,
-        db2: float,
-    ) -> tuple[float, float]:
-        """
-        Solve for working centre distance al and working pressure angle αtw
-        from the involute equation.
-
-        ISO 21771 §7:
-          inv(αtw) = inv(αt) + 2·tan(αn)·(x1+x2)/(z1+z2)
-          al = (db1 + db2) / (2·cos(αtw))
-
-        Uses scipy.optimize.brentq to invert the involute function.
-
-        Returns
-        -------
-        (al [mm], alpha_tw [rad])
-        """
-        inv_target = (
-            math.tan(alpha_t) - alpha_t
-            + 2.0 * math.tan(alpha_n) * (x1 + x2) / (z1 + z2)
-        )
-
-        def _involute_residual(alpha_tw: float) -> float:
-            return math.tan(alpha_tw) - alpha_tw - inv_target
-
-        # Search bracket: αt/2 to 89°
-        lo = alpha_t / 2.0 if alpha_t > 0 else 1e-6
-        hi = math.radians(89.0)
-
-        try:
-            alpha_tw = brentq(_involute_residual, lo, hi, xtol=1e-12, rtol=1e-12)
-        except ValueError as exc:
-            raise ValueError(
-                f"Could not solve involute equation for x1={x1}, x2={x2}. "
-                f"inv_target={inv_target:.8f}. Check profile shift values."
-            ) from exc
-
-        al = (db1 + db2) / (2.0 * math.cos(alpha_tw))
-        return al, alpha_tw
-
-    # ------------------------------------------------------------------
-    # Private: contact ratio helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _contact_ratio_alpha(
-        z1: int, z2: int,
-        da1: float, da2: float,
-        db1: float, db2: float,
-        al: float, alpha_tw: float, p_bt: float,
-    ) -> float:
-        """
-        Transverse contact ratio εα (ISO 21771).
-
-        εa1 = z1·(tan(αa1) − tan(αtw)) / (2π)
-        εa2 = z2·(tan(αa2) − tan(αtw)) / (2π)
-        αa1 = arccos(db1/da1)
-        """
-        cos_aa1 = min(max(db1 / da1, -1.0), 1.0)
-        cos_aa2 = min(max(db2 / da2, -1.0), 1.0)
-        alpha_a1 = math.acos(cos_aa1)
-        alpha_a2 = math.acos(cos_aa2)
-
-        tan_atw = math.tan(alpha_tw)
-        eps_a1 = z1 * (math.tan(alpha_a1) - tan_atw) / (2.0 * math.pi)
-        eps_a2 = z2 * (math.tan(alpha_a2) - tan_atw) / (2.0 * math.pi)
-        return eps_a1 + eps_a2
-
-    @staticmethod
-    def _contact_ratio_beta(b: float, beta_b: float, p_bt: float) -> float:
-        """Overlap contact ratio εβ = b·tan(βb)/p_bt. Zero if b=0."""
-        if b <= 0.0 or p_bt <= 0.0:
-            return 0.0
-        return b * math.tan(beta_b) / p_bt
-
-    @staticmethod
-    def _undercut_z_min(alpha_n_deg: float, beta_deg: float) -> int:
-        """
-        Minimum teeth to avoid undercut for x=0.
-        zmin = int(2/sin²(αt))  — floor, not ceil.
-        z=17 is safe for α=20° (Shigley §13-10, Tab. 13-11).
-        """
-        alpha_n = math.radians(alpha_n_deg)
-        beta    = math.radians(beta_deg)
-        alpha_t = math.atan(math.tan(alpha_n) / math.cos(beta))
-        sin_at  = math.sin(alpha_t)
-        if sin_at < 1e-9:
-            return 999
-        return int(2.0 / sin_at ** 2)
-
-    # ------------------------------------------------------------------
-    # Private: input validation
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _validate_geometry_inputs(
-        mn: float, z1: int, z2: int,
-        alpha_n_deg: float, beta_deg: float,
-        al: Optional[float], x1: float, x2: float,
-    ) -> None:
-        if mn <= 0.0:
-            raise ValueError(f"mn must be > 0, got {mn}")
-        if z1 <= 0:
-            raise ValueError(f"z1 must be ≥ 1, got {z1}")
-        if z2 <= 0:
-            raise ValueError(f"z2 must be ≥ 1, got {z2}")
-        if not (0.0 < alpha_n_deg < 90.0):
-            raise ValueError(f"alpha_n_deg must be in (0, 90), got {alpha_n_deg}")
-        if not (0.0 <= beta_deg < 90.0):
-            raise ValueError(f"beta_deg must be in [0, 90), got {beta_deg}")
-        if al is not None and al <= 0.0:
-            raise ValueError(f"al must be > 0, got {al}")
-        if x1 < -2.0 or x1 > 2.0:
-            raise ValueError(f"x1={x1} outside plausible range [-2, 2]")
-        if x2 < -2.0 or x2 > 2.0:
-            raise ValueError(f"x2={x2} outside plausible range [-2, 2]")

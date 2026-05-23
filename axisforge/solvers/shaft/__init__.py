@@ -1,19 +1,18 @@
-# solvers/__init__.py
+# solvers/shaft/__init__.py
 """
-AxisForge solver public interface.
+Shaft analysis solvers.
 
-All application code imports from here:
-    from solvers import StaticsSolver
-    from solvers import BearingLifeSolver
-    from solvers import GearSolver
+Public interface — import from here, never from sub-modules directly:
+    from solvers.shaft import StaticsSolver, StaticFailureSolver, StressSolver
 
-Never import from sub-packages directly.
+Phase 4+:  DeflectionSolver, CriticalSpeedSolver (not yet implemented).
 """
 
-from solvers.shaft import (
-    StaticsSolver,
-    StaticFailureSolver,
+from solvers.shaft.statics import StaticsSolver
+from solvers.shaft.static_failure import StaticFailureSolver
+from solvers.shaft.stress import (
     StressSolver,
+    # Marin factor helpers — exposed for testing and transparency
     ka_surface_finish,
     kb_size,
     kc_load,
@@ -21,22 +20,20 @@ from solvers.shaft import (
     ke_reliability,
     ke_reliability_from_z,
     endurance_limit_corrected,
+    # Peterson / notch sensitivity helpers
     kt_shoulder_bending,
     kt_shoulder_torsion,
     neuber_constant_sqrt_a,
     notch_sensitivity,
     kf_from_kt,
 )
-from solvers.bearings import BearingLifeSolver
-from solvers.gears import GearSolver
 
 __all__ = [
+    # Solver classes
     "StaticsSolver",
     "StaticFailureSolver",
     "StressSolver",
-    "BearingLifeSolver",
-    "GearSolver",
-    # Stress helpers
+    # Marin factors
     "ka_surface_finish",
     "kb_size",
     "kc_load",
@@ -44,6 +41,7 @@ __all__ = [
     "ke_reliability",
     "ke_reliability_from_z",
     "endurance_limit_corrected",
+    # Notch / stress concentration
     "kt_shoulder_bending",
     "kt_shoulder_torsion",
     "neuber_constant_sqrt_a",

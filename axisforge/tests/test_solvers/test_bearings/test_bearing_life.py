@@ -33,7 +33,7 @@ from core.components import Bearing, BearingType
 from core.loads import LoadPlane
 from core.system import MechanicalSystem
 from models.bearing_result import BearingLifeResult
-from solvers.bearings.bearing_life import BearingLifeSolver
+from solvers.bearings.life import BearingLifeSolver
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────

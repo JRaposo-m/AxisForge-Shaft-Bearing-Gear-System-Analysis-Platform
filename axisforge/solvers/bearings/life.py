@@ -1,5 +1,5 @@
 """
-solvers/bearing_life.py
+solvers/life.py
 BearingLifeSolver — ISO 281 rolling bearing life and static safety.
 
 Formulation:

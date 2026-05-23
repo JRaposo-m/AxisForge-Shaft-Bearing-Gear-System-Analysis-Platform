@@ -50,6 +50,7 @@ axisforge/
 │   │
 │   ├── shaft/                     # Shaft analysis solvers
 │   │   ├── __init__.py
+│   │   ├── utils.py               # ka, kb, kc, kd, ke, kt, neuber, kf helpers — stress helpers internos
 │   │   ├── statics.py             # StaticsSolver — reactions, V(x), M(x), T(x)
 │   │   ├── static_failure.py      # StaticFailureSolver — Von Mises (DE), Tresca (MSS)
 │   │   ├── stress.py              # StressSolver — Kf/Kfs, Marin Se', Goodman, ASME-Elliptic
@@ -65,6 +66,7 @@ axisforge/
 │   │
 │   ├── gears/                     # Gear analysis solvers
 │   │   ├── __init__.py
+│   │   ├── utils.py               # involute, solve_alpha_tw, contact_ratio_*, undercut_z_min, HAP, HFP
 │   │   ├── geometry.py            # GearSolver — MAAG geometry, Ft/Fr/Fa (ISO 21771)
 │   │   ├── strength.py            # GearStrengthSolver — σ_H, σ_F, KA/KV/KHβ/KHα (ISO 6336-2/3) — Phase 2
 │   │   ├── profile_shift.py       # ProfileShiftSolver — optimal x1/x2 calculation — Phase 2

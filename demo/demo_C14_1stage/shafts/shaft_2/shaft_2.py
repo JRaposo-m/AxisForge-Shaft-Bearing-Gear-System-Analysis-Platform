@@ -7,15 +7,33 @@
 #   §3 : L=80mm   d=25mm
 #   L_total = 350mm
 #
-# Rolamentos : A @ x=40mm  (fixo,     C=45kN, C0=28kN)
-#              B @ x=310mm (flutuante, C=45kN, C0=28kN)
-# Engrenagem : x=175mm  — forças reactivas ao stage_1 (sentido invertido)
-# Velocidade : 1000 rpm  (= 1500 × 16/24)
-# Material   : 42CrMo4  (Sut=1000MPa, Sy=800MPa)
+# Posicionamento automático:
+#   shaft_position : (0.0, geo_stage_1.al)
+#   shaft_origin_x : calculado para que x_gear_global coincida entre veios
 #
-# NOTA: forças no shaft_2 são reactivas — Ft, Fr, Fa de forces_stage_1
-# com Ft e Fr invertidas de plano (shaft_driver → shaft_driven).
-# T2 = T1 × (z2/z1) = 200 × 1.5 = 300 N·m
+# Depende de (namespace partilhado — correr após gear.py e shaft_1.py):
+#   geo_stage_1      → al, dl2
+#   forces_stage_1   → Ft, Fr, Fa, T2_Nmm
+#   sys_shaft_1      → shaft_origin_x, speed_rpm
+
+# %% Posicionamento automático
+
+# Única entrada do utilizador — posição da engrenagem no referencial local do veio
+_x_gear_driven_local = 175.0   # [mm] — alterar aqui se necessário
+
+# Posição global da engrenagem do shaft_1 (driver)
+_x_gear_global = sys_shaft_1.shaft_origin_x + sys_shaft_1.gears[0].position
+
+# Origem global do shaft_2 para garantir contacto em X
+_shaft_2_origin_x = _x_gear_global - _x_gear_driven_local
+
+# Distância entre eixos vem directamente da geometria do estágio
+_shaft_2_y = geo_stage_1.al   # [mm]
+
+print(f"Shaft_2 — Posicionamento automático:")
+print(f"  x_gear_global  = {_x_gear_global:.1f} mm  (coincide com Shaft_1 ✓)")
+print(f"  shaft_origin_x = {_shaft_2_origin_x:.1f} mm")
+print(f"  shaft_position = (0.0, {_shaft_2_y:.3f} mm)  [al = {geo_stage_1.al:.3f} mm]")
 
 # %% Sistema Mecânico
 
@@ -25,20 +43,19 @@ shaft_2.add_section(ShaftSection(
 ))
 shaft_2.add_section(ShaftSection(
     length=190.0, diameter=35.0, material_id="42CrMo4", label="§2",
-    shoulder_left =Shoulder(fillet_radius=2.0, diameter_large=35.0, diameter_small=30.0),
-    shoulder_right=Shoulder(fillet_radius=2.0, diameter_large=35.0, diameter_small=30.0),
+    shoulder_left =Shoulder(fillet_radius=2.5, diameter_large=35.0, diameter_small=30.0),
+    shoulder_right=Shoulder(fillet_radius=2.5, diameter_large=35.0, diameter_small=25.0),
 ))
 shaft_2.add_section(ShaftSection(
-    length=80.0, diameter=30.0, material_id="42CrMo4", label="§3",
+    length=80.0, diameter=25.0, material_id="42CrMo4", label="§3",
 ))
 
-# Forças reactivas: Ft e Fr mantêm magnitude, torque = T2
 gear_elem_s2 = GearElement(
-    position=175.0,
-    tangential_force=forces_stage_1.Ft,   # mesma magnitude — plano invertido pelo solver
+    position=_x_gear_driven_local,
+    tangential_force=forces_stage_1.Ft,
     radial_force=forces_stage_1.Fr,
-    axial_force=forces_stage_1.Fa,        # spur → 0; helical: sentido invertido
-    pitch_diameter=geo_stage_1.dl2,       # diâmetro da roda
+    axial_force=forces_stage_1.Fa,
+    pitch_diameter=geo_stage_1.dl2,
     torque=forces_stage_1.T2_Nmm,
     label="Gear_S1_driven",
 )
@@ -46,9 +63,9 @@ gear_elem_s2 = GearElement(
 sys_shaft_2 = MechanicalSystem(
     shaft=shaft_2,
     name="Shaft_2",
-    speed_rpm=1000.0,
-    shaft_position=(0.0, 91.5),   # al = 91.5mm — afastamento em Y
-    shaft_origin_x=25.0,          # x_gear_local=175 → x_global=200 ✓ contacto
+    speed_rpm=sys_shaft_1.speed_rpm / geo_stage_1.u,   # automático: n2 = n1 / i
+    shaft_position=(0.0, _shaft_2_y),
+    shaft_origin_x=_shaft_2_origin_x,
 )
 sys_shaft_2.add_bearing(Bearing(
     position=40.0, C=45_000.0, C0=28_000.0,
@@ -60,10 +77,9 @@ sys_shaft_2.add_bearing(Bearing(
 ))
 sys_shaft_2.add_gear(gear_elem_s2)
 
-print(f"Shaft_2: {sys_shaft_2.name}  n={sys_shaft_2.speed_rpm:.0f} rpm  L={shaft_2.total_length:.0f}mm")
+print(f"Shaft_2: {sys_shaft_2.name}  n={sys_shaft_2.speed_rpm:.1f} rpm  L={shaft_2.total_length:.0f}mm")
 print(f"  Rolamentos: A@{sys_shaft_2.bearings[0].position:.0f}mm   B@{sys_shaft_2.bearings[1].position:.0f}mm")
-print(f"  Engrenagem: @{sys_shaft_2.gears[0].position:.0f}mm  (x_global={sys_shaft_2.shaft_origin_x + 175.0:.0f}mm)")
-print(f"  T2 = {forces_stage_1.T2_Nmm / 1000:.1f} N·m")
+print(f"  Engrenagem: @{_x_gear_driven_local:.0f}mm local  →  x_global={_x_gear_global:.1f}mm")
 
 # %% Estática
 

@@ -112,9 +112,9 @@ def _plot_stress_envelope(sr, system, title: str):
     tau_t  = np.where(d > 0, 16.0 * np.abs(T) / (np.pi * d**3), 0.0)
     sig_eq = np.sqrt(sig_b**2 + 3.0 * tau_t**2)   # MPa
 
-    fig, ax = plt.subplots(figsize=(10, 4))
-    fig.suptitle(title, fontsize=12, fontweight="bold",
-                 color=_TEXT, y=1.01)
+    fig, ax = plt.subplots(figsize=(10, 4.8))
+    fig.subplots_adjust(top=0.88, bottom=0.13, left=0.10, right=0.97)
+    fig.suptitle(title, fontsize=12, fontweight="bold", color=_TEXT)
 
     ax.fill_between(x, sig_eq, alpha=0.15, color=_FILL)
     ax.plot(x, sig_eq, color=_LINE, lw=1.6)
@@ -129,7 +129,6 @@ def _plot_stress_envelope(sr, system, title: str):
     ax.set_ylim(bottom=0)
     _apply_style(ax)
     fig.patch.set_facecolor(_BG_FIG)
-    fig.tight_layout()
     return fig
 
 

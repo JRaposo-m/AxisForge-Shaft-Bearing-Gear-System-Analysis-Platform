@@ -37,6 +37,14 @@ class MechanicalSystem:
         Operating rotational speed [rpm]. Required for bearing life (L10h).
     design_life_hours : float
         Target bearing life [h]. Default from config.
+    shaft_position : tuple[float, float]
+        (y, z) position of the shaft centreline in the global coordinate
+        system [mm]. Used by GearSystem for centre-distance validation and
+        visualisation. Solvers are unaffected.
+    shaft_origin_x : float
+        Global X origin of this shaft [mm].
+        x_global = shaft_origin_x + x_local.
+        Used by GearSystem to verify gear contact alignment in X.
 
     Internal lists are sorted by position on every access via properties.
     """
@@ -44,6 +52,14 @@ class MechanicalSystem:
     name: str = "System_1"
     speed_rpm: float = 0.0
     design_life_hours: float = DEFAULT_DESIGN_LIFE_HOURS
+
+    # Spatial position in the global multi-shaft coordinate system.
+    # shaft_position : (y, z) of the shaft centreline [mm].
+    # shaft_origin_x : global X offset — x_global = shaft_origin_x + x_local.
+    # Both are metadata for GearSystem validation and visualisation only.
+    # All solvers continue to work exclusively in local coordinates.
+    shaft_position: tuple[float, float] = (0.0, 0.0)
+    shaft_origin_x: float = 0.0
 
     _bearings: list[Bearing] = field(default_factory=list, repr=False)
     _gears: list[GearElement] = field(default_factory=list, repr=False)

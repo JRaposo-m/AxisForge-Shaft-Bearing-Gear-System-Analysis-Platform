@@ -454,22 +454,38 @@ class Shaft:
             # shoulder_right of section i describes the step from i → i+1
             if left.shoulder_right is not None:
                 d_small = left.shoulder_right.diameter_small
+                d_large = left.shoulder_right.diameter_large
                 d_next = right.diameter
+                d_self = left.diameter
                 if abs(d_small - d_next) > TOL_GEOMETRY_mm:
                     errors.append(
                         f"Shoulder mismatch at boundary {i}/{i+1}: "
-                        f"shoulder_right.diameter_small={d_small:.4f} mm "
+                        f"section[{i}].shoulder_right.diameter_small={d_small:.4f} mm "
                         f"≠ section[{i+1}].diameter={d_next:.4f} mm"
+                    )
+                if abs(d_large - d_self) > TOL_GEOMETRY_mm:
+                    errors.append(
+                        f"Shoulder mismatch at boundary {i}/{i+1}: "
+                        f"section[{i}].shoulder_right.diameter_large={d_large:.4f} mm "
+                        f"≠ section[{i}].diameter={d_self:.4f} mm"
                     )
             # shoulder_left of section i+1 must match the step from i → i+1
             if right.shoulder_left is not None:
                 d_small = right.shoulder_left.diameter_small
+                d_large = right.shoulder_left.diameter_large
                 d_prev = left.diameter
+                d_self = right.diameter
                 if abs(d_small - d_prev) > TOL_GEOMETRY_mm:
                     errors.append(
                         f"Shoulder mismatch at boundary {i}/{i+1}: "
                         f"section[{i+1}].shoulder_left.diameter_small={d_small:.4f} mm "
                         f"≠ section[{i}].diameter={d_prev:.4f} mm"
+                    )
+                if abs(d_large - d_self) > TOL_GEOMETRY_mm:
+                    errors.append(
+                        f"Shoulder mismatch at boundary {i}/{i+1}: "
+                        f"section[{i+1}].shoulder_left.diameter_large={d_large:.4f} mm "
+                        f"≠ section[{i+1}].diameter={d_self:.4f} mm"
                     )
 
         return errors

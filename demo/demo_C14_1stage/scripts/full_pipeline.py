@@ -93,3 +93,4 @@ for _nome, _sr, _stress, _sf, _spd in [
 
 print()
 print("Ficheiros exportados para shafts/*/results/ e stages/*/elements/*/results/")
+print("Executar scripts/plots.py para gerar os diagramas.")

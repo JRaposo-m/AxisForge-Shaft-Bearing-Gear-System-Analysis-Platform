@@ -4,7 +4,7 @@ AxisForge — Fatigue Stress Analysis — Shaft
 Project  : demo_C14_1stage
 Element  : shaft_2
 Script   : shaft_2.py
-Date     : 2026-05-25 12:29:14
+Date     : 2026-05-25 14:22:09
 Solver   : StressSolver v1.0
 Standard : Shigley 10th ed. §7-4
 ================================================================================
@@ -18,29 +18,29 @@ Standard : Shigley 10th ed. §7-4
 --------------------------------------------------------------------------------
     x [mm]    d [mm]      Kf     Kfs   σ_a [MPa]   σ_m [MPa]    nf_GM   nf_ASME       ny   Safe
   ----------------------------------------------------------------------------
-    270.00     25.00   1.539   1.229     118.633     208.186    1.499     1.896    3.339      ✓
+    270.00     30.00   1.681   1.318      74.969     129.158    2.354     2.969    5.357      ✓
 
 MOST CRITICAL SECTION
 --------------------------------------------------------------------------------
   x                     : 270.00  [mm]
-  diameter              : 25.00  [mm]
-  Kt                    : 1.6000
-  Kf                    : 1.5391
-  Kts                   : 1.2500
-  Kfs                   : 1.2292
-  q (bending)           : 0.8984
-  qs (torsion)          : 0.9168
+  diameter              : 30.00  [mm]
+  Kt                    : 1.7667
+  Kf                    : 1.6806
+  Kts                   : 1.3500
+  Kfs                   : 1.3178
+  q (bending)           : 0.8878
+  qs (torsion)          : 0.9079
   Ma                    : 118241.97  [N·mm]
   Tm                    : 300000.00  [N·mm]
-  Se'                   : 258.59  [MPa]
+  Se'                   : 253.59  [MPa]
   ka                    : 0.7231
-  kb                    : 0.8787
+  kb                    : 0.8617
   ke                    : 0.8140
-  sigma_a               : 118.633  [MPa]
-  sigma_m               : 208.186  [MPa]
-  nf_goodman            : 1.499
-  nf_asme               : 1.896
-  ny                    : 3.339
+  sigma_a               : 74.969  [MPa]
+  sigma_m               : 129.158  [MPa]
+  nf_goodman            : 2.354
+  nf_asme               : 2.969
+  ny                    : 5.357
   Safe                  : ✓
   Langer OK             : ✓
 

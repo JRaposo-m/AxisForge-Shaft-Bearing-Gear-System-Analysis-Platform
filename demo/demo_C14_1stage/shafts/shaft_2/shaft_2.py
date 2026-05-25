@@ -26,10 +26,10 @@ shaft_2.add_section(ShaftSection(
 shaft_2.add_section(ShaftSection(
     length=190.0, diameter=35.0, material_id="42CrMo4", label="§2",
     shoulder_left =Shoulder(fillet_radius=2.0, diameter_large=35.0, diameter_small=30.0),
-    shoulder_right=Shoulder(fillet_radius=2.5, diameter_large=35.0, diameter_small=25.0),
+    shoulder_right=Shoulder(fillet_radius=2.0, diameter_large=35.0, diameter_small=30.0),
 ))
 shaft_2.add_section(ShaftSection(
-    length=80.0, diameter=25.0, material_id="42CrMo4", label="§3",
+    length=80.0, diameter=30.0, material_id="42CrMo4", label="§3",
 ))
 
 # Forças reactivas: Ft e Fr mantêm magnitude, torque = T2

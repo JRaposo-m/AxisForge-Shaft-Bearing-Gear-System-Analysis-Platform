@@ -21,11 +21,11 @@ shaft_1.add_section(ShaftSection(
 ))
 shaft_1.add_section(ShaftSection(
     length=200.0, diameter=30.0, material_id="42CrMo4", label="§2",
-    shoulder_left =Shoulder(fillet_radius=2.5, diameter_large=30.0, diameter_small=25.0),
-    shoulder_right=Shoulder(fillet_radius=2.0, diameter_large=30.0, diameter_small=20.0),
+    shoulder_left =Shoulder(fillet_radius=2.0, diameter_large=30.0, diameter_small=25.0),
+    shoulder_right=Shoulder(fillet_radius=2.0, diameter_large=30.0, diameter_small=25.0),
 ))
 shaft_1.add_section(ShaftSection(
-    length=100.0, diameter=20.0, material_id="42CrMo4", label="§3",
+    length=100.0, diameter=25.0, material_id="42CrMo4", label="§3",
 ))
 
 sys_shaft_1 = MechanicalSystem(

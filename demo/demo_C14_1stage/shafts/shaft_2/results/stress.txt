@@ -4,7 +4,7 @@ AxisForge — Fatigue Stress Analysis — Shaft
 Project  : demo_C14_1stage
 Element  : shaft_2
 Script   : shaft_2.py
-Date     : 2026-05-25 14:22:09
+Date     : 2026-05-26 12:30:06
 Solver   : StressSolver v1.0
 Standard : Shigley 10th ed. §7-4
 ================================================================================

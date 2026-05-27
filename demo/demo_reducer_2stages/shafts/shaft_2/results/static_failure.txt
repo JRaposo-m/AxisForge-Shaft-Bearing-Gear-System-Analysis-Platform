@@ -1,10 +1,10 @@
 ================================================================================
 AxisForge — Static Failure Analysis — Shaft
 ================================================================================
-Project  : demo_C14_1stage
+Project  : demo_reducer_2stages
 Element  : shaft_2
 Script   : shaft_2.py
-Date     : 2026-05-26 12:30:06
+Date     : 2026-05-26 23:58:05
 Solver   : StaticFailureSolver v1.0
 Standard : Shigley 10th ed. §5-4/5-5
 ================================================================================
@@ -15,22 +15,22 @@ Standard : Shigley 10th ed. §5-4/5-5
 --------------------------------------------------------------------------------
     x [mm]    d [mm]   σ_x [MPa]  τ_xy [MPa]     n_DE    n_MSS   Gov.      Status
   ------------------------------------------------------------------------
-    270.00     30.00      44.608      56.588    7.429    6.576    MSS  conservative
+    300.00     40.00       0.000       0.000        ∞        ∞  equal   no_stress
 
 CRITICAL SECTION
 --------------------------------------------------------------------------------
-  x                     : 270.00  [mm]
-  diameter              : 30.00  [mm]
-  sigma_x               : 44.608  [MPa]
-  tau_xy                : 56.588  [MPa]
-  sigma_prime           : 107.687  [MPa]
-  sigma_eff_mss         : 121.650  [MPa]
-  n_DE                  : 7.429
-  n_MSS                 : 6.576
-  governing_n           : 6.576
-  governing_theory      : MSS
+  x                     : 300.00  [mm]
+  diameter              : 40.00  [mm]
+  sigma_x               : 0.000  [MPa]
+  tau_xy                : 0.000  [MPa]
+  sigma_prime           : 0.000  [MPa]
+  sigma_eff_mss         : 0.000  [MPa]
+  n_DE                  : ∞
+  n_MSS                 : ∞
+  governing_n           : ∞
+  governing_theory      : equal
   yielded               : ✓
-  risk                  : conservative
+  risk                  : no_stress
 
 ================================================================================
 STATUS : OK

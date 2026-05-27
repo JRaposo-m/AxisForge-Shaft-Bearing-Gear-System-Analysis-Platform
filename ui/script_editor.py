@@ -568,11 +568,15 @@ class ScriptEditor(QWidget):
 
         # Keyboard shortcuts
         from PySide6.QtGui import QShortcut
+        from PySide6.QtCore import Qt as _Qt
         QShortcut(QKeySequence("Ctrl+Return"),       self, self._run_current_section)
         QShortcut(QKeySequence("Shift+Return"),      self, self._run_current_and_advance)
         QShortcut(QKeySequence("Ctrl+Shift+Return"), self, self._run_all)
-        QShortcut(QKeySequence("Ctrl+S"),            self, self.save_file)
         QShortcut(QKeySequence("Ctrl+Shift+E"),      self, self._open_external)
+        # Ctrl+S: ApplicationShortcut so it works regardless of which widget has focus
+        _sc_save = QShortcut(QKeySequence("Ctrl+S"), self)
+        _sc_save.setContext(_Qt.ShortcutContext.ApplicationShortcut)
+        _sc_save.activated.connect(self.save_file)
 
     # ------------------------------------------------------------------
     # Execution

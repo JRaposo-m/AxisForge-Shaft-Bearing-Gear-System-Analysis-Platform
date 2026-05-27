@@ -4,7 +4,7 @@ AxisForge — Gear Pair — Forces
 Project  : demo_C14_1stage
 Element  : stage_1_gear
 Script   : gear.py
-Date     : 2026-05-25 14:22:09
+Date     : 2026-05-26 12:30:06
 Solver   : GearSolver v1.0
 Standard : ISO 21771:2007 / Shigley §13-7
 ================================================================================

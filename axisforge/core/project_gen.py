@@ -255,13 +255,13 @@ _TPL_GEAR_PAIR = Template('''\
 # Executar via full_pipeline.py → _run("stages/$stage_name/gear_pair_$pair_index.py")
 #
 # Variáveis exportadas para o namespace:
-#   geo_stage_$pair_index    — GearGeometryResult
-#   forces_stage_$pair_index — GearForceResult
+#   geo_$stage_name    — GearGeometryResult
+#   forces_$stage_name — GearForceResult
 
 # %% Geometria e forças
 gs = GearSolver()
 
-geo_stage_$pair_index = gs.compute_geometry(
+geo_$stage_name = gs.compute_geometry(
     mn=4.5,          # TODO: módulo normal [mm]
     z1=16,           # TODO: dentes do pinhão
     z2=24,           # TODO: dentes da roda
@@ -273,14 +273,14 @@ geo_stage_$pair_index = gs.compute_geometry(
     b=50.0,          # TODO: largura de face [mm]
 )
 
-forces_stage_$pair_index = gs.compute_forces(
+forces_$stage_name = gs.compute_forces(
     T1_Nm=0.0,       # TODO: binário de entrada [N·m]
-    geometry=geo_stage_$pair_index,
+    geometry=geo_$stage_name,
 )
 
-print(f"Gear pair $pair_index: u={geo_stage_${pair_index}.u:.4f}  "
-      f"al={geo_stage_${pair_index}.al:.3f}mm  "
-      f"Ft={forces_stage_${pair_index}.Ft:.1f}N  Fr={forces_stage_${pair_index}.Fr:.1f}N")
+print(f"$stage_name gear_pair_$pair_index: u={geo_${stage_name}.u:.4f}  "
+      f"al={geo_${stage_name}.al:.3f}mm  "
+      f"Ft={forces_${stage_name}.Ft:.1f}N  Fr={forces_${stage_name}.Fr:.1f}N")
 ''')
 
 _TPL_STAGE = Template('''\
@@ -288,19 +288,29 @@ _TPL_STAGE = Template('''\
 # $project_name — $stage_name — GearStage + GearSystem
 # Gerado automaticamente por AxisForge ProjectManager
 #
-# Depende de: geo_stage_N, forces_stage_N (de gear_pair_N.py)
-#             sys_shaft_driver, sys_shaft_driven (de shaft_N.py)
+# Depende de (devem ter corrido antes via _run()):
+#   stages/$stage_name/gear_pair_$stage_index.py  → geo_$stage_name, forces_$stage_name
+#   shafts/shaft_driver/shaft_driver.py            → sys_shaft_driver  (substituir pelo nome real)
+#   shafts/shaft_driven/shaft_driven.py            → sys_shaft_driven  (substituir pelo nome real)
+#
 # Executar via full_pipeline.py → _run("stages/$stage_name/$stage_name.py")
+
+def _gear_x(sys_, label):
+    """Posição local [mm] da engrenagem com o label dado no veio."""
+    for g in sys_.gears:
+        if g.label == label:
+            return g.position
+    raise ValueError(f"Engrenagem '{label}' não encontrada em '{sys_.name}'")
 
 # %% GearStage
 stage_$stage_index = GearStage(
     label="$stage_name",
-    shaft_driver=sys_TODO_driver,      # TODO: MechanicalSystem do veio condutor
-    shaft_driven=sys_TODO_driven,      # TODO: MechanicalSystem do veio conduzido
-    geometry=geo_stage_$stage_index,   # TODO: GearGeometryResult de gear_pair_N.py
-    forces=forces_stage_$stage_index,  # TODO: GearForceResult de gear_pair_N.py
-    x_gear_driver_local=0.0,           # TODO: posição da engrenagem no veio condutor [mm]
-    x_gear_driven_local=0.0,           # TODO: posição da engrenagem no veio conduzido [mm]
+    shaft_driver=sys_TODO_driver,    # TODO: substituir pelo MechanicalSystem do veio condutor (ex: sys_shaft_1)
+    shaft_driven=sys_TODO_driven,    # TODO: substituir pelo MechanicalSystem do veio conduzido (ex: sys_shaft_2)
+    geometry=geo_$stage_name,
+    forces=forces_$stage_name,
+    x_gear_driver_local=_gear_x(sys_TODO_driver, "TODO_label_driver"),  # TODO: label da engrenagem condutora
+    x_gear_driven_local=_gear_x(sys_TODO_driven, "TODO_label_driven"),  # TODO: label da engrenagem conduzida
 )
 
 # %% GearSystem

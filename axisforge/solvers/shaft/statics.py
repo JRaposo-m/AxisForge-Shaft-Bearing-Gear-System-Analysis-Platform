@@ -79,10 +79,10 @@ class StaticsSolver:
         # ── Collect loads by plane ──────────────────────────────────────────
         # Use system properties directly — avoids duplicating RadialLoad filtering logic.
         radial_xz: list[tuple[float, float]] = [
-            (l.position, l.magnitude) for l in system.radial_loads_xz
+            (l.position, -l.magnitude) for l in system.radial_loads_xz
         ]
         radial_xy: list[tuple[float, float]] = [
-            (l.position, l.magnitude) for l in system.radial_loads_xy
+            (l.position, -l.magnitude) for l in system.radial_loads_xy
         ]
         axial_loads = list(system.axial_loads)
         torque_loads = list(system.torque_loads)
@@ -92,7 +92,7 @@ class StaticsSolver:
         # ── Decompose GearElements into equivalent point loads ──────────────
         for gear in system.gears:
             # Wt → XZ plane (tangential, in-plane horizontal)
-            radial_xz.append((gear.position, gear.tangential_force))
+            radial_xz.append((gear.position, -gear.tangential_force))
             # Wr → XY plane (radial, in-plane vertical)
             radial_xy.append((gear.position, gear.radial_force))
             if gear.axial_force != 0.0:
@@ -178,8 +178,8 @@ class StaticsSolver:
         span = xB - xA
         if external_moments is None:
             external_moments = []
-        R_B = (-sum(m.magnitude for m in external_moments) + sum(F * (x - xA) for x, F in loads)) / span
-        R_A = sum(F for _, F in loads) - R_B
+        R_B = (-sum(m.magnitude for m in external_moments) + -sum(F * (x - xA) for x, F in loads)) / span
+        R_A = -sum(F for _, F in loads) - R_B
         return R_A, R_B
 
     def _shear_diagram(

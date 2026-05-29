@@ -14,7 +14,7 @@ XZ  = horizontal plane  (Wt gear force, lateral loads)
 XY  = vertical plane    (Wr gear force, opposed direction of gravity)
 
 Positive radial load: Downard (XY), forward (XZ)
-      - The loads are inputed as positive and treated as negative in the equilibrium equations
+      - The loads are inputed as positive however in the statics.py they are inported as -l.magnitude and are treated as the opposite direction for the rest of the class
 Reactions:  sign determined by equilibrium equations (not forced positive)
 Torsion T:  accumulates left-to-right; positive = CCW when viewed from +x
 ```

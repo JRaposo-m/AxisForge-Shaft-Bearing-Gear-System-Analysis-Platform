@@ -4,7 +4,7 @@ AxisForge — Static Failure Analysis — Shaft
 Project  : demo_reducer_2stages
 Element  : shaft_1
 Script   : shaft_1.py
-Date     : 2026-05-29 12:15:32
+Date     : 2026-05-29 14:59:12
 Solver   : StaticFailureSolver v1.0
 Standard : Shigley 10th ed. §5-4/5-5
 ================================================================================
@@ -15,19 +15,19 @@ Standard : Shigley 10th ed. §5-4/5-5
 --------------------------------------------------------------------------------
     x [mm]    d [mm]   σ_x [MPa]  τ_xy [MPa]     n_DE    n_MSS   Gov.      Status
   ------------------------------------------------------------------------
-    300.00     40.00     317.567      15.915    2.510    2.507    MSS  conservative
+    300.00     40.00      35.285      15.915   17.866   16.835    MSS  conservative
 
 CRITICAL SECTION
 --------------------------------------------------------------------------------
   x                     : 300.00  [mm]
   diameter              : 40.00  [mm]
-  sigma_x               : 317.567  [MPa]
+  sigma_x               : 35.285  [MPa]
   tau_xy                : 15.915  [MPa]
-  sigma_prime           : 318.761  [MPa]
-  sigma_eff_mss         : 319.158  [MPa]
-  n_DE                  : 2.510
-  n_MSS                 : 2.507
-  governing_n           : 2.507
+  sigma_prime           : 44.777  [MPa]
+  sigma_eff_mss         : 47.521  [MPa]
+  n_DE                  : 17.866
+  n_MSS                 : 16.835
+  governing_n           : 16.835
   governing_theory      : MSS
   yielded               : ✓
   risk                  : conservative

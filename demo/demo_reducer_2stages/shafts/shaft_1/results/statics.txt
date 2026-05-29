@@ -4,7 +4,7 @@ AxisForge — Static Analysis — Shaft
 Project  : demo_reducer_2stages
 Element  : shaft_1
 Script   : shaft_1.py
-Date     : 2026-05-29 12:15:32
+Date     : 2026-05-29 14:59:12
 Solver   : StaticsSolver v1.0
 Standard : Shigley 10th ed. §3
 ================================================================================
@@ -12,19 +12,19 @@ Standard : Shigley 10th ed. §3
 REACTIONS
 --------------------------------------------------------------------------------
   A_xz                  : 3472.22  [N]
-  A_xy                  : 1263.79  [N]
+  A_xy                  : -1263.79  [N]
   B_xz                  : 2083.33  [N]
-  B_xy                  : 758.27  [N]
+  B_xy                  : -758.27  [N]
   Axial                 : 0.00  [N]
 
 EXTREMES
 --------------------------------------------------------------------------------
-  V_xz_max              : 11111.11  [N]
-  V_xy_max              : 4044.11  [N]
-  M_xz_max              : 2777777.78  [N·mm]
-  M_xy_max              : 1011028.43  [N·mm]
-  M_res_max             : 2956049.37  [N·mm]
-  x @ M_res_max         : 400.00  [mm]
+  V_xz_max              : 3472.22  [N]
+  V_xy_max              : 1263.79  [N]
+  M_xz_max              : 520520.52  [N·mm]
+  M_xy_max              : 189453.98  [N·mm]
+  M_res_max             : 553926.37  [N·mm]
+  x @ M_res_max         : 150.15  [mm]
   T_max                 : 200000.00  [N·mm]
 
 ================================================================================

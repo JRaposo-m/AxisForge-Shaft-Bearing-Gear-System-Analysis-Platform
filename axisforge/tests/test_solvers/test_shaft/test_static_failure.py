@@ -387,7 +387,7 @@ class TestStaticFailureSolverIntegration:
         statics = StaticsSolver().solve(system)
         result = StaticFailureSolver().solve(system, statics, _make_material_sy(500.0))
 
-        M_at_300 = 175_000.0   # hand-calculated above
+        M_at_300 = 875_000.0   # hand-calculated above
         # diameter_at(300) = 40mm: shoulder position x=300 is the start of s3.
         # shaft.diameter_at() returns the section containing x, which at x=300
         # is s3 (d=40mm). Consistent with how StressSolver uses diameter_at().

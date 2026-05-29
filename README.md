@@ -11,9 +11,10 @@ Gear geometry and force calculation is implemented natively according to ISO 217
 ```
 x   = axial axis; datum = left end of shaft; increases rightward
 XZ  = horizontal plane  (Wt gear force, lateral loads)
-XY  = vertical plane    (Wr gear force, gravity direction)
+XY  = vertical plane    (Wr gear force, opposed direction of gravity)
 
-Positive radial load: downward (XY), forward (XZ)
+Positive radial load: Downard (XY), forward (XZ)
+      - The loads are inputed as positive and treated as negative in the equilibrium equations
 Reactions:  sign determined by equilibrium equations (not forced positive)
 Torsion T:  accumulates left-to-right; positive = CCW when viewed from +x
 ```

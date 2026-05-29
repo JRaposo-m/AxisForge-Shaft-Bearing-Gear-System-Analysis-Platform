@@ -24,8 +24,12 @@ geo_stage_2 = gs.compute_geometry(
     b=50.0,          # TODO: largura de face [mm]
 )
 
+def T1_next_stage(forces_):
+    """Binário de saída do estágio actual [N·m] — usar como T1_Nm do próximo."""
+    return forces_.T2_Nmm / 1000.0
+# gear_pair_2.py
 forces_stage_2 = gs.compute_forces(
-    T1_Nm=0.0,       # TODO: binário de entrada [N·m]
+    T1_Nm=T1_next_stage(forces_stage_1),  # derivado do estágio anterior
     geometry=geo_stage_2,
 )
 

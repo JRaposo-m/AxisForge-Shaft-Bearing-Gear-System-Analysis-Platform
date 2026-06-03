@@ -10,6 +10,7 @@ Units: SI throughout (N, mm, MPa = N/mm², rpm, h).
 SOLVER_RESOLUTION: int = 1000          # Points along shaft axis [count]
 SOLVER_TOLERANCE: float = 1e-6         # General numerical tolerance
 BOUNDARY_MOMENT_TOLERANCE: float = 500.0  # |M| at supports ≤ this [N·mm]
+MESH_MIN_NODE_DIST_MM: float = 0.1   # Minimum distance between nodes in the FEM mesh, to avoid singularities and numerical issues.
 
 # ---------------------------------------------------------------------------
 # Bearing life defaults

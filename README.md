@@ -486,6 +486,7 @@ python axisforge_cli.py
 ```bash
 python -m pytest tests/ -v
 python -m pytest tests/ --cov=core --cov=solvers --cov-report=term-missing
+python tests/test_solvers/test_shaft/test_statics_solver.py # corre a parte do if: __main__ que permite mostrar os graficos e testes
 
 # Run a specific validation case
 python -m pytest tests/test_solvers/test_gears/test_geometry.py::TestGearSolverValidation::test_c14_forces -v

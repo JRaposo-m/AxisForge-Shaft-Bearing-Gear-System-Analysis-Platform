@@ -150,3 +150,40 @@ class ExternalMoment:
 
 # Union type alias — use in type hints for any load container
 Load = RadialLoad | AxialLoad | TorqueLoad | ExternalMoment
+
+
+# ===========================================================================
+# LoadingProfile — fatigue cycle decomposition
+# ===========================================================================
+
+@dataclass(frozen=True)
+class LoadingProfile:
+
+    # aqui posso trabalhar força a força
+        # tenho os campos de tensao definidos para cada força no codigo ou seja posso fazer definição individual do tipo de carga e depois aplicar a cada uma a sua contribuição de tensão e depois somar tudo no final para obter o resultado total da tensão em cada ponto do eixo
+
+        # ou seja isto é algo modular para poder usar depois e chamar à vontade 
+
+        # depois no FatiguePostProcessing pego nos valores depois de serem tratados aqui e aplico as concentrações de carga e tenho o valor total do campo de tensões no veio
+    label: str = ""
+    R: float = 1.0
+
+    def __post_init__(self) -> None:
+        if not -1.0 <= self.R <= 1.0:
+            raise ValueError(f"R must be in [-1.0, 1.0], got {self.R}")
+
+    @property
+    def sigma_mean_factor(self) -> float:
+        return (1 + self.R) / 2
+
+    @property
+    def sigma_amplitude_factor(self) -> float:
+        return abs(1 - self.R) / 2
+
+    @property
+    def is_static(self) -> bool:
+        return self.R == 1.0
+
+    @property
+    def is_fully_reversed(self) -> bool:
+        return self.R == -1.0

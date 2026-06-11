@@ -11,9 +11,10 @@ Gear geometry and force calculation is implemented natively according to ISO 217
 ```
 x   = axial axis; datum = left end of shaft; increases rightward
 XZ  = horizontal plane  (Wt gear force, lateral loads)
-XY  = vertical plane    (Wr gear force, gravity direction)
+XY  = vertical plane    (Wr gear force, opposed direction of gravity)
 
-Positive radial load: downward (XY), forward (XZ)
+Positive radial load: Downard (XY), forward (XZ)
+      - The loads are inputed as positive however in the statics.py they are inported as -l.magnitude and are treated as the opposite direction for the rest of the class
 Reactions:  sign determined by equilibrium equations (not forced positive)
 Torsion T:  accumulates left-to-right; positive = CCW when viewed from +x
 ```
@@ -485,6 +486,7 @@ python axisforge_cli.py
 ```bash
 python -m pytest tests/ -v
 python -m pytest tests/ --cov=core --cov=solvers --cov-report=term-missing
+python tests/test_solvers/test_shaft/test_statics_solver.py # corre a parte do if: __main__ que permite mostrar os graficos e testes
 
 # Run a specific validation case
 python -m pytest tests/test_solvers/test_gears/test_geometry.py::TestGearSolverValidation::test_c14_forces -v

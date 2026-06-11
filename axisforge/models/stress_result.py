@@ -3,10 +3,10 @@ models/stress_result.py
 StressResult — immutable output of StressSolver.
 
 Phase 1 scope:
-  - Critical sections at shaft shoulders only.
-  - Rotating shaft: Ma = M_res, Mm = 0, Ta = 0, Tm = T.
+  - Full shaft sweep (SOLVER_RESOLUTION points); Kf/Kfs applied at shoulders only.
+  - Rotating shaft: Ma = M_res, Mm = 0, Ta = 0, Tm = T (default LoadingProfile).
   - Goodman (DE-Goodman) and ASME-Elliptic (DE-ASME) safety factors.
-  - Yielding check: ny = Sy / σ'_max.
+  - Yielding check: ny = Sy / (σ'_a + σ'_m).
 
 References:
   Shigley 10th ed. §7-4, Eq. 7-7, 7-11, 7-15, 7-16.
@@ -21,6 +21,7 @@ from typing import Optional
 
 class StressRaiserType(Enum):
     """Classification of the geometric stress raiser at a critical section."""
+    NONE = auto()          # no geometric raiser; Kf = Kfs = 1.0
     SHOULDER = auto()      # stepped shaft shoulder (Phase 1)
     KEYWAY = auto()        # keyway — Phase 2+
     PRESS_FIT = auto()     # interference fit — Phase 2+
@@ -31,9 +32,13 @@ class StressRaiserType(Enum):
 @dataclass
 class CriticalSection:
     """
-    Stress state and fatigue safety factors at one critical cross-section.
+    Stress state and fatigue safety factors at one axial position.
 
-    Phase 1 assumption (rotating shaft):
+    Evaluated at every point in the SOLVER_RESOLUTION sweep.
+    Kf/Kfs > 1.0 only at shaft shoulders (raiser_type = SHOULDER).
+    All other positions use Kf = Kfs = 1.0 (raiser_type = NONE).
+
+    Default loading profile (rotating shaft, Shigley §7-1):
       Ma = M_res  (fully reversed bending)
       Mm = 0
       Ta = 0
@@ -88,7 +93,7 @@ class CriticalSection:
     ny : float
         Yielding safety factor ny = Sy / σ'_max (Eq. 7-16).
     langer_ok : bool
-        True if nf_goodman ≤ ny (Langer static yield line not governing).
+        True if ny ≥ nf_goodman (static yield does not govern before fatigue).
     """
     x: float
     diameter: float
@@ -140,11 +145,9 @@ class StressResult:
     """
     Complete output of StressSolver.solve().
 
-    Contains one CriticalSection per shaft shoulder, sorted by
-    nf_goodman ascending (most critical first).
-
-    Sections with M_res < 1 N·mm are excluded from the sorted list
-    (infinite life — no bending stress).
+    Contains one CriticalSection per point in the SOLVER_RESOLUTION sweep,
+    sorted by nf_goodman ascending (most critical first).
+    Sections with negligible stress (nf = inf) appended at the end.
 
     Attributes
     ----------

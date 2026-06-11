@@ -4,16 +4,16 @@ AxisForge — Static Analysis — Shaft
 Project  : demo_C14_H501
 Element  : C14_shaft
 Script   : full_pipeline.py
-Date     : 2026-05-25 11:31:08
+Date     : 2026-05-29 14:47:40
 Solver   : StaticsSolver v1.0
 Standard : Shigley 10th ed. §3
 ================================================================================
 
 REACTIONS
 --------------------------------------------------------------------------------
-  A_xz                  : -2732.24  [N]
+  A_xz                  : 2732.24  [N]
   A_xy                  : -1128.31  [N]
-  B_xz                  : -2732.24  [N]
+  B_xz                  : 2732.24  [N]
   B_xy                  : -1128.31  [N]
   Axial                 : 0.00  [N]
 

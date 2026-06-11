@@ -4,7 +4,7 @@ AxisForge — Gear Pair — Geometry
 Project  : demo_C14_H501
 Element  : gear_H501
 Script   : full_pipeline.py
-Date     : 2026-05-25 11:31:08
+Date     : 2026-05-29 14:47:40
 Solver   : GearSolver v1.0
 Standard : ISO 21771:2007
 ================================================================================

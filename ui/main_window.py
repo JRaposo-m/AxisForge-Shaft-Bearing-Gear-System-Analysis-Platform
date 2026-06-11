@@ -52,6 +52,19 @@ from script_editor import ScriptEditor
 from output_console import OutputConsole
 from workspace_panel import WorkspacePanel
 from project_explorer import ProjectExplorer
+from project_wizard import NewProjectWizard
+
+try:
+    import sys as _sys, pathlib as _pathlib
+    _ui_dir    = _pathlib.Path(__file__).parent
+    _repo_root = _ui_dir.parent
+    _axisforge  = _repo_root / "axisforge"
+    for _p in (str(_repo_root), str(_axisforge)):
+        if _p not in _sys.path:
+            _sys.path.insert(0, _p)
+    from core.project_gen import ProjectManager
+except Exception:
+    ProjectManager = None  # type: ignore[assignment,misc]
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +219,10 @@ class MainWindow(QMainWindow):
         # File
         file_menu = mb.addMenu("File")
         file_menu.addAction(self._action(
+            "New Project…", self._new_project, "Ctrl+N"
+        ))
+        file_menu.addSeparator()
+        file_menu.addAction(self._action(
             "Open Project Folder…", self._open_project, "Ctrl+Shift+O"
         ))
         file_menu.addAction(self._action(
@@ -298,6 +315,7 @@ class MainWindow(QMainWindow):
             name_to_section=self._runner.get_name_to_section_map(),
         )
         self._update_status_ns(len(ns))
+        self._scan_new_elements()
 
     def _on_namespace_reset(self) -> None:
         """Clear workspace and log after runner reset."""
@@ -330,6 +348,108 @@ class MainWindow(QMainWindow):
         self._explorer.set_root(folder)
         self._console.append_log(f"Project: {folder}")
         self._status_file.setText(f"  {Path(folder).name}")
+        # Re-seed create_gear_pair with new root
+        self._runner.reset()
+
+    def _new_project(self) -> None:
+        wizard = NewProjectWizard(parent=self)
+        if wizard.exec() != NewProjectWizard.DialogCode.Accepted:
+            return
+        name, parent = wizard.result_data
+
+        if ProjectManager is None:
+            QMessageBox.critical(
+                self, "New Project",
+                "ProjectManager unavailable — check axisforge/core/project_gen.py."
+            )
+            return
+
+        try:
+            project_root = ProjectManager.create_project(name, parent)
+        except FileExistsError as exc:
+            QMessageBox.warning(self, "New Project", str(exc))
+            return
+        except OSError as exc:
+            QMessageBox.critical(self, "New Project", f"Could not create project:\n{exc}")
+            return
+
+        import os
+        os.chdir(project_root)
+        self._explorer.set_root(str(project_root))
+        self._console.append_log(f"Project created: {project_root}")
+        self._status_file.setText(f"  {name}")
+
+        # Re-seed namespace — create_gear_pair needs the new root
+        self._runner.reset()
+
+        # Open full_pipeline.py in the editor
+        pipeline = project_root / "scripts" / "full_pipeline.py"
+        if pipeline.exists():
+            self._open_py_file(str(pipeline))
+
+    def _scan_new_elements(self) -> None:
+        """
+        Compare MechanicalSystem components in the namespace against disk state.
+        Generate skeleton files for any new bearings or gears detected.
+
+        Runs synchronously in the UI thread after each section execution.
+        Errors are logged to the OutputConsole — never raised.
+
+        Convention: MechanicalSystem.name must match the shaft directory name
+        (e.g. MechanicalSystem(name="shaft_1") → shafts/shaft_1/).
+        """
+        if ProjectManager is None:
+            return
+
+        import os
+        root = Path(os.getcwd())
+        if not (root / "shafts").is_dir():
+            return  # not an AxisForge project root
+
+        try:
+            state = ProjectManager.scan_project(root)
+        except Exception:
+            return
+
+        project_name = state.project_name  # read from project.axf
+        systems = self._runner.get_systems()
+        tree_dirty = False
+
+        for sys_obj in systems:
+            shaft_name = sys_obj.name
+
+            for bearing in sys_obj.bearings:
+                label = bearing.label
+                if label in state.bearing_labels.get(shaft_name, set()):
+                    continue
+                try:
+                    result = ProjectManager.generate_bearing_file(
+                        shaft_name, label, root, project_name
+                    )
+                    self._console.append_log(
+                        f"[ProjectGen] Gerado: {result.relative_to(root)}"
+                    )
+                    tree_dirty = True
+                except FileExistsError as exc:
+                    self._console.append_log(f"[ProjectGen] ERRO: {exc}")
+
+            for gear in sys_obj.gears:
+                label = gear.label
+                if label in state.gear_labels.get(shaft_name, set()):
+                    continue
+                try:
+                    result = ProjectManager.generate_gear_file(
+                        shaft_name, label, root, project_name
+                    )
+                    self._console.append_log(
+                        f"[ProjectGen] Gerado: {result.relative_to(root)}"
+                    )
+                    tree_dirty = True
+                except FileExistsError as exc:
+                    self._console.append_log(f"[ProjectGen] ERRO: {exc}")
+
+        if tree_dirty:
+            self._explorer.set_root(str(root))
 
     def _open_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(

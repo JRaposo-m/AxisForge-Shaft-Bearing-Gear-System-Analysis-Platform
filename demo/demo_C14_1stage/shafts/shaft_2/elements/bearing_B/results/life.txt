@@ -4,7 +4,11 @@ AxisForge — Bearing Life Analysis
 Project  : demo_C14_1stage
 Element  : shaft_2_bearing_B
 Script   : bearing_B.py
+<<<<<<< HEAD
 Date     : 2026-05-25 18:02:10
+=======
+Date     : 2026-05-26 12:30:06
+>>>>>>> phase2-clean-restart
 Solver   : BearingLifeSolver v1.0
 Standard : ISO 281:2007
 ================================================================================

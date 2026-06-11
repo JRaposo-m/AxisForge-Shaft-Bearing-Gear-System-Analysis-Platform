@@ -4,7 +4,7 @@ AxisForge — Bearing Life Analysis
 Project  : demo_C14_H501
 Element  : bearing_C14_B
 Script   : full_pipeline.py
-Date     : 2026-05-25 11:31:08
+Date     : 2026-05-29 14:47:40
 Solver   : BearingLifeSolver v1.0
 Standard : ISO 281:2007
 ================================================================================

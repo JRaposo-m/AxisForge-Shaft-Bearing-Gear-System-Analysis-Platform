@@ -48,6 +48,7 @@ class Material:
     Sy: float           # [MPa]
     E: float            # [GPa]
     density: float      # [kg/m³]
+    poisson_ratio: float = 0.3
     Se_base: Optional[float] = None
     description: str = ""
 

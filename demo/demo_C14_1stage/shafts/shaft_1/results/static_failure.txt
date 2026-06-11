@@ -4,7 +4,11 @@ AxisForge — Static Failure Analysis — Shaft
 Project  : demo_C14_1stage
 Element  : shaft_1
 Script   : shaft_1.py
+<<<<<<< HEAD
 Date     : 2026-05-25 18:02:10
+=======
+Date     : 2026-05-26 12:30:06
+>>>>>>> phase2-clean-restart
 Solver   : StaticFailureSolver v1.0
 Standard : Shigley 10th ed. §5-4/5-5
 ================================================================================

@@ -556,6 +556,25 @@ class SectionRunner:
         except Exception:  # noqa: BLE001
             pass
 
+        # create_shaft + create_gear_pair — seeded with current project root
+        try:
+            import os as _os
+            import pathlib as _pathlib
+            from core.project_gen import ProjectManager as _PM  # type: ignore[import]
+            _root = _pathlib.Path(_os.getcwd())
+            _project_name = _PM.read_project_name(_root)
+            # Logs via print() — captured by redirect_stdout in execute()
+            _cs = _PM.make_create_shaft(_root, _project_name,
+                                        console_log_fn=print)
+            self._namespace["create_shaft"] = _cs
+            seeded.add("create_shaft")
+            _cgp = _PM.make_create_gear_pair(_root, _project_name,
+                                             console_log_fn=print)
+            self._namespace["create_gear_pair"] = _cgp
+            seeded.add("create_gear_pair")
+        except Exception:
+            pass
+
         self._SEEDED_NAMES = frozenset(seeded)
 
     def _run_validation(self) -> list[str]:

@@ -300,7 +300,17 @@ def build_system_complex():
     system.add_load(TorqueLoad(position=150.0, magnitude=0.0, label="input_torque"))   # N·mm
     system.add_load(TorqueLoad(position=250.0, magnitude=-200_000.0, label="output_torque"))
 
-    return system
+    from core.loads import LoadingProfile
+
+    loading_profiles = {
+        "overhang_R":                    LoadingProfile(label="overhang_R",   R=1.0),
+        "overhang_L":                    LoadingProfile(label="overhang_L",   R=1.0),
+        "gear_C14_pinion@150.0":         LoadingProfile(label="gear_bending", R=-1.0),
+        "gear_C14_pinion@150.0_torque":  LoadingProfile(label="gear_torque",  R=0.0),
+        "output_torque":                 LoadingProfile(label="output_torque", R=0.0),
+    }
+
+    return system, loading_profiles
 
 
 if __name__ == "__main__":
@@ -449,7 +459,7 @@ if __name__ == "__main__":
     plt.show()
 
 
-    system_complex = build_system_complex()
+    system_complex, loading_profiles  = build_system_complex()
     result_complex = solver.solve(system_complex)
     stress_complex = stress_solver.solve(result_complex, system_complex)
 
@@ -574,5 +584,59 @@ if __name__ == "__main__":
         print("\n── Torsion at nodes — Caso 3 ──")
         print(f"{'x [mm]':>10} {'τ [MPa]':>12}")
         print("-" * 25)
-        for x, tau in stress_complex.tau:
-            print(f"{x:>10.1f} {tau:>12.4f}")
+        for node in stress_complex.tau:
+            print(f"{node['x']:>10.1f} {node['tau_total']:>12.4f}")
+
+        print("\n── Torsion contributions — Caso 3 ──")
+        for node in stress_complex.tau:
+            x = node['x']
+            tau_t = node['tau_total']
+            contribs = node['contributions']
+            if abs(tau_t) > 1e-6 or any(abs(c['tau']) > 1e-6 for c in contribs):
+                print(f"\n  x={x:.1f} mm  τ_total={tau_t:.4f} MPa")
+                for c in contribs:
+                    print(f"    [{c['label']}] T={c['T']:.1f} N·mm  τ={c['tau']:.4f} MPa")
+
+        print("\n── Loading Profiles ──")
+        for label, profile in loading_profiles.items():
+            print(f"  {label:>35} R={profile.R:>5.1f}  σ_m_factor={profile.sigma_mean_factor:.2f}  σ_a_factor={profile.sigma_amplitude_factor:.2f}")
+
+        from solvers.shaft.shaft_analysis import FatiguePostProcessing, StressRaiser
+
+        stress_raisers = [
+            StressRaiser(label="shoulder@100.0", x=100.0, raiser_type="shoulder", Kf=1.5, Kfs=1.5),
+            StressRaiser(label="shoulder@250.0", x=250.0, raiser_type="shoulder", Kf=1.5, Kfs=1.5),
+        ]
+
+        fatigue_pp = FatiguePostProcessing()
+        fatigue_result = fatigue_pp.process(
+            stress_complex, loading_profiles, result_complex.x_nodes, stress_raisers
+        )
+
+        print("\n── FatiguePostProcessing — Caso 3 ──")
+        print(f"{'x [mm]':>10} {'σ_m_xz':>12} {'σ_a_xz':>12} {'σ_m_xy':>12} {'σ_a_xy':>12} {'τ_m':>10} {'τ_a':>10} {'Kf':>6} {'Kfs':>6}")
+        print("-" * 90)
+        for i, node in enumerate(fatigue_result):
+            x = result_complex.x_nodes[i]
+            print(f"{x:>10.1f} {node['sigma_m_xz']:>12.4f} {node['sigma_a_xz']:>12.4f} "
+                  f"{node['sigma_m_xy']:>12.4f} {node['sigma_a_xy']:>12.4f} "
+                  f"{node['tau_m']:>10.4f} {node['tau_a']:>10.4f} "
+                  f"{node['Kf']:>6.2f} {node['Kfs']:>6.2f}")
+
+    x_pts_f = result_complex.x_nodes
+    fig8, axes8 = plt.subplots(3, 1, figsize=(11, 9), sharex=True)
+    axes8[0].plot(x_pts_f, [n['sigma_m_xz'] for n in fatigue_result], 'b-o', label='σ_m_xz')
+    axes8[0].plot(x_pts_f, [n['sigma_a_xz'] for n in fatigue_result], 'b--o', label='σ_a_xz')
+    axes8[0].axhline(0, color='k', lw=0.5); axes8[0].set_ylabel('σ_xz [MPa]')
+    axes8[0].legend(); axes8[0].grid(True)
+    axes8[1].plot(x_pts_f, [n['sigma_m_xy'] for n in fatigue_result], 'r-o', label='σ_m_xy')
+    axes8[1].plot(x_pts_f, [n['sigma_a_xy'] for n in fatigue_result], 'r--o', label='σ_a_xy')
+    axes8[1].axhline(0, color='k', lw=0.5); axes8[1].set_ylabel('σ_xy [MPa]')
+    axes8[1].legend(); axes8[1].grid(True)
+    axes8[2].plot(x_pts_f, [n['tau_m'] for n in fatigue_result], 'g-o', label='τ_m')
+    axes8[2].plot(x_pts_f, [n['tau_a'] for n in fatigue_result], 'g--o', label='τ_a')
+    axes8[2].axhline(0, color='k', lw=0.5); axes8[2].set_ylabel('τ [MPa]')
+    axes8[2].set_xlabel('x [mm]'); axes8[2].legend(); axes8[2].grid(True)
+    fig8.suptitle('FatiguePostProcessing — σ_m, σ_a, τ — Caso 3')
+    fig8.tight_layout()
+    plt.show()

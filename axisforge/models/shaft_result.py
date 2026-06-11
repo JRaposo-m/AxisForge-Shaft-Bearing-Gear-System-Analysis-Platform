@@ -21,23 +21,20 @@ class StaticsResult:
     # cada dict: {'label': str, 'type': 'gear'|'external', 'd_xz': np.ndarray, 'd_xy': np.ndarray}
 # ── 2. Stress (fatigue) ──────────────────────────────────────────────────────
 
-#class StressRaiserType(Enum):
-#    SHOULDER, KEYWAY, PRESS_FIT, GROOVE, OTHER
-
-#@dataclass
-#class CriticalSection:
-#    x, diameter, raiser_type, Kt, Kts, q, qs, Kf, Kfs
-#    Ma, Mm, Ta, Tm
-#    sigma_a, sigma_m, Se_prime, ka, kb, ke
-#    nf_goodman, nf_asme, ny, langer_ok
-    # properties: governing_nf, is_safe
+@dataclass
+class StressRaiser:
+    label: str                          # ex: "shoulder@100.0", "keyway@175.0"
+    x: float                            # posição [mm]
+    raiser_type: str = "other"          # "shoulder", "keyway", "press_fit", "groove", "other"
+    Kf: float = 1.0                     # concentração flexão
+    Kfs: float = 1.0                    # concentração torção
 
 @dataclass
 class StressResult:
     sigma: list[tuple[float, Elem, float, float, float]]        # (zeta, elem, σ_xz, σ_xy)
     internal_forces: list[tuple[float, Elem, np.ndarray, np.ndarray]]  # (zeta, elem, f_xz[3], f_xy[3])
     sigma_contributions: list[dict] | None = None
-    tau: list[tuple[float, float]] | None = None
+    tau: list[dict] | None = None
 
 # ── 3. Static failure ────────────────────────────────────────────────────────
 

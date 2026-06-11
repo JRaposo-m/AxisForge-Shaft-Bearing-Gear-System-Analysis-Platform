@@ -158,118 +158,32 @@ Load = RadialLoad | AxialLoad | TorqueLoad | ExternalMoment
 
 @dataclass(frozen=True)
 class LoadingProfile:
-    """
-    Cycle decomposition parameters for combined bending + torsion fatigue.
 
-    Defines how the peak loads from StaticsResult are split into alternating
-    and mean components, independently for bending and torsion.
+    # aqui posso trabalhar força a força
+        # tenho os campos de tensao definidos para cada força no codigo ou seja posso fazer definição individual do tipo de carga e depois aplicar a cada uma a sua contribuição de tensão e depois somar tudo no final para obter o resultado total da tensão em cada ponto do eixo
 
-    Stress ratio (Shigley §6-12, Eq. 6-37):
-        R = σ_min / σ_max        [-1 ≤ R ≤ 1]
+        # ou seja isto é algo modular para poder usar depois e chamar à vontade 
 
-    Decomposition from peak value (treated as σ_max):
-        Ma = M_peak · (1 - R_bend) / 2
-        Mm = M_peak · (1 + R_bend) / 2
-        Ta = T_peak · (1 - R_tors) / 2
-        Tm = T_peak · (1 + R_tors) / 2
-
-    Special cases:
-        R = -1  → fully reversed  → Ma = M_peak, Mm = 0
-        R =  0  → pulsating       → Ma = Mm = M_peak / 2
-        R = +1  → static          → Ma = 0,      Mm = M_peak
-
-    Amplitude ratio (Eq. 6-38):
-        A = σ_a / σ_m = (1 - R) / (1 + R)    [R ≠ -1]
-
-    Factory methods:
-        LoadingProfile.rotating_shaft()  → R_bend=-1, R_tors=+1  (default)
-        LoadingProfile.pulsating()       → R_bend= 0, R_tors= 0
-        LoadingProfile.static_load()     → R_bend=+1, R_tors=+1
-        LoadingProfile.custom(R_b, R_t)  → arbitrary
-
-    References:
-        Shigley 10th ed. §6-12, Fig. 6-23, Eq. 6-36 to 6-38.
-        Shigley §7-1 — rotating shaft canonical assumption.
-    """
-
-    R_bend: float = -1.0   # fully reversed bending (rotating shaft default)
-    R_tors: float = +1.0   # steady torsion (rotating shaft default)
+        # depois no FatiguePostProcessing pego nos valores depois de serem tratados aqui e aplico as concentrações de carga e tenho o valor total do campo de tensões no veio
+    label: str = ""
+    R: float = 1.0
 
     def __post_init__(self) -> None:
-        for name, val in (("R_bend", self.R_bend), ("R_tors", self.R_tors)):
-            if not (-1.0 <= val <= 1.0):
-                raise ValueError(
-                    f"{name}={val} outside valid range [-1, 1]. "
-                    f"R = σ_min / σ_max requires |R| ≤ 1."
-                )
-
-    # ------------------------------------------------------------------
-    # Derived: amplitude ratios
-    # ------------------------------------------------------------------
+        if not -1.0 <= self.R <= 1.0:
+            raise ValueError(f"R must be in [-1.0, 1.0], got {self.R}")
 
     @property
-    def A_bend(self) -> float:
-        """A = σ_a / σ_m for bending. Returns inf when R_bend = -1 (σ_m = 0)."""
-        denom = 1.0 + self.R_bend
-        if abs(denom) < 1e-12:
-            return float("inf")
-        return (1.0 - self.R_bend) / denom
+    def sigma_mean_factor(self) -> float:
+        return (1 + self.R) / 2
 
     @property
-    def A_tors(self) -> float:
-        """A = τ_a / τ_m for torsion. Returns inf when R_tors = -1 (τ_m = 0)."""
-        denom = 1.0 + self.R_tors
-        if abs(denom) < 1e-12:
-            return float("inf")
-        return (1.0 - self.R_tors) / denom
+    def sigma_amplitude_factor(self) -> float:
+        return abs(1 - self.R) / 2
 
-    # ------------------------------------------------------------------
-    # Decomposition
-    # ------------------------------------------------------------------
+    @property
+    def is_static(self) -> bool:
+        return self.R == 1.0
 
-    def decompose_bending(self, M_peak: float) -> tuple[float, float]:
-        """
-        Split peak bending moment into (Ma, Mm) [N·mm].
-
-        M_peak is treated as σ_max (the maximum of the cycle).
-        """
-        Ma = M_peak * (1.0 - self.R_bend) / 2.0
-        Mm = M_peak * (1.0 + self.R_bend) / 2.0
-        return Ma, Mm
-
-    def decompose_torsion(self, T_peak: float) -> tuple[float, float]:
-        """
-        Split peak torque into (Ta, Tm) [N·mm].
-
-        T_peak is treated as τ_max (the maximum of the cycle).
-        """
-        Ta = T_peak * (1.0 - self.R_tors) / 2.0
-        Tm = T_peak * (1.0 + self.R_tors) / 2.0
-        return Ta, Tm
-
-    # ------------------------------------------------------------------
-    # Factory methods
-    # ------------------------------------------------------------------
-
-    @classmethod
-    def rotating_shaft(cls) -> "LoadingProfile":
-        """
-        Standard rotating shaft: fully reversed bending, steady torsion.
-        R_bend = -1, R_tors = +1.
-        """
-        return cls(R_bend=-1.0, R_tors=1.0)
-
-    @classmethod
-    def pulsating(cls) -> "LoadingProfile":
-        """Pulsating cycle (0 to max) for both bending and torsion."""
-        return cls(R_bend=0.0, R_tors=0.0)
-
-    @classmethod
-    def static_load(cls) -> "LoadingProfile":
-        """No alternating component. For static verification only."""
-        return cls(R_bend=1.0, R_tors=1.0)
-
-    @classmethod
-    def custom(cls, R_bend: float, R_tors: float) -> "LoadingProfile":
-        """Arbitrary stress ratios for bending and torsion."""
-        return cls(R_bend=R_bend, R_tors=R_tors)
+    @property
+    def is_fully_reversed(self) -> bool:
+        return self.R == -1.0

@@ -8,11 +8,11 @@ from dataclasses import dataclass
 
 from core.system import MechanicalSystem
 from core.components import Bearing
-from core.loads import AxialLoad, RadialLoad, TorqueLoad, ExternalMoment, LoadPlane
+from core.loads import AxialLoad, LoadingProfile, RadialLoad, TorqueLoad, ExternalMoment, LoadPlane
 from core.materials import get_material
 from models.shaft_result import (
     StaticsResult,
-    #StressRaiserType,
+    StressRaiser,
     #CriticalSection,
     StressResult,
     #StaticFailureSection,
@@ -467,27 +467,30 @@ class StressSolver:
 
         return sigma
     
-    def _compute_torsion(self, statics_result: StaticsResult, system: MechanicalSystem) -> list[tuple[float, float]]:
-        torque_loads = [(l.position, l.magnitude) for l in system.torque_loads]
+    def _compute_torsion(self, statics_result, system) -> list[dict]:
+        torque_sources = [(l.position, l.magnitude, l.label or f"torque@{l.position}") 
+                        for l in system.torque_loads]
         for gear in system.gears:
             if gear.torque != 0.0:
-                torque_loads.append((gear.position, gear.torque))
+                torque_sources.append((gear.position, gear.torque, f"gear_{gear.label}@{gear.position}_torque"))
 
         tau_nodes = []
         for i, x in enumerate(statics_result.x_nodes):
-            # torque acumulado à esquerda de x
-            T = sum(mag for pos, mag in torque_loads if pos <= x)
-            # secção no nó
             elem = next((e for e in statics_result.elements if e.idx_node_1 == i or e.idx_node_2 == i), None)
-            if elem is None:
-                tau_nodes.append((x, 0.0))
-                continue
-            d = 2 * math.sqrt(elem.A / math.pi)
-            J = math.pi * d**4 / 32
-            Wt = J / (d / 2)
-            tau = T / Wt if Wt > 0 else 0.0
-            tau_nodes.append((x, tau))
+            d = 2 * math.sqrt(elem.A / math.pi) if elem else 0.0
+            Wt = math.pi * d**4 / 32 / (d / 2) if d > 0 else 1.0
 
+            contributions = []
+            for pos, mag, label in torque_sources:
+                if pos <= x:
+                    contributions.append({'label': label, 'T': mag, 'tau': mag / Wt})
+
+            T_total = sum(c['T'] for c in contributions)
+            tau_nodes.append({
+                'x': x,
+                'tau_total': T_total / Wt if Wt > 0 else 0.0,
+                'contributions': contributions,
+            })
 
         return tau_nodes
     
@@ -502,10 +505,97 @@ class StressSolver:
 class StaticFailureSolver: ...
     # analise de falha estática (yielding) usando os resultados da analise estática e propriedades do material 
 
-class FatiguePostProcessing: ...
+class FatiguePostProcessing: 
     # post-processing dos resultados de tensoes e aplicação dos coeficientes de concentração de tensao e das deformações reais causadas por eles
         # depois teremos ainda a aplicação dos fatores como R (sigma_m/sigma_a) de modo a ter as tensoes sentidas na fadiga e depois poder usar no seu calculo de vida util
+
+    def process(self, stress_result: StressResult, 
+                loading_profiles: dict,
+                x_nodes: list[float],
+                stress_raisers: list | None = None) -> list[dict]:
+        
+        sigma_results = self._apply_loading_profile(
+            stress_result.sigma_contributions, loading_profiles
+        )
+        tau_results = self._apply_torsion_profile(
+            stress_result.tau, loading_profiles
+        )
+        
+        if stress_raisers:
+            final = self._apply_stress_concentration(
+                sigma_results, tau_results, x_nodes, stress_raisers
+            )
+        else:
+            final = []
+            for node, tau in zip(sigma_results, tau_results):
+                final.append({**node, **tau, 'Kf': 1.0, 'Kfs': 1.0})
+        
+        return final 
+
+    def _apply_loading_profile(self, sigma_contributions: list[dict], loading_profiles: dict) -> list[dict]:
+        n_nodes = len(sigma_contributions[0]['sigma'])
+        node_results = [{'sigma_m_xz': 0.0, 'sigma_a_xz': 0.0, 'sigma_m_xy': 0.0, 'sigma_a_xy': 0.0} for _ in range(n_nodes)]
+
+        for contrib in sigma_contributions:
+            profile = loading_profiles.get(contrib['label'], LoadingProfile())
+            for i, (_, _, s_ax, s_xz, s_xy) in enumerate(contrib['sigma']):
+                node_results[i]['sigma_m_xz'] += s_xz * profile.sigma_mean_factor
+                node_results[i]['sigma_a_xz'] += s_xz * profile.sigma_amplitude_factor
+                node_results[i]['sigma_m_xy'] += s_xy * profile.sigma_mean_factor
+                node_results[i]['sigma_a_xy'] += s_xy * profile.sigma_amplitude_factor
+
+        return node_results
+        
+
+    def _apply_torsion_profile(self, tau_nodes: list[dict], loading_profiles: dict) -> list[dict]:
+        tau_results = [{'tau_m': 0.0, 'tau_a': 0.0} for _ in range(len(tau_nodes))]
+
+        for i, node in enumerate(tau_nodes):
+            for contrib in node['contributions']:
+                profile = loading_profiles.get(contrib['label'], LoadingProfile())
+                tau_results[i]['tau_m'] += contrib['tau'] * profile.sigma_mean_factor
+                tau_results[i]['tau_a'] += contrib['tau'] * profile.sigma_amplitude_factor
+
+        return tau_results
+    
+
+    def _apply_stress_concentration(self,
+                                    node_results: list[dict],
+                                    tau_results: list[dict],
+                                    x_nodes: list[float],
+                                    stress_raisers: list) -> list[dict]:
+        raiser_map = {self._find_node_index(x_nodes, sr.x): sr
+                    for sr in stress_raisers}
+
+        result = []
+        for i, (node, tau) in enumerate(zip(node_results, tau_results)):
+            sr  = raiser_map.get(i)
+            Kf  = sr.Kf  if sr else 1.0
+            Kfs = sr.Kfs if sr else 1.0
+            result.append({
+                'sigma_m_xz': node['sigma_m_xz'],
+                'sigma_a_xz': node['sigma_a_xz'] * Kf,
+                'sigma_m_xy': node['sigma_m_xy'],
+                'sigma_a_xy': node['sigma_a_xy'] * Kf,
+                'tau_m':      tau['tau_m'],
+                'tau_a':      tau['tau_a'] * Kfs,
+                'Kf':  Kf,
+                'Kfs': Kfs,
+            })
+        return result
+
+    def _find_node_index(self, x_nodes: list[float], x: float, tol: float = MESH_MIN_NODE_DIST_MM) -> int:
+        for i, xn in enumerate(x_nodes):
+            if abs(xn - x) <= tol:
+                return i
+        raise ValueError(f"No node found at x={x:.4f} mm within tolerance {tol} mm")
+            
+ 
+          
 
 class FatigueSolver: ...
     # analise de fadiga usando os resultados da analise de tensoes e deformações e propriedades do material, incluindo a vida util estimada e fatores de segurança contra fadiga
 
+
+
+# pergunta: mas por exemplo ao definir os R dos flutuating loads, a frequencia destas cargas harmonicas tambem nao seria importante para a analise de fadiga?

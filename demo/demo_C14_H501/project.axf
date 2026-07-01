@@ -1,8 +1,0 @@
-{
-  "name": "demo_C14_H501",
-  "description": "Projecto de demonstração — Casos C14 (spur) e H501 (helicoidal) validados contra GEARpie",
-  "version": "1.0",
-  "phase": 1,
-  "created": "2026-05-24",
-  "notes": "Veios genéricos — não são os veios reais dos reports. Phase 1: X=1, Y=0 nos rolamentos."
-}

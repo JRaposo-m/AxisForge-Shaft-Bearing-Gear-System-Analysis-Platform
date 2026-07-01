@@ -28,35 +28,7 @@ class BearingType(Enum):
 
 @dataclass
 class Bearing:
-    """
-    Rolling bearing positioned on the shaft.
 
-    In Phase 1, C and C0 are supplied manually. Phase 3 adds catalogue lookup.
-
-    Parameters
-    ----------
-    position : float
-        Axial coordinate [mm]. Must be ≥ 0.
-    bearing_type : BearingType
-        Determines life exponent and default X/Y load factors.
-    designation : str
-        SKF or other catalogue designation (e.g. '6210'). Optional in Phase 1.
-    C : float
-        Basic dynamic load rating [N]. Required for L10 calculation.
-    C0 : float
-        Basic static load rating [N]. Required for S0 calculation.
-    arrangement : str
-        'fixed' — carries axial load; 'floating' — free to slide axially.
-    contact_angle : float
-        Nominal contact angle α [°]. 0° for DGBB in pure radial service.
-    X : float
-        Radial load factor for equivalent load P = X*Fr + Y*Fa.
-        Phase 1 default: 1.0 (radial dominant simplification).
-    Y : float
-        Axial load factor. Phase 1 default: 0.0.
-    label : str
-        Human-readable identifier, e.g. 'A', 'B', 'input_side'.
-    """
     position: float
     bearing_type: BearingType = BearingType.DEEP_GROOVE_BALL
     designation: str = ""

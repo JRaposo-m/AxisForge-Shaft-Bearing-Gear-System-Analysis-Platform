@@ -372,11 +372,11 @@ class SpurGearMeshing:
         # positions of pinion and wheel along AE
         self.T1A = self.T1T2 - self.T2A
         self.T1B = self.T1E - pb
-        self.T1C = rl1*np.sin(self.alphaw)
+        self.T1C = rb1*np.tan(self.alphaw)
         self.T1D = self.T1A + pb
         self.T2E = self.T1T2 - self.T1E
         self.T2B = self.T2E + pb
-        self.T2C = rl2*np.sin(self.alphaw)
+        self.T2C = rb2*np.tan(self.alphaw)
         self.T2D = self.T2A - pb
         # positions along path of contact
         self.AE = self.T1E - self.T1A

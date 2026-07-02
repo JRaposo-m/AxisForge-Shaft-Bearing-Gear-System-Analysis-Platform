@@ -325,6 +325,7 @@ class InternalGearMeshing:
         self.gear1_w.dl = self.gear1_w.db / np.cos(self.gear1_w.alphatw)
         self.gear2_w.dl = self.gear2_w.db / np.cos(self.gear2_w.alphatw)
         self.gear1_w.rl, self.gear2_w.rl = self.gear1_w.dl / 2, self.gear2_w.dl / 2
+        rl1, rl2 = self.gear1_w.rl, self.gear2_w.rl
 
         # --- tip diameters ---
         d1, d2   = self.gear1.d, self.gear2.d
@@ -335,11 +336,13 @@ class InternalGearMeshing:
         self.gear1_w.ra = self.gear1_w.da / 2.0
 
         # ring gear tip circle: unchanged, taken straight from reference
-        self.gear2_w.da = d2 + 2 * m * (haP2 + cP2 + self.x2)
+        self.gear2_w.da = d2 + z2/abs(z2) * 2 * m * (haP2 + cP2 + self.x2)
         self.gear2_w.ra = self.gear2_w.da / 2.0
 
         db1, db2 = self.gear1_w.db, self.gear2_w.db
+        rb1, rb2 = db1/2, db2/2
         da1, da2 = self.gear1_w.da, self.gear2_w.da
+        ra1, ra2 = da1/2, da2/2
 
         self.gear1_w.alpha_a = np.arccos(db1 / da1)
         self.gear2_w.alpha_a = np.arccos(db2 / da2)
@@ -350,7 +353,7 @@ class InternalGearMeshing:
         # transverse contact ratio (KHK §4.2 — note the MINUS, not plus,
         # which is the internal-pair analogue of the external z1+z2 sum)
         self.gear1_w.epslon_a1 = z1 * (np.tan(alpha_a1) - np.tan(self.alphatw)) / (2 * np.pi)
-        self.gear2_w.epslon_a2 = z2 * (np.tan(alpha_a2) - np.tan(self.alphatw)) / (2 * np.pi)
+        self.gear2_w.epslon_a2 = abs(z2) * (np.tan(alpha_a2) - np.tan(self.alphatw)) / (2 * np.pi)
 
         self.epslon_alpha = self.gear1_w.epslon_a1 - self.gear2_w.epslon_a2
 
@@ -360,6 +363,55 @@ class InternalGearMeshing:
         self.epslon_beta = self.b * np.tan(betab) / pbt
 
         self.epslon_gamma = self.epslon_alpha + self.epslon_beta
+
+
+        self.gear1_w.galpha = rb1 * (np.tan(alpha_a1) - np.tan(self.alphatw))
+        self.gear2_w.galpha = rb2 * (np.tan(alpha_a2) - np.tan(self.alphatw))
+
+        self.galpha = 1/2 * ((da1**2 - db1**2)**(1/2) + z2/abs(z2) * (da2**2 - db2**2)**(1/2) - 2 * self.al * np.sin(self.alphatw))
+
+
+
+        # equivalent curvature radius on pitch point
+        self.ReqI = 1 / (1 / (rl1 * np.sin(self.alphatw))
+                        + 1 / (rl2 * np.sin(self.alphatw)))
+
+        self.T1T2 = z2/abs(z2) * self.al * np.sin(self.alphatw)
+        # positions along line of action length (pinion)
+        self.T1E = (ra1**2 - rb1**2) ** (1 / 2)
+        # positions along line of action length (wheel)
+        self.T2A = z2/abs(z2) * ((ra2**2 - rb2**2) ** (1 / 2))
+        # positions of pinion and wheel along AE
+        self.T1A = self.T1T2 - self.T2A
+        self.T1B = self.T1E - pbt
+        self.T1C = rb1 * np.tan(self.alphatw)
+        self.T1D = self.T1A + pbt
+        self.T2E = self.T1T2 - self.T1E
+        self.T2B = self.T2E + pbt
+        self.T2C = z2/abs(z2) * rb2 * np.tan(self.alphatw)
+        self.T2D = self.T2A - pbt
+        # positions along path of contact
+        self.AE = self.T1E - self.T1A
+        self.AB = self.T1B - self.T1A
+        self.AC = self.T1C - self.T1A
+        self.AD = self.T1D - self.T1A
+        # radius along the path of contact
+        self.rA1 = (self.T1A**2 + rb1**2) ** (1 / 2)
+        self.rB1 = (self.T1B**2 + rb1**2) ** (1 / 2)
+        self.rD1 = (self.T1D**2 + rb1**2) ** (1 / 2)
+        self.rA2 = ((self.T2A - self.AE)**2 + rb2**2) ** (1 / 2)
+        self.rB2 = ((self.T2A - self.AD)**2 + rb2**2) ** (1 / 2)
+        self.rD2 = ((self.T2A - self.AB)**2 + rb2**2) ** (1 / 2)
+
+        # gear loss factor according to Ohlendorf
+        self.HV = (np.pi * (self.u + 1) / (z1 * self.u * np.cos(betab)) *
+                   (1 - self.epslon_alpha + self.gear1_w.epslon_a1**2 +
+                    self.gear2_w.epslon_a2**2))
+
+        # gear finishing
+        self.Ram = (self.gear1_w.Ra + self.gear2_w.Ra) / 2
+        self.Rrms = (self.gear1_w.Rq**2 + self.gear2_w.Rq**2) ** (1 / 2)
+        self.RzS = (self.gear1.Rz + self.gear2.Rz)
 
     # ------------------------------------------------------------------
     # Forces (ISO 6336-1) — same definitions as the external pair, using
@@ -462,6 +514,8 @@ class InternalGearMeshing:
             f"── {tag} ─────────────────────────────────",
             f"  gear1 (ext): z={self.gear1_w.z}, mn={self.gear1_w.mn}, x={self.gear1_w.x}, β={self.gear1.beta_n_deg}°",
             f"  gear2 (int): z={self.gear2_w.z}, mn={self.gear2_w.mn}, x={self.gear2_w.x}, β={self.gear2.beta_n_deg}°",
+            f" da2 : {self.gear2_w.da:.4f} mm",
+            f" T1C : {self.T1C:.4f} mm   (pinion tip contact point)",
             f"  u     : {self.u:.4f}",
             f"  a     : {self.a:.4f} mm   (reference centre distance)",
             f"  al    : {self.al:.4f} mm   (working centre distance)",

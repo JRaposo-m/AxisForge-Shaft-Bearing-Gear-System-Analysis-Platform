@@ -367,11 +367,11 @@ class HelicalGearMeshing:
         # positions of pinion and wheel along AE
         self.T1A = self.T1T2 - self.T2A
         self.T1B = self.T1E - pbt
-        self.T1C = rl1 * np.sin(self.alphatw)
+        self.T1C = rb1 * np.tan(self.alphatw)
         self.T1D = self.T1A + pbt
         self.T2E = self.T1T2 - self.T1E
         self.T2B = self.T2E + pbt
-        self.T2C = rl2 * np.sin(self.alphatw)
+        self.T2C = rb2 * np.tan(self.alphatw)
         self.T2D = self.T2A - pbt
         # positions along path of contact
         self.AE = self.T1E - self.T1A

@@ -26,7 +26,8 @@ class HelicalGear:
                  Rq: float = 1.0,
                  Rz: float = 4.0,
                  label: str = "",
-                 material_id: str = ""):
+                 material_id: str = "",
+                 position: float = 0.0):
         """
         Parameters
         ----------
@@ -47,7 +48,8 @@ class HelicalGear:
         # --- metadata ---
         self.label       = label
         self.material_id = material_id
-
+        self.position    = position
+        
         # --- input parameters ---
         self.mn          = mn
         self.z           = z

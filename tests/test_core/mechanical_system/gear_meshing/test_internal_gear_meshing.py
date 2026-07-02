@@ -203,7 +203,7 @@ if __name__ == "__main__":
     print("=" * 70)
 
     pinion = SpurGear(mn=2.0, z=20, x=0.3, b=25, alpha_n_deg=20.0, label="pinion")
-    ring = InternalGear(mn=2.0, z=-60, x=0.0, b=25, alpha_n_deg=20.0, label="ring")
+    ring = InternalGear(mn=2.0, z=-80, x=0.0, b=25, alpha_n_deg=20.0, label="ring")
 
     mesh_g1 = InternalGearMeshing(gear1=pinion, gear2=ring, driver="gear1",
                                    label="spur-ring (driver=gear1)")
@@ -226,7 +226,7 @@ if __name__ == "__main__":
 
     pinion_h = HelicalGear(mn=2.0, z=20, x=0.3, b=25, alpha_n_deg=20.0,
                             beta_n_deg=15.0, label="pinion-helical")
-    ring_h = InternalGear(mn=2.0, z=-60, x=0.0, b=25, alpha_n_deg=20.0,
+    ring_h = InternalGear(mn=2.0, z=-80, x=0.0, b=25, alpha_n_deg=20.0,
                            beta_n_deg=15.0, label="ring-helical")
 
     mesh_h1 = InternalGearMeshing(gear1=pinion_h, gear2=ring_h, driver="gear1",

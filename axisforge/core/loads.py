@@ -1,155 +1,161 @@
 """
-core/loads.py
-Point load primitives applied to the shaft.
+mechanical_system/loads.py
 
-All loads are positioned by absolute axial coordinate [mm].
-Sign convention: magnitude is always positive (direction is encoded in LoadPlane
-and by the solver sign convention documented in solvers/statics.py).
+Point load primitives applied to a shaft.
 
-Units: N for forces, N·mm for moments and torques.
+Transverse loads (RadialLoad, ExternalMoment) are defined by a magnitude and
+an angular position theta around the shaft cross-section, then decomposed
+into the two principal bending planes (XY, XZ) for the StaticsSolver.
+
+Sign convention:
+  - theta_deg measured from +Y toward +Z, right-hand rule about +X.
+  - magnitude always >= 0; direction fully encoded by theta.
+  - AxialLoad, TorqueLoad act along/about +X — no angular decomposition needed.
+
+Units: N for forces, N*mm for moments/torques, mm for position.
 """
 
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum, auto
+import numpy as np
 
 
 class LoadPlane(Enum):
-    """
-    Plane in which a transverse load acts.
-
-    XZ — horizontal plane (tangential gear forces are assigned here by default)
-    XY — vertical plane (radial gear forces, gravity)
-    AXIAL — along shaft axis (helical gear thrust, axial preload)
-    """
-    XZ = auto()
+    """Principal bending plane — used only as a decomposition result key,
+    never as user input."""
     XY = auto()
-    AXIAL = auto()
+    XZ = auto()
 
 
-@dataclass
-class RadialLoad:
+class Load:
+    """Base class — not instantiated directly."""
+
+    def __init__(self, position: float, label: str = "", source: str = "user"):
+        self.position = position
+        self.label = label
+        self.source = source   # "user" | "gear_mesh" | "bearing_reaction"
+
+    def validate(self) -> list[str]:
+        errors: list[str] = []
+        tag = self.label or self.__class__.__name__
+        if self.position < 0:
+            errors.append(f"{tag}: position must be >= 0, got {self.position}")
+        return errors
+
+    def validate_or_raise(self) -> None:
+        errors = self.validate()
+        if errors:
+            raise ValueError("\n".join(errors))
+
+
+class RadialLoad(Load):
     """
-    Point radial (transverse) force applied at a specific axial position.
+    Transverse point force at arbitrary angular position theta.
 
     Parameters
     ----------
-    position : float
-        Axial coordinate [mm]. Must be ≥ 0.
-    magnitude : float
-        Force magnitude [N]. Pass absolute value; sign convention handled by solver.
-    plane : LoadPlane
-        XZ or XY — the plane in which the force acts.
-    label : str
-        Optional identifier.
+    position  : axial coordinate [mm]
+    magnitude : force magnitude [N], >= 0
+    theta_deg : angular position [deg], measured from +Y toward +Z
+    source    : "user" | "gear_mesh" | "bearing_reaction"
     """
-    position: float
-    magnitude: float
-    plane: LoadPlane
-    label: str = ""
 
-    def __post_init__(self) -> None:
-        if self.position < 0:
-            raise ValueError(
-                f"RadialLoad position cannot be negative, got {self.position}"
-            )
-        if self.plane == LoadPlane.AXIAL:
-            raise ValueError(
-                "RadialLoad cannot have plane=AXIAL. Use AxialLoad instead."
-            )
+    def __init__(self, position: float, magnitude: float,
+                 theta_deg: float = 0.0, label: str = "",
+                 source: str = "user"):
+        super().__init__(position, label, source)
+        self.magnitude = magnitude
+        self.theta_deg = theta_deg % 360.0
+        self.theta = np.radians(self.theta_deg)
+
+    @property
+    def Fy(self) -> float:
+        return self.magnitude * np.cos(self.theta)
+
+    @property
+    def Fz(self) -> float:
+        return self.magnitude * np.sin(self.theta)
+
+    def component(self, plane: LoadPlane) -> float:
+        """Signed magnitude projected onto a principal plane."""
+        return self.Fy if plane == LoadPlane.XY else self.Fz
+
+    def validate(self) -> list[str]:
+        errors = super().validate()
+        tag = self.label or self.__class__.__name__
+        if self.magnitude < 0:
+            errors.append(f"{tag}: magnitude must be >= 0, got {self.magnitude}")
+        return errors
+
+    def __repr__(self) -> str:
+        return (f"RadialLoad(position={self.position:.2f} mm, "
+                f"F={self.magnitude:.2f} N, theta={self.theta_deg:.1f}°, "
+                f"Fy={self.Fy:.2f} N, Fz={self.Fz:.2f} N, "
+                f"source={self.source!r}, label={self.label!r})")
 
 
-@dataclass
-class AxialLoad:
+class AxialLoad(Load):
+    """Force along shaft axis. Positive = tensile (+X)."""
+
+    def __init__(self, position: float, magnitude: float, label: str = "",
+                 source: str = "user"):
+        super().__init__(position, label, source)
+        self.magnitude = magnitude
+
+    def __repr__(self) -> str:
+        return (f"AxialLoad(position={self.position:.2f} mm, "
+                f"Fa={self.magnitude:.2f} N, source={self.source!r}, "
+                f"label={self.label!r})")
+
+
+class TorqueLoad(Load):
+    """Torque about shaft axis. Positive = CCW viewed from +X. [N*m]"""
+
+    def __init__(self, position: float, magnitude: float, label: str = "",
+                 source: str = "user"):
+        super().__init__(position, label, source)
+        self.magnitude = magnitude
+
+    def __repr__(self) -> str:
+        return (f"TorqueLoad(position={self.position:.2f} mm, "
+                f"T={self.magnitude:.2f} N·m, source={self.source!r}, "
+                f"label={self.label!r})")
+
+
+class ExternalMoment(Load):
     """
-    Point axial force (along shaft axis).
-
-    Positive direction: +x (right, away from datum).
-
-    Parameters
-    ----------
-    position : float
-        Axial coordinate [mm].
-    magnitude : float
-        Force [N]. Positive = tensile (+x direction), negative = compressive.
-    label : str
-        Optional identifier.
+    Applied bending moment at arbitrary angular orientation theta.
+    Same decomposition convention as RadialLoad — theta defines the
+    moment vector direction in the YZ cross-section.
     """
-    position: float
-    magnitude: float
-    label: str = ""
 
-    def __post_init__(self) -> None:
-        if self.position < 0:
-            raise ValueError(
-                f"AxialLoad position cannot be negative, got {self.position}"
-            )
+    def __init__(self, position: float, magnitude: float,
+                 theta_deg: float = 0.0, label: str = "",
+                 source: str = "user"):
+        super().__init__(position, label, source)
+        self.magnitude = magnitude
+        self.theta_deg = theta_deg % 360.0
+        self.theta = np.radians(self.theta_deg)
 
+    @property
+    def My(self) -> float:
+        return self.magnitude * np.cos(self.theta)
 
-@dataclass
-class TorqueLoad:
-    """
-    External torque applied at a specific axial position.
+    @property
+    def Mz(self) -> float:
+        return self.magnitude * np.sin(self.theta)
 
-    Convention: positive = counter-clockwise viewed from +x (right-hand rule).
-    Typically applied at gear/coupling positions.
+    def component(self, plane: LoadPlane) -> float:
+        return self.My if plane == LoadPlane.XY else self.Mz
 
-    Parameters
-    ----------
-    position : float
-        Axial coordinate [mm].
-    magnitude : float
-        Torque [N·mm]. Sign encodes direction.
-    label : str
-        Optional identifier.
-    """
-    position: float
-    magnitude: float
-    label: str = ""
-
-    def __post_init__(self) -> None:
-        if self.position < 0:
-            raise ValueError(
-                f"TorqueLoad position cannot be negative, got {self.position}"
-            )
+    def __repr__(self) -> str:
+        return (f"ExternalMoment(position={self.position:.2f} mm, "
+                f"M={self.magnitude:.2f} N·m, theta={self.theta_deg:.1f}°, "
+                f"source={self.source!r}, label={self.label!r})")
 
 
-@dataclass
-class ExternalMoment:
-    """
-    External bending moment applied at a specific axial position.
-
-    Used for overhanging loads, coupling misalignment moments, etc.
-
-    Parameters
-    ----------
-    position : float
-        Axial coordinate [mm].
-    magnitude : float
-        Moment [N·mm]. Sign encodes direction per right-hand rule.
-    plane : LoadPlane
-        XZ or XY — the plane in which the moment acts.
-    label : str
-        Optional identifier.
-    """
-    position: float
-    magnitude: float
-    plane: LoadPlane
-    label: str = ""
-
-    def __post_init__(self) -> None:
-        if self.position < 0:
-            raise ValueError(
-                f"ExternalMoment position cannot be negative, got {self.position}"
-            )
-        if self.plane == LoadPlane.AXIAL:
-            raise ValueError(
-                "ExternalMoment cannot have plane=AXIAL."
-            )
-
-
-# Union type alias — use in type hints for any load container
-Load = RadialLoad | AxialLoad | TorqueLoad | ExternalMoment
+Load_T = RadialLoad | AxialLoad | TorqueLoad | ExternalMoment
 
 
 # ===========================================================================
@@ -158,13 +164,6 @@ Load = RadialLoad | AxialLoad | TorqueLoad | ExternalMoment
 
 @dataclass(frozen=True)
 class LoadingProfile:
-
-    # aqui posso trabalhar força a força
-        # tenho os campos de tensao definidos para cada força no codigo ou seja posso fazer definição individual do tipo de carga e depois aplicar a cada uma a sua contribuição de tensão e depois somar tudo no final para obter o resultado total da tensão em cada ponto do eixo
-
-        # ou seja isto é algo modular para poder usar depois e chamar à vontade 
-
-        # depois no FatiguePostProcessing pego nos valores depois de serem tratados aqui e aplico as concentrações de carga e tenho o valor total do campo de tensões no veio
     label: str = ""
     R: float = 1.0
 

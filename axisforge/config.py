@@ -43,3 +43,6 @@ FLA_THRESHOLD_HIGH: float = 0.60
 # Numerical guards
 # ---------------------------------------------------------------------------
 MIN_LOAD_N: float = 1.0   # Minimum equivalent bearing load
+MIN_BEARING_SEPARATION_MM = 1.0e-3 # Minimum separation between two supports (div-by-zero guard for the solver).
+MIN_SHOULDER_CLEARANCE_MM = 1.0
+FLOATING_BEARING_CLEARANCE_MM = 0.1  # Minimum clearance for a floating bearing to be considered "floating" (not abutting a shoulder).

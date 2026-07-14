@@ -10,3 +10,6 @@ pytest-cov>=4.0
 pytest-qt>=4.4
 ruff>=0.4
 mypy>=1.10
+
+[viz]
+matplotlib>=3.8

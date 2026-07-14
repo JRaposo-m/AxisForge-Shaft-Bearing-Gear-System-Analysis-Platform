@@ -23,9 +23,13 @@ dev = [
     "mypy>=1.10",
 ]
 
+viz = [
+    "matplotlib>=3.8",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["axisforge*"]
+include = ["axisforge*", "mesh*"]
 
 [tool.pytest.ini_options]
 pythonpath = [".", "axisforge"]

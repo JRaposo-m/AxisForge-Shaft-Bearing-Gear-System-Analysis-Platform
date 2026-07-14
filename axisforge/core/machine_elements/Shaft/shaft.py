@@ -19,9 +19,9 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Optional
 
-from config import TOL_GEOMETRY_mm
-from database.shaft.keyway.Parallel.parallel_keyway import lookup_parallel_keyway
-from database.shaft.keyway.Woodruff_key.iso3912 import lookup_woodruff_keyway
+from axisforge.config import TOL_GEOMETRY_mm
+from axisforge.database.shaft.keyway.Parallel.parallel_keyway import lookup_parallel_keyway
+from axisforge.database.shaft.keyway.Woodruff_key.iso3912 import lookup_woodruff_keyway
 
 
 class KeywayType(Enum):

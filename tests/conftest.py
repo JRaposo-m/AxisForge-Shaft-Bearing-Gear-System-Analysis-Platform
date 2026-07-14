@@ -7,6 +7,8 @@ All positions in mm, forces in N, moments in N·mm.
 """
 
 import pytest
+import math
+from __future__ import annotations
 from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_gear import SpurGear
 from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.helical_gear import HelicalGear
 from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.internal_gear import InternalGear
@@ -221,106 +223,115 @@ def skf_6210_floating():
 # MechanicalSystem — primary integration fixture
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
-def simple_system(three_section_shaft, skf_6210_fixed, skf_6210_floating):
-    """
-    Reference system used throughout Phase 1 tests.
-
-    Shaft: 400mm, 3 sections (40/50/40mm diameter)
-    Bearings: SKF 6210 at x=50mm (fixed) and x=350mm (floating)
-    Gear: Wt=3500N, Wr=1274N, T=175000N·mm at x=200mm
-    Speed: 1450 rpm | Design life: 20000 h
-
-    Hand-calculated reactions (span = 300mm, gear at midspan):
-      R_A_xz = R_B_xz = 1750 N
-      R_A_xy = R_B_xy = 637 N
-    """
-    system = MechanicalSystem(
-        shaft=three_section_shaft,
-        name="Demo_Shaft_001",
-        speed_rpm=1450.0,
-        design_life_hours=20_000.0,
-    )
-    system.add_bearing(skf_6210_fixed)
-    system.add_bearing(skf_6210_floating)
-    system.add_gear(GearElement(
-        position=200.0,
-        tangential_force=3500.0,
-        radial_force=1274.0,
-        axial_force=0.0,
-        pitch_diameter=100.0,
-        torque=175_000.0,
-        label="G1",
-    ))
-    return system
+"""
+Lightweight fakes standing in for the real geometry/bearing/meshing classes.
+They implement only the attribute surface that ShaftSystem / GearSystem touch,
+so the systems logic can be tested without the full AxisForge stack.
+"""
 
 
-@pytest.fixture
-def simple_system_central_load(three_section_shaft):
-    """
-    System with a single central radial load (no gear, no torque).
-    Used for pure static equilibrium tests.
+class FakeShaft:
+    def __init__(self, total_length: float = 200.0, errors=None):
+        self._L = total_length
+        self._errors = errors or []
 
-    Load: F=5000N in XY plane at x=200mm (midspan of 50–350 span).
-    Expected reactions: R_A_xy = R_B_xy = 2500N (symmetric).
-    """
-    system = MechanicalSystem(
-        shaft=three_section_shaft,
-        name="Central_Load_Test",
-        speed_rpm=1450.0,
-    )
-    system.add_bearing(Bearing(
-        position=50.0, C=35_000.0, C0=22_000.0,
-        arrangement="fixed", label="A",
-    ))
-    system.add_bearing(Bearing(
-        position=350.0, C=35_000.0, C0=22_000.0,
-        arrangement="floating", label="B",
-    ))
-    system.add_load(RadialLoad(
-        position=200.0, magnitude=5000.0,
-        plane=LoadPlane.XY, label="F_central",
-    ))
-    return system
+    @property
+    def total_length(self) -> float:
+        return self._L
+
+    def validate(self) -> list[str]:
+        return list(self._errors)
 
 
-@pytest.fixture
-def system_with_external_moment(three_section_shaft):
-    """
-    System with an ExternalMoment load.
-    Used to exercise the external_moments filter in MechanicalSystem.
-    """
-    system = MechanicalSystem(
-        shaft=three_section_shaft,
-        name="Moment_Test",
-        speed_rpm=1450.0,
-    )
-    system.add_bearing(Bearing(
-        position=50.0, C=35_000.0, C0=22_000.0,
-        arrangement="fixed", label="A",
-    ))
-    system.add_bearing(Bearing(
-        position=350.0, C=35_000.0, C0=22_000.0,
-        arrangement="floating", label="B",
-    ))
-    system.add_load(ExternalMoment(
-        position=200.0, magnitude=50_000.0,
-        plane=LoadPlane.XY, label="M_ext",
-    ))
-    return system
-    
+class FakeBearing:
+    def __init__(self, position: float, arrangement: str = "floating",
+                 Ka=None, errors=None, name="brg"):
+        self.position = position
+        self.arrangement = arrangement
+        self.Ka = Ka
+        self._errors = errors or []
+        self.name = name
 
-@pytest.fixture
-def shigley_ex3_6():
+    def validate(self) -> list[str]:
+        return list(self._errors)
+
+
+class FakeGear:
+    """Minimal gear geometry: only `.position` (+ optional validate)."""
+    def __init__(self, position: float, errors=None):
+        self.position = position
+        self._errors = errors or []
+
+    def validate(self) -> list[str]:
+        return list(self._errors)
+
+
+class FakeMeshing:
     """
-    Shigley Ex. 3-6 — simply-supported beam, off-centre point load.
-    xA=0, xB=600mm, F=5000N (XY) at x=200mm.
-    R_A=3333.3N, R_B=1666.7N, M_max=666667 N·mm at x=200mm.
+    Configurable meshing whose forces() returns caller-controlled numbers,
+    used to exercise topology / propagation / load-injection independently of
+    real gear math.
     """
-    shaft = Shaft(name="shigley_ex3_6")
-    shaft.add_section(ShaftSection(length=600.0, diameter=50.0))
-    system = MechanicalSystem(shaft=shaft, speed_rpm=0.0, name="Shigley_Ex3_6")
-    system.add_bearing(Bearing(position=0.0, C=1.0, C0=1.0, arrangement="fixed", label="A"))
-    system.add_bearing(Bearing(position=600.0, C=1.0, C0=1.0, arrangement="floating", label="B"))
-    system.add_load(RadialLoad(position=200.0, magnitude=5000.0, plane=LoadPlane.XY))
-    return system    
+    def __init__(self, al: float = 100.0, u: float = 2.0,
+                 Ft=1000.0, Fr=364.0, Fa=0.0, internal=False):
+        self.al = al
+        self.u = u
+        self._Ft = Ft
+        self._Fr = Fr
+        self._Fa = Fa
+        self._internal = internal
+        self.calls: list[tuple] = []
+
+    def forces(self, T_in: float, phi_deg: float = 0.0,
+               rotation_dir_in: int = 1) -> dict:
+        self.calls.append((T_in, phi_deg, rotation_dir_in))
+        if self._internal:
+            rotation_dir_out = rotation_dir_in           # internal: same sense
+            T_out = T_in * abs(self.u)
+        else:
+            rotation_dir_out = -rotation_dir_in          # external: inverts
+            T_out = T_in * self.u
+        out = {
+            "Ft": self._Ft, "Fr": self._Fr, "Fn": 0.0, "T_out": T_out,
+            "theta_Fr_driver": phi_deg % 360.0,
+            "theta_Ft_driver": (phi_deg + 90.0 * rotation_dir_in) % 360.0,
+            "theta_Fr_driven": (phi_deg + 180.0) % 360.0,
+            "theta_Ft_driven": (phi_deg + 180.0 + 90.0 * rotation_dir_out) % 360.0,
+            "rotation_dir_out": rotation_dir_out,
+        }
+        if self._Fa:
+            out["Fa"] = self._Fa
+        return out
+
+
+class SpurLikeMeshing:
+    """
+    Faithful re-implementation of SpurGearMeshing.forces() (documented spur
+    formulae) so the reducer regression can be checked against a hand calc.
+
+    rl1 in mm (working pitch radius of the driver), alphaw in rad, u = z2/z1.
+    """
+    def __init__(self, rl1_mm: float, alphaw_rad: float, u: float, al: float):
+        self.rl1_mm = rl1_mm
+        self.alphaw = alphaw_rad
+        self.u = u
+        self.al = al
+
+    def forces(self, T1: float, phi_deg: float = 0.0,
+               rotation_dir: int = 1, rotation_dir_in: int | None = None) -> dict:
+        rot = rotation_dir_in if rotation_dir_in is not None else rotation_dir
+        Ft = T1 / (self.rl1_mm / 1000.0)
+        Fr = Ft * math.tan(self.alphaw)
+        Fn = Ft / math.cos(self.alphaw)
+        T_out = T1 * self.u
+        theta_Fr_driver = phi_deg % 360.0
+        theta_Ft_driver = (phi_deg + 90.0 * rot) % 360.0
+        rotation_dir_out = -self.u / abs(self.u) * rot
+        theta_Fr_driven = (phi_deg + 180.0) % 360.0
+        theta_Ft_driven = (phi_deg + 180.0 + 90.0 * rotation_dir_out) % 360.0
+        return {
+            "Ft": Ft, "Fr": Fr, "Fn": Fn, "T_out": T_out,
+            "theta_Fr_driver": theta_Fr_driver, "theta_Ft_driver": theta_Ft_driver,
+            "theta_Fr_driven": theta_Fr_driven, "theta_Ft_driven": theta_Ft_driven,
+            "rotation_dir_out": int(rotation_dir_out),
+        }

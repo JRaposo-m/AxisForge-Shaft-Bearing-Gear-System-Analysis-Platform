@@ -34,7 +34,7 @@ class Material:
     Sy : float
         Yield strength [MPa].
     E : float
-        Young's modulus [GPa].
+        Young's modulus [MPa].
     density : float
         Density [kg/m³].
     Se_base : float
@@ -46,7 +46,7 @@ class Material:
     material_id: str
     Sut: float          # [MPa]
     Sy: float           # [MPa]
-    E: float            # [GPa]
+    E: float            # [MPa]
     density: float      # [kg/m³]
     poisson_ratio: float = 0.3
     Se_base: Optional[float] = None
@@ -93,7 +93,7 @@ S355 = Material(
     material_id="S355",
     Sut=590.0,
     Sy=355.0,
-    E=210.0,
+    E=210000.0,
     density=7850.0,
     description="EN 10025-2 S355 — structural steel",
 )
@@ -103,7 +103,7 @@ CrMo42 = Material(
     material_id="42CrMo4",
     Sut=1000.0,
     Sy=800.0,
-    E=210.0,
+    E=210000.0,
     density=7850.0,
     description="DIN 42CrMo4 (AISI 4140 equiv.) — heat-treated, QT900",
 )
@@ -113,7 +113,7 @@ AISI_1045 = Material(
     material_id="AISI_1045",
     Sut=570.0,
     Sy=310.0,
-    E=207.0,
+    E=207000.0,
     density=7850.0,
     description="AISI 1045 normalised — Shigley reference (Table A-20)",
 )
@@ -123,7 +123,7 @@ AISI_4340 = Material(
     material_id="AISI_4340",
     Sut=1460.0,
     Sy=1380.0,
-    E=207.0,
+    E=207000.0,
     density=7850.0,
     Se_base=700.0,   # capped per Shigley §6-2
     description="AISI 4340 OQT 600 — high-strength alloy steel",

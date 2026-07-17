@@ -292,29 +292,13 @@ class ShaftSystem:
                     f"{kind2} '{tag2}' [{lo2:.3f}, {hi2:.3f}] mm by {-gap:.3f} mm"
                 )
         return errors
+                
+
 
     def _shoulder_coincidence_errors(
         self, margin: float | None = None
     ) -> list[str]:
-        """
-        Check shoulder coincidence separately for gears and bearings.
 
-        Gears: any axial coincidence with a shoulder is flagged — not a
-        standard mounting pattern for AxisForge's scope.
-
-        Bearings: axial coincidence with a shoulder is the NORMAL axial
-        locating scheme (the shoulder is the abutment face for the inner
-        ring) and is NOT flagged by itself. It is only an error if the
-        shoulder's diameter_large exceeds the bearing's permissible
-        abutment diameter (Bearing.da_max) — i.e. the shoulder step would
-        foul the inner race fillet / rolling track. If da_max is not
-        defined on the bearing, coincidence is reported as unverifiable
-        rather than silently accepted.
-
-        margin : float | None
-            Axial keep-out margin used only for the GEAR check.
-            Defaults to MIN_SHOULDER_CLEARANCE_mm if None.
-        """
         errors: list[str] = []
         tag = self.name or self.label or "ShaftSystem"
         keep_out = margin if margin is not None else MIN_SHOULDER_CLEARANCE_MM
@@ -340,7 +324,7 @@ class ShaftSystem:
             lo, hi = self.bearing_extent(b)
             elem_tag = b.label or b.designation or "bearing"
             for x_shoulder, shoulder in shoulders:
-                if not (lo < x_shoulder < hi):
+                if not (lo <= x_shoulder <= hi):
                     continue  # no axial overlap at all — nothing to check
                 
                 if hi > x_shoulder or lo < x_shoulder:

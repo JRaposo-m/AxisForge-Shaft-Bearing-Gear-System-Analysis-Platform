@@ -38,8 +38,7 @@ from scipy import optimize
 import copy
 
 from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.internal_gear import InternalGear
-from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.helical_gear import HelicalGear
-from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_gear import SpurGear
+from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_helical_gear import SpurHelicalGear
 
 
 class InternalGearMeshing:
@@ -66,7 +65,7 @@ class InternalGearMeshing:
     """
 
     def __init__(self,
-             gear1: SpurGear | HelicalGear,
+             gear1: SpurHelicalGear,
              gear2: InternalGear,
              label: str = "",
              al: float | None = None,

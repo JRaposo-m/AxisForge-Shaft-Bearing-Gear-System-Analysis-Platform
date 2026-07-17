@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 
 
-class HelicalGear:
+class SpurHelicalGear:
 
     def __init__(self,
                  mn: float,

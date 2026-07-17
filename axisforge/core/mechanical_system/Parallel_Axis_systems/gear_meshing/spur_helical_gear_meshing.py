@@ -15,10 +15,10 @@ import numpy as np
 from scipy import optimize
 import copy
 
-from machine_elements.Gears.Parallel_Axis_gears.helical_gear import HelicalGear
+from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_helical_gear import SpurHelicalGear
 
 
-class HelicalGearMeshing:
+class SpurHelicalGearMeshing:
     """
     Defines a helical gear pair and computes:
       - Working centre distance and transverse working pressure angle
@@ -39,12 +39,13 @@ class HelicalGearMeshing:
     """
 
     def __init__(self,
-                 gear1: HelicalGear,
-                 gear2: HelicalGear,
+                 gear1: SpurHelicalGear,
+                 gear2: SpurHelicalGear,
                  label: str = "",
                  al: float | None = None,
                  equalise_gs: bool = False,
-                 addendum_reduction: bool = False):
+                 addendum_reduction: bool = False,
+                 driver: str = "gear1"):
         """
         Parameters
         ----------
@@ -62,6 +63,15 @@ class HelicalGearMeshing:
         """
         # --- compatibility check before anything else ---
         self._check_compatibility(gear1, gear2)
+
+        if driver not in ("gear1", "gear2"):
+            raise ValueError(
+                f"driver must be 'gear1' or 'gear2', got '{driver}'. "
+                "This selects which gear delivers input torque — it is independent "
+                "of gear1/gear2 being external/internal."
+            )
+        self.driver = driver
+        self.driven = "gear2" if driver == "gear1" else "gear1"
 
         self.label = label
 
@@ -560,7 +570,7 @@ class HelicalGearMeshing:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _check_compatibility(g1: HelicalGear, g2: HelicalGear) -> None:
+    def _check_compatibility(g1: SpurHelicalGear, g2: SpurHelicalGear) -> None:
         """Raise ValueError if the two gears cannot mesh."""
         if not np.isclose(g1.mn, g2.mn, rtol=1e-6):
             raise ValueError(

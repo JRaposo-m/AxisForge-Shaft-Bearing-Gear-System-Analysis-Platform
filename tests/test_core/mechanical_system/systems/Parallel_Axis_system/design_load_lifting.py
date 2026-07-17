@@ -9,6 +9,10 @@ Extends design_load_lifting.py:
   3. Runs SimpleFEMSolver (bending XZ/XY + torsion) on all three shafts.
   4. Produces verification plots: bending moment, shear, deflection,
      torque and shear-stress diagrams, per shaft.
+  5. Draws the assembly SCHEMATIC (system 1D + per-shaft 2D detail) right
+     after resolve(), as a quick "is this wired up right" visual check
+     before any solver runs — see axisforge/core/mechanical_system/
+     Parallel_Axis_systems/schematic.py.
 
 ASSUMPTIONS (flagged explicitly, not silently applied):
   A1. Bearing seats sit at the smaller step diameter (typical practice —
@@ -45,8 +49,8 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
-from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_gear import SpurGear
-from axisforge.core.mechanical_system.Parallel_Axis_systems.gear_meshing.spur_gear_meshing import SpurGearMeshing
+from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_helical_gear import SpurHelicalGear
+from axisforge.core.mechanical_system.Parallel_Axis_systems.gear_meshing.spur_helical_gear_meshing import SpurHelicalGearMeshing
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
 from axisforge.core.machine_elements.Shaft.shaft import Shaft, ShaftSection, Shoulder
@@ -56,6 +60,11 @@ from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoi
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.gear_system import GearMeshLink, GearSystem
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
 
+# --- schematic (visual sanity check, no solver dependency) -----------------
+from axisforge.core.mechanical_system.Parallel_Axis_systems.schematic import (
+    draw_gear_system, draw_shaft_detail, INK,
+)
+
 
 # ===========================================================================
 # 1. GEARS — unchanged from design_load_lifting.py
@@ -64,13 +73,13 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_f
 GEAR_KW = dict(mn=2.0, x=0.0, b=20.0, alpha_n_deg=20.0, Ra=0.8,
                material_id="42CrMo4")
 
-z1 = SpurGear(z=20, position=55.0, label="z1", **GEAR_KW)
-z2 = SpurGear(z=60, position=95.0, label="z2", **GEAR_KW)
-z3 = SpurGear(z=20, position=55.0, label="z3", **GEAR_KW)
-z4 = SpurGear(z=60, position=55.0, label="z4", **GEAR_KW)
+z1 = SpurHelicalGear(z=20, position=55.0, label="z1", **GEAR_KW)
+z2 = SpurHelicalGear(z=60, position=95.0, label="z2", **GEAR_KW)
+z3 = SpurHelicalGear(z=20, position=55.0, label="z3", **GEAR_KW)
+z4 = SpurHelicalGear(z=60, position=55.0, label="z4", **GEAR_KW)
 
-stage1 = SpurGearMeshing(z1, z2, label="stage1 (z1->z2)")
-stage2 = SpurGearMeshing(z3, z4, label="stage2 (z3->z4)")
+stage1 = SpurHelicalGearMeshing(z1, z2, label="stage1 (z1->z2)")
+stage2 = SpurHelicalGearMeshing(z3, z4, label="stage2 (z3->z4)")
 
 
 # ===========================================================================
@@ -227,6 +236,29 @@ assert not topo, f"topology errors: {topo}"
 
 gearbox.resolve(P_W, RPM_IN, rotation_dir_source=1, source_position=(0.0, 0.0))
 
+
+# ===========================================================================
+# 5b. SCHEMATIC — quick "is this wired up right" visual check, BEFORE any
+# solver runs. Uses only shaft_origin_x / shaft_position / bearings / gears
+# / links, already available right after resolve() above.
+#
+# axis="z": stage1/stage2 both use phi_deg=270, which offsets shaft_position
+# along z, not y (see schematic.py module docstring) — with axis="y" every
+# shaft would collapse onto the same row.
+# ===========================================================================
+
+fig_schem, ax_schem = plt.subplots(figsize=(12, 5))
+draw_gear_system(ax_schem, gearbox, axis="z")
+fig_schem.suptitle("Gearbox schematic — system (1D)", fontsize=12, fontweight="bold")
+fig_schem.tight_layout()
+
+for sh in (sys1, sys2, sys3):
+    fig_d, ax_d = plt.subplots(figsize=(9, 2.6))
+    draw_shaft_detail(ax_d, sh)
+    fig_d.suptitle(f"{sh.name} — detail (2D)", fontsize=11, fontweight="bold")
+    fig_d.tight_layout()
+
+
 T3 = gearbox._resolved[id(sys3)]["T_out_Nm"]
 r_pulley = 0.050
 F_rope = T3 / r_pulley
@@ -253,7 +285,7 @@ for st, drv_shaft, drv_label in ((stage1, sys1, "z1"), (stage2, sys2, "z3")):
               if l.source == "gear_mesh" and l.label == f"{drv_label}:Fr")
     ft = next(l.magnitude for l in drv_shaft.radial_loads
               if l.source == "gear_mesh" and l.label == f"{drv_label}:Ft")
-    Fn = ft / math.cos(st.alphaw)
+    Fn = ft / math.cos(st.alphatw)
     print(f"  {st.label:<20} Ft={ft:8.1f} N   Fr={fr:8.1f} N   Fn={Fn:8.1f} N")
 
 print("\n" + "-" * 74)
@@ -429,53 +461,52 @@ def plot_shaft(name, d, shaft_system):
     fig, axes = plt.subplots(5, 1, figsize=(9, 13), sharex=True)
     fig.suptitle(f"Shaft analysis — {name}", fontsize=13, fontweight="bold")
 
-    # shaft outline (diameter envelope)
+    # --- shaft profile: reuse the real schematic (shoulders, bearings, gears,
+    # true diameter) instead of a hand-rolled fill_between envelope.
+    # local=True aligns it to the same 0..total_length frame as x below
+    # (shaft2/shaft3 have shaft_origin_x != 0 — without local=True the
+    # profile would sit shifted relative to the moment/shear/deflection
+    # panels underneath, since they share this axis).
     ax0 = axes[0]
-    ax0.fill_between(x, d["d_local"]/2, -d["d_local"]/2, step="pre",
-                      color="#8899aa", alpha=0.5)
-    for b in shaft_system.bearings:
-        ax0.axvline(b.position, color="black", linestyle=":", linewidth=1)
-        ax0.text(b.position, d["d_local"].max()/2*1.15, "brg", ha="center", fontsize=7)
-    for ge in shaft_system.gears:
-        ax0.axvline(ge.position, color="tab:red", linestyle="--", linewidth=1)
-        ax0.text(ge.position, d["d_local"].max()/2*1.35, ge.label, ha="center",
-                  fontsize=7, color="tab:red")
-    ax0.set_ylabel("shaft\nprofile [mm]")
-    ax0.set_ylim(-d["d_local"].max()*0.9, d["d_local"].max()*0.9)
+    draw_shaft_detail(ax0, shaft_system, local=True)
+    ax0.set_title("")   # redundant with the figure suptitle above
+    ax0.set_xlabel("")  # only the bottom panel (ax4) labels the shared x-axis
 
     ax1 = axes[1]
-    ax1.plot(x, d["M_xz"], label="M_xz", color="tab:blue")
-    ax1.plot(x, d["M_xy"], label="M_xy", color="tab:orange")
-    ax1.axhline(0, color="grey", linewidth=0.6)
+    ax1.plot(x, d["M_xz"], label="M_xz", color=INK, linestyle="-", linewidth=1.1)
+    ax1.plot(x, d["M_xy"], label="M_xy", color=INK, linestyle="--", linewidth=1.1)
+    ax1.axhline(0, color="0.6", linewidth=0.6)
     ax1.set_ylabel("Moment\n[N·mm]")
-    ax1.legend(fontsize=8, loc="upper right")
+    ax1.legend(fontsize=8, loc="upper right", frameon=False)
 
     ax2 = axes[2]
-    ax2.plot(x, d["V_xz"], label="V_xz", color="tab:blue")
-    ax2.plot(x, d["V_xy"], label="V_xy", color="tab:orange")
-    ax2.axhline(0, color="grey", linewidth=0.6)
+    ax2.plot(x, d["V_xz"], label="V_xz", color=INK, linestyle="-", linewidth=1.1)
+    ax2.plot(x, d["V_xy"], label="V_xy", color=INK, linestyle="--", linewidth=1.1)
+    ax2.axhline(0, color="0.6", linewidth=0.6)
     ax2.set_ylabel("Shear\n[N]")
-    ax2.legend(fontsize=8, loc="upper right")
+    ax2.legend(fontsize=8, loc="upper right", frameon=False)
 
     ax3 = axes[3]
-    ax3.plot(x, d["v_xz"]*1000, label="v_xz (µm)", color="tab:blue")
-    ax3.plot(x, d["v_xy"]*1000, label="v_xy (µm)", color="tab:orange")
-    ax3.axhline(0, color="grey", linewidth=0.6)
+    ax3.plot(x, d["v_xz"]*1000, label="v_xz (µm)", color=INK, linestyle="-", linewidth=1.1)
+    ax3.plot(x, d["v_xy"]*1000, label="v_xy (µm)", color=INK, linestyle="--", linewidth=1.1)
+    ax3.axhline(0, color="0.6", linewidth=0.6)
     ax3.set_ylabel("Deflection\n[µm]")
-    ax3.legend(fontsize=8, loc="upper right")
+    ax3.legend(fontsize=8, loc="upper right", frameon=False)
 
     ax4 = axes[4]
     ax4b = ax4.twinx()
-    l1, = ax4.plot(x, d["T"], color="tab:green", label="T(x)")
-    l2, = ax4b.plot(x, d["tau"], color="tab:purple", linestyle="--", label="tau(x)")
-    ax4.axhline(0, color="grey", linewidth=0.6)
-    ax4.set_ylabel("Torque\n[N·m]", color="tab:green")
-    ax4b.set_ylabel("Shear stress\n[MPa]", color="tab:purple")
+    l1, = ax4.plot(x, d["T"], color=INK, linestyle="-", linewidth=1.1, label="T(x)")
+    l2, = ax4b.plot(x, d["tau"], color=INK, linestyle=":", linewidth=1.1, label="tau(x)")
+    ax4.axhline(0, color="0.6", linewidth=0.6)
+    ax4.set_ylabel("Torque\n[N·m]")
+    ax4b.set_ylabel("Shear stress\n[MPa]")
     ax4.set_xlabel("x [mm]")
-    ax4.legend(handles=[l1, l2], fontsize=8, loc="upper right")
+    ax4.legend(handles=[l1, l2], fontsize=8, loc="upper right", frameon=False)
 
     for ax in axes:
-        ax.grid(alpha=0.3)
+        ax.grid(alpha=0.25, linewidth=0.5, color="0.7")
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
 
     fig.tight_layout(rect=[0, 0, 1, 0.97])
     return fig
@@ -486,15 +517,17 @@ for sh in (sys1, sys2, sys3):
 
 # --- combined bending-stress summary across all 3 shafts ---
 fig, ax = plt.subplots(figsize=(9, 4.5))
-for sh, color in zip((sys1, sys2, sys3), ("tab:blue", "tab:orange", "tab:green")):
+for sh, ls in zip((sys1, sys2, sys3), ("-", "--", ":")):
     d = diagrams[sh.name]
-    ax.plot(d["x"], d["sigma_b"], label=f"{sh.name} σ_b", color=color)
-ax.axhline(0, color="grey", linewidth=0.6)
+    ax.plot(d["x"], d["sigma_b"], label=f"{sh.name} σ_b", color=INK, linestyle=ls, linewidth=1.2)
+ax.axhline(0, color="0.6", linewidth=0.6)
 ax.set_xlabel("x [mm] (local, per-shaft)")
 ax.set_ylabel("Bending stress at outer fibre [MPa]")
 ax.set_title("Bending stress comparison — all shafts")
-ax.legend(fontsize=8)
-ax.grid(alpha=0.3)
+ax.legend(fontsize=8, frameon=False)
+ax.grid(alpha=0.25, linewidth=0.5, color="0.7")
+ax.spines["top"].set_visible(False)
+ax.spines["right"].set_visible(False)
 fig.tight_layout()
 
 # show every figure created above, blocking until closed — nothing written to disk

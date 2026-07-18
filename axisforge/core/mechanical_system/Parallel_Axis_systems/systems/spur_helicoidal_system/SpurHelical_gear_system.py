@@ -4,10 +4,10 @@ mechanical_system/systems/gear_system.py
 Multi-shaft parallel-axis transmission assembler.
 
 Two classes:
-  - GearMeshLink : one directed mesh, shaft_a(driver) -> shaft_b(driven),
+  - SpurHelicalMeshLink : one directed mesh, shaft_a(driver) -> shaft_b(driven),
                    carrying a meshing model and the global line-of-centres
                    angle phi_deg. Optional torque_split selects fan-out mode.
-  - GearSystem   : a single-source DAG of shafts joined by GearMeshLink.
+  - GearSystem   : a single-source DAG of shafts joined by SpurHelicalMeshLink.
                    resolve() walks the DAG in topological order, propagating
                    torque / rotation sense / shaft position, and injects the
                    resulting mesh loads onto each ShaftSystem.
@@ -35,10 +35,10 @@ from axisforge.config import TOL_GEOMETRY_mm
 
 
 # ===========================================================================
-# GearMeshLink
+# SpurHelicalMeshLink  
 # ===========================================================================
 
-class GearMeshLink:
+class SpurHelicalMeshLink  :
     """
     A single directed mesh from shaft_a (driver) to shaft_b (driven).
 
@@ -73,7 +73,7 @@ class GearMeshLink:
 
     def validate(self) -> list[str]:
         errors: list[str] = []
-        tag = self.label or "GearMeshLink"
+        tag = self.label or "SpurHelicalMeshLink"
         if self.shaft_a is self.shaft_b:
             errors.append(f"{tag}: a mesh cannot connect a shaft to itself")
         if self.torque_split is not None and not (0.0 < self.torque_split <= 1.0):
@@ -87,18 +87,18 @@ class GearMeshLink:
         return errors
 
     def __repr__(self) -> str:
-        return (f"GearMeshLink({self.shaft_a.name} -> {self.shaft_b.name}, "
+        return (f"SpurHelicalMeshLink({self.shaft_a.name} -> {self.shaft_b.name}, "
                 f"phi={self.phi_deg:.1f}°, "
                 f"torque_split={self.torque_split!r}, label={self.label!r})")
 
 
 # ===========================================================================
-# GearSystem
+# SpurHelicalGearSystem
 # ===========================================================================
 
-class GearSystem:
+class SpurHelicalGearSystem:
     """
-    A single-source DAG of shafts connected by GearMeshLink.
+    A single-source DAG of shafts connected by SpurHelicalMeshLink.
 
     Enforced topology:
       - exactly one source shaft (zero incoming links),
@@ -108,7 +108,7 @@ class GearSystem:
         and every such link must carry torque_split, summing to 1.0.
     """
 
-    def __init__(self, shafts: list[ShaftSystem], links: list[GearMeshLink],
+    def __init__(self, shafts: list[ShaftSystem], links: list[SpurHelicalMeshLink],
                  label: str = ""):
         self.shafts = shafts
         self.links = links
@@ -134,7 +134,7 @@ class GearSystem:
         """Kahn's algorithm over the shaft graph. Returns None on a cycle."""
         shaft_by_id = {id(s): s for s in self.shafts}
         indeg = self._incoming_count()
-        adj: dict[int, list[GearMeshLink]] = defaultdict(list)
+        adj: dict[int, list[SpurHelicalMeshLink]] = defaultdict(list)
         for link in self.links:
             adj[id(link.shaft_a)].append(link)
 
@@ -153,9 +153,9 @@ class GearSystem:
             return None  # cycle
         return order
 
-    def _driver_groups(self) -> dict[int, list[GearMeshLink]]:
+    def _driver_groups(self) -> dict[int, list[SpurHelicalMeshLink]]:
         """Group links by the *identity* of their driver GearElement."""
-        groups: dict[int, list[GearMeshLink]] = defaultdict(list)
+        groups: dict[int, list[SpurHelicalMeshLink]] = defaultdict(list)
         for link in self.links:
             groups[id(link.gear_a)].append(link)
         return groups
@@ -166,7 +166,7 @@ class GearSystem:
 
     def _axial_alignment_errors(self, tol: float | None = None) -> list[str]:
         """
-        Verify gear_a and gear_b of every GearMeshLink occupy the same
+        Verify gear_a and gear_b of every SpurHelicalMeshLink occupy the same
         global axial (X) position: shaft.shaft_origin_x + gear.position.
 
         tol : max allowed centre-to-centre offset [mm].
@@ -178,12 +178,12 @@ class GearSystem:
                 NOT an engineering guarantee of real overlap.
 
         NOTE: shaft_origin_x is NOT propagated automatically by resolve()
-        (see GearSystem module docstring / session notes) — the caller is
+        (see SpurHelicalGearSystem module docstring / session notes) — the caller is
         responsible for setting it consistently on every ShaftSystem
         before validate() is meaningful for multi-shaft systems.
         """
         errors: list[str] = []
-        tag = self.label or "GearSystem"
+        tag = self.label or "SpurHelicalGearSystem"
 
         for link in self.links:
             xa = link.shaft_a.shaft_origin_x + link.gear_a.position
@@ -210,7 +210,7 @@ class GearSystem:
 
     def _topology_errors(self) -> list[str]:
         errors: list[str] = []
-        tag = self.label or "GearSystem"
+        tag = self.label or "SpurHelicalGearSystem"
 
         for link in self.links:
             errors.extend(f"{tag}: {e}" for e in link.validate())
@@ -230,7 +230,7 @@ class GearSystem:
             names = ", ".join(s.name for s in sources)
             errors.append(
                 f"{tag}: {len(sources)} source shafts ({names}); exactly one "
-                f"required. Disconnected chains belong in separate GearSystems."
+                f"required. Disconnected chains belong in separate SpurHelicalGearSystems."
             )
 
         # no merge
@@ -280,7 +280,7 @@ class GearSystem:
         errors = self.validate()
         if errors:
             raise ValueError(
-                f"GearSystem '{self.label}' validation failed:\n"
+                f"SpurHelicalGearSystem '{self.label}' validation failed:\n"
                 + "\n".join(f"  - {e}" for e in errors)
             )
 
@@ -288,12 +288,12 @@ class GearSystem:
     # Link resolution — two physically distinct fan-out modes
     # ------------------------------------------------------------------
 
-    def _resolve_link_mode_B(self, link: GearMeshLink, T_in: float,
+    def _resolve_link_mode_B(self, link: SpurHelicalMeshLink, T_in: float,
                              rotation_dir_in: int) -> dict:
         """Sequential / reuse: the driver delivers the FULL available torque."""
         return link.meshing.forces(T_in, link.phi_deg, rotation_dir_in)
 
-    def _resolve_link_mode_A(self, link: GearMeshLink, T_total: float,
+    def _resolve_link_mode_A(self, link: SpurHelicalMeshLink, T_total: float,
                              rotation_dir_in: int) -> dict:
         """Simultaneous fan-out: this mesh takes torque_split of the total."""
         T_in = T_total * link.torque_split
@@ -304,7 +304,7 @@ class GearSystem:
     # ------------------------------------------------------------------
 
     def _forces_to_loads(self, F: dict, gear: GearElement, side: str,
-                         T_in_nm: float) -> list[Load]:  # noqa: F821 (Load via loads)
+                         T_in_nm: float):  # noqa: F821 (Load via loads)
         """
         Build the mesh loads for one side of a mesh.
 
@@ -361,7 +361,7 @@ class GearSystem:
         topo_errors = self._topology_errors()
         if topo_errors:
             raise ValueError(
-                "GearSystem.resolve: invalid topology:\n"
+                "SpurHelicalGearSystem.resolve: invalid topology:\n"
                 + "\n".join(f"  - {e}" for e in topo_errors)
             )
         if rpm <= 0.0:
@@ -438,7 +438,7 @@ class GearSystem:
     # ------------------------------------------------------------------
 
     def summary(self) -> str:
-        tag = self.label or "GearSystem"
+        tag = self.label or "SpurHelicalGearSystem"
         lines = [f"── {tag} ──────────────────────────────────────────────"]
         sources = self._sources()
         lines.append(

@@ -57,7 +57,7 @@ from axisforge.core.machine_elements.Shaft.shaft import Shaft, ShaftSection, Sho
 
 from axisforge.core.loads import RadialLoad, TorqueLoad
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import GearElement, ShaftSystem
-from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.gear_system import GearMeshLink, GearSystem
+from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.SpurHelical_gear_system import SpurHelicalMeshLink, SpurHelicalGearSystem
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
 
 # --- schematic (visual sanity check, no solver dependency) -----------------
@@ -199,10 +199,10 @@ sys1.add_gear(ge_z1)
 sys2.add_gear(ge_z2); sys2.add_gear(ge_z3)
 sys3.add_gear(ge_z4)
 
-link1 = GearMeshLink(sys1, ge_z1, sys2, ge_z2, stage1, phi_deg=270.0, label="stage1")
-link2 = GearMeshLink(sys2, ge_z3, sys3, ge_z4, stage2, phi_deg=270.0, label="stage2")
+link1 = SpurHelicalMeshLink(sys1, ge_z1, sys2, ge_z2, stage1, phi_deg=270.0, label="stage1")
+link2 = SpurHelicalMeshLink(sys2, ge_z3, sys3, ge_z4, stage2, phi_deg=270.0, label="stage2")
 
-gearbox = GearSystem([sys1, sys2, sys3], [link1, link2], label="load-lifting")
+gearbox = SpurHelicalGearSystem([sys1, sys2, sys3], [link1, link2], label="load-lifting")
 
 
 def dump_loads(shaft: ShaftSystem) -> None:

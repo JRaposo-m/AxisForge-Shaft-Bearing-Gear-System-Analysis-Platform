@@ -4,7 +4,7 @@ mesh/oneD/shaft/mesh_generation/mesh_1D.py
 """
 
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import GearElement, ShaftSystem
-from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.gear_system import GearSystem
+from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.SpurHelical_gear_system import SpurHelicalGearSystem
 from axisforge.core.materials import get_material
 from axisforge.config import MESH_MIN_NODE_DIST_MM
 
@@ -23,7 +23,7 @@ class Mesh1D:
     shaft_system : ShaftSystem
         Single-shaft container — bearings, gears, and loads already
         placed via add_bearing/add_gear/add_load, and (if applicable)
-        gear-mesh loads already injected via GearSystem.resolve().
+        gear-mesh loads already injected via SpurHelicalGearSystem.resolve().
     """
 
     def __init__(self, shaft_system: ShaftSystem):

@@ -57,8 +57,8 @@ from matplotlib.ticker import MultipleLocator
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import (
     ShaftSystem, GearElement,
 )
-from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.gear_system import (
-    GearSystem, GearMeshLink,
+from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.SpurHelical_gear_system import (
+    SpurHelicalGearSystem,SpurHelicalMeshLink,
 )
 
 
@@ -183,7 +183,7 @@ def _gear_radii(gear_element: GearElement) -> tuple[float, float]:
     a standard external pair, centre_distance == r1 + r2, so if the layout
     is correct, the two gears' pitch ticks land exactly on top of each
     other. If they don't overlap (or overlap a lot), shaft_position/al is
-    wrong somewhere upstream — GearSystem.resolve() or the meshing object.
+    wrong somewhere upstream — SpurHelicalGearSystem.resolve() or the meshing object.
     """
     gear = gear_element.gear
     pitch_r = getattr(gear, "r", None)
@@ -206,7 +206,7 @@ def _max_gear_tip_radius(shafts: list[ShaftSystem]) -> float:
 
 
 # ===========================================================================
-# Drawing — free functions operating on the REAL ShaftSystem / GearSystem.
+# Drawing — free functions operating on the REAL ShaftSystem / SpurHelicalGearSystem.
 # Nothing here mutates the objects passed in.
 # ===========================================================================
 
@@ -286,7 +286,7 @@ def draw_shaft_system(ax: Axes, shaft_system: ShaftSystem, detail: bool = False,
                     ha="center", va="bottom", fontsize=FONT_SIZE_LABEL, color=INK)
 
 
-def draw_gear_system(ax: Axes, gear_system: GearSystem, axis: str = "y") -> Axes:
+def draw_gear_system(ax: Axes, gear_system: SpurHelicalGearSystem, axis: str = "y") -> Axes:
     """
     Draw every shaft in `gear_system.shafts` as a 1D line (see
     draw_shaft_system(detail=False)) plus dotted connectors marking which
@@ -376,10 +376,10 @@ def recommended_figsize(target, axis: str = "y", height: float = 4.0) -> tuple[f
     stretched the real geometry is — same idea as before, just computed
     from real mm spans instead of grid columns.
 
-    target : a GearSystem (spans computed like draw_gear_system) or a
+    target : a SpurHelicalGearSystem (spans computed like draw_gear_system) or a
              single ShaftSystem (spans computed like draw_shaft_detail).
     """
-    if isinstance(target, GearSystem):
+    if isinstance(target, SpurHelicalGearSystem):
         idx = _axis_index(axis)
         xs = [s.shaft_origin_x for s in target.shafts]
         xs += [s.shaft_origin_x + s.shaft.total_length for s in target.shafts]

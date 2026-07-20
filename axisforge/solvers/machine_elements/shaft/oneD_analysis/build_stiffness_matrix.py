@@ -21,6 +21,8 @@ class StiffnessMatrixBuilder:
                 f"StiffnessMatrixBuilder: unknown theory '{theory}', "
                 f"available: {list(self._BEAM_THEORIES)}"
             )
+        
+        self.beam = self._BEAM_THEORIES[self.theory]()
 
 
     def build_stiffness_matrix(self, mesh: Mesh1D, elements: list[Elem]) -> np.ndarray:
@@ -28,8 +30,8 @@ class StiffnessMatrixBuilder:
         n_nodes = mesh.n_nodes
         n_dofs = 3 * n_nodes
         K = np.zeros((n_dofs, n_dofs))
-        beam = self._BEAM_THEORIES[self.theory]()
-
+        beam = self.beam                           
+        
         for elem in elements:
             K_elem = beam.stiffness_element(elem)
             dofs = [

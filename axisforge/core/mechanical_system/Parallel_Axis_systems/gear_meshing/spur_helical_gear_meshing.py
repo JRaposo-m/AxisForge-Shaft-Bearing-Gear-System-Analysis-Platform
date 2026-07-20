@@ -110,7 +110,7 @@ class SpurHelicalGearMeshing:
         self.inv_alphatw = np.tan(self.alphatw) - self.alphatw
 
         # --- gear ratio ---
-        self.u = gear2.z / gear1.z
+        self.u = max(self.gear1.z, self.gear2.z) / min(self.gear1.z, self.gear2.z)
 
         # --- working geometry, calculada uma vez, automaticamente ---
         self.gear_geometry(addendum_reduction=addendum_reduction)

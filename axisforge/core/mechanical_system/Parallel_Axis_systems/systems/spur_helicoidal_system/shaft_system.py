@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 from axisforge.config import MIN_BEARING_SEPARATION_MM, MIN_SHOULDER_CLEARANCE_MM, FLOATING_BEARING_CLEARANCE_MM
 
 from axisforge.core.loads import (
-    Load, RadialLoad, AxialLoad, TorqueLoad, ExternalMoment,
+    Load, RadialLoad, AxialLoad, TorqueLoad, ExternalMoment, DistributedRadialLoad,
 )
 
 # Type-only imports: annotations are strings (PEP 563), so these never need to
@@ -160,7 +160,16 @@ class ShaftSystem:
         return self
 
     def add_load(self, load: Load) -> "ShaftSystem":
-        self._check_axial_bounds(load.position, "load")
+        if isinstance(load, DistributedRadialLoad):
+            L = self.shaft.total_length
+            if load.x_lo < 0.0 or load.x_hi > L:
+                raise ValueError(
+                    f"{self.name}: DistributedRadialLoad '{load.label}' "
+                    f"[{load.x_lo:.4f}, {load.x_hi:.4f}] mm is outside "
+                    f"the shaft extent [0, {L:.4f}] mm"
+                )
+        else:
+            self._check_axial_bounds(load.position, "load")
         self._loads.append(load)
         return self
 
@@ -218,6 +227,10 @@ class ShaftSystem:
     @property
     def external_moments(self) -> list[ExternalMoment]:
         return [ld for ld in self.loads if isinstance(ld, ExternalMoment)]
+
+    @property
+    def distributed_radial_loads(self) -> list[DistributedRadialLoad]:
+        return [ld for ld in self.loads if isinstance(ld, DistributedRadialLoad)]
     
     # ------------------------------------------------------------------
     # Axial extent helpers (overlap / shoulder checks)
@@ -409,7 +422,13 @@ class ShaftSystem:
                     f"{tag}: gear position {g.position:.4f} mm outside [0, {L:.4f}]"
                 )
         for ld in self._loads:
-            if not (0.0 <= ld.position <= L):
+            if isinstance(ld, DistributedRadialLoad):
+                if ld.x_lo < 0.0 or ld.x_hi > L:
+                    errors.append(
+                        f"{tag}: DistributedRadialLoad '{ld.label}' "
+                        f"[{ld.x_lo:.3f}, {ld.x_hi:.3f}] mm outside shaft extent [0, {L:.3f}] mm"
+                    )
+            elif not (0.0 <= ld.position <= L):
                 errors.append(
                     f"{tag}: load position {ld.position:.4f} mm outside [0, {L:.4f}]"
                 )

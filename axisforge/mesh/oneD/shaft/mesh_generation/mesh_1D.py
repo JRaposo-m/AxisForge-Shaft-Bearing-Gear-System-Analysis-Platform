@@ -67,6 +67,10 @@ class Mesh1D:
         x_mandatory += [ld.position for ld in shaft_system.torque_loads]
         x_mandatory += [m.position for m in shaft_system.external_moments]
 
+        # distributed radial loads — x_lo and x_hi are discontinuities in V(x)
+        for ld in shaft_system.distributed_radial_loads:
+            x_mandatory += [ld.x_lo, ld.x_hi]
+
         return x_mandatory
 
     def _create_mesh(self) -> list[float]:

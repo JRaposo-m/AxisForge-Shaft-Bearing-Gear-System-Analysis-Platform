@@ -1,0 +1,5 @@
+driving_characteristic,uniform,light_shocks,moderate_shocks,heavy_shocks
+uniform,1.00,1.25,1.50,1.75
+light_shocks,1.10,1.35,1.60,1.85
+moderate_shocks,1.25,1.50,1.75,2.00
+heavy_shocks,1.50,1.75,2.00,2.25

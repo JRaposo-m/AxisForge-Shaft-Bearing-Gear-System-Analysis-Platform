@@ -15,6 +15,8 @@ class SpurHelicalGear:
     def __init__(self,
                  mn: float,
                  z: int,
+                 Ca: float = 0.0,
+                 Cf: float = 0.0,
                  x: float = 0.0,
                  b: float = 0.0,
                  alpha_n_deg: float = 20.0,
@@ -53,6 +55,8 @@ class SpurHelicalGear:
         # --- input parameters ---
         self.mn          = mn
         self.z           = z
+        self.Ca          = Ca
+        self.Cf          = Cf
         self.x           = x
         self.b           = b
         self.alpha_n_deg = alpha_n_deg

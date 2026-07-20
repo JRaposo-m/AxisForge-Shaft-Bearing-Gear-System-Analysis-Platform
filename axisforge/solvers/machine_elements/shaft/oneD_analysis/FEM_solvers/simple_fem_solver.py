@@ -39,6 +39,8 @@ build if isolation between runs is needed.
 from __future__ import annotations
 
 import numpy as np
+from typing import Callable
+
 
 from axisforge.mesh.oneD.shaft.mesh_generation.mesh_1D import Mesh1D
 from axisforge.mesh.oneD.shaft.Elements.elem import Elem
@@ -62,8 +64,21 @@ class SimpleFEMSolver:
         solver.d_total_xz      # -> np.ndarray, global displacement (XZ)
     """
 
-    def __init__(self, theory: str = "timoshenko", constraint_bearing: str = "rigid"):
+    def __init__(self, theory: str = "timoshenko", 
+                 constraint_bearing: str = "rigid",
+                 distribute_gear_labels: set[str] | None = None):
+        
+        """
+        distribute_gear_labels : set of gear labels whose mesh loads should be
+                             treated as distributed over face width.
+                             None or empty -> all gear mesh loads as point loads.
+                             e.g. {"pinion", "wheel"} -> only those two distributed.
+                             Use {"*"} as a sentinel to distribute ALL gear mesh loads.
+        """
+        
         self._builder = StiffnessMatrixBuilder(theory=theory)
+        self._distribute_all   = distribute_gear_labels == {"*"}
+        self._distribute_labels = distribute_gear_labels or set()
 
         # --- public result attributes, populated by solve() ---
         self.x_nodes: list[float] | None = None
@@ -116,6 +131,17 @@ class SimpleFEMSolver:
             f_xy = self._assemble_load_vector(x_nodes, lc["radial_xy"],
                                                [], lc["moments_xy"])  # no axial here in order to have only 1 axial in the total ShaftSystem
 
+            if lc.get("distributed_xz"):
+                for d in lc["distributed_xz"]:
+                    f_xz += self._assemble_distributed_load_vector(
+                        x_nodes, elements, d["x_lo"], d["x_hi"], d["q"])
+
+            if lc.get("distributed_xy"):
+                for d in lc["distributed_xy"]:
+                    f_xy += self._assemble_distributed_load_vector(
+                        x_nodes, elements, d["x_lo"], d["x_hi"], d["q"])
+                    
+                    
             d_xz = np.zeros(n_dofs)
             d_xy = np.zeros(n_dofs)
             d_xz[free_dofs] = np.linalg.solve(K_red, f_xz[free_dofs])
@@ -158,12 +184,31 @@ class SimpleFEMSolver:
     def _build_load_cases(self, shaft_system: ShaftSystem) -> list[dict]:
         cases: list[dict] = []
 
+
         for ld in shaft_system.radial_loads:
+            if self._is_distributed(ld.label, ld.source):
+                continue   # gear mesh load — will be handled as distributed below
             cases.append({
                 "label": ld.label or f"radial@{ld.position:.1f}",
                 "source": ld.source,
                 "radial_xz": [(ld.position, ld.component(LoadPlane.XZ))],
                 "radial_xy": [(ld.position, ld.component(LoadPlane.XY))],
+                "axial": [], "moments_xz": [], "moments_xy": [],
+            })
+
+        for ld in shaft_system.distributed_radial_loads:
+            cases.append({
+                "label": ld.label or f"dist@[{ld.x_lo:.1f},{ld.x_hi:.1f}]",
+                "source": ld.source,
+                "distributed_xz": [{
+                    "x_lo": ld.x_lo, "x_hi": ld.x_hi,
+                    "q": lambda x, _ld=ld: _ld.component_intensity(x, LoadPlane.XZ),
+                }],
+                "distributed_xy": [{
+                    "x_lo": ld.x_lo, "x_hi": ld.x_hi,
+                    "q": lambda x, _ld=ld: _ld.component_intensity(x, LoadPlane.XY),
+                }],
+                "radial_xz": [], "radial_xy": [],
                 "axial": [], "moments_xz": [], "moments_xy": [],
             })
 
@@ -192,6 +237,50 @@ class SimpleFEMSolver:
     # ------------------------------------------------------------------
     # Load vector assembly (u, v, theta per node)
     # ------------------------------------------------------------------
+
+    def _assemble_distributed_load_vector(self, x_nodes: list[float],
+                                          elements: list[Elem],
+                                          x_lo: float, x_hi: float,
+                                          q: Callable[[float], float]) -> np.ndarray:
+        """
+        Equivalent nodal force vector for a distributed transverse load q(x) [N/mm]
+        over [x_lo, x_hi] via Gauss quadrature on each element.
+
+            f_e = ∫_{-1}^{+1} N^T(zeta) · q(x(zeta)) · J dzeta
+
+        Returns np.ndarray of size 3 * len(x_nodes), transverse DOF only (v).
+        """
+        beam = self._builder.beam
+        f    = np.zeros(3 * len(x_nodes))
+
+        for elem in elements:
+            x_a = x_nodes[elem.idx_node_1]
+            x_b = x_nodes[elem.idx_node_2]
+
+            if x_b <= x_lo or x_a >= x_hi:
+                continue
+
+            # clamp integration to load span
+            x_lo_elem = max(x_a, x_lo)
+            x_hi_elem = min(x_b, x_hi)
+
+            x_map  = beam.global_to_natural_radial(x_lo_elem, x_hi_elem, elem)
+            q_zeta = beam.vetor_global_to_natural(q, x_map)
+            J      = beam.jacobian(elem)
+
+            n_gauss          = beam.gauss_order(q, x_lo_elem, x_hi_elem, elem)
+            gauss_pts, gauss_wts = beam.gauss_quadrature(n_gauss)
+
+            f_elem = np.zeros(6)
+            for xi, w in zip(gauss_pts, gauss_wts):
+                N       = beam.shape_functions(xi, elem)
+                f_elem[1] += N[1] * q_zeta(xi) * J * w
+                f_elem[4] += N[4] * q_zeta(xi) * J * w
+
+            f[3 * elem.idx_node_1 + 1] += f_elem[1]
+            f[3 * elem.idx_node_2 + 1] += f_elem[4]
+
+        return f
 
     def _assemble_load_vector(self, x_nodes, radial, axial, moments) -> np.ndarray:
         f = np.zeros(3 * len(x_nodes))
@@ -275,6 +364,20 @@ class SimpleFEMSolver:
         n_dofs = 3 * len(x_nodes)
         free = [d for d in range(n_dofs) if d not in constrained]
         return free, constrained
+    
+
+    # ------------------------------------------------------------------
+    # Helper
+    # ------------------------------------------------------------------
+
+    def _is_distributed(self, label: str, source: str) -> bool:
+        if source != "gear_mesh":
+            return False              # user loads sempre pontuais
+        if self._distribute_all:
+            return True
+        gear_label = label.split(":")[0]
+        return gear_label in self._distribute_labels
+    
 
     # ------------------------------------------------------------------
     # Numerical guard

@@ -27,7 +27,7 @@ from __future__ import annotations
 import math
 from collections import defaultdict, deque
 
-from axisforge.core.loads import RadialLoad, AxialLoad, TorqueLoad
+from axisforge.core.loads import RadialLoad, AxialLoad, TorqueLoad, DistributedRadialLoad
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import GearElement, ShaftSystem
 from axisforge.config import TOL_GEOMETRY_mm
 
@@ -61,15 +61,19 @@ class SpurHelicalMeshLink  :
                  shaft_b: ShaftSystem, gear_b: GearElement,
                  meshing, phi_deg: float,
                  torque_split: float | None = None,
+                 distribute_loads: bool = False,
                  label: str = ""):
-        self.shaft_a = shaft_a
-        self.gear_a = gear_a
-        self.shaft_b = shaft_b
-        self.gear_b = gear_b
-        self.meshing = meshing
-        self.phi_deg = phi_deg % 360.0
-        self.torque_split = torque_split
-        self.label = label
+        
+        self.shaft_a             = shaft_a
+        self.gear_a              = gear_a
+        self.shaft_b             = shaft_b
+        self.gear_b              = gear_b
+        self.meshing             = meshing
+        self.phi_deg             = phi_deg % 360.0
+        self.torque_split        = torque_split
+        self.distribute_loads    = distribute_loads
+        self.meshing_load_factor = 1.0    # in this code, there is only 1 load path so it is always equal to 1.0
+        self.label               = label
 
     def validate(self) -> list[str]:
         errors: list[str] = []
@@ -304,46 +308,84 @@ class SpurHelicalGearSystem:
     # ------------------------------------------------------------------
 
     def _forces_to_loads(self, F: dict, gear: GearElement, side: str,
-                         T_in_nm: float):  # noqa: F821 (Load via loads)
+                        T_in_nm: float, distribute: bool = False) -> list:
         """
         Build the mesh loads for one side of a mesh.
 
-        side : "driver" -> reads theta_*_driver, torque flow +T_in
-               "driven" -> reads theta_*_driven, torque flow -T_out
+        distribute=False (default): Ft and Fr as RadialLoad at gear.position.
+        distribute=True           : Ft and Fr as DistributedRadialLoad over
+                                    [position - b/2, position + b/2], using
+                                    b from the gear geometry. Falls back to
+                                    RadialLoad when b == 0.0 (face width not set).
+        Fa (axial thrust) and TorqueLoad are always point loads.
         """
-        suffix = "_driver" if side == "driver" else "_driven"
-        pos = gear.position
+        suffix   = "_driver" if side == "driver" else "_driven"
+        pos      = gear.position
+        b        = getattr(gear.gear, "b", 0.0)
         loads: list = []
 
-        # radial + tangential components (both are RadialLoad, distinct theta)
-        loads.append(RadialLoad(pos, F["Fr"], F[f"theta_Fr{suffix}"],
-                                label=f"{gear.label or 'mesh'}:Fr",
-                                source="gear_mesh"))
-        loads.append(RadialLoad(pos, F["Ft"], F[f"theta_Ft{suffix}"],
-                                label=f"{gear.label or 'mesh'}:Ft",
-                                source="gear_mesh"))
+        if distribute and b > 0.0:
+            loads += self._radial_as_distributed(F, gear, suffix, pos, b)
+        else:
+            loads += self._radial_as_point(F, gear, suffix, pos)
 
-        # axial thrust (helical / internal-helical only)
+        # axial thrust — always a point load
         Fa = F.get("Fa", 0.0)
         if Fa != 0.0:
-            # Placeholder sign: +Fa on the driver, -Fa on the driven, pending
-            # HelicalGear.helix_hand. Revisit when helix_hand lands.
             sign = 1.0 if side == "driver" else -1.0
             loads.append(AxialLoad(pos, sign * Fa,
-                                   label=f"{gear.label or 'mesh'}:Fa",
-                                   source="gear_mesh"))
+                                label=f"{gear.label or 'mesh'}:Fa",
+                                source="gear_mesh"))
 
-        # torque flow THROUGH the mesh point (not a reaction). Stored in N·m.
-        # Starting convention (T(x) sign is finalised in StaticsSolver):
-        #   driver mesh point -> +T_in ; driven mesh point -> -T_out.
-        if side == "driver":
-            T_flow_nm = +T_in_nm
-        else:
-            T_flow_nm = -F["T_out"]
+        # torque flow — always a point load at mesh position
+        T_flow_nm = +T_in_nm if side == "driver" else -F["T_out"]
         loads.append(TorqueLoad(pos, T_flow_nm,
                                 label=f"{gear.label or 'mesh'}:T",
                                 source="gear_mesh"))
         return loads
+
+
+    def _radial_as_point(self, F: dict, gear: GearElement,
+                        suffix: str, pos: float) -> list:
+        """RadialLoad for Ft and Fr (original behaviour)."""
+        return [
+            RadialLoad(pos, F["Fr"], F[f"theta_Fr{suffix}"],
+                    label=f"{gear.label or 'mesh'}:Fr",
+                    source="gear_mesh"),
+            RadialLoad(pos, F["Ft"], F[f"theta_Ft{suffix}"],
+                    label=f"{gear.label or 'mesh'}:Ft",
+                    source="gear_mesh"),
+        ]
+
+
+    def _radial_as_distributed(self, F: dict, gear: GearElement,
+                                suffix: str, pos: float, b: float) -> list:
+        """
+        DistributedRadialLoad for Ft and Fr over [pos - b/2, pos + b/2].
+
+        magnitude is the signed scalar from forces() — constant over the
+        face width (uniform distribution). theta is the constant angle from
+        forces() for this side. Both can be overridden by the caller by
+        constructing DistributedRadialLoad directly with a Callable.
+        """
+        x_lo = pos - b / 2.0
+        x_hi = pos + b / 2.0
+        return [
+            DistributedRadialLoad(
+                x_lo, x_hi,
+                magnitude=F["Fr"],
+                theta_deg=F[f"theta_Fr{suffix}"],
+                label=f"{gear.label or 'mesh'}:Fr",
+                source="gear_mesh",
+            ),
+            DistributedRadialLoad(
+                x_lo, x_hi,
+                magnitude=F["Ft"],
+                theta_deg=F[f"theta_Ft{suffix}"],
+                label=f"{gear.label or 'mesh'}:Ft",
+                source="gear_mesh",
+            ),
+        ]
 
     # ------------------------------------------------------------------
     # resolve
@@ -413,9 +455,11 @@ class SpurHelicalGearSystem:
             rot_of[b_id] = F["rotation_dir_out"]
 
             loads_by_shaft[a_id] += self._forces_to_loads(
-                F, link.gear_a, side="driver", T_in_nm=T_in_used)
+                F, link.gear_a, side="driver", T_in_nm=T_in_used,
+                distribute=link.distribute_loads)
             loads_by_shaft[b_id] += self._forces_to_loads(
-                F, link.gear_b, side="driven", T_in_nm=T_in_used)
+                F, link.gear_b, side="driven", T_in_nm=T_in_used,
+                distribute=link.distribute_loads)
 
         # push loads onto every shaft (empty list clears stale gear_mesh loads)
         for shaft in self.shafts:

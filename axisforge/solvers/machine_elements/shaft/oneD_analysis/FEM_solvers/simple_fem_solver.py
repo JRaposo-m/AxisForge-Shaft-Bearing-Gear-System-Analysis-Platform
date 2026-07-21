@@ -134,14 +134,16 @@ class SimpleFEMSolver:
             if lc.get("distributed_xz"):
                 for d in lc["distributed_xz"]:
                     f_xz += self._assemble_distributed_load_vector(
-                        x_nodes, elements, d["x_lo"], d["x_hi"], d["q"])
+                        x_nodes, elements, d["x_lo"], d["x_hi"], d["q"],
+                        theta_fn=d.get("theta_fn"))
+
 
             if lc.get("distributed_xy"):
                 for d in lc["distributed_xy"]:
                     f_xy += self._assemble_distributed_load_vector(
-                        x_nodes, elements, d["x_lo"], d["x_hi"], d["q"])
-                    
-                    
+                        x_nodes, elements, d["x_lo"], d["x_hi"], d["q"],
+                        theta_fn=d.get("theta_fn"))
+                                        
             d_xz = np.zeros(n_dofs)
             d_xy = np.zeros(n_dofs)
             d_xz[free_dofs] = np.linalg.solve(K_red, f_xz[free_dofs])
@@ -197,16 +199,19 @@ class SimpleFEMSolver:
             })
 
         for ld in shaft_system.distributed_radial_loads:
+            theta_fn = ld._theta_fn if ld._theta_variable else None
             cases.append({
                 "label": ld.label or f"dist@[{ld.x_lo:.1f},{ld.x_hi:.1f}]",
                 "source": ld.source,
                 "distributed_xz": [{
                     "x_lo": ld.x_lo, "x_hi": ld.x_hi,
                     "q": lambda x, _ld=ld: _ld.component_intensity(x, LoadPlane.XZ),
+                    "theta_fn": theta_fn,
                 }],
                 "distributed_xy": [{
                     "x_lo": ld.x_lo, "x_hi": ld.x_hi,
                     "q": lambda x, _ld=ld: _ld.component_intensity(x, LoadPlane.XY),
+                    "theta_fn": theta_fn
                 }],
                 "radial_xz": [], "radial_xy": [],
                 "axial": [], "moments_xz": [], "moments_xy": [],
@@ -241,7 +246,8 @@ class SimpleFEMSolver:
     def _assemble_distributed_load_vector(self, x_nodes: list[float],
                                           elements: list[Elem],
                                           x_lo: float, x_hi: float,
-                                          q: Callable[[float], float]) -> np.ndarray:
+                                          q: Callable[[float], float],
+                                          theta_fn: Callable[[float], float] | None = None) -> np.ndarray:
         """
         Equivalent nodal force vector for a distributed transverse load q(x) [N/mm]
         over [x_lo, x_hi] via Gauss quadrature on each element.
@@ -268,7 +274,7 @@ class SimpleFEMSolver:
             q_zeta = beam.vetor_global_to_natural(q, x_map)
             J      = beam.jacobian(elem)
 
-            n_gauss          = beam.gauss_order(q, x_lo_elem, x_hi_elem, elem)
+            n_gauss          = beam.gauss_order(q, x_lo_elem, x_hi_elem, elem, theta_fn=theta_fn)
             gauss_pts, gauss_wts = beam.gauss_quadrature(n_gauss)
 
             f_elem = np.zeros(6)

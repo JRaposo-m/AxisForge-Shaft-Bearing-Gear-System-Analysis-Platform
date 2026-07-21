@@ -98,16 +98,20 @@ class TimoshenkoBeam:
     
     def gauss_quadrature(self, n: int) -> tuple[np.ndarray, np.ndarray]:
         """
-        Gauss-Legendre points and weights on [-1, 1] for n = 1, 2, 3.
+        Gauss-Legendre points and weights on [-1, 1] for arbitrary n.
+        Uses numpy.polynomial.legendre for n > 3.
         """
         if n == 1:
             return np.array([0.0]), np.array([2.0])
         elif n == 2:
             s = 1.0 / np.sqrt(3)
             return np.array([-s, s]), np.array([1.0, 1.0])
-        else:  # n == 3
+        elif n == 3:
             s = np.sqrt(3/5)
             return np.array([-s, 0.0, s]), np.array([5/9, 8/9, 5/9])
+        else:
+            pts, wts = np.polynomial.legendre.leggauss(n)
+            return pts, wts
         
     def shape_function_degree(self, node_idx: int, elem: Elem) -> int:
         """
@@ -131,28 +135,41 @@ class TimoshenkoBeam:
 
         return deg
     
-    def gauss_order(self, q: Callable[[float], float],
-                    x_lo: float, x_hi: float, elem: Elem) -> int:
-        """
-        n such that p <= 2n - 1, where p = deg(N) + deg(q).
-        deg(N) computed from shape functions, not assumed.
-        """
+
+    def _q_degree(self, q: Callable, x_lo: float, x_hi: float) -> int:
+        """Estimate polynomial degree of q(x) over [x_lo, x_hi]."""
         xs = np.linspace(x_lo, x_hi, 6)
         ys = np.array([q(x) for x in xs])
-
-        deg_q = 0
+        deg = 3
         for d in range(4):
             coeffs   = np.polyfit(xs, ys, d)
             residual = np.max(np.abs(np.polyval(coeffs, xs) - ys))
             if residual < 1e-8:
-                deg_q = d
+                deg = d
                 break
-        else:
-            deg_q = 3
+        return deg
 
-        deg_N = max(self.shape_function_degree(1, elem),
-                    self.shape_function_degree(4, elem))
+    def _theta_degree(self, theta_fn: Callable, x_lo: float, x_hi: float) -> int:
+        """
+        Estimate effective degree of cos(theta(x)) over [x_lo, x_hi]
+        by sampling cos(theta(x)) directly.
+        """
+        xs = np.linspace(x_lo, x_hi, 6)
+        ys = np.array([np.cos(np.radians(theta_fn(x))) for x in xs])
+        deg = 3
+        for d in range(4):
+            coeffs   = np.polyfit(xs, ys, d)
+            residual = np.max(np.abs(np.polyval(coeffs, xs) - ys))
+            if residual < 1e-8:
+                deg = d
+                break
+        return deg
 
-        p = deg_q + deg_N
-        n = math.ceil((p + 1) / 2)
-        return min(max(n, 1), 3)
+
+    def gauss_order(self, q, x_lo, x_hi, elem, theta_fn=None) -> int:
+        deg_q     = self._q_degree(q, x_lo, x_hi)
+        deg_theta = self._theta_degree(theta_fn, x_lo, x_hi) if theta_fn else 0
+        deg_N     = max(self.shape_function_degree(1, elem),
+                        self.shape_function_degree(4, elem))
+        p = deg_q + deg_theta + deg_N
+        return max(1, math.ceil((p + 1) / 2))

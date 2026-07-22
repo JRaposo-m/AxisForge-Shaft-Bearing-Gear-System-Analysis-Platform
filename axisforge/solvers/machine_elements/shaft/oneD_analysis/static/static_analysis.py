@@ -346,8 +346,6 @@ def _find_node(x_nodes: list[float], x: float, tol: float = 1e-6) -> int:
     raise ValueError(f"Position {x:.4f} mm not found in x_nodes.")
 
 
-
-
 class StaticFailure:
 
     """

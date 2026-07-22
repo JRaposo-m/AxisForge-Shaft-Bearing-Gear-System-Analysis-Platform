@@ -112,10 +112,10 @@ def _build_shaft_system(shaft_length_mm: float = 254.0):
         C=50_000.0, C0=30_000.0, arrangement="floating",
     ))
 
-    F_total = (20.0 * LBF_TO_N / IN_TO_MM) * (4.0 * IN_TO_MM)
+    F_total = -(20.0 * LBF_TO_N / IN_TO_MM) * (4.0 * IN_TO_MM)
     sys.add_load(DistributedRadialLoad(
         x_lo=3.0 * IN_TO_MM, x_hi=7.0 * IN_TO_MM,
-        magnitude=F_total, theta_deg=180.0,
+        magnitude=F_total, theta_deg=0.0,
         label="uniform_q", source="user",
     ))
     sys.add_load(ExternalMoment(
@@ -215,6 +215,19 @@ def test_fem_reactions():
     print("  ✓ Reações dentro da tolerância")
 
 
+
+def run_mesh_convergence_report(shaft_length_mm: float = 254.0):
+    from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
+    from axisforge.mesh.oneD.shaft.mesh_generation.mesh_convergence_study import MeshConvergenceStudy
+
+    sys = _build_shaft_system(shaft_length_mm)
+    solver = SimpleFEMSolver(theory="timoshenko")
+    study = MeshConvergenceStudy(solver)
+    result = study.run(sys)
+    result.print_report()
+    return result
+
+
 # ---------------------------------------------------------------------------
 # PLOTTING — malha grosseira vs. malha refinada (add_mandatory_positions)
 # ---------------------------------------------------------------------------
@@ -289,5 +302,9 @@ if __name__ == "__main__":
     print("\n[3] FEM: reaction comparison (requires axisforge)")
     test_fem_reactions()
 
-    print("\n[4] Plotting: malha grosseira vs. refinada (add_mandatory_positions)...")
+    print("\n[4] Mesh convergence study: relatório (mesh_convergence_study.py)")
+    run_mesh_convergence_report()
+
+    print("\n[5] Plotting: malha grosseira vs. refinada (add_mandatory_positions)...")
     plot_shigley_ex33(show=True)
+

@@ -68,7 +68,7 @@ class MeshConvergenceStudy:
     def __init__(
         self,        
         solver: "SimpleFEMSolver",
-        tol: float = 1e-3,
+        tol: float = 1e-4,
         max_levels: int = 4,
 
         metric: str = "sigma_b",   # "sigma_b" | "M_max" | "l2_M"
@@ -120,9 +120,10 @@ class MeshConvergenceStudy:
         return sorted(set(out))
 
     def _evaluate(self, shaft_system, candidates: list[float]) -> float:
-        mesh = Mesh1D(shaft_system, extra_nodes=candidates)
+        mesh = Mesh1D(shaft_system)
+        mesh.add_mandatory_positions(candidates)          # correct API
         solver = SimpleFEMSolver(theory=self._theory)
-        solver.solve(shaft_system, mesh=mesh)          # requer o solve() aceitar mesh opcional
+        solver.solve(shaft_system, mesh=mesh)
         reader = ShaftResultsReader(solver, shaft_system)
         results = reader.read()
 

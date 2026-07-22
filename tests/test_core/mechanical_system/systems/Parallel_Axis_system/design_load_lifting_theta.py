@@ -1,12 +1,5 @@
 """
-design_load_lifting_theta_sweep.py
-
-Fixed b=20 mm. Sweeps the rate of theta variation along the face width.
-Uses ShaftResultsReader (static_analysis.py) for internal force recovery.
-
-Output per shaft — two figures:
-  Fig A — M_xz | M_xy | V_xz | V_xy | v_xz | v_xy  (XZ left, XY right)
-  Fig B — sigma_b | T | tau  (full width)
+design_load_lifting_theta_sweep.py  (com convergência de malha + prints nodais)
 """
 
 from __future__ import annotations
@@ -24,12 +17,14 @@ from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoi
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.SpurHelical_gear_system import SpurHelicalMeshLink, SpurHelicalGearSystem
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import ShaftResultsReader
+from axisforge.mesh.oneD.shaft.mesh_generation.mesh_1D import Mesh1D
+from axisforge.mesh.oneD.shaft.mesh_generation.mesh_convergence_study import MeshConvergenceStudy
 
 # ===========================================================================
 # PARAMETERS
 # ===========================================================================
 
-B = 20.0    # fixed face width [mm]
+B = 20.0
 
 def _linear(rate):
     return lambda theta_0, x_lo: (
@@ -55,17 +50,18 @@ P_W         = 1000.0
 RPM_IN      = 450.0
 r_pulley    = 0.050
 SHAFT_NAMES = ["shaft1(motor)", "shaft2", "shaft3(pulley)"]
+GEAR_KW     = dict(mn=2.0, x=0.0, b=B, alpha_n_deg=20.0, Ra=0.8, material_id="42CrMo4")
 
-GEAR_KW = dict(mn=2.0, x=0.0, b=B, alpha_n_deg=20.0, Ra=0.8, material_id="42CrMo4")
-
+CONV_TOL        = 1e-3
+CONV_MAX_LEVELS = 5
+CONV_METRIC     = "sigma_b"
 
 # ===========================================================================
 # HELPERS
 # ===========================================================================
 
 def make_stepped_shaft(name, total_length, d_seat, d_body,
-                        l_seat_a, l_seat_b, fillet_r,
-                        material_id="AISI_1045"):
+                        l_seat_a, l_seat_b, fillet_r, material_id="AISI_1045"):
     l_body = total_length - l_seat_a - l_seat_b
     sh = Shaft(label=name)
     sh.add_section(ShaftSection(length=l_seat_a, diameter=d_seat,
@@ -92,30 +88,15 @@ def N204(position, label, locating=False):
                    position=position, label=label)
 
 
-def recover_diagrams(solver, shaft_system) -> dict:
-    res = ShaftResultsReader(solver, shaft_system).read()
-    return dict(
-        x       = res.x,
-        M_xz    = res.M_xz,    M_xy    = res.M_xy,
-        V_xz    = res.V_xz,    V_xy    = res.V_xy,
-        v_xz    = res.v_xz,    v_xy    = res.v_xy,
-        M_eq    = res.M,
-        V_eq    = res.V,
-        v_eq    = res.v,
-        sigma_b = res.sigma_b,
-        T       = res.T,
-        tau     = res.tau,
-    )
+# ===========================================================================
+# BUILD — gearbox + theta substitution, devolve (sys1, sys2, sys3)
+# ===========================================================================
 
-
-def build_and_solve(label: str, theta_factory) -> dict:
+def build_systems(theta_factory) -> tuple[ShaftSystem, ShaftSystem, ShaftSystem]:
     z1 = SpurHelicalGear(z=20, position=55.0, label="z1", **GEAR_KW)
     z2 = SpurHelicalGear(z=60, position=95.0, label="z2", **GEAR_KW)
     z3 = SpurHelicalGear(z=20, position=55.0, label="z3", **GEAR_KW)
     z4 = SpurHelicalGear(z=60, position=55.0, label="z4", **GEAR_KW)
-
-    stage1 = SpurHelicalGearMeshing(z1, z2, label="stage1")
-    stage2 = SpurHelicalGearMeshing(z3, z4, label="stage2")
 
     s1 = make_stepped_shaft("shaft1", 120.0, 20.0, 25.0, 30.0, 30.0, 1.5)
     s2 = make_stepped_shaft("shaft2", 150.0, 20.0, 28.0, 35.0, 35.0, 2.0)
@@ -145,16 +126,18 @@ def build_and_solve(label: str, theta_factory) -> dict:
     sys2.add_gear(ge_z2); sys2.add_gear(ge_z3)
     sys3.add_gear(ge_z4)
 
-    link1 = SpurHelicalMeshLink(sys1, ge_z1, sys2, ge_z2, stage1,
+    link1 = SpurHelicalMeshLink(sys1, ge_z1, sys2, ge_z2,
+                                 SpurHelicalGearMeshing(z1, z2, label="stage1"),
                                  phi_deg=270.0, distribute_loads=True, label="stage1")
-    link2 = SpurHelicalMeshLink(sys2, ge_z3, sys3, ge_z4, stage2,
+    link2 = SpurHelicalMeshLink(sys2, ge_z3, sys3, ge_z4,
+                                 SpurHelicalGearMeshing(z3, z4, label="stage2"),
                                  phi_deg=270.0, distribute_loads=True, label="stage2")
 
     gearbox = SpurHelicalGearSystem([sys1, sys2, sys3], [link1, link2],
                                      label="load-lifting")
     gearbox.resolve(P_W, RPM_IN, rotation_dir_source=1, source_position=(0.0, 0.0))
 
-    # --- replace theta with the provided factory ---
+    # substituir theta nas DistributedRadialLoad de gear_mesh
     for sh in (sys1, sys2, sys3):
         new_loads = []
         for ld in sh._loads:
@@ -181,131 +164,230 @@ def build_and_solve(label: str, theta_factory) -> dict:
     sys1.add_load(TorqueLoad(0.0,  -T_z1_in, source="user", label="motor-input"))
     sys3.add_load(TorqueLoad(95.0,  T3,      source="user", label="pulley-load-resistance"))
 
-    solvers = {}
-    for sh in (sys1, sys2, sys3):
-        s = SimpleFEMSolver(theory="timoshenko", distribute_gear_labels={"*"})
-        s.solve(sh)
-        solvers[sh.name] = s
+    return sys1, sys2, sys3
 
-    return {sh.name: recover_diagrams(solvers[sh.name], sh)
-            for sh in (sys1, sys2, sys3)}
+
+# ===========================================================================
+# CONVERGENCE + SOLVE — um ShaftSystem de cada vez
+# ===========================================================================
+
+def converge_and_solve(shaft_sys: ShaftSystem,
+                        verbose: bool = False) -> tuple[object, object]:
+    """
+    Devolve (ShaftResults, MeshRefinementResult | None).
+    MeshRefinementResult é None se não houver cargas distribuídas.
+    """
+    dist_labels = {"*"}
+    theory      = "timoshenko"
+
+    conv_result = None
+    extra_nodes: list[float] = []
+
+    if shaft_sys.distributed_radial_loads:
+        probe = SimpleFEMSolver(theory=theory, distribute_gear_labels=dist_labels)
+        study = MeshConvergenceStudy(probe,
+                                      tol=CONV_TOL,
+                                      max_levels=CONV_MAX_LEVELS,
+                                      metric=CONV_METRIC)
+        conv_result = study.run(shaft_sys)
+        extra_nodes = conv_result.all_extra_nodes
+        if verbose:
+            conv_result.print_report()
+
+    mesh = Mesh1D(shaft_sys)
+    if extra_nodes:
+        mesh.add_mandatory_positions(extra_nodes)
+
+    solver = SimpleFEMSolver(theory=theory, distribute_gear_labels=dist_labels)
+    solver.solve(shaft_sys, mesh=mesh)
+
+    results = ShaftResultsReader(solver, shaft_sys).read()
+    return results, conv_result
 
 
 # ===========================================================================
 # RUN SWEEP
 # ===========================================================================
 
-results = {}
-for lbl, factory in CASES:
-    print(f"  Solving case: {lbl} ...")
-    results[lbl] = build_and_solve(lbl, factory)
+# all_results[case_label][shaft_name] = ShaftResults
+# all_conv[case_label][shaft_name]    = MeshRefinementResult | None
+all_results: dict[str, dict] = {}
+all_conv:    dict[str, dict] = {}
+
+for case_lbl, factory in CASES:
+    print(f"  Solving: {case_lbl} ...")
+    sys1, sys2, sys3 = build_systems(factory)
+
+    res_case  = {}
+    conv_case = {}
+    for sh in (sys1, sys2, sys3):
+        r, c = converge_and_solve(sh, verbose=False)
+        res_case[sh.name]  = r
+        conv_case[sh.name] = c
+
+    all_results[case_lbl] = res_case
+    all_conv[case_lbl]    = conv_case
 
 print("All cases complete.\n")
 
 
 # ===========================================================================
-# PLOTS
+# PRINT — convergência por caso e veio
 # ===========================================================================
 
-QUANTITIES_A = [
-    ("M",  "M_xz",    "M_xy",  "Moment [N·mm]",    None),
-    ("V",  "V_xz",    "V_xy",  "Shear [N]",        None),
-    ("v",  "v_xz",    "v_xy",  "Deflection [µm]",  None),
-]
-QUANTITIES_B = [
-    ("sigma_b", "sigma_b", None,  "σ_b [MPa]",       None),
-    ("T",       "T",       None,  "Torque [N·m]",    None),
-    ("tau",     "tau",     None,  "τ [MPa]",         None),
-]
+print("\n" + "#" * 80)
+print("  MESH CONVERGENCE REPORTS")
+print("#" * 80)
 
-
-def _plot_group(shaft_name: str, qty_list: list, fig_label: str) -> None:
-    nrows = len(qty_list)
-    fig   = plt.figure(figsize=(16, 3.8 * nrows))
-    fig.suptitle(f"{shaft_name} — {fig_label}  (b={B:.0f} mm, θ sweep)",
-                 fontsize=13, fontweight="bold")
-    gs = gridspec.GridSpec(nrows, 2, figure=fig, hspace=0.45, wspace=0.3)
-
-    for row, (label, key_xz, key_xy, ylabel, scale) in enumerate(qty_list):
-        has_two = key_xy is not None
-        if has_two:
-            ax_xz = fig.add_subplot(gs[row, 0])
-            ax_xy = fig.add_subplot(gs[row, 1])
-            pair  = [(ax_xz, key_xz, "XZ"), (ax_xy, key_xy, "XY")]
+for case_lbl, _ in CASES:
+    for shaft_name in SHAFT_NAMES:
+        c = all_conv[case_lbl][shaft_name]
+        print(f"\n{'='*70}")
+        print(f"  case: {case_lbl}  |  {shaft_name}")
+        print(f"{'='*70}")
+        if c is None:
+            print("  (sem distributed_radial_loads — sem estudo de convergência)")
         else:
-            ax_sc = fig.add_subplot(gs[row, :])
-            pair  = [(ax_sc, key_xz, "")]
-
-        s = scale if scale else 1.0
-        for ax, key, plane in pair:
-            for (lbl, _factory), color in zip(CASES, COLORS):
-                d = results[lbl][shaft_name]
-                ax.plot(d["x"], d[key] * s, color=color, lw=1.2, label=lbl)
-            title = f"{label} — {plane}" if plane else label
-            ax.set_title(title, fontsize=9)
-            ax.set_xlabel("x [mm]", fontsize=8)
-            ax.set_ylabel(ylabel, fontsize=8)
-            ax.axhline(0, color="0.6", lw=0.5)
-            ax.grid(alpha=0.2, lw=0.4, color="0.7")
-            ax.spines["top"].set_visible(False)
-            ax.spines["right"].set_visible(False)
-            ax.tick_params(labelsize=7)
-            ax.legend(fontsize=7, frameon=False, ncol=2)
-
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
+            c.print_report()
 
 
-for shaft_name in SHAFT_NAMES:
-    _plot_group(shaft_name, QUANTITIES_A, "M  |  V  |  deflection")
-    _plot_group(shaft_name, QUANTITIES_B, "σ_b  |  T  |  τ")
+# ===========================================================================
+# PRINT — resultados nodais por caso e veio
+# ===========================================================================
+
+print("\n" + "#" * 80)
+print("  NODAL RESULTS")
+print("#" * 80)
+
+for case_lbl, _ in CASES:
+    for shaft_name in SHAFT_NAMES:
+        r = all_results[case_lbl][shaft_name]
+
+        print(f"\n{'='*90}")
+        print(f"  case: {case_lbl}  |  {shaft_name}  |  {len(r.x)} nodes")
+        print(f"{'='*90}")
+        print(f"  {'node':>5}  {'x [mm]':>9}  {'M [N·mm]':>12}  {'V [N]':>10}  "
+              f"{'v [µm]':>9}  {'σ_b [MPa]':>11}  {'T [N·m]':>9}  "
+              f"{'τ [MPa]':>9}  {'σ_eq [MPa]':>11}")
+        print(f"  {'-'*5}  {'-'*9}  {'-'*12}  {'-'*10}  "
+              f"{'-'*9}  {'-'*11}  {'-'*9}  {'-'*9}  {'-'*11}")
+
+        for i, x in enumerate(r.x):
+            sb  = r.sigma_b[i]
+            tau = r.tau[i]
+            seq = float(np.sqrt(sb**2 + 3.0 * tau**2))
+            print(f"  {i:>5}  {x:>9.3f}  {r.M[i]:>12.2f}  {r.V[i]:>10.2f}  "
+                  f"{r.v[i]*1000:>9.4f}  {sb:>11.4f}  "
+                  f"{r.T[i]:>9.4f}  {tau:>9.4f}  {seq:>11.4f}")
+
+        print(f"\n  PEAKS:")
+        print(f"    M_max   = {r.M_max:>12.2f} N·mm  @ x={r.x_M_max:.3f} mm")
+        print(f"    σ_b_max = {r.sigma_b_max:>12.4f} MPa   @ x={r.x_sigma_b_max:.3f} mm")
+        print(f"    v_max   = {r.v_max*1000:>12.4f} µm    @ x={r.x_v_max:.3f} mm")
+        print(f"    τ_max   = {r.tau_max:>12.4f} MPa   @ x={r.x_tau_max:.3f} mm")
 
 
 # ===========================================================================
 # PEAK VALUES TABLE
 # ===========================================================================
 
-print("=" * 95)
+print("\n" + "=" * 100)
 print(f"  PEAK VALUES — b={B:.0f} mm, θ sweep")
-print("=" * 95)
+print("=" * 100)
 hdrs = [lbl for lbl, _ in CASES]
-print(f"  {'shaft':<18}  {'qty':<14}  "
-      + "  ".join(f"{h:>16}" for h in hdrs))
-print("  " + "-" * 110)
+print(f"  {'shaft':<18}  {'quantity':<16}  " + "  ".join(f"{h:>18}" for h in hdrs))
+print("  " + "-" * 130)
+
+PEAK_FNS = [
+    ("|M|_max [N·mm]", lambda r: r.M_max),
+    ("σ_b_max [MPa]",  lambda r: r.sigma_b_max),
+    ("v_max [µm]",     lambda r: r.v_max * 1000.0),
+    ("|V|_max [N]",    lambda r: float(r.V.max())),
+    ("τ_max [MPa]",    lambda r: r.tau_max),
+]
 
 for shaft_name in SHAFT_NAMES:
-    for qty, fn in [
-        ("|M|_max [N.mm]", lambda d: d["M_eq"].max()),
-        ("sb_max [MPa]",   lambda d: d["sigma_b"].max()),
-        ("|v|_max [µm]",   lambda d: d["v_eq"].max()),
-        ("|V|_max [N]",    lambda d: d["V_eq"].max()),
-    ]:
-        vals = [fn(results[lbl][shaft_name]) for lbl, _ in CASES]
-        print(f"  {shaft_name:<18}  {qty:<14}  "
-              + "  ".join(f"{v:>16.2f}" for v in vals))
+    for qty_lbl, fn in PEAK_FNS:
+        vals = [fn(all_results[lbl][shaft_name]) for lbl, _ in CASES]
+        print(f"  {shaft_name:<18}  {qty_lbl:<16}  "
+              + "  ".join(f"{v:>18.3f}" for v in vals))
     print()
 
-print("=" * 95)
+print("=" * 100)
+
 
 # ===========================================================================
-# NODE-BY-NODE DETAIL
+# PLOTS — M / V / v  (XZ | XY por veio)
 # ===========================================================================
+
+QUANTITIES_A = [
+    ("M", "M_xz", "M_xy", "Moment [N·mm]"),
+    ("V", "V_xz", "V_xy", "Shear [N]"),
+    ("v", "v_xz", "v_xy", "Deflection [µm]"),
+]
+
+SCALE_A = {"v_xz": 1000.0, "v_xy": 1000.0}
+
+
+def _plot_bending(shaft_name: str) -> None:
+    nrows = len(QUANTITIES_A)
+    fig = plt.figure(figsize=(16, 3.6 * nrows))
+    fig.suptitle(f"{shaft_name} — M / V / v  (b={B:.0f} mm, θ sweep)",
+                 fontsize=13, fontweight="bold")
+    gs = gridspec.GridSpec(nrows, 2, figure=fig, hspace=0.45, wspace=0.30)
+
+    for row, (title, key_xz, key_xy, ylabel) in enumerate(QUANTITIES_A):
+        for col, (key, plane) in enumerate([(key_xz, "XZ"), (key_xy, "XY")]):
+            ax = fig.add_subplot(gs[row, col])
+            scale = SCALE_A.get(key, 1.0)
+            for (lbl, _), color in zip(CASES, COLORS):
+                r = all_results[lbl][shaft_name]
+                ax.plot(r.x, getattr(r, key) * scale, color=color, lw=1.2, label=lbl)
+            ax.set_title(f"{title} — {plane}", fontsize=9)
+            ax.set_xlabel("x [mm]", fontsize=8)
+            ax.set_ylabel(ylabel, fontsize=8)
+            ax.axhline(0, color="0.6", lw=0.5)
+            ax.grid(alpha=0.2, lw=0.4)
+            ax.spines[["top", "right"]].set_visible(False)
+            ax.tick_params(labelsize=7)
+            ax.legend(fontsize=7, frameon=False, ncol=2)
+
+
+# ===========================================================================
+# PLOTS — σ_b / T / τ  (figura separada por veio)
+# ===========================================================================
+
+QUANTITIES_B = [
+    ("Bending stress  σ_b", "sigma_b", "σ_b [MPa]"),
+    ("Torque  T",           "T",       "T [N·m]"),
+    ("Torsional shear  τ",  "tau",     "τ [MPa]"),
+]
+
+
+def _plot_stress(shaft_name: str) -> None:
+    nrows = len(QUANTITIES_B)
+    fig = plt.figure(figsize=(10, 3.8 * nrows))
+    fig.suptitle(f"{shaft_name} — σ_b / T / τ  (b={B:.0f} mm, θ sweep)",
+                 fontsize=13, fontweight="bold")
+    gs = gridspec.GridSpec(nrows, 1, figure=fig, hspace=0.50)
+
+    for row, (title, key, ylabel) in enumerate(QUANTITIES_B):
+        ax = fig.add_subplot(gs[row, 0])
+        for (lbl, _), color in zip(CASES, COLORS):
+            r = all_results[lbl][shaft_name]
+            ax.plot(r.x, getattr(r, key), color=color, lw=1.4, label=lbl)
+        ax.set_title(title, fontsize=10, fontweight="bold")
+        ax.set_xlabel("x [mm]", fontsize=9)
+        ax.set_ylabel(ylabel, fontsize=9)
+        ax.axhline(0, color="0.6", lw=0.5)
+        ax.grid(alpha=0.25, lw=0.5)
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.tick_params(labelsize=8)
+        ax.legend(fontsize=8, frameon=False, ncol=3)
+
 
 for shaft_name in SHAFT_NAMES:
-    for lbl, _ in CASES:
-        d = results[lbl][shaft_name]
-        x = d["x"]
-        print(f"\n  {shaft_name}  |  case: {lbl}")
-        print(f"  {'x [mm]':>10}  {'M_xz [N.mm]':>14}  {'M_xy [N.mm]':>14}"
-              f"  {'V_xz [N]':>10}  {'V_xy [N]':>10}"
-              f"  {'sigma_b [MPa]':>14}  {'tau [MPa]':>10}  {'sigma_eq [MPa]':>14}")
-        print("  " + "-" * 110)
-        for i in range(len(x)):
-            sigma_b = d["sigma_b"][i]
-            tau     = d["tau"][i]
-            sigma_eq = float(np.sqrt(sigma_b**2 + 3 * tau**2))   # von Mises
-            print(f"  {x[i]:>10.2f}  {d['M_xz'][i]:>14.2f}  {d['M_xy'][i]:>14.2f}"
-                  f"  {d['V_xz'][i]:>10.2f}  {d['V_xy'][i]:>10.2f}"
-                  f"  {sigma_b:>14.3f}  {tau:>10.3f}  {sigma_eq:>14.3f}")
-        print()
+    _plot_bending(shaft_name)
+    _plot_stress(shaft_name)
 
 plt.show()

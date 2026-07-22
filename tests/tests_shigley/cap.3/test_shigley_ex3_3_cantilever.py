@@ -161,69 +161,19 @@ def _cantilever_solver_class():
 
 
 def _intermediate_nodes(x_lo: float, x_hi: float, n_intermediate: int) -> list[float]:
-    """n_intermediate pontos igualmente espaçados dentro de (x_lo, x_hi), excluindo os extremos.
-
-    NOTA: mantida apenas como fallback manual. A malha "oficial" de produção
-    passa agora a vir de `_extra_nodes_from_convergence`, que usa o
-    MeshConvergenceStudy em vez de um número de nós arbitrário.
-    """
+    """n_intermediate pontos igualmente espaçados dentro de (x_lo, x_hi), excluindo os extremos."""
     return [x_lo + k * (x_hi - x_lo) / n_intermediate for k in range(1, n_intermediate)]
 
 
-def _extra_nodes_from_convergence(
-    shaft_system,
-    theory: str = "timoshenko",
-    tol: float = 1e-3,
-    max_levels: int = 4,
-    metric: str = "sigma_b",
-    verbose: bool = True,
-):
+def _try_fem_solve(shaft_length_mm: float = 254.0, n_intermediate: int = 8):
     """
-    Corre o MeshConvergenceStudy sobre o ShaftSystem e devolve
-    (extra_nodes_mm, MeshRefinementResult).
-
-    Esta é agora a fonte oficial dos extra_nodes usados no cantilever:
-    em vez de escolher `n_intermediate` à mão, deixamos o estudo de
-    convergência decidir onde a malha precisa de refinamento dentro de
-    cada distributed_radial_load, com base no critério `metric`/`tol`.
-    """
-    from axisforge.mesh.oneD.shaft.mesh_generation.mesh_convergence_study import MeshConvergenceStudy
-    from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
-
-    base_solver = SimpleFEMSolver(theory=theory)
-    study = MeshConvergenceStudy(base_solver, tol=tol, max_levels=max_levels, metric=metric)
-    result = study.run(shaft_system)
-
-    if verbose:
-        result.print_report(unit_label="mm")
-
-    return result.all_extra_nodes, result
-
-
-def _try_fem_solve(
-    shaft_length_mm: float = 254.0,
-    n_intermediate: int = 8,
-    use_convergence: bool = False,
-    convergence_kwargs: dict | None = None,
-):
-    """
-    Resolve o cantilever.
-
-    - use_convergence=False (default, compatibilidade): nós extra igualmente
-      espaçados dentro de [3,7] in, via `_intermediate_nodes`.
-    - use_convergence=True: nós extra vêm de `_extra_nodes_from_convergence`
-      (MeshConvergenceStudy), isto é, do próprio `mesh_convergence_study.py`,
-      em vez de um número de subdivisões escolhido à mão.
+    Resolve o cantilever com n_intermediate nós extra dentro de [3,7] in,
+    injetados via Mesh1D.add_mandatory_positions (não via loads falsas).
     """
     from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import ShaftResultsReader
 
     sys = _build_shaft_system(shaft_length_mm)
-
-    conv_result = None
-    if use_convergence:
-        extra_nodes, conv_result = _extra_nodes_from_convergence(sys, **(convergence_kwargs or {}))
-    else:
-        extra_nodes = _intermediate_nodes(3.0 * IN_TO_MM, 7.0 * IN_TO_MM, n_intermediate)
+    extra_nodes = _intermediate_nodes(3.0 * IN_TO_MM, 7.0 * IN_TO_MM, n_intermediate)
 
     CantileverFEMSolver = _cantilever_solver_class()
     solver = CantileverFEMSolver(theory="timoshenko", extra_nodes=extra_nodes)
@@ -240,11 +190,8 @@ def _try_fem_solve(
     R1_fem = abs(float(f_xy_rxn[1]))
     M1_fem = abs(float(f_xy_rxn[2]))
 
-    print(f"\n  [diag] n_nodes={len(x_nodes)}  R1={R1_fem:.3f} N  M1={M1_fem:.3f} N·mm"
-          f"  (use_convergence={use_convergence})")
+    print(f"\n  [diag] n_nodes={len(x_nodes)}  R1={R1_fem:.3f} N  M1={M1_fem:.3f} N·mm")
 
-    if conv_result is not None:
-        return x_nodes, V_fem, M_fem, R1_fem, M1_fem, conv_result
     return x_nodes, V_fem, M_fem, R1_fem, M1_fem
 
 
@@ -268,39 +215,6 @@ def test_fem_reactions():
     print("  ✓ Reações dentro da tolerância")
 
 
-def test_mesh_convergence_report():
-    """
-    Corre o MeshConvergenceStudy (mesh_convergence_study.py) sobre o
-    ShaftSystem do Ex.3-3, imprime o relatório completo (por load: níveis,
-    métrica, erro relativo, nodes finais) e valida as reações FEM resolvidas
-    com esses extra_nodes, exatamente como nos outros testes deste ficheiro.
-    """
-    try:
-        sys_ = _build_shaft_system()
-        extra_nodes, conv_result = _extra_nodes_from_convergence(sys_, verbose=True)
-    except ImportError as e:
-        print(f"\n  [SKIP] axisforge not importable: {e}")
-        return
-
-    assert len(extra_nodes) > 0, "MeshConvergenceStudy não devolveu nenhum extra_node"
-
-    x_nodes, V_fem, M_fem, R1_fem, M1_fem, conv_result = _try_fem_solve(
-        use_convergence=True,
-    )
-
-    rxn = analytical_reactions()
-    tol_R, tol_M = 2.0, 200.0
-
-    err_R = abs(R1_fem - rxn["R1_N"])
-    err_M = abs(M1_fem - rxn["M1_Nmm"])
-    print(f"  R1 (malha da convergência): FEM={R1_fem:.2f} N, ref={rxn['R1_N']:.2f} N, err={err_R:.3f} N")
-    print(f"  M1 (malha da convergência): FEM={M1_fem:.1f} N·mm, ref={rxn['M1_Nmm']:.1f} N·mm, err={err_M:.1f} N·mm")
-
-    assert err_R < tol_R
-    assert err_M < tol_M
-    print("  ✓ Reações dentro da tolerância, usando extra_nodes do MeshConvergenceStudy")
-
-
 # ---------------------------------------------------------------------------
 # PLOTTING — malha grosseira vs. malha refinada (add_mandatory_positions)
 # ---------------------------------------------------------------------------
@@ -314,8 +228,7 @@ def plot_shigley_ex33(show: bool = True):
     x_fine   = V_fine   = M_fine   = None
     try:
         x_coarse, V_coarse, M_coarse, _, _ = _try_fem_solve(n_intermediate=0)   # sem refinamento
-        # malha "refinada": agora vinda do MeshConvergenceStudy, não de n_intermediate=24
-        x_fine, V_fine, M_fine, _, _, _ = _try_fem_solve(use_convergence=True)
+        x_fine,   V_fine,   M_fine,   _, _ = _try_fem_solve(n_intermediate=24)  # malha refinada
         fem_available = True
     except ImportError as e:
         print(f"  [INFO] FEM overlay not available: {e}")
@@ -325,7 +238,7 @@ def plot_shigley_ex33(show: bool = True):
     fig = plt.figure(figsize=(12, 9))
     fig.suptitle(
         "Shigley Example 3-3 — Cantilever: V(x) e M(x)\n"
-        "(malha grosseira vs. malha do MeshConvergenceStudy)",
+        "(malha grosseira vs. malha refinada via Mesh1D.add_mandatory_positions)",
         fontsize=12, fontweight="bold",
     )
     gs = gridspec.GridSpec(2, 1, hspace=0.45, figure=fig)
@@ -334,7 +247,7 @@ def plot_shigley_ex33(show: bool = True):
     ax1.plot(x_in, V_ref / LBF_TO_N, "b-", lw=2.0, label="Macaulay (ref)")
     if fem_available:
         ax1.plot(x_coarse / IN_TO_MM, V_coarse / LBF_TO_N, "g--", lw=1.2, label="FEM grosseiro")
-        ax1.plot(x_fine / IN_TO_MM, V_fine / LBF_TO_N, "r-", lw=1.2, label="FEM (convergência)")
+        ax1.plot(x_fine / IN_TO_MM, V_fine / LBF_TO_N, "r-", lw=1.2, label="FEM refinado")
     ax1.axhline(0, color="k", lw=0.8, ls="--")
     for xv in (3, 7, 10):
         ax1.axvline(xv, color="gray", lw=0.7, ls=":")
@@ -347,7 +260,7 @@ def plot_shigley_ex33(show: bool = True):
     ax2.plot(x_in, M_ref / LBFIN_TO_Nmm, "b-", lw=2.0, label="Macaulay (ref)")
     if fem_available:
         ax2.plot(x_coarse / IN_TO_MM, M_coarse / LBFIN_TO_Nmm, "g--", lw=1.2, label="FEM grosseiro")
-        ax2.plot(x_fine / IN_TO_MM, M_fine / LBFIN_TO_Nmm, "r-", lw=1.2, label="FEM (convergência)")
+        ax2.plot(x_fine / IN_TO_MM, M_fine / LBFIN_TO_Nmm, "r-", lw=1.2, label="FEM refinado")
     ax2.axhline(0, color="k", lw=0.8, ls="--")
     for xv in (3, 7, 10):
         ax2.axvline(xv, color="gray", lw=0.7, ls=":")
@@ -373,11 +286,8 @@ if __name__ == "__main__":
     print("\n[2] Analytical: key section point checks")
     test_analytical_key_points()
 
-    print("\n[3] FEM: reaction comparison (malha manual, requires axisforge)")
+    print("\n[3] FEM: reaction comparison (requires axisforge)")
     test_fem_reactions()
 
-    print("\n[4] Mesh convergence study: relatório + reações com extra_nodes da convergência")
-    test_mesh_convergence_report()
-
-    print("\n[5] Plotting: malha grosseira vs. malha do MeshConvergenceStudy...")
+    print("\n[4] Plotting: malha grosseira vs. refinada (add_mandatory_positions)...")
     plot_shigley_ex33(show=True)

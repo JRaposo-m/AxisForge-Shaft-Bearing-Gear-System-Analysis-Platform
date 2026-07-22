@@ -120,12 +120,7 @@ class MeshConvergenceStudy:
         return sorted(set(out))
 
     def _evaluate(self, shaft_system, candidates: list[float]) -> float:
-        # Mesh1D não aceita `extra_nodes=` no __init__ (mesmo padrão usado em
-        # CantileverFEMSolver._build_mesh): construir vazio e injetar os
-        # pontos candidatos via add_mandatory_positions.
-        mesh = Mesh1D(shaft_system)
-        mesh.add_mandatory_positions(candidates)
-
+        mesh = Mesh1D(shaft_system, extra_nodes=candidates)
         solver = SimpleFEMSolver(theory=self._theory)
         solver.solve(shaft_system, mesh=mesh)          # requer o solve() aceitar mesh opcional
         reader = ShaftResultsReader(solver, shaft_system)

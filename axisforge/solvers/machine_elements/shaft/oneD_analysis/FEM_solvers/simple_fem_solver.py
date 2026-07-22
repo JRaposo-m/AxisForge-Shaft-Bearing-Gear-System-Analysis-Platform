@@ -104,10 +104,11 @@ class SimpleFEMSolver:
     # Public entry point
     # ------------------------------------------------------------------
 
-    def solve(self, shaft_system: ShaftSystem) -> None:
+    def solve(self, shaft_system: ShaftSystem, mesh: Mesh1D | None = None) -> None:
         shaft_system.validate_or_raise()
 
-        mesh = Mesh1D(shaft_system)
+        if mesh is None:
+            mesh = self._build_mesh(shaft_system)
         x_nodes = mesh.x_nodes
         elements = Elem.from_mesh(mesh)
 
@@ -387,6 +388,18 @@ class SimpleFEMSolver:
             return True
         gear_label = label.split(":")[0]
         return gear_label in self._distribute_labels
+
+    def _build_mesh(self, shaft_system: ShaftSystem) -> Mesh1D:
+        """
+        Hook de construção da malha. Por omissão devolve uma Mesh1D "limpa".
+
+        Subclasses (ex.: estudos de convergência de malha, ou testes de
+        validação que precisam de forçar nós extra num intervalo de carga
+        distribuída) podem sobrepor este método para chamar
+        mesh.add_mandatory_positions(...) antes de devolver a malha —
+        sem tocar em mais nada do solve().
+        """
+        return Mesh1D(shaft_system)
     
 
     # ------------------------------------------------------------------

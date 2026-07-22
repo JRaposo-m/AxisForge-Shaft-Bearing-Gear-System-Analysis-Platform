@@ -1,4 +1,3 @@
-
 """
 mesh/oneD/shaft/mesh_generation/mesh_1D.py
 """
@@ -29,10 +28,35 @@ class Mesh1D:
     def __init__(self, shaft_system: ShaftSystem):
         self.shaft_system = shaft_system
         self._x_nodes: list[float] | None = None
+        self._extra_mandatory: list[float] = []
 
     # ------------------------------------------------------------------
     # Mandatory node positions
     # ------------------------------------------------------------------
+
+    def add_mandatory_positions(self, xs: list[float]) -> None:
+        """
+        Adiciona posições x extra que devem obrigatoriamente cair num nó,
+        além das mandatórias estruturais (secções, bearings, gears, loads).
+
+        Usado pelo estudo de convergência de malha (mesh_refinement) para
+        injetar os candidatos de bisecção de um distributed_radial_load,
+        sem alterar o ShaftSystem nem o SimpleFEMSolver.
+
+        Cumulativo: chamadas sucessivas somam-se (útil para bisecção
+        nível a nível, em que cada nível é sobreconjunto do anterior).
+        Usa clear_mandatory_positions() para reiniciar.
+
+        Invalida o cache de x_nodes — a próxima leitura de .x_nodes
+        recalcula a malha incluindo as novas posições.
+        """
+        self._extra_mandatory.extend(xs)
+        self._x_nodes = None
+
+    def clear_mandatory_positions(self) -> None:
+        """Remove todas as posições extra adicionadas via add_mandatory_positions."""
+        self._extra_mandatory.clear()
+        self._x_nodes = None
 
     def _mandatory_positions(self) -> list[float]:
         """
@@ -71,6 +95,9 @@ class Mesh1D:
         for ld in shaft_system.distributed_radial_loads:
             x_mandatory += [ld.x_lo, ld.x_hi]
 
+        # extra positions injected externally (e.g. mesh convergence study)
+        x_mandatory += self._extra_mandatory
+
         return x_mandatory
 
     def _create_mesh(self) -> list[float]:
@@ -104,6 +131,3 @@ class Mesh1D:
     @property
     def n_nodes(self) -> int:
         return len(self.x_nodes)
-    
-
-

@@ -226,13 +226,9 @@ class ShaftResultsReader:
         M_max / sigma_b_max (not yet wired in read() — left for you to
         review first, as discussed).
         """
-        V_xz, M_xz, refined_xz = self._sweep_plane_from_elements(LoadPlane.XZ)
-        V_xy, M_xy, refined_xy = self._sweep_plane_from_elements(LoadPlane.XY)
+        V_xz, M_xz = self._sweep_plane_from_elements(LoadPlane.XZ)
+        V_xy, M_xy = self._sweep_plane_from_elements(LoadPlane.XY)
 
-        # stashed for later use in read() (M_max / sigma_b_max over refined
-        # intra-element data) — intentionally not yet consumed there.
-        self._last_refined_xz = refined_xz
-        self._last_refined_xy = refined_xy
 
         return M_xz, M_xy, V_xz, V_xy
 
@@ -252,7 +248,7 @@ class ShaftResultsReader:
         n = len(x_nodes)
         V = np.zeros(n)
         M = np.zeros(n)
-        refined: list[dict] = []
+
 
         for elem_idx, elem in enumerate(elements):
             k_e = self._beam.stiffness_element(elem)
@@ -274,107 +270,7 @@ class ShaftResultsReader:
             V[elem.idx_node_2] = V2
             M[elem.idx_node_2] = M2
 
-            # -- este elemento tem alguma distribuída sobreposta? --
-            x1, x2 = x_nodes[elem.idx_node_1], x_nodes[elem.idx_node_2]
-            overlapping = [s for s in segments if s["x_hi"] > x1 and s["x_lo"] < x2]
-            if not overlapping:
-                continue    # elemento "limpo" -> os 2 valores de nó já bastam
-
-            refined_elem = self._refine_element(overlapping, x1, x2, V1, M1)
-            refined_elem["elem_idx"] = elem_idx
-            refined.append(refined_elem)
-
-        return V, M, refined
-
-    # ------------------------------------------------------------------
-    # Intra-element reconstruction for elements carrying a distributed load
-    # ------------------------------------------------------------------
-
-    def _refine_element(
-        self, overlapping: list[dict], x1: float, x2: float,
-        V1: float, M1: float, n_sample: int = 6
-    ) -> dict:
-        """
-        Integra dV/dx=-q(x), dM/dx=-V(x) dentro de UM elemento com
-        distribuída(s) sobreposta(s), com q(x) totalmente arbitrário.
-
-        NOTA DE REVISÃO (por validar com calma)
-        ----------------------------------------
-        - q(x) pode ser descontínuo internamente (duas distribuídas
-          sobrepostas com x_lo/x_hi diferentes dentro do MESMO elemento).
-          Por isso integra-se EXACTAMENTE por sub-troço: corta-se o
-          elemento em cada breakpoint interno e corre-se solve_ivp uma
-          vez por sub-troço, encadeando (V,M) de um para o seguinte —
-          sem heurísticos tipo max_step.
-        - rtol=1e-8, atol=1e-10 são valores provisórios, ainda não
-          ligados a config.SOLVER_TOLERANCE.
-        - Localização do M_max interior: amostragem grosseira (grelha de
-          n_sample pontos por sub-troço) para gerar candidatos a pico,
-          seguida de minimize_scalar no sub-troço do melhor candidato —
-          cobre múltiplos picos dentro do elemento, mas fica dependente
-          da resolução da grelha inicial (n_sample) para não passar ao
-          lado de um pico muito estreito.
-        - Comparação por |M| para achar candidatos; devolve-se o valor
-          com sinal.
-        """
-        def rhs(x, y):
-            V, M = y
-            q = self._q_total(overlapping, x)
-            return [-q, -V]
-
-        breakpoints = sorted({
-            b for seg in overlapping for b in (seg["x_lo"], seg["x_hi"])
-            if x1 < b < x2
-        })
-        edges = [x1] + breakpoints + [x2]
-
-        xs_all: list[np.ndarray] = []
-        V_all:  list[np.ndarray] = []
-        M_all:  list[np.ndarray] = []
-        sols:   list[tuple] = []   # (a, b, sol) por sub-troço
-
-        V_cur, M_cur = V1, M1
-        for a, b in zip(edges[:-1], edges[1:]):
-            sol = solve_ivp(
-                rhs, (a, b), y0=[V_cur, M_cur],
-                dense_output=True, rtol=1e-8, atol=1e-10,
-            )
-            sols.append((a, b, sol))
-
-            xs = np.linspace(a, b, n_sample + 1)
-            V_s, M_s = sol.sol(xs)
-
-            if xs_all:
-                xs, V_s, M_s = xs[1:], V_s[1:], M_s[1:]
-
-            xs_all.append(xs)
-            V_all.append(V_s)
-            M_all.append(M_s)
-
-            V_cur, M_cur = sol.sol(b)
-
-        xs_full = np.concatenate([[x1], *xs_all]) if xs_all else np.array([x1])
-        V_full  = np.concatenate([[V1],  *V_all])  if V_all  else np.array([V1])
-        M_full  = np.concatenate([[M1],  *M_all])  if M_all  else np.array([M1])
-
-        idx_peak = int(np.argmax(np.abs(M_full)))
-        x_candidate = xs_full[idx_peak]
-
-        a_ref, b_ref, sol_ref = min(
-            sols, key=lambda t: abs(0.5 * (t[0] + t[1]) - x_candidate)
-        )
-        res = minimize_scalar(
-            lambda x: -abs(sol_ref.sol(x)[1]),
-            bounds=(a_ref, b_ref), method="bounded",
-        )
-        x_M_max_local = float(res.x)
-        M_max_local   = float(sol_ref.sol(x_M_max_local)[1])
-
-        return {
-            "x": xs_full, "V": V_full, "M": M_full,
-            "x_M_max": x_M_max_local, "M_max": M_max_local,
-            "breakpoints": breakpoints,
-        }
+        return V, M
 
     # ------------------------------------------------------------------
     # Distributed-load lookup helpers (shared by _refine_element)
@@ -448,3 +344,15 @@ def _find_node(x_nodes: list[float], x: float, tol: float = 1e-6) -> int:
         if abs(xi - x) < tol:
             return i
     raise ValueError(f"Position {x:.4f} mm not found in x_nodes.")
+
+
+
+
+class StaticFailure:
+
+    """
+    In this class we will analyse the different failure criteria for shafts
+    according to it's material and choosen criteria
+    """
+    def __init__(self):
+        pass

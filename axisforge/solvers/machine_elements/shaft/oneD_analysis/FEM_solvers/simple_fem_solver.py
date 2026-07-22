@@ -156,8 +156,8 @@ class SimpleFEMSolver:
             d_total_xz += d_xz
             d_total_xy += d_xy
 
-        f_xz_ext = K @ d_total_xz
-        f_xy_ext = K @ d_total_xy
+        f_xz_total = K @ d_total_xz
+        f_xy_total = K @ d_total_xy
 
         # --- torsion: pure statics, same x_nodes, no DOF ---
         T_total, tau_total, torsion_contributions = self._solve_torsion(
@@ -171,8 +171,12 @@ class SimpleFEMSolver:
 
         self.d_total_xz = d_total_xz
         self.d_total_xy = d_total_xy
-        self.f_xz_ext = f_xz_ext
-        self.f_xy_ext = f_xy_ext
+        self.f_xz_total = f_xz_total
+        self.f_xy_total = f_xy_total
+
+        self.f_xz_reaction = f_xz_total - f_xz
+        self.f_xy_reaction = f_xy_total - f_xy
+
         self.d_contributions = d_contributions
 
         self.T_total = T_total

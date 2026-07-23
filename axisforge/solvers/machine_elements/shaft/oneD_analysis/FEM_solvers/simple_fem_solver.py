@@ -104,11 +104,12 @@ class SimpleFEMSolver:
     # Public entry point
     # ------------------------------------------------------------------
 
-    def solve(self, shaft_system: ShaftSystem, mesh: Mesh1D | None = None) -> None:
+    def solve(self, 
+              shaft_system: ShaftSystem,
+              extra_mandatory: list[float] | None = None) -> None:
         shaft_system.validate_or_raise()
 
-        if mesh is None:
-            mesh = self._build_mesh(shaft_system)
+        mesh = Mesh1D(shaft_system, extra_mandatory=extra_mandatory or [])
         x_nodes = mesh.x_nodes
         elements = Elem.from_mesh(mesh)
 
@@ -389,17 +390,11 @@ class SimpleFEMSolver:
         gear_label = label.split(":")[0]
         return gear_label in self._distribute_labels
 
-    def _build_mesh(self, shaft_system: ShaftSystem) -> Mesh1D:
-        """
-        Hook de construção da malha. Por omissão devolve uma Mesh1D "limpa".
-
-        Subclasses (ex.: estudos de convergência de malha, ou testes de
-        validação que precisam de forçar nós extra num intervalo de carga
-        distribuída) podem sobrepor este método para chamar
-        mesh.add_mandatory_positions(...) antes de devolver a malha —
-        sem tocar em mais nada do solve().
-        """
-        return Mesh1D(shaft_system)
+    def _find_node(x_nodes: list[float], x: float, tol: float = 1e-6) -> int:
+        for i, xi in enumerate(x_nodes):
+            if abs(xi - x) < tol:
+                return i
+        raise ValueError(f"Position {x:.4f} mm not found in x_nodes.")
     
 
     # ------------------------------------------------------------------
@@ -412,3 +407,73 @@ class SimpleFEMSolver:
                 "SimpleFEMSolver: reduced stiffness matrix is (near-)singular — "
                 "check bearing count/positions (mechanism / insufficient constraints)."
             )
+
+    # ------------------------------------------------------------------
+    # Return values for submodeling
+    # ------------------------------------------------------------------
+
+    def return_values(
+                    self,
+                    x_nodes: list[float],
+                    x: list[float]) -> dict[float, dict[str, float]]:
+        """
+        Extract nodal solution quantities for all nodes within the
+        interval [x[0], x[1]].
+
+        Parameters
+        ----------
+        x_nodes : mesh node positions of the current FEM solution
+        x       : [x_lo, x_hi] — interval bounds (must coincide with nodes)
+
+        Returns
+        -------
+        dict mapping each node position within [x_lo, x_hi] to its quantities:
+            {
+                x_i: {"v_xz": ..., "theta_xz": ..., "f1_xz": ..., "f2_xz": ...,
+                       "v_xy": ..., "theta_xy": ..., "f1_xy": ..., "f2_xy": ...},
+                ...
+            }
+
+        Notes
+        -----
+        v     : transverse displacement   [mm]
+        theta : rotation                  [rad]
+        f1    : nodal transverse force    [N]
+        f2    : nodal moment              [N·mm]
+
+        Raises
+        ------
+        RuntimeError if solve() has not been called yet.
+        ValueError   if x does not contain exactly two positions.
+        """
+        if self.d_total_xz is None:
+            raise RuntimeError(
+                "return_values() called before solve(). "
+                "Call solver.solve(shaft_system) first."
+            )
+
+        if len(x) != 2:
+            raise ValueError(
+                f"x must contain exactly [x_lo, x_hi], got {len(x)} values."
+            )
+
+        x_lo, x_hi = x[0], x[1]
+        result: dict[float, dict[str, float]] = {}
+
+        for i, xi in enumerate(x_nodes):
+            if x_lo - SOLVER_TOLERANCE <= xi <= x_hi + SOLVER_TOLERANCE:
+                result[xi] = {
+                    "u":            float(self.d_total_xz[3 * i]),
+                    "v_xz":         float(self.d_total_xz[3 * i + 1]),
+                    "theta_xz":     float(self.d_total_xz[3 * i + 2]),
+                    "f_u":          float(self.f_xy_total[3 * i]),
+                    "f_v_xz":       float(self.f_xz_total[3 * i + 1]),
+                    "f_theta_xz":   float(self.f_xz_total[3 * i + 2]),
+                    "v_xy":         float(self.d_total_xy[3 * i + 1]),
+                    "theta_xy":     float(self.d_total_xy[3 * i + 2]),
+                    "f1_xy":        float(self.f_xy_total[3 * i + 1]),
+                    "f2_xy":        float(self.f_xy_total[3 * i + 2]),
+                }
+
+        return result
+        

@@ -113,14 +113,48 @@ class RichardsonGCI:
     max_p         : upper clamp on observed order — guards against super-convergence artefacts
     """
 
-    def __init__(
-        self,
-        gci_threshold: float = 0.01,
-        safety_factor: float = 3.0,
-        r: float = 2.0,
-        min_p: float = 0.5,
-        max_p: float = 4.0,
-    ): ...
+    def __init__(self,
+                 f_coarse: float,
+                 f_medium: float,
+                 f_fine: float,
+                 x_nodes_coarse: list[float],
+                 x_nodes_medium: list[float],
+                 x_nodes_fine: list[float],
+                 gci_threshold: float = 0.01,
+                 safety_factor: float = 1.25):
+
+        self.x_nodes_coarse = x_nodes_coarse
+        self.x_nodes_medium = x_nodes_medium
+        self.x_nodes_fine   = x_nodes_fine
+        self.gci_threshold  = gci_threshold
+        self.safety_factor  = safety_factor
+        self.f_coarse       = f_coarse
+        self.f_medium       = f_medium
+        self.f_fine         = f_coarse
+
+        self.r_m_c          = (len(x_nodes_medium) - 1) / (len(x_nodes_coarse) - 1)
+        self.r_f_m          = (len(x_nodes_fine) - 1) / (len(x_nodes_medium) - 1)
+
+        if self.r_f_m == self.r_m_c:
+            self.r = self.r_f_m
+        # else:
+            # depois aqui preciso de ver o que fazer, provavelmente um raise ValueError
+
+
+        # here the function is capable of obtaining the convergence of
+        # the interval by taking into consideration an value f the user must define
+
+
+        self.p = np.log((self.f_fine - self.f_medium)/(
+            self.f_medium - self.f_coarse)) / np.log(self.r)
+
+        self.e_m_c = (self.f_medium - self.f_coarse) / self.f_coarse
+        self.e_f_m = (self.f_fine - self.f_medium) / self.f_medium
+
+        self.GCI_m_c = self.safety_factor * abs(self.e_m_c) / (
+            (self.r_m_c**self.p) - 1)
+        self.GCI_f_m = self.safety_factor * abs(self.e_f_m) / (
+            (self.r_f_m**self.p) - 1)
 
     def compute_gci(
         self,

@@ -77,11 +77,17 @@ class SubmodelGrader:
     The grade string is produced by RichardsonGCI and consumed
     by SubmodelSolver.
 
+    x_eval is guaranteed to exist in ALL grades — it is the node at which
+    the Richardson GCI metric (resultant deflection) is evaluated.
+    Defaults to the geometric midpoint (x_lo + x_hi) / 2 if not provided.
+
     Parameters
     ----------
     x_lo    : lower bound of the subdomain
     x_hi    : upper bound of the subdomain
     x_nodes : full mesh node positions (from Mesh1D.x_nodes)
+    x_eval  : evaluation point injected as mandatory node in all grades.
+              None -> uses geometric midpoint (x_lo + x_hi) / 2
     """
 
     def __init__(
@@ -89,10 +95,12 @@ class SubmodelGrader:
         x_lo: float,
         x_hi: float,
         x_nodes: list[float],
+        x_eval: float | None = None,
     ):
-        self._x_lo = x_lo
-        self._x_hi = x_hi
+        self._x_lo    = x_lo
+        self._x_hi    = x_hi
         self._x_nodes = x_nodes
+        self._x_eval  = x_eval if x_eval is not None else (x_lo + x_hi) / 2.0
 
     def get_grade(self, grade: str) -> list[float]:
         """
@@ -142,16 +150,20 @@ class SubmodelGrader:
 
     def _base_nodes(self) -> list[float]:
         """
-        Extract nodes from x_nodes that fall within [x_lo, x_hi].
+        Extract nodes from x_nodes that fall within [x_lo, x_hi],
+        and inject x_eval as mandatory node if not already present.
 
         These are grade_0 — the natural mesh nodes in the subdomain,
         one per existing element boundary.
         """
         from axisforge.config import SOLVER_TOLERANCE
-        return [
+        nodes = [
             x for x in self._x_nodes
             if self._x_lo - SOLVER_TOLERANCE <= x <= self._x_hi + SOLVER_TOLERANCE
         ]
+        if not any(abs(x - self._x_eval) < SOLVER_TOLERANCE for x in nodes):
+            nodes.append(self._x_eval)
+        return sorted(nodes)
 
     def _bisect_once(self, nodes: list[float]) -> list[float]:
         """
@@ -187,10 +199,10 @@ class SubmodelSolver:
         self._x_hi = x_hi
 
     def solve(self,
-              global_solver: SimpleFEMSolver,   # já resolvido externamente
+              global_solver: SimpleFEMSolver,
               shaft_system,
-              grade: str) -> SubmodelResult:
-
+              grade: str,
+              x_eval: float | None = None) -> SubmodelResult:
 
         x_lo = self._x_lo
         x_hi = self._x_hi
@@ -205,7 +217,7 @@ class SubmodelSolver:
         bc_data = global_solver.return_values(global_solver.x_nodes, [x_lo, x_hi])
 
         # 3. grade -> candidatos -> Mesh1D com extra_mandatory
-        grader     = SubmodelGrader(x_lo, x_hi, global_solver.x_nodes)
+        grader     = SubmodelGrader(x_lo, x_hi, global_solver.x_nodes, x_eval=x_eval)
         candidates = grader.get_grade(grade)
         mesh       = Mesh1D(shaft_system, extra_mandatory=candidates)
         x_nodes    = mesh.x_nodes
@@ -272,9 +284,9 @@ class SubmodelSolver:
         sol_xy = np.linalg.solve(K_aug, rhs_xy)
 
         # extract displacements and Lagrange multipliers
-        d_xz = sol_xz[:n]   # displacements
+        d_xz = sol_xz[:n]
         d_xy = sol_xy[:n]
-        lam_xz = sol_xz[n:] # Lagrange multipliers (reaction forces at cut nodes)
+        lam_xz = sol_xz[n:]
         lam_xy = sol_xy[n:]
 
         return SubmodelResult(
@@ -324,12 +336,12 @@ class SubmodelSolver:
                 for j, gj in enumerate(dofs):
                     K[gi, gj] += K_elem[i, j]
 
-        return K 
+        return K
 
     # ------------------------------------------------------------------
     # Load-case construction (decomposes RadialLoad/ExternalMoment by plane)
     # ------------------------------------------------------------------
-  
+
     def _build_submodel_load_cases(self, shaft_system) -> list[dict]:
         """
         Same as SimpleFEMSolver._build_load_cases but filtered to
@@ -504,7 +516,6 @@ class SubmodelSolver:
             C[dof, dof] = 1.0
 
         return C, p_dofs
-
 
     def _build_prescribed_vectors(
         self,

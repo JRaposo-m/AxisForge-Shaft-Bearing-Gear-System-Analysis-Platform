@@ -6,20 +6,18 @@ Coupled shaft-bearing analysis for the load-lifting gearbox at fixed b.
 Pipeline per shaft:
   1. build ShaftSystem with deep-groove ball bearings (6204)
   2. setup_internal_geometry + compute_hertz_point_contact per bearing
-  3. IterativeBearingFEMSolver.solve  -> load distribution + coupled FEM
-  4. MeshConvergenceStudy on the converged FEM (bearings EXCLUDED --
-     no axial gradient inside the seat, GCI is undefined there)
+  3. grade_3 nodes injected at gear intervals (mesh fixed, no convergence study)
+  4. IterativeBearingFEMSolver.solve  -> load distribution + coupled FEM
   5. plots:
        - global deflection diagrams  (v_xz, v_xy, v_res)
-       - mesh convergence per interval
-       - polar load distribution per bearing (Q_j vs phi_j)
+       - polar load distribution per bearing (Q_j vs phi_j, XZ and XY)
+       - bearing results summary table
 """
 
 from __future__ import annotations
 
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 
 from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_helical_gear import SpurHelicalGear
 from axisforge.core.mechanical_system.Parallel_Axis_systems.gear_meshing.spur_helical_gear_meshing import SpurHelicalGearMeshing
@@ -35,28 +33,25 @@ from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoi
 )
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
 from axisforge.solvers.machine_elements.bearings.ISO_16281_ball_bearing import IterativeBearingFEMSolver
-from axisforge.mesh.oneD.shaft.mesh_generation.mesh_convergence_study import MeshConvergenceStudy
+from axisforge.mesh.oneD.shaft.mesh_generation.mesh_1D import Mesh1D
+from axisforge.mesh.oneD.shaft.mesh_generation.mesh_grade import Grader
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import ShaftResultsReader
 
 # ===========================================================================
 # PARAMETERS
 # ===========================================================================
 
-B_STUDY   = 20.0
-P_W       = 1000.0
-RPM_IN    = 450.0
-r_pulley  = 0.050
+B_STUDY  = 20.0
+P_W      = 1000.0
+RPM_IN   = 450.0
+r_pulley = 0.050
 
 GEAR_KW_BASE = dict(mn=2.0, x=0.0, alpha_n_deg=20.0, Ra=0.8, material_id="42CrMo4")
-
-GCI_THRESHOLD = 0.01
-SAFETY_FACTOR = 1.25
-MAX_LEVELS    = 8
 
 COUPLING_TOL      = 1.0e-6
 COUPLING_MAX_ITER = 100
 
-SHAFT_NAMES = ["shaft1(motor)", "shaft2", "shaft3(pulley)"]
+GEAR_GRADE = "grade_3"   # mesh fixo nas engrenagens — sem estudo de convergência
 
 # --- 6204 deep-groove ball bearing internal geometry ---
 BB_GEOM = dict(
@@ -176,7 +171,24 @@ def build_systems(b: float) -> dict[str, ShaftSystem]:
 
 
 # ===========================================================================
-# SOLVE — coupled bearing-FEM + convergence study
+# HELPERS
+# ===========================================================================
+
+def gear_grade_nodes(sys: ShaftSystem, grade: str = GEAR_GRADE) -> list[float]:
+    """
+    Gera nós de refinamento fixo (grade_N) para todos os intervalos de
+    engrenagem do ShaftSystem. Usa a mesh base do sistema como input ao Grader.
+    """
+    base_nodes = Mesh1D(sys).x_nodes
+    extra: list[float] = []
+    for ge in sys.gears:
+        lo, hi = sys.gear_extent(ge)
+        extra += Grader(lo, hi, base_nodes).get_grade(grade)
+    return extra
+
+
+# ===========================================================================
+# SOLVE — coupled bearing-FEM (grade_3 fixo nas engrenagens)
 # ===========================================================================
 
 print(f"Building system (b = {B_STUDY} mm) ...")
@@ -184,62 +196,61 @@ shaft_systems = build_systems(B_STUDY)
 
 coupled_solvers: dict[str, IterativeBearingFEMSolver] = {}
 load_results:    dict[str, dict] = {}
-conv_results:    dict[str, object] = {}
 
 for name, sys in shaft_systems.items():
     print(f"\n=== {name} ===")
 
     bearings = {b.label: b for b in sys.bearings}
 
-    # 1. coupled bearing-FEM solve
+    # nós grade_3 nos intervalos de engrenagem
+    extra_nodes = gear_grade_nodes(sys)
+
+    # FEM base com mesh enriquecida nas engrenagens
+    fem_base = SimpleFEMSolver()
+    fem_base.solve(sys, extra_mandatory=extra_nodes)
+
+    # coupled bearing-FEM solve (reutiliza fem_base, não reconstrói mesh)
     print("  Coupled bearing-FEM solve ...")
     coupled = IterativeBearingFEMSolver(tol=COUPLING_TOL, max_iter=COUPLING_MAX_ITER)
-    load_dist = coupled.solve(sys, bearings)
+    load_dist = coupled.solve(sys, bearings, fem=fem_base)
     coupled_solvers[name] = coupled
     load_results[name]    = load_dist
 
+    # --- print resultados ISO 16281 ---
+    print(f"\n  {'Bearing':<8}  {'Fr_xz':>8}  {'Fr_xy':>8}  {'Fa':>7}  "
+          f"{'Fr_res':>8}  {'dr_xz':>10}  {'dr_xy':>10}  "
+          f"{'dr_res':>10}  {'da':>10}")
+    print(f"  {'':8}  {'[N]':>8}  {'[N]':>8}  {'[N]':>7}  "
+          f"{'[N]':>8}  {'[mm]':>10}  {'[mm]':>10}  "
+          f"{'[mm]':>10}  {'[mm]':>10}")
+    print("  " + "-" * 95)
+
     for lbl, res in load_dist.items():
         data = coupled.bearing_data[lbl]
-        print(f"    {lbl}: Fr_xz={data['Fr_xz']:8.1f}  Fr_xy={data['Fr_xy']:8.1f}  "
-            f"Fa={data['Fa']:6.1f}  |  dr_xz={res.delta_r_xz:.3e}  "
-            f"dr_xy={res.delta_r_xy:.3e}  da={res.delta_a:.3e}")
-        print(f"         n_iter_xz={res.n_iter_xz} res_xz={res.residual_xz:.2e}  "
-            f"n_iter_xy={res.n_iter_xy} res_xy={res.residual_xy:.2e}")
+        Fr_res = np.sqrt(data['Fr_xz']**2 + data['Fr_xy']**2)
+        print(f"  {lbl:<8}  {data['Fr_xz']:>8.1f}  {data['Fr_xy']:>8.1f}  "
+              f"{data['Fa']:>7.1f}  {Fr_res:>8.1f}  "
+              f"{res.delta_r_xz:>10.3e}  {res.delta_r_xy:>10.3e}  "
+              f"{res.delta_r_res:>10.3e}  {res.delta_a:>10.3e}")
 
-    # 2. convergence study on converged FEM — bearings excluded
-    print("  Convergence study ...")
-    intervals, skipped = MeshConvergenceStudy.intervals_from_shaft_system(sys)
-    for msg in skipped:
-        print(f"    [SKIP] {msg}")
-
-    # exclude bearing seats: no axial gradient inside the seat, GCI undefined
-    bearing_extents = {
-        (round(lo, 6), round(hi, 6))
-        for b in sys.bearings
-        for lo, hi in [sys.bearing_extent(b)]
-    }
-    intervals = [
-        (x_lo, x_hi, label) for x_lo, x_hi, label in intervals
-        if (round(x_lo, 6), round(x_hi, 6)) not in bearing_extents
-    ]
-
-    if not intervals:
-        print("    No intervals — nothing to study.")
-        conv_results[name] = None
-        continue
-
-    study = MeshConvergenceStudy(
-        global_solver = coupled.fem_converged,
-        gci_threshold = GCI_THRESHOLD,
-        safety_factor = SAFETY_FACTOR,
-        max_levels    = MAX_LEVELS,
-    )
-    conv_results[name] = study.run(sys, intervals)
-    conv_results[name].print_report()
+    print()
+    for lbl, res in load_dist.items():
+        Q_xz = coupled_solvers[name].bearing_data  # acesso ao bearing
+        b_obj = next(b for b in sys.bearings if b.label == lbl)
+        Q_xz_arr = b_obj.cp * np.maximum(res.delta_j_xz, 0.0) ** 1.5
+        Q_xy_arr = b_obj.cp * np.maximum(res.delta_j_xy, 0.0) ** 1.5
+        print(f"  {lbl}: ok_xz={res.ok_xz}  res_xz={res.residual_xz:.2e}  "
+              f"nfev_xz={res.n_iter_xz}  |  "
+              f"ok_xy={res.ok_xy}  res_xy={res.residual_xy:.2e}  "
+              f"nfev_xy={res.n_iter_xy}")
+        print(f"         max Q_xz={Q_xz_arr.max():.1f} N  "
+              f"max Q_xy={Q_xy_arr.max():.1f} N  "
+              f"n_loaded_xz={int((res.delta_j_xz > 0).sum())}/{b_obj.Z}  "
+              f"n_loaded_xy={int((res.delta_j_xy > 0).sum())}/{b_obj.Z}")
 
 
 # ===========================================================================
-# PLOT 1 — global deflection diagrams per shaft
+# PLOT 1 — deflection diagrams per shaft
 # ===========================================================================
 
 for name, sys in shaft_systems.items():
@@ -252,13 +263,14 @@ for name, sys in shaft_systems.items():
     v    = results.v
 
     fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
-    fig.suptitle(f"Deflection — {name}  (coupled bearing-FEM, b={B_STUDY} mm)",
+    fig.suptitle(f"Deflection — {name}  (coupled bearing-FEM, b={B_STUDY} mm, "
+                 f"gear mesh={GEAR_GRADE})",
                  fontsize=11, fontweight="bold")
 
     for ax, data, label, color in [
-        (axes[0], v_xz, "v_xz [µm]", "#2166ac"),
-        (axes[1], v_xy, "v_xy [µm]", "#d62728"),
-        (axes[2], v,    "v resultant [µm]", "#1a1a1a"),
+        (axes[0], v_xz * 1e3, "v_xz [µm]", "#2166ac"),
+        (axes[1], v_xy * 1e3, "v_xy [µm]", "#d62728"),
+        (axes[2], v    * 1e3, "v resultant [µm]", "#1a1a1a"),
     ]:
         ax.plot(x, data, color=color, lw=1.5, label=label)
         ax.axhline(0, color="0.7", lw=0.5)
@@ -280,95 +292,82 @@ for name, sys in shaft_systems.items():
 
 
 # ===========================================================================
-# PLOT 2 — mesh convergence per interval
-# ===========================================================================
-
-for name, result in conv_results.items():
-    if result is None:
-        continue
-    records = list(result.per_load.values())
-    if not records:
-        continue
-
-    n = len(records)
-    fig = plt.figure(figsize=(14, 4 * n))
-    fig.suptitle(f"Mesh convergence — {name}  (b={B_STUDY} mm)",
-                 fontsize=11, fontweight="bold")
-    gs = gridspec.GridSpec(n, 3, figure=fig, hspace=0.6, wspace=0.35)
-
-    for row, rec in enumerate(records):
-        levels = list(range(len(rec.levels)))
-        m_xz  = [m[0] for m in rec.point_metrics_history]
-        m_xy  = [m[1] for m in rec.point_metrics_history]
-        m_res = [m[2] for m in rec.point_metrics_history]
-
-        for col, (metrics, plane, color) in enumerate([
-            (m_xz,  "XZ", "#2166ac"),
-            (m_xy,  "XY", "#d62728"),
-            (m_res, "resultant", "#1a1a1a"),
-        ]):
-            ax = fig.add_subplot(gs[row, col])
-            ax.plot(levels, metrics, marker="o", color=color, lw=1.5, ms=5)
-
-            for lvl_idx, gci_dict in enumerate(rec.gci_history):
-                lvl_fine = lvl_idx + 2
-                key = {"XZ": "xz", "XY": "xy", "resultant": "res"}[plane]
-                g = gci_dict[key]
-                if hasattr(g, "GCI_f_m") and not np.isnan(g.GCI_f_m):
-                    ax.annotate(f"GCI={g.GCI_f_m*100:.3f}%",
-                                xy=(lvl_fine, metrics[lvl_fine]),
-                                xytext=(lvl_fine + 0.05, metrics[lvl_fine]),
-                                fontsize=6,
-                                color="#d62728" if g.GCI_f_m > GCI_THRESHOLD else "#33a02c",
-                                va="center")
-
-            ax.axhline(metrics[-1], color="0.6", lw=0.7, ls="--")
-            sc = "#33a02c" if rec.converged else "#d62728"
-            st = "converged" if rec.converged else "NOT converged"
-            ax.set_title(f"[{rec.label}] {plane}  {st}", fontsize=8, color=sc)
-            ax.set_xlabel("level", fontsize=7)
-            ax.set_ylabel("v [mm]", fontsize=7)
-            ax.set_xticks(levels)
-            ax.tick_params(labelsize=6)
-            ax.grid(alpha=0.2, lw=0.4)
-            ax.spines[["top", "right"]].set_visible(False)
-
-    plt.tight_layout()
-
-
-# ===========================================================================
-# PLOT 3 — polar load distribution per bearing (XZ plane)
+# PLOT 2 — polar load distribution per bearing (XZ e XY)
 # ===========================================================================
 
 def plot_bearing_polar(name: str, sys: ShaftSystem, load_dist: dict):
     bearings = sys.bearings
     n = len(bearings)
-    fig, axes = plt.subplots(1, n, figsize=(4 * n, 4.2),
+    fig, axes = plt.subplots(1, n * 2, figsize=(5 * n * 2, 5),
                              subplot_kw={"projection": "polar"})
     if n == 1:
-        axes = [axes]
-    fig.suptitle(f"Load distribution (XZ) — {name}", fontsize=11, fontweight="bold")
+        axes = list(axes)
+    fig.suptitle(f"Load distribution — {name}  (ISO/TS 16281)", fontsize=11,
+                 fontweight="bold")
 
-    for ax, b in zip(axes, bearings):
+    for i, b in enumerate(bearings):
         res = load_dist[b.label]
+        data = coupled_solvers[name].bearing_data[b.label]
         phi = b.phi_j
-        Q   = b.cp * np.maximum(res.delta_j_xz, 0.0) ** 1.5   # contact force [N]
 
-        phi_closed = np.append(phi, phi[0])
-        Q_closed   = np.append(Q,   Q[0])
+        Q_xz = b.cp * np.maximum(res.delta_j_xz, 0.0) ** 1.5
+        Q_xy = b.cp * np.maximum(res.delta_j_xy, 0.0) ** 1.5
 
-        ax.plot(phi_closed, Q_closed, color="#2166ac", lw=1.5, marker="o", ms=4)
-        ax.fill(phi_closed, Q_closed, color="#2166ac", alpha=0.12)
-        ax.set_title(f"{b.label}\nmax Q = {Q.max():.1f} N", fontsize=8)
+        # ângulo global da carga em cada plano
+        phi_load_xz = np.arctan2(data['Fr_xz'], 0)
+        phi_load_xy  = np.arctan2(data['Fr_xy'], 0) + np.pi / 2  # +90° plano Y
+
+        # phi_j no referencial global
+        phi_xz = phi + phi_load_xz
+        phi_xy  = phi + phi_load_xy
+
+        # --- col 0: XZ + XY sobrepostos ---
+        ax = axes[i * 2]
+        for Q, phi_plot, color, label in [
+            (Q_xz, phi_xz, "#2166ac", "XZ"),
+            (Q_xy, phi_xy, "#d62728", "XY"),
+        ]:
+            Q_c   = np.append(Q, Q[0])
+            phi_c = np.append(phi_plot, phi_plot[0])
+            ax.plot(phi_c, Q_c, color=color, lw=1.5, marker="o", ms=4, label=label)
+            ax.fill(phi_c, Q_c, color=color, alpha=0.10)
+
+        ax.set_title(f"{b.label}", fontsize=9, fontweight="bold")
         ax.set_theta_zero_location("E")
         ax.set_theta_direction(1)
         ax.tick_params(labelsize=6)
+        ax.yaxis.set_major_locator(plt.MaxNLocator(4))  # menos numeros radiais
+        ax.legend(fontsize=8, frameon=False, loc="upper right",
+                bbox_to_anchor=(1.25, 1.1))
+
+        # --- col 1: resultante bola a bola ---
+        # interpola Q_xy no phi_j global do XZ para somar nas mesmas bolas físicas
+        Q_xy_interp = np.interp(phi_xz % (2*np.pi),
+                                phi_xy  % (2*np.pi),
+                                Q_xy,
+                                period=2*np.pi)
+        Q_res = Q_xz + Q_xy_interp
+
+        # resultante
+        phi_orig_c = np.append(phi_xz, phi_xz[0])
+        Q_res_c    = np.append(Q_res,  Q_res[0])
+        ax2 = axes[i * 2 + 1]
+        ax2.plot(phi_orig_c, Q_res_c, color="#1a1a1a", lw=1.5, marker="o", ms=4,
+                label="resultante")
+        ax2.fill(phi_orig_c, Q_res_c, color="#1a1a1a", alpha=0.10)
+        ax2.set_title(f"{b.label} — max Q={Q_res.max():.0f} N", fontsize=9,
+                    fontweight="bold")
+        ax2.set_theta_zero_location("E")
+        ax2.set_theta_direction(1)
+        ax2.tick_params(labelsize=6)
+        ax2.yaxis.set_major_locator(plt.MaxNLocator(4))
+        ax2.legend(fontsize=8, frameon=False, loc="upper right",
+                bbox_to_anchor=(1.25, 1.1))
 
     plt.tight_layout()
 
 
 for name, sys in shaft_systems.items():
     plot_bearing_polar(name, sys, load_results[name])
-
 
 plt.show()

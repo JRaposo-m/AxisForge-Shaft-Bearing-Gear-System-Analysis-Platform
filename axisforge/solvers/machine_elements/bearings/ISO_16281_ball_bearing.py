@@ -108,6 +108,7 @@ class LoadDistributionResult:
         "delta_r_xy", "psi_xy",
         "delta_j_xy", "alpha_j_xy", "Mz_xy",
         "n_iter_xy", "residual_xy", "ok_xy",
+        "delta_r_res",
     )
 
     def __init__(self,
@@ -131,6 +132,7 @@ class LoadDistributionResult:
         self.delta_j_xy  = delta_j_xy
         self.alpha_j_xy  = alpha_j_xy
         self.Mz_xy       = Mz_xy
+        self.delta_r_res = np.sqrt(delta_r_xz**2 + delta_r_xy**2)        
         self.n_iter_xy   = n_iter_xy
         self.residual_xy = residual_xy
         self.ok_xy       = ok_xy
@@ -402,7 +404,7 @@ class IterativeBearingFEMSolver:
             Mz_xz=Mz_xz_res, n_iter_xz=nfev_xz, residual_xz=res_xz, ok_xz=ok_xz,
             delta_r_xy=delta_r_xy, psi_xy=psi_xy,
             delta_j_xy=delta_j_xy, alpha_j_xy=alpha_j_xy,
-            Mz_xy=Mz_xy_res, n_iter_xy=nfev_xy, residual_xy=res_xy, ok_xy=ok_xy,
+            Mz_xy=Mz_xy_res,n_iter_xy=nfev_xy, residual_xy=res_xy, ok_xy=ok_xy,
         )
 
     def _run_root(self, fun, x0, n_out):

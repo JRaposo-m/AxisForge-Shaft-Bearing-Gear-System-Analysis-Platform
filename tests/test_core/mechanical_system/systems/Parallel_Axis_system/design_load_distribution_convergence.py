@@ -34,7 +34,7 @@ from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoi
     SpurHelicalMeshLink, SpurHelicalGearSystem,
 )
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
-from axisforge.solvers.machine_elements.bearings.load_distribution import IterativeBearingFEMSolver
+from axisforge.solvers.machine_elements.bearings.ISO_16281_ball_bearing import IterativeBearingFEMSolver
 from axisforge.mesh.oneD.shaft.mesh_generation.mesh_convergence_study import MeshConvergenceStudy
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import ShaftResultsReader
 
@@ -53,8 +53,8 @@ GCI_THRESHOLD = 0.01
 SAFETY_FACTOR = 1.25
 MAX_LEVELS    = 8
 
-COUPLING_TOL      = 1.0e-3
-COUPLING_MAX_ITER = 30
+COUPLING_TOL      = 1.0e-6
+COUPLING_MAX_ITER = 100
 
 SHAFT_NAMES = ["shaft1(motor)", "shaft2", "shaft3(pulley)"]
 
@@ -203,6 +203,8 @@ for name, sys in shaft_systems.items():
         print(f"    {lbl}: Fr_xz={data['Fr_xz']:8.1f}  Fr_xy={data['Fr_xy']:8.1f}  "
             f"Fa={data['Fa']:6.1f}  |  dr_xz={res.delta_r_xz:.3e}  "
             f"dr_xy={res.delta_r_xy:.3e}  da={res.delta_a:.3e}")
+        print(f"         n_iter_xz={res.n_iter_xz} res_xz={res.residual_xz:.2e}  "
+            f"n_iter_xy={res.n_iter_xy} res_xy={res.residual_xy:.2e}")
 
     # 2. convergence study on converged FEM — bearings excluded
     print("  Convergence study ...")

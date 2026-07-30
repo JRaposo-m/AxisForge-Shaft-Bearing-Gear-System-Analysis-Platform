@@ -66,12 +66,17 @@ def make_stepped_shaft(name, total_length, d_seat, d_body,
 
 
 def N204(position, label, locating=False):
-    return Bearing(bearing_type=BearingType.CYLINDRICAL_ROLLER,
-                   designation="N204", b=14.0, d=20.0, D=47.0,
-                   C=28_500.0, C0=19_000.0,
-                   arrangement="locating" if locating else "floating",
-                   contact_angle_deg=0.0, X=1.0, Y=0.0,
-                   position=position, label=label)
+    return Bearing(
+        d=20.0, D=47.0,
+        bearing_type=BearingType.CYLINDRICAL_ROLLER,
+        designation="N204",
+        b=14.0, C=28_500.0, C0=19_000.0,
+        arrangement="locating" if locating else "floating",
+        contact_angle_deg=0.0,
+        X=1.0, Y=0.0,
+        label=label,
+        position=position,
+    )
 
 
 # ===========================================================================
@@ -138,41 +143,35 @@ def build_gear_system(b: float):
     return sys1, sys2, sys3, distribute
 
 
-def converge_and_solve(shaft_system: ShaftSystem,
-                        distribute: bool,
-                        verbose: bool = False) -> ShaftResultsReader:
-    """
-    1. Corre MeshConvergenceStudy (só se houver distributed_radial_loads).
-    2. Constrói a malha final com extra_nodes convergidos.
-    3. Resolve com SimpleFEMSolver.
-    4. Devolve o solver resolvido (para ShaftResultsReader).
-    """
+def converge_and_solve(shaft_system, distribute, verbose=False):
     dist_labels = {"*"} if distribute else None
     theory      = "timoshenko"
 
-    # --- passo 1: convergência (só se existirem cargas distribuídas) ---
     extra_nodes: list[float] = []
     if shaft_system.distributed_radial_loads:
-        probe_solver = SimpleFEMSolver(theory=theory,
+        # 1. solve global primeiro — obrigatório antes do MeshConvergenceStudy
+        global_solver = SimpleFEMSolver(theory=theory,
                                         distribute_gear_labels=dist_labels)
-        study = MeshConvergenceStudy(probe_solver,
-                                      tol=CONV_TOL,
-                                      max_levels=CONV_MAX_LEVELS,
-                                      metric=CONV_METRIC)
-        conv_result = study.run(shaft_system)
-        extra_nodes = conv_result.all_extra_nodes
-        if verbose:
-            conv_result.print_report()
+        global_solver.solve(shaft_system)
 
-    # --- passo 2: malha final ---
-    mesh = Mesh1D(shaft_system)
-    if extra_nodes:
-        mesh.add_mandatory_positions(extra_nodes)
+        # 2. derivar intervals automaticamente
+        intervals, skipped = MeshConvergenceStudy.intervals_from_shaft_system(shaft_system)
+        if skipped and verbose:
+            for s in skipped:
+                print(f"  [skipped] {s}")
 
-    # --- passo 3: solve final ---
+        if intervals:
+            study = MeshConvergenceStudy(global_solver,
+                                         gci_threshold=CONV_TOL,
+                                         max_levels=CONV_MAX_LEVELS)
+            conv_result = study.run(shaft_system, intervals)
+            extra_nodes = conv_result.all_extra_nodes
+            if verbose:
+                conv_result.print_report()
+
+    # 3. solve final com extra_nodes convergidos
     solver = SimpleFEMSolver(theory=theory, distribute_gear_labels=dist_labels)
-    solver.solve(shaft_system, mesh=mesh)
-
+    solver.solve(shaft_system, extra_mandatory=extra_nodes or None)
     return solver
 
 

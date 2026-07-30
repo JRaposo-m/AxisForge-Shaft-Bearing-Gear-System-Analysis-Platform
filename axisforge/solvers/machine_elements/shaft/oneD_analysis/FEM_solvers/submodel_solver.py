@@ -27,6 +27,7 @@ from axisforge.mesh.oneD.shaft.mesh_generation.mesh_1D import Mesh1D
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.build_stiffness_matrix import StiffnessMatrixBuilder
 from axisforge.config import SOLVER_TOLERANCE
 from axisforge.core.loads import LoadPlane
+from axisforge.mesh.oneD.shaft.mesh_generation.mesh_grade import Grader
 
 
 # ===========================================================================
@@ -58,128 +59,20 @@ class SubmodelResult:
     """Lagrange multipliers — XY plane (reaction forces at cut nodes)."""
 
 
-# ===========================================================================
-# Submodel grader
-# ===========================================================================
-
-class SubmodelGrader:
-    """
-    Generates standardised mesh grades for a subdomain [x_lo, x_hi]
-    by successive elementwise bisection of the base mesh.
-
-    Grade definition
-    ----------------
-    grade_0 : base mesh nodes already present in [x_lo, x_hi]
-    grade_1 : grade_0 + midpoint of each element
-    grade_2 : grade_1 + midpoint of each element  (4x grade_0 elements)
-    grade_N : grade_{N-1} bisected elementwise
-
-    The grade string is produced by RichardsonGCI and consumed
-    by SubmodelSolver.
-
-    x_eval is guaranteed to exist in ALL grades — it is the node at which
-    the Richardson GCI metric (resultant deflection) is evaluated.
-    Defaults to the geometric midpoint (x_lo + x_hi) / 2 if not provided.
-
-    Parameters
-    ----------
-    x_lo    : lower bound of the subdomain
-    x_hi    : upper bound of the subdomain
-    x_nodes : full mesh node positions (from Mesh1D.x_nodes)
-    x_eval  : evaluation point injected as mandatory node in all grades.
-              None -> uses geometric midpoint (x_lo + x_hi) / 2
-    """
-
-    def __init__(
-        self,
-        x_lo: float,
-        x_hi: float,
-        x_nodes: list[float],
-        x_eval: float | None = None,
-    ):
-        self._x_lo    = x_lo
-        self._x_hi    = x_hi
-        self._x_nodes = x_nodes
-        self._x_eval  = x_eval if x_eval is not None else (x_lo + x_hi) / 2.0
-
-    def get_grade(self, grade: str) -> list[float]:
-        """
-        Return node positions for the requested grade.
-
-        Parameters
-        ----------
-        grade : "grade_0" | "grade_1" | ... | "grade_N"
-
-        Returns
-        -------
-        Sorted list of node positions within [x_lo, x_hi].
-
-        Raises
-        ------
-        ValueError if grade string is malformed or N is negative.
-        """
-        n = self._parse_grade(grade)
-        nodes = self._base_nodes()
-        for _ in range(n):
-            nodes = self._bisect_once(nodes)
-        return nodes
-
-    def _parse_grade(self, grade: str) -> int:
-        """
-        Parse grade string into refinement level integer.
-
-        "grade_0" -> 0, "grade_1" -> 1, etc.
-
-        Raises
-        ------
-        ValueError if string does not match expected format.
-        """
-        prefix = "grade_"
-        if not grade.startswith(prefix):
-            raise ValueError(
-                f"Invalid grade string: {grade!r}. "
-                f"Expected format: 'grade_N' where N >= 0."
-            )
-        suffix = grade[len(prefix):]
-        if not suffix.isdigit():
-            raise ValueError(
-                f"Invalid grade level: {suffix!r}. "
-                f"Expected a non-negative integer after 'grade_'."
-            )
-        return int(suffix)
-
-    def _base_nodes(self) -> list[float]:
-        """
-        Extract nodes from x_nodes that fall within [x_lo, x_hi],
-        and inject x_eval as mandatory node if not already present.
-
-        These are grade_0 — the natural mesh nodes in the subdomain,
-        one per existing element boundary.
-        """
-        from axisforge.config import SOLVER_TOLERANCE
-        nodes = [
-            x for x in self._x_nodes
-            if self._x_lo - SOLVER_TOLERANCE <= x <= self._x_hi + SOLVER_TOLERANCE
-        ]
-        if not any(abs(x - self._x_eval) < SOLVER_TOLERANCE for x in nodes):
-            nodes.append(self._x_eval)
-        return sorted(nodes)
-
-    def _bisect_once(self, nodes: list[float]) -> list[float]:
-        """
-        Insert the midpoint of every interval between consecutive nodes.
-
-        Applied iteratively to produce grade_1, grade_2, ... grade_N.
-        """
-        result = list(nodes)
-        for a, b in zip(nodes, nodes[1:]):
-            result.append((a + b) / 2.0)
-        return sorted(result)
-
 
 # ===========================================================================
 # Submodel solver
 # ===========================================================================
+
+class _SubdomainMesh(Mesh1D):
+    """
+    Mesh1D sintética para o subdomínio [x_lo, x_hi].
+    Bypassa _create_mesh — usa os nós já filtrados directamente.
+    Usada exclusivamente pelo SubmodelSolver.
+    """
+    def __init__(self, shaft_system, x_nodes_sub: list[float]):
+        super().__init__(shaft_system)
+        self._x_nodes = x_nodes_sub   # injeta directamente, sem recalcular
 
 class SubmodelSolver:
     """
@@ -201,8 +94,7 @@ class SubmodelSolver:
     def solve(self,
               global_solver: SimpleFEMSolver,
               shaft_system,
-              grade: str,
-              x_eval: float | None = None) -> SubmodelResult:
+              grade: str) -> SubmodelResult:
 
         x_lo = self._x_lo
         x_hi = self._x_hi
@@ -216,16 +108,27 @@ class SubmodelSolver:
         # 2. extrai BCs dos nós de corte via return_values
         bc_data = global_solver.return_values(global_solver.x_nodes, [x_lo, x_hi])
 
-        # 3. grade -> candidatos -> Mesh1D com extra_mandatory
-        grader     = SubmodelGrader(x_lo, x_hi, global_solver.x_nodes, x_eval=x_eval)
+        # 3. grade -> nós candidatos dentro do subdomínio
+        grader     = Grader(x_lo, x_hi, global_solver.x_nodes)
         candidates = grader.get_grade(grade)
-        mesh       = Mesh1D(shaft_system, extra_mandatory=candidates)
-        x_nodes    = mesh.x_nodes
-        elements   = Elem.from_mesh(mesh)
 
-        # --- stiffness matrix ---
-        builder  = global_solver._builder
-        K_sub    = self._build_submodel_stiffness(mesh, elements, builder)
+        # 4. malha global com os candidatos extra (garante que estão na malha)
+        mesh_full = Mesh1D(shaft_system, extra_mandatory=candidates)
+
+        # 5. filtrar apenas os nós do subdomínio — dimensão correcta para K_sub
+        x_nodes_sub = [
+            x for x in mesh_full.x_nodes
+            if x_lo - SOLVER_TOLERANCE <= x <= x_hi + SOLVER_TOLERANCE
+        ]
+
+        # 6. malha sintética do subdomínio — Elem.from_mesh lê shaft_system correctamente
+        mesh_sub = _SubdomainMesh(shaft_system, x_nodes_sub)
+        x_nodes  = mesh_sub.x_nodes        # == x_nodes_sub
+        elements = Elem.from_x_nodes(x_nodes_sub, shaft_system)
+
+        # K_sub agora tem dimensão 3 * len(x_nodes_sub) — sem linhas/colunas a zero
+        builder = global_solver._builder
+        K_sub   = self._build_submodel_stiffness(mesh_sub, elements, builder)
 
         # --- force vectors ---
         load_cases = self._build_submodel_load_cases(shaft_system)
@@ -256,38 +159,34 @@ class SubmodelSolver:
                         builder, theta_fn=d.get("theta_fn")
                     )
 
+
         # --- constraint matrix and prescribed vectors ---
         C, p_dofs = self._build_constraint_matrix(x_nodes)
         q_xz, q_xy = self._build_prescribed_vectors(x_nodes, bc_data)
 
-        # --- augmented system [K C^T; C 0] ---
-        n = n_dofs
-        K_aug = np.zeros((2 * n, 2 * n))
-        K_aug[:n, :n] = K_sub          # K
-        K_aug[:n, n:] = C.T            # C^T
-        K_aug[n:, :n] = C              # C
-        # K_aug[n:, n:] = 0            # already zero
+        n   = n_dofs          # 9
+        n_c = C.shape[0]      # 6
 
-        # --- augmented RHS ---
-        # XZ plane
-        rhs_xz = np.zeros(2 * n)
+        K_aug = np.zeros((n + n_c, n + n_c))   # (15, 15)
+        K_aug[:n, :n] = K_sub                  # (9, 9)
+        K_aug[:n, n:] = C.T                    # (9, 6)
+        K_aug[n:, :n] = C                      # (6, 9)
+
+        rhs_xz = np.zeros(n + n_c)             # (15,)
         rhs_xz[:n] = f_xz
-        rhs_xz[n:] = q_xz
+        rhs_xz[n:] = q_xz                      # q_xz deve ser (6,)
 
-        # XY plane
-        rhs_xy = np.zeros(2 * n)
+        rhs_xy = np.zeros(n + n_c)
         rhs_xy[:n] = f_xy
-        rhs_xy[n:] = q_xy
+        rhs_xy[n:] = q_xy                      # q_xy deve ser (6,)
 
-        # --- solve ---
         sol_xz = np.linalg.solve(K_aug, rhs_xz)
         sol_xy = np.linalg.solve(K_aug, rhs_xy)
 
-        # extract displacements and Lagrange multipliers
-        d_xz = sol_xz[:n]
-        d_xy = sol_xy[:n]
-        lam_xz = sol_xz[n:]
-        lam_xy = sol_xy[n:]
+        d_xz   = sol_xz[:n]
+        d_xy   = sol_xy[:n]
+        lam_xz = sol_xz[n:]   # (6,)
+        lam_xy = sol_xy[n:]   # (6,)
 
         return SubmodelResult(
             x_lo=self._x_lo,
@@ -486,70 +385,49 @@ class SubmodelSolver:
         self,
         x_nodes: list[float],
     ) -> tuple[np.ndarray, list[int]]:
-        """
-        Build constraint matrix C of shape (n_dofs, n_dofs).
 
-        One row per DOF — identity rows for prescribed DOFs,
-        zero rows for free DOFs.
-
-        Returns
-        -------
-        C      : (n_dofs, n_dofs)
-        p_dofs : indices of prescribed DOFs
-        """
         n_dofs = 3 * len(x_nodes)
 
         i_lo = Elem.find_node_index(x_nodes, self._x_lo)
         i_hi = Elem.find_node_index(x_nodes, self._x_hi)
 
         p_dofs = [
-            3 * i_lo,
-            3 * i_lo + 1,
-            3 * i_lo + 2,
-            3 * i_hi,
-            3 * i_hi + 1,
-            3 * i_hi + 2,
-        ]
+            3 * i_lo,      3 * i_lo + 1,  3 * i_lo + 2,
+            3 * i_hi,      3 * i_hi + 1,  3 * i_hi + 2,
+        ]                                          # sempre 6
 
-        C = np.zeros((n_dofs, n_dofs))
-        for dof in p_dofs:
-            C[dof, dof] = 1.0
+        n_c = len(p_dofs)                          # = 6
+        C = np.zeros((n_c, n_dofs))               # (6, 9) para grade_0
+        for row, dof in enumerate(p_dofs):
+            C[row, dof] = 1.0
 
         return C, p_dofs
 
     def _build_prescribed_vectors(
         self,
         x_nodes: list[float],
-        bc_data: dict[float, dict[str, float]],
+        bc_data: dict,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Build prescribed displacement vectors of shape (n_dofs,).
-        Zero at free DOFs, prescribed value at constrained DOFs.
-
-        Returns
-        -------
-        q_xz : (n_dofs,)
-        q_xy : (n_dofs,)
-        """
-        n_dofs = 3 * len(x_nodes)
-        q_xz = np.zeros(n_dofs)
-        q_xy = np.zeros(n_dofs)
 
         i_lo = Elem.find_node_index(x_nodes, self._x_lo)
         i_hi = Elem.find_node_index(x_nodes, self._x_hi)
 
-        q_xz[3 * i_lo]     = bc_data[self._x_lo]["u"]
-        q_xz[3 * i_lo + 1] = bc_data[self._x_lo]["v_xz"]
-        q_xz[3 * i_lo + 2] = bc_data[self._x_lo]["theta_xz"]
-        q_xz[3 * i_hi]     = bc_data[self._x_hi]["u"]
-        q_xz[3 * i_hi + 1] = bc_data[self._x_hi]["v_xz"]
-        q_xz[3 * i_hi + 2] = bc_data[self._x_hi]["theta_xz"]
+        q_xz = np.array([
+            bc_data[self._x_lo]["u"],
+            bc_data[self._x_lo]["v_xz"],
+            bc_data[self._x_lo]["theta_xz"],
+            bc_data[self._x_hi]["u"],
+            bc_data[self._x_hi]["v_xz"],
+            bc_data[self._x_hi]["theta_xz"],
+        ])
 
-        q_xy[3 * i_lo]     = bc_data[self._x_lo]["u"]
-        q_xy[3 * i_lo + 1] = bc_data[self._x_lo]["v_xy"]
-        q_xy[3 * i_lo + 2] = bc_data[self._x_lo]["theta_xy"]
-        q_xy[3 * i_hi]     = bc_data[self._x_hi]["u"]
-        q_xy[3 * i_hi + 1] = bc_data[self._x_hi]["v_xy"]
-        q_xy[3 * i_hi + 2] = bc_data[self._x_hi]["theta_xy"]
+        q_xy = np.array([
+            bc_data[self._x_lo]["u"],
+            bc_data[self._x_lo]["v_xy"],
+            bc_data[self._x_lo]["theta_xy"],
+            bc_data[self._x_hi]["u"],
+            bc_data[self._x_hi]["v_xy"],
+            bc_data[self._x_hi]["theta_xy"],
+        ])
 
         return q_xz, q_xy

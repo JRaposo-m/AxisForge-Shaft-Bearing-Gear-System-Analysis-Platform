@@ -73,6 +73,32 @@ class Elem:
                 ))
         return elements
 
+
+    @classmethod
+    def from_x_nodes(cls, x_nodes: list[float], shaft_system: "ShaftSystem") -> list["Elem"]:
+        shaft = shaft_system.shaft
+        elements: list[Elem] = []
+
+        for j in range(len(x_nodes) - 1):
+            x_a   = x_nodes[j]
+            x_b   = x_nodes[j + 1]
+            x_mid = (x_a + x_b) / 2.0
+
+            section, _ = shaft.section_at(x_mid)   # desempacotar tuple
+            mat        = get_material(section.material_id)
+
+            elements.append(cls(
+                length     = x_b - x_a,
+                E          = mat.E,
+                I          = section.second_moment_of_area,
+                A          = section.area,
+                v          = mat.poisson_ratio,
+                idx_node_1 = j,
+                idx_node_2 = j + 1,
+            ))
+
+        return elements
+
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------

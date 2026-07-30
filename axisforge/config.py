@@ -47,3 +47,6 @@ MIN_LOAD_N: float = 1.0   # Minimum equivalent bearing load
 MIN_BEARING_SEPARATION_MM = 1.0e-3 # Minimum separation between two supports (div-by-zero guard for the solver).
 MIN_SHOULDER_CLEARANCE_MM = 1.0
 FLOATING_BEARING_CLEARANCE_MM = 0.1  # Minimum clearance for a floating bearing to be considered "floating" (not abutting a shoulder).
+MIN_FACE_WIDTH_FOR_CONVERGENCE_MM: float = 1.0  # Below this, element is treated as point load — no submodel study.
+NR_TOL = 1.0e-3
+NR_MAX_ITER = 200

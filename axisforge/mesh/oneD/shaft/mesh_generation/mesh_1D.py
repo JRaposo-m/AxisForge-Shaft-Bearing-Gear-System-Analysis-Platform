@@ -5,6 +5,8 @@ mesh/oneD/shaft/mesh_generation/mesh_1D.py
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import GearElement, ShaftSystem
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.SpurHelical_gear_system import SpurHelicalGearSystem
 from axisforge.core.materials import get_material
+from axisforge.core.loads import LoadPlane
+from axisforge.mesh.oneD.shaft.mesh_generation.mesh_grade import Grader
 from axisforge.config import MESH_MIN_NODE_DIST_MM
 
 
@@ -33,6 +35,7 @@ class Mesh1D:
         self.shaft_system = shaft_system
         self._x_nodes: list[float] | None = None
         self._extra_mandatory: list[float] = extra_mandatory or []
+        self._graders: list[tuple["Grader", str]] = [] 
 
     # ------------------------------------------------------------------
     # Mandatory node positions
@@ -74,9 +77,14 @@ class Mesh1D:
         # distributed radial loads — x_lo and x_hi are discontinuities in V(x)
         for ld in shaft_system.distributed_radial_loads:
             x_mandatory += [ld.x_lo, ld.x_hi]
+            x_mandatory.append(ld.centroid(LoadPlane.XY))
+            x_mandatory.append(ld.centroid(LoadPlane.XY))
 
         # extra positions injected externally (e.g. mesh convergence study)
         x_mandatory += self._extra_mandatory
+
+        for grader, grade in self._graders:
+            x_mandatory += grader.get_grade(grade)
 
         return x_mandatory
 
@@ -135,3 +143,19 @@ class Mesh1D:
             print("-" * 35)
 
         return result
+
+    def add_grader(self, grader: "Grader", grade: str) -> None:
+        """
+        Inject a Grader + grade level as mandatory nodes.
+
+        Call AFTER the base mesh is built (x_nodes must already exist
+        so the Grader was constructed with a valid base node set).
+        Invalidates the node cache — next .x_nodes call rebuilds.
+        """
+        self._graders.append((grader, grade))
+        self._x_nodes = None
+
+    def clear_graders(self) -> None:
+        """Remove all injected graders. Invalidates cache."""
+        self._graders.clear()
+        self._x_nodes = None

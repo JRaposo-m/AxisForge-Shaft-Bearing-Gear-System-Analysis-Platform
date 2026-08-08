@@ -1,5 +1,5 @@
 """
-axisforge/solvers/machine_elements/bearings/load_distribution_ISO_16281_ball_bearing.py
+axisforge/solvers/machine_elements/bearings/ISO_16281_ball_bearing.py
 
 ISO/TS 16281 internal load distribution — coupled shaft-bearing solver
 (prescribed-psi formulation, solved with scipy.optimize.root).
@@ -9,9 +9,17 @@ Architecture (ISO/TS 16281 §4.2)
 The FEM supplies the bearing reactions (Fr_xz, Fr_xy, Fa) and the shaft
 centreline slope across the bearing seat; a per-bearing root solve then
 resolves the internal load distribution (delta_r, delta_a) that equilibrates
-those radial/axial reactions. The root solve IS the bearing model — no
-bearing stiffness is injected back into the global FEM K. Rolling-element
-supports remain rigid displacement BCs in the FEM.
+the radial resultant Fr = sqrt(Fr_xz² + Fr_xy²).
+
+The solve is performed in the plane of the resultant force:
+    phi_Fr = arctan2(Fr_xy, Fr_xz)   [rad, global frame]
+
+phi_j is kept local in the solver (bearing.phi_j, starting at 0) and
+rotated to the global frame only for output:
+    phi_j_global = bearing.phi_j + phi_Fr
+
+This ensures solver and plot share the same reference frame with no
+post-processing conversion.
 
 Element kinematics — ISO/TS 16281 eq. (12)/(15)
 -----------------------------------------------
@@ -22,28 +30,19 @@ Element kinematics — ISO/TS 16281 eq. (12)/(15)
 
 Static equilibrium — ISO/TS 16281 §4.2.2.1
 ------------------------------------------
-    R0 = Fr - cp*sum(delta_j^1.5 * cos(alpha_j) * cos(phi_j))
-    R1 = Fa - cp*sum(delta_j^1.5 * sin(alpha_j))                (XZ only)
+    R0 = Fr  - cp*sum(delta_j^1.5 * cos(alpha_j) * cos(phi_j))
+    R1 = Fa  - cp*sum(delta_j^1.5 * sin(alpha_j))
 
 Solver
 ------
-scipy.optimize.root (MINPACK 'hybr', with 'lm' fallback) replaces the hand-
-rolled Newton. It supplies automatic variable scaling and a trust-region /
-line-search globalisation, which the radial DGBB under Fa=0 needs: delta_r is
-stiff, delta_a is soft, and a plain Newton either overshoots delta_a or
-stalls on the badly-scaled 2x2 Jacobian. root() handles both without manual
-damping.
+scipy.optimize.root (MINPACK 'hybr', with 'lm' fallback).
+2-eq root (delta_r, delta_a) for Fr_res and Fa.
 
 Why psi is prescribed
 ---------------------
-For a radial DGBB the moment reaction is negligible; feeding the beam bending
-moment into the solve has no physical root and diverges. psi (ring tilt) is
-PRESCRIBED from the shaft centreline slope across the seat:
-    psi = (v(x_hi) - v(x_lo)) / (x_hi - x_lo)
-Mz then falls out as a pure OUTPUT of the converged distribution.
-
-    XZ : 2-eq root  (delta_r_xz, delta_a)   -- psi prescribed
-    XY : 1-eq root  (delta_r_xy)            -- delta_a shared from XZ
+psi (ring tilt) is PRESCRIBED from the shaft centreline slope across the
+seat, projected onto the plane of the resultant force:
+    psi = psi_xz*cos(phi_Fr) + psi_xy*sin(phi_Fr)
 
 References
 ----------
@@ -53,7 +52,7 @@ References
 from __future__ import annotations
 
 import numpy as np
-from scipy.optimize import root
+from scipy.optimize import root, brentq
 
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
@@ -69,73 +68,52 @@ from axisforge.config import NR_TOL, NR_MAX_ITER
 
 class LoadDistributionResult:
     """
-    Output of the internal load distribution solve for a single bearing
-    position — two independent planar solves with psi prescribed.
+    Output of the internal load distribution solve for a single bearing —
+    single solve in the plane of the resultant force.
 
     Attributes
     ----------
-    -- XZ plane (2-eq root: delta_r_xz, delta_a | psi_xz prescribed) --
-    delta_r_xz  : float           — radial ring displacement, XZ [mm]
-    delta_a     : float           — axial ring displacement [mm]
-    psi_xz      : float           — prescribed misalignment, XZ [rad]
-    delta_j_xz  : np.ndarray(Z,)  — elastic deflection per element, XZ [mm]
-    alpha_j_xz  : np.ndarray(Z,)  — effective contact angle per element, XZ [rad]
-    Mz_xz       : float           — moment reaction (OUTPUT), XZ [N.mm]
-    n_iter_xz   : int             — solver function evaluations
-    residual_xz : float           — final ||R|| XZ [N]
-    ok_xz       : bool            — solver success flag
-
-    -- XY plane (1-eq root: delta_r_xy | delta_a fixed, psi_xy prescribed) --
-    delta_r_xy  : float           — radial ring displacement, XY [mm]
-    psi_xy      : float           — prescribed misalignment, XY [rad]
-    delta_j_xy  : np.ndarray(Z,)  — elastic deflection per element, XY [mm]
-    alpha_j_xy  : np.ndarray(Z,)  — effective contact angle per element, XY [rad]
-    Mz_xy       : float           — moment reaction (OUTPUT), XY [N.mm]
-    n_iter_xy   : int             — solver function evaluations
-    residual_xy : float           — final ||R|| XY [N]
-    ok_xy       : bool            — solver success flag
+    delta_r : float           — radial ring displacement [mm]
+    delta_a : float           — axial ring displacement [mm]
+    psi     : float           — prescribed misalignment in resultant plane [rad]
+    phi_Fr  : float           — angle of resultant radial force, global frame [rad]
+                                used only for plot — solve is always in local frame
+                                (phi_j=0 aligned with Fr)
+    delta_j : np.ndarray(Z,)  — elastic deflection per element [mm]
+    alpha_j : np.ndarray(Z,)  — effective contact angle per element [rad]
+    Mz      : float           — moment reaction (OUTPUT) [N.mm]
+    n_iter  : int             — solver function evaluations
+    residual: float           — final ||R|| [N]
+    ok      : bool            — solver success flag
 
     Note
     ----
-    Contact-force distribution is recovered downstream as
-    Q_j = cp * max(delta_j, 0)**1.5.
+    Contact-force per element: Q_j = cp * max(delta_j, 0)**1.5  [N]
+    Ball positions in global frame (plot only):
+        phi_j_global = (bearing.phi_j + phi_Fr) % (2*pi)
     """
 
     __slots__ = (
-        "delta_r_xz", "delta_a", "psi_xz",
-        "delta_j_xz", "alpha_j_xz", "Mz_xz",
-        "n_iter_xz", "residual_xz", "ok_xz",
-        "delta_r_xy", "psi_xy",
-        "delta_j_xy", "alpha_j_xy", "Mz_xy",
-        "n_iter_xy", "residual_xy", "ok_xy",
-        "delta_r_res",
+        "delta_r", "delta_a", "psi", "phi_Fr",
+        "delta_j", "alpha_j",
+        "Mz", "n_iter", "residual", "ok",
     )
 
     def __init__(self,
-                 delta_r_xz, delta_a, psi_xz,
-                 delta_j_xz, alpha_j_xz, Mz_xz, n_iter_xz, residual_xz, ok_xz,
-                 delta_r_xy, psi_xy,
-                 delta_j_xy, alpha_j_xy, Mz_xy, n_iter_xy, residual_xy, ok_xy):
+                 delta_r, delta_a, psi, phi_Fr,
+                 delta_j, alpha_j,
+                 Mz, n_iter, residual, ok):
 
-        self.delta_r_xz  = delta_r_xz
-        self.delta_a     = delta_a
-        self.psi_xz      = psi_xz
-        self.delta_j_xz  = delta_j_xz
-        self.alpha_j_xz  = alpha_j_xz
-        self.Mz_xz       = Mz_xz
-        self.n_iter_xz   = n_iter_xz
-        self.residual_xz = residual_xz
-        self.ok_xz       = ok_xz
-
-        self.delta_r_xy  = delta_r_xy
-        self.psi_xy      = psi_xy
-        self.delta_j_xy  = delta_j_xy
-        self.alpha_j_xy  = alpha_j_xy
-        self.Mz_xy       = Mz_xy
-        self.delta_r_res = np.sqrt(delta_r_xz**2 + delta_r_xy**2)        
-        self.n_iter_xy   = n_iter_xy
-        self.residual_xy = residual_xy
-        self.ok_xy       = ok_xy
+        self.delta_r  = delta_r
+        self.delta_a  = delta_a
+        self.psi      = psi
+        self.phi_Fr   = phi_Fr
+        self.delta_j  = delta_j
+        self.alpha_j  = alpha_j
+        self.Mz       = Mz
+        self.n_iter   = n_iter
+        self.residual = residual
+        self.ok       = ok
 
 
 # ===========================================================================
@@ -151,18 +129,17 @@ class IterativeBearingFEMSolver:
     1. SimpleFEMSolver with rigid bearings
        -> Fr_xz, Fr_xy, Fa per bearing
        -> shaft centreline slope across each seat -> psi_xz, psi_xy
-    2. Per bearing: _solve_bearing_internal
-         XZ 2-eq root (delta_r_xz, delta_a)   -- psi_xz prescribed
-         XY 1-eq root (delta_r_xy)            -- delta_a shared, psi_xy prescribed
+    2. Per bearing: single 2-eq root (delta_r, delta_a) in the plane of Fr
+       phi_Fr = arctan2(Fr_xy, Fr_xz)
+       Fr     = sqrt(Fr_xz² + Fr_xy²)
+       psi    = psi_xz*cos(phi_Fr) + psi_xy*sin(phi_Fr)
+       phi_j_global = phi_j + phi_Fr  (output only, not used in solve)
 
     Single FEM pass; no bearing stiffness injected into the global FEM.
 
-    Requires bearing.setup_internal_geometry() and
-    bearing.compute_hertz_point_contact() on every Bearing before solve().
-
     Parameters
     ----------
-    tol      : residual tolerance passed to root() (xtol/ftol) [-]
+    tol      : residual tolerance passed to root() [-]
     max_iter : ignored by root(); kept for interface compatibility
     """
 
@@ -189,6 +166,7 @@ class IterativeBearingFEMSolver:
                        setup_internal_geometry() and compute_hertz_point_contact()
                        must have been called on each Bearing before this call.
         Pd           : diametral clearance override [mm] (0 = use bearing.s)
+        fem          : pre-built SimpleFEMSolver (optional); built internally if None
 
         Returns
         -------
@@ -204,14 +182,13 @@ class IterativeBearingFEMSolver:
             psi_xz, psi_xy = self._psi_from_displacement_gradient(fem, shaft_system, b)
             results[label] = self._solve_bearing_internal(
                 b,
-                Fr_xz           = data['Fr_xz'],
-                Fr_xy           = data['Fr_xy'],
-                Fa              = data['Fa'],
-                delta_r_xz_init = data['v_xz'],
-                delta_r_xy_init = data['v_xy'],
-                delta_a_init    = data['u'],
-                psi_xz          = psi_xz,
-                psi_xy          = psi_xy,
+                Fr_xz        = data['Fr_xz'],
+                Fr_xy        = data['Fr_xy'],
+                Fa           = data['Fa'],
+                delta_r_init = data['v'],
+                delta_a_init = data['u'],
+                psi_xz       = psi_xz,
+                psi_xy       = psi_xy,
             )
 
         self.fem_converged = fem
@@ -240,7 +217,7 @@ class IterativeBearingFEMSolver:
         """
         Average slope of the shaft centreline across the bearing seat:
             psi = (v(x_hi) - v(x_lo)) / (x_hi - x_lo)
-        Falls back to the nodal section rotation theta if the seat width is 0.
+        Falls back to the nodal section rotation theta if seat width is 0.
 
         Returns
         -------
@@ -273,10 +250,6 @@ class IterativeBearingFEMSolver:
                           M_xz, M_xy, M, phi_M,
                           v_xz, v_xy, v, phi_v, u,
                           theta_xz, theta_xy, theta, phi_theta}}
-
-        Fa is the axial reaction at the locating bearing node (0 at floating).
-        M_xz/M_xy are the beam bending moments — reported for inspection only,
-        NOT fed into the bearing solve (see module docstring).
         """
         result = {}
         for b in shaft_system.bearings:
@@ -300,15 +273,15 @@ class IterativeBearingFEMSolver:
 
             result[b.label] = {
                 'Fr_xz'    : Fr_xz,  'Fr_xy'   : Fr_xy,
-                'Fr'       : Fr,     'phi_Fr'  : np.arctan2(Fr_xy, Fr_xz),
+                'Fr'       : Fr,     'phi_Fr'  : float(np.arctan2(Fr_xy, Fr_xz)),
                 'Fa'       : Fa,
                 'M_xz'     : M_xz,   'M_xy'    : M_xy,
-                'M'        : M,      'phi_M'   : np.arctan2(M_xy, M_xz),
+                'M'        : M,      'phi_M'   : float(np.arctan2(M_xy, M_xz)),
                 'v_xz'     : v_xz,   'v_xy'    : v_xy,
-                'v'        : v,      'phi_v'   : np.arctan2(v_xy, v_xz),
+                'v'        : v,      'phi_v'   : float(np.arctan2(v_xy, v_xz)),
                 'u'        : u,
                 'theta_xz' : theta_xz, 'theta_xy' : theta_xy,
-                'theta'    : theta,    'phi_theta': np.arctan2(theta_xy, theta_xz),
+                'theta'    : theta,    'phi_theta': float(np.arctan2(theta_xy, theta_xz)),
             }
 
         return result
@@ -320,10 +293,8 @@ class IterativeBearingFEMSolver:
     @staticmethod
     def _elements(bearing, delta_r, delta_a, Vpsi):
         """
-        Per-element deflection and contact angle for given ring displacements
-        (ISO eq. 12/15).
-
-        Vpsi : constant array Ri*sin(psi)*cos(phi_j).
+        Per-element deflection and contact angle for given ring displacements.
+        phi_j is bearing.phi_j (local, starting at 0 = direction of Fr).
 
         Returns delta_j, alpha_j, ca, sa, cp_j, d32, d12, mask.
         """
@@ -347,9 +318,7 @@ class IterativeBearingFEMSolver:
 
     def _radial_init(self, bearing, Fr, delta_r_init):
         """
-        Initial delta_r that clears the clearance gap A*(1-cos(alpha_0)) and
-        adds a Hertzian contact estimate, so the residual is well-defined
-        (elements in contact) at the starting point.
+        Initial delta_r estimate — clears clearance gap and adds Hertz estimate.
         """
         A       = bearing.A
         alpha_0 = bearing.alpha_0
@@ -365,47 +334,202 @@ class IterativeBearingFEMSolver:
         return delta_r_init if abs(delta_r_init) > seed else seed
 
     # ------------------------------------------------------------------
-    # Internal load distribution — psi prescribed, solved with root()
+    # Internal load distribution — single solve in resultant plane
     # ------------------------------------------------------------------
 
     def _solve_bearing_internal(self,
-                             bearing: Bearing,
-                             Fr_xz: float,
-                             Fr_xy: float,
-                             Fa: float,
-                             delta_r_xz_init: float,
-                             delta_r_xy_init: float,
-                             delta_a_init: float,
-                             psi_xz: float,
-                             psi_xy: float) -> LoadDistributionResult:
+                                bearing: Bearing,
+                                Fr_xz: float,
+                                Fr_xy: float,
+                                Fa: float,
+                                delta_r_init: float,
+                                delta_a_init: float,
+                                psi_xz: float,
+                                psi_xy: float) -> LoadDistributionResult:
         """
-        XZ: 2-eq root  (delta_r_xz, delta_a)   -- psi_xz prescribed
-        XY: 1-eq root  (delta_r_xy)            -- delta_a fixed from XZ
+        Single 2-eq root (delta_r, delta_a) in the plane of the resultant Fr.
 
-        Requires bearing.cp, bearing.A, bearing.alpha_0,
-                 bearing.phi_j, bearing.Dpw, bearing.Ri to exist.
+        phi_Fr = arctan2(Fr_xy, Fr_xz)  — global angle of resultant force
+        Fr     = sqrt(Fr_xz² + Fr_xy²)  — resultant radial force magnitude
+        psi    = psi_xz*cos(phi_Fr) + psi_xy*sin(phi_Fr)  — misalignment
+                 projected onto the resultant plane
+        phi_j_global = phi_j + phi_Fr   — ball positions in global frame (output)
         """
-        delta_r_xz, delta_a, delta_j_xz, alpha_j_xz, \
-            Mz_xz_res, nfev_xz, res_xz, ok_xz = self._root_xz(
-                bearing, Fr_xz, Fa, psi_xz,
-                delta_r_init = delta_r_xz_init,
-                delta_a_init = delta_a_init,
-            )
+        Fr     = float(np.sqrt(Fr_xz**2 + Fr_xy**2))
+        phi_Fr = float(np.arctan2(Fr_xy, Fr_xz))
 
-        delta_r_xy, delta_j_xy, alpha_j_xy, \
-            Mz_xy_res, nfev_xy, res_xy, ok_xy = self._root_xy(
-                bearing, Fr_xy, delta_a, psi_xy,
-                delta_r_init = delta_r_xy_init,
-            )
+        # misalignment projected onto resultant plane
+        psi = psi_xz * np.cos(phi_Fr) + psi_xy * np.sin(phi_Fr)
+
+        cp   = bearing.cp
+        Dpw  = bearing.Dpw
+        Ri   = bearing.Ri
+        cp_j = np.cos(bearing.phi_j)
+        Vpsi = Ri * np.sin(psi) * cp_j
+
+        def residual(u):
+            dr, da = u
+            _, _, ca, sa, _, d32, _, _ = self._elements(bearing, dr, da, Vpsi)
+            return np.array([
+                Fr - cp * np.sum(d32 * ca * cp_j),
+                Fa - cp * np.sum(d32 * sa),
+            ])
+
+        dr0 = self._radial_init(bearing, Fr, delta_r_init)
+        x, nfev, res, ok = self._run_root(residual, [dr0, delta_a_init], 2)
+        delta_r, delta_a = float(x[0]), float(x[1])
+
+        delta_j, alpha_j, ca, sa, _, d32, _, _ = self._elements(
+            bearing, delta_r, delta_a, Vpsi)
+        Mz = (Dpw / 2.0) * cp * float(np.sum(d32 * sa * cp_j))
 
         return LoadDistributionResult(
-            delta_r_xz=delta_r_xz, delta_a=delta_a, psi_xz=psi_xz,
-            delta_j_xz=delta_j_xz, alpha_j_xz=alpha_j_xz,
-            Mz_xz=Mz_xz_res, n_iter_xz=nfev_xz, residual_xz=res_xz, ok_xz=ok_xz,
-            delta_r_xy=delta_r_xy, psi_xy=psi_xy,
-            delta_j_xy=delta_j_xy, alpha_j_xy=alpha_j_xy,
-            Mz_xy=Mz_xy_res,n_iter_xy=nfev_xy, residual_xy=res_xy, ok_xy=ok_xy,
+            delta_r=delta_r, delta_a=delta_a, psi=psi, phi_Fr=phi_Fr,
+            delta_j=delta_j, alpha_j=alpha_j,
+            Mz=Mz, n_iter=nfev, residual=res, ok=ok,
         )
+
+    # ------------------------------------------------------------------
+    # Post-processing utilities
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def phi_j_global(bearing: Bearing, result: LoadDistributionResult) -> np.ndarray:
+        """
+        Ball positions in the global frame [rad], for plotting only.
+        phi_j_global = (phi_j + phi_Fr) % (2*pi)
+
+        phi_j   : local positions (phi_j=0 aligned with Fr, from bearing.phi_j)
+        phi_Fr  : global angle of resultant force (from result.phi_Fr)
+
+        Parameters
+        ----------
+        bearing : Bearing
+        result  : LoadDistributionResult
+
+        Returns
+        -------
+        np.ndarray(Z,) [rad], values in [0, 2*pi)
+        """
+        return (bearing.phi_j + result.phi_Fr) % (2 * np.pi)
+
+    @staticmethod
+    def contact_distribution(bearing: Bearing,
+                              result: LoadDistributionResult,
+                              frame: str = "global") -> np.ndarray:
+        """
+        Per-element contact force paired with angular position, in one call.
+ 
+        Q_j   = cp * max(delta_j, 0)^1.5                     [N]
+        phi_j = bearing.phi_j (local)  or  phi_j + phi_Fr (global)
+ 
+        Parameters
+        ----------
+        bearing : Bearing — must have cp set (compute_hertz_point_contact called)
+        result  : LoadDistributionResult
+        frame   : "global" (default) — phi_j + phi_Fr, wrapped to [0, 2*pi)
+                  "local"            — bearing.phi_j as-is (phi_j=0 aligned with Fr)
+ 
+        Returns
+        -------
+        np.ndarray, shape (Z, 2), dtype float — column 0 = phi_j [rad],
+        column 1 = Q_j [N]. Row j is rolling element j (same order/index as
+        bearing.phi_j and result.delta_j).
+ 
+        Example
+        -------
+            dist = IterativeBearingFEMSolver.contact_distribution(bearing, result)
+            phi, Q = dist[:, 0], dist[:, 1]
+            for phi_i, Q_i in dist:
+                print(f"phi={np.degrees(phi_i):6.1f}  Q={Q_i:8.2f} N")
+        """
+        if frame == "global":
+            phi = (bearing.phi_j + result.phi_Fr) % (2 * np.pi)
+        elif frame == "local":
+            phi = bearing.phi_j
+        else:
+            raise ValueError(f"frame must be 'global' or 'local', got '{frame}'")
+ 
+        Q = bearing.cp * np.maximum(result.delta_j, 0.0) ** 1.5
+        return np.column_stack((phi, Q))
+
+    @staticmethod
+    def bearing_stiffness(bearing: Bearing,
+                           result: LoadDistributionResult,
+                           Fr_xz: float,
+                           Fr_xy: float,
+                           Fa: float) -> tuple[float, float, float]:
+        """
+        Secant bearing stiffness (Kr_xz, Kr_xy, Ka) recovered from the
+        converged internal load distribution result.
+ 
+            Kr_xz = Fr_xz / delta_r_xz
+            Kr_xy = Fr_xy / delta_r_xy
+            Ka    = Fa    / delta_a
+ 
+        delta_r_xz, delta_r_xy are the radial ring displacement decomposed
+        from the resultant-plane solve (result.delta_r, result.phi_Fr) back
+        onto the global XZ/XY axes:
+            delta_r_xz = delta_r * cos(phi_Fr)
+            delta_r_xy = delta_r * sin(phi_Fr)
+        Fr_xz, Fr_xy must be the SAME reactions that produced Fr/phi_Fr in
+        this solve (i.e. bearing_data[label]['Fr_xz'/'Fr_xy'] from the same
+        call to solve()) — passing mismatched values silently corrupts Kr.
+ 
+        Guards
+        ------
+        Kr_xz / Kr_xy : if the corresponding displacement component is ~0,
+            the ring has not moved in that direction (no measurable
+            compliance) -> stiffness reported as inf (rigid).
+ 
+        Ka : delta_a is, in general, NOT the pure axial response to Fa alone
+            — under Fa=0 the ring still settles at delta_a ~= -A*sin(alpha_0)
+            to balance the free contact angle (see module docstring / ISO
+            eq. 12). That settling is an assembly/clearance artefact, not a
+            load-deflection response, and computing Fa/delta_a there (with
+            Fa=0) would report Ka=0 — implying "no axial stiffness", which
+            is physically wrong (the DGBB is not axially free; it simply
+            has no axial load applied in this load case).
+            Therefore Ka is only evaluated when Fa != 0 (a real axial load
+            is present); otherwise Ka -> inf (no axial stiffness deficiency
+            can be inferred from a zero-load case).
+            A negative delta_a with Fa != 0 would indicate an assembly/sign
+            inconsistency (ring displacing opposite to the applied axial
+            load) — Ka is still returned (Fa/delta_a, negative), and the
+            caller should treat a negative Ka as an error flag rather than
+            a physical stiffness.
+ 
+        Parameters
+        ----------
+        bearing : Bearing
+        result  : LoadDistributionResult — from the same solve() call as
+                  Fr_xz, Fr_xy, Fa below
+        Fr_xz, Fr_xy, Fa : float — bearing reactions [N], typically
+                  bearing_data[label]['Fr_xz'/'Fr_xy'/'Fa']
+ 
+        Returns
+        -------
+        (Kr_xz, Kr_xy, Ka) [N/mm], each possibly float('inf')
+        """
+
+        delta_r_xz = result.delta_r * np.cos(result.phi_Fr)
+        delta_r_xy = result.delta_r * np.sin(result.phi_Fr)
+        delta_a    = result.delta_a
+ 
+        eps = 1e-9  # mm, below which a displacement component is "zero"
+ 
+        Kr_xz = (Fr_xz / delta_r_xz) if abs(delta_r_xz) > eps else float("inf")
+        Kr_xy = (Fr_xy / delta_r_xy) if abs(delta_r_xy) > eps else float("inf")
+ 
+        if Fa == 0.0:
+            Ka = float("inf")
+        elif abs(delta_a) > eps:
+            Ka = Fa / delta_a
+        else:
+            Ka = float("inf")
+ 
+        return Kr_xz, Kr_xy, Ka
+        
 
     def _run_root(self, fun, x0, n_out):
         """
@@ -415,7 +539,6 @@ class IterativeBearingFEMSolver:
         sol = root(fun, x0, method="hybr", tol=self.tol)
         if not sol.success:
             sol_lm = root(fun, x0, method="lm", tol=self.tol)
-            # keep whichever has the smaller residual
             if float(np.linalg.norm(np.atleast_1d(sol_lm.fun))) < \
                float(np.linalg.norm(np.atleast_1d(sol.fun))):
                 sol = sol_lm
@@ -425,53 +548,90 @@ class IterativeBearingFEMSolver:
         nfev = int(getattr(sol, "nfev", 0))
         return x, nfev, res, bool(sol.success)
 
+   # ------------------------------------------------------------------
+    # Helper
     # ------------------------------------------------------------------
-    # XZ — 2-eq root (delta_r, delta_a), psi prescribed
-    # ------------------------------------------------------------------
-
-    def _root_xz(self, bearing, Fr_xz, Fa, psi, delta_r_init, delta_a_init):
-        cp    = bearing.cp
-        Dpw   = bearing.Dpw
-        Ri    = bearing.Ri
-        cp_j  = np.cos(bearing.phi_j)
-        Vpsi  = Ri * np.sin(psi) * cp_j
-
-        def residual(u):
-            dr, da = u
-            _, _, ca, sa, _, d32, _, _ = self._elements(bearing, dr, da, Vpsi)
-            return np.array([
-                Fr_xz - cp * np.sum(d32 * ca * cp_j),
-                Fa    - cp * np.sum(d32 * sa),
-            ])
-
-        dr0 = self._radial_init(bearing, Fr_xz, delta_r_init)
-        x, nfev, res, ok = self._run_root(residual, [dr0, delta_a_init], 2)
-        delta_r, delta_a = float(x[0]), float(x[1])
-
-        delta_j, alpha_j, ca, sa, _, d32, _, _ = self._elements(bearing, delta_r, delta_a, Vpsi)
-        Mz_res = (Dpw / 2.0) * cp * float(np.sum(d32 * sa * cp_j))
-        return delta_r, delta_a, delta_j, alpha_j, Mz_res, nfev, res, ok
-
-    # ------------------------------------------------------------------
-    # XY — 1-eq root (delta_r), psi prescribed, delta_a fixed from XZ
-    # ------------------------------------------------------------------
-
-    def _root_xy(self, bearing, Fr_xy, delta_a_fixed, psi, delta_r_init):
-        cp    = bearing.cp
-        Dpw   = bearing.Dpw
-        Ri    = bearing.Ri
-        cp_j  = np.cos(bearing.phi_j)
-        Vpsi  = Ri * np.sin(psi) * cp_j
-
-        def residual(u):
-            dr = u[0]
-            _, _, ca, _, _, d32, _, _ = self._elements(bearing, dr, delta_a_fixed, Vpsi)
-            return np.array([Fr_xy - cp * np.sum(d32 * ca * cp_j)])
-
-        dr0 = self._radial_init(bearing, Fr_xy, delta_r_init)
-        x, nfev, res, ok = self._run_root(residual, [dr0], 1)
-        delta_r = float(x[0])
-
-        delta_j, alpha_j, ca, sa, _, d32, _, _ = self._elements(bearing, delta_r, delta_a_fixed, Vpsi)
-        Mz_res = (Dpw / 2.0) * cp * float(np.sum(d32 * sa * cp_j))
-        return delta_r, delta_j, alpha_j, Mz_res, nfev, res, ok
+ 
+    def minimum_axial_load(self,
+                            bearing: Bearing,
+                            Fr_xz: float,
+                            Fr_xy: float,
+                            psi_xz: float,
+                            psi_xy: float,
+                            delta_r_init: float = 0.0,
+                            delta_a_init: float = 0.0,
+                            Fa_bracket: tuple[float, float] = (0.0, 5.0e4),
+                            xtol: float = 1e-6) -> tuple[float, LoadDistributionResult]:
+        """
+        Minimum axial preload Fa_min [N] that must be applied to the shaft so
+        that this bearing's axial ring displacement delta_a >= 0.
+ 
+        Context
+        -------
+        Under Fa=0 a radial DGBB settles at delta_a ~= -A*sin(alpha_0) (ISO
+        eq. 12 free-contact-angle balance) — a negative axial displacement
+        that is NOT itself an error (see bearing_stiffness docstring: it is
+        clearance take-up, not a load response). It only becomes a problem
+        for arrangements that require the ring to stay at or above its
+        nominal axial position (e.g. this bearing is meant to be preloaded,
+        or delta_a < 0 would mean the ring rides on the wrong flank of the
+        raceway for the intended locating direction).
+ 
+        This helper finds the smallest Fa >= 0 that brings delta_a exactly
+        to 0, i.e. cancels the free-contact-angle settling. Applying less
+        than Fa_min leaves the ring in the negative (clearance-only)
+        position; applying Fa_min or more keeps delta_a >= 0.
+ 
+        Method
+        ------
+        Root search (brentq) on g(Fa) = delta_a(Fa), bracketed by Fa_bracket.
+        delta_a(Fa) is obtained by re-running the full internal-distribution
+        solve (_solve_bearing_internal) at each trial Fa — Fr_xz, Fr_xy,
+        psi_xz, psi_xy are held fixed throughout (only Fa is varied).
+ 
+        If delta_a(Fa=0) is already >= 0 (no clearance-settling problem for
+        this load case), Fa_min = 0.0 is returned without a root search.
+ 
+        Parameters
+        ----------
+        bearing      : Bearing — cp, geometry already set up
+        Fr_xz, Fr_xy : radial reactions [N] (held fixed)
+        psi_xz, psi_xy : prescribed misalignment [rad] (held fixed)
+        delta_r_init, delta_a_init : starting guesses for the inner solve
+        Fa_bracket   : (Fa_lo, Fa_hi) [N] search bracket; must bracket the
+                       root (delta_a(Fa_lo) < 0 <= delta_a(Fa_hi)). Widen if
+                       ValueError is raised.
+        xtol         : brentq tolerance on Fa [N]
+ 
+        Returns
+        -------
+        (Fa_min, result) : Fa_min [N], and the LoadDistributionResult at
+                            Fa_min (delta_a ~= 0 there, up to xtol)
+ 
+        Raises
+        ------
+        ValueError if Fa_bracket does not bracket the root (delta_a stays
+        negative even at Fa_bracket[1] — widen the bracket).
+        """
+        res0 = self._solve_bearing_internal(
+            bearing, Fr_xz, Fr_xy, 0.0, delta_r_init, delta_a_init, psi_xz, psi_xy)
+        if res0.delta_a >= 0.0:
+            return 0.0, res0
+ 
+        def g(Fa: float) -> float:
+            res = self._solve_bearing_internal(
+                bearing, Fr_xz, Fr_xy, Fa, delta_r_init, delta_a_init, psi_xz, psi_xy)
+            return res.delta_a
+ 
+        lo, hi = Fa_bracket
+        g_hi = g(hi)
+        if g_hi < 0.0:
+            raise ValueError(
+                f"minimum_axial_load: delta_a still negative ({g_hi:.4e} mm) "
+                f"at Fa={hi:.1f} N — widen Fa_bracket."
+            )
+ 
+        Fa_min = brentq(g, lo, hi, xtol=xtol)
+        result = self._solve_bearing_internal(
+            bearing, Fr_xz, Fr_xy, Fa_min, delta_r_init, delta_a_init, psi_xz, psi_xy)
+        return Fa_min, result

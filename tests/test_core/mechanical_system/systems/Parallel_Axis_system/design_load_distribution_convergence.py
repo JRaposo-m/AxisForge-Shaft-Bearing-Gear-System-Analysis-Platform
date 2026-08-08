@@ -10,8 +10,10 @@ Pipeline per shaft:
   4. IterativeBearingFEMSolver.solve  -> load distribution + coupled FEM
   5. plots:
        - global deflection diagrams  (v_xz, v_xy, v_res)
-       - polar load distribution per bearing (Q_j vs phi_j, XZ and XY)
-       - bearing results summary table
+       - polar load distribution per bearing (Q_j vs phi_j_global)
+
+Q_j / phi_j_global are no longer called separately — contact_distribution()
+returns both, paired by rolling element, in a single call.
 """
 
 from __future__ import annotations
@@ -51,7 +53,7 @@ GEAR_KW_BASE = dict(mn=2.0, x=0.0, alpha_n_deg=20.0, Ra=0.8, material_id="42CrMo
 COUPLING_TOL      = 1.0e-6
 COUPLING_MAX_ITER = 100
 
-GEAR_GRADE = "grade_3"   # mesh fixo nas engrenagens — sem estudo de convergência
+GEAR_GRADE = "grade_3"
 
 # --- 6204 deep-groove ball bearing internal geometry ---
 BB_GEOM = dict(
@@ -90,7 +92,6 @@ def make_stepped_shaft(name, total_length, d_seat, d_body,
 
 
 def BB6204(position, label, locating=False):
-    """Deep-groove ball bearing 6204 with internal geometry attached."""
     b = Bearing(
         d=20.0, D=47.0,
         bearing_type=BearingType.DEEP_GROOVE_BALL,
@@ -175,10 +176,6 @@ def build_systems(b: float) -> dict[str, ShaftSystem]:
 # ===========================================================================
 
 def gear_grade_nodes(sys: ShaftSystem, grade: str = GEAR_GRADE) -> list[float]:
-    """
-    Gera nós de refinamento fixo (grade_N) para todos os intervalos de
-    engrenagem do ShaftSystem. Usa a mesh base do sistema como input ao Grader.
-    """
     base_nodes = Mesh1D(sys).x_nodes
     extra: list[float] = []
     for ge in sys.gears:
@@ -188,7 +185,7 @@ def gear_grade_nodes(sys: ShaftSystem, grade: str = GEAR_GRADE) -> list[float]:
 
 
 # ===========================================================================
-# SOLVE — coupled bearing-FEM (grade_3 fixo nas engrenagens)
+# SOLVE
 # ===========================================================================
 
 print(f"Building system (b = {B_STUDY} mm) ...")
@@ -202,14 +199,10 @@ for name, sys in shaft_systems.items():
 
     bearings = {b.label: b for b in sys.bearings}
 
-    # nós grade_3 nos intervalos de engrenagem
     extra_nodes = gear_grade_nodes(sys)
-
-    # FEM base com mesh enriquecida nas engrenagens
     fem_base = SimpleFEMSolver()
     fem_base.solve(sys, extra_mandatory=extra_nodes)
 
-    # coupled bearing-FEM solve (reutiliza fem_base, não reconstrói mesh)
     print("  Coupled bearing-FEM solve ...")
     coupled = IterativeBearingFEMSolver(tol=COUPLING_TOL, max_iter=COUPLING_MAX_ITER)
     load_dist = coupled.solve(sys, bearings, fem=fem_base)
@@ -217,36 +210,57 @@ for name, sys in shaft_systems.items():
     load_results[name]    = load_dist
 
     # --- print resultados ISO 16281 ---
-    print(f"\n  {'Bearing':<8}  {'Fr_xz':>8}  {'Fr_xy':>8}  {'Fa':>7}  "
-          f"{'Fr_res':>8}  {'dr_xz':>10}  {'dr_xy':>10}  "
-          f"{'dr_res':>10}  {'da':>10}")
-    print(f"  {'':8}  {'[N]':>8}  {'[N]':>8}  {'[N]':>7}  "
-          f"{'[N]':>8}  {'[mm]':>10}  {'[mm]':>10}  "
-          f"{'[mm]':>10}  {'[mm]':>10}")
-    print("  " + "-" * 95)
+    print(f"\n  {'Bearing':<8}  {'Fr':>8}  {'Fa':>7}  {'phi_Fr':>8}  "
+          f"{'delta_r':>10}  {'delta_a':>10}  {'n_loaded':>10}")
+    print(f"  {'':8}  {'[N]':>8}  {'[N]':>7}  {'[deg]':>8}  "
+          f"{'[mm]':>10}  {'[mm]':>10}  {'':>10}")
+    print("  " + "-" * 80)
 
     for lbl, res in load_dist.items():
         data = coupled.bearing_data[lbl]
-        Fr_res = np.sqrt(data['Fr_xz']**2 + data['Fr_xy']**2)
-        print(f"  {lbl:<8}  {data['Fr_xz']:>8.1f}  {data['Fr_xy']:>8.1f}  "
-              f"{data['Fa']:>7.1f}  {Fr_res:>8.1f}  "
-              f"{res.delta_r_xz:>10.3e}  {res.delta_r_xy:>10.3e}  "
-              f"{res.delta_r_res:>10.3e}  {res.delta_a:>10.3e}")
-
-    print()
-    for lbl, res in load_dist.items():
-        Q_xz = coupled_solvers[name].bearing_data  # acesso ao bearing
         b_obj = next(b for b in sys.bearings if b.label == lbl)
-        Q_xz_arr = b_obj.cp * np.maximum(res.delta_j_xz, 0.0) ** 1.5
-        Q_xy_arr = b_obj.cp * np.maximum(res.delta_j_xy, 0.0) ** 1.5
-        print(f"  {lbl}: ok_xz={res.ok_xz}  res_xz={res.residual_xz:.2e}  "
-              f"nfev_xz={res.n_iter_xz}  |  "
-              f"ok_xy={res.ok_xy}  res_xy={res.residual_xy:.2e}  "
-              f"nfev_xy={res.n_iter_xy}")
-        print(f"         max Q_xz={Q_xz_arr.max():.1f} N  "
-              f"max Q_xy={Q_xy_arr.max():.1f} N  "
-              f"n_loaded_xz={int((res.delta_j_xz > 0).sum())}/{b_obj.Z}  "
-              f"n_loaded_xy={int((res.delta_j_xy > 0).sum())}/{b_obj.Z}")
+
+        # single call: (Z, 2) array -> col 0 = phi_j_global [rad], col 1 = Q_j [N]
+        dist = IterativeBearingFEMSolver.contact_distribution(b_obj, res)
+        phi, Q = dist[:, 0], dist[:, 1]
+
+        n_loaded = int((Q > 0).sum())
+        print(f"  {lbl:<8}  {data['Fr']:>8.1f}  {data['Fa']:>7.1f}  "
+              f"{np.degrees(res.phi_Fr):>8.1f}  "
+              f"{res.delta_r:>10.3e}  {res.delta_a:>10.3e}  "
+              f"{n_loaded:>4}/{b_obj.Z}")
+        print(f"  {'':8}  ok={res.ok}  residual={res.residual:.2e}  "
+              f"nfev={res.n_iter}   Q_max={Q.max():.1f} N")
+
+        # --- bearing stiffness (secant, from converged distribution) ---
+        Kr_xz, Kr_xy, Ka = IterativeBearingFEMSolver.bearing_stiffness(
+            b_obj, res, Fr_xz=data['Fr_xz'], Fr_xy=data['Fr_xy'], Fa=data['Fa'])
+        print(f"  {'':8}  stiffness: Kr_xz={Kr_xz:>12.4e} N/mm   "
+              f"Kr_xy={Kr_xy:>12.4e} N/mm   Ka={Ka:>12.4e} N/mm")
+
+        # --- minimum axial preload to bring delta_a back to >= 0 ---
+        psi_xz, psi_xy = coupled._psi_from_displacement_gradient(fem_base, sys, b_obj)
+        psi_proj = psi_xz * np.cos(res.phi_Fr) + psi_xy * np.sin(res.phi_Fr)
+        print(f"  {'':8}  psi: psi_xz={np.degrees(psi_xz):>9.5f} deg  "
+              f"psi_xy={np.degrees(psi_xy):>9.5f} deg  "
+              f"psi_proj(Fr plane)={np.degrees(psi_proj):>9.5f} deg  "
+              f"[= res.psi={np.degrees(res.psi):>9.5f} deg]")
+        Fa_min, res_min = coupled.minimum_axial_load(
+            b_obj, Fr_xz=data['Fr_xz'], Fr_xy=data['Fr_xy'],
+            psi_xz=psi_xz, psi_xy=psi_xy,
+            delta_r_init=res.delta_r, delta_a_init=res.delta_a,
+        )
+        if Fa_min == 0.0:
+            print(f"  {'':8}  Fa_min: not needed (delta_a already >= 0)")
+        else:
+            print(f"  {'':8}  Fa_min={Fa_min:>10.2f} N   "
+                  f"(delta_a -> {res_min.delta_a:.3e} mm at Fa_min)")
+
+        # per-element contact distribution — phi (global, deg) paired with Q [N]
+        print(f"  {'':8}  per-element distribution (phi_global | Q):")
+        for phi_i, Q_i in dist:
+            tag = "  <-- loaded" if Q_i > 0 else ""
+            print(f"  {'':10}  {np.degrees(phi_i):7.2f} deg  |  {Q_i:8.2f} N{tag}")
 
 
 # ===========================================================================
@@ -292,77 +306,41 @@ for name, sys in shaft_systems.items():
 
 
 # ===========================================================================
-# PLOT 2 — polar load distribution per bearing (XZ e XY)
+# PLOT 2 — polar load distribution per bearing
 # ===========================================================================
 
 def plot_bearing_polar(name: str, sys: ShaftSystem, load_dist: dict):
     bearings = sys.bearings
     n = len(bearings)
-    fig, axes = plt.subplots(1, n * 2, figsize=(5 * n * 2, 5),
+    fig, axes = plt.subplots(1, n, figsize=(5 * n, 5),
                              subplot_kw={"projection": "polar"})
     if n == 1:
-        axes = list(axes)
+        axes = [axes]
     fig.suptitle(f"Load distribution — {name}  (ISO/TS 16281)", fontsize=11,
                  fontweight="bold")
 
-    for i, b in enumerate(bearings):
+    for ax, b in zip(axes, bearings):
         res = load_dist[b.label]
-        data = coupled_solvers[name].bearing_data[b.label]
-        phi = b.phi_j
 
-        Q_xz = b.cp * np.maximum(res.delta_j_xz, 0.0) ** 1.5
-        Q_xy = b.cp * np.maximum(res.delta_j_xy, 0.0) ** 1.5
+        # single call: (Z, 2) -> phi_j_global [rad], Q_j [N], paired per element
+        dist = IterativeBearingFEMSolver.contact_distribution(b, res)
+        phi, Q = dist[:, 0], dist[:, 1]
 
-        # ângulo global da carga em cada plano
-        phi_load_xz = np.arctan2(data['Fr_xz'], 0)
-        phi_load_xy  = np.arctan2(data['Fr_xy'], 0) + np.pi / 2  # +90° plano Y
+        phi_c = np.append(phi, phi[0])
+        Q_c   = np.append(Q,   Q[0])
 
-        # phi_j no referencial global
-        phi_xz = phi + phi_load_xz
-        phi_xy  = phi + phi_load_xy
-
-        # --- col 0: XZ + XY sobrepostos ---
-        ax = axes[i * 2]
-        for Q, phi_plot, color, label in [
-            (Q_xz, phi_xz, "#2166ac", "XZ"),
-            (Q_xy, phi_xy, "#d62728", "XY"),
-        ]:
-            Q_c   = np.append(Q, Q[0])
-            phi_c = np.append(phi_plot, phi_plot[0])
-            ax.plot(phi_c, Q_c, color=color, lw=1.5, marker="o", ms=4, label=label)
-            ax.fill(phi_c, Q_c, color=color, alpha=0.10)
-
-        ax.set_title(f"{b.label}", fontsize=9, fontweight="bold")
+        ax.plot(phi_c, Q_c, color="#2166ac", lw=1.5, marker="o", ms=4)
+        ax.fill(phi_c, Q_c, color="#2166ac", alpha=0.12)
+        ax.set_title(
+            f"{b.label}\n"
+            f"max Q={Q.max():.0f} N  n_loaded={int((Q > 0).sum())}/{b.Z}\n"
+            f"phi_Fr={np.degrees(res.phi_Fr):.1f}°",
+            fontsize=8,
+        )
         ax.set_theta_zero_location("E")
         ax.set_theta_direction(1)
         ax.tick_params(labelsize=6)
-        ax.yaxis.set_major_locator(plt.MaxNLocator(4))  # menos numeros radiais
-        ax.legend(fontsize=8, frameon=False, loc="upper right",
-                bbox_to_anchor=(1.25, 1.1))
-
-        # --- col 1: resultante bola a bola ---
-        # interpola Q_xy no phi_j global do XZ para somar nas mesmas bolas físicas
-        Q_xy_interp = np.interp(phi_xz % (2*np.pi),
-                                phi_xy  % (2*np.pi),
-                                Q_xy,
-                                period=2*np.pi)
-        Q_res = Q_xz + Q_xy_interp
-
-        # resultante
-        phi_orig_c = np.append(phi_xz, phi_xz[0])
-        Q_res_c    = np.append(Q_res,  Q_res[0])
-        ax2 = axes[i * 2 + 1]
-        ax2.plot(phi_orig_c, Q_res_c, color="#1a1a1a", lw=1.5, marker="o", ms=4,
-                label="resultante")
-        ax2.fill(phi_orig_c, Q_res_c, color="#1a1a1a", alpha=0.10)
-        ax2.set_title(f"{b.label} — max Q={Q_res.max():.0f} N", fontsize=9,
-                    fontweight="bold")
-        ax2.set_theta_zero_location("E")
-        ax2.set_theta_direction(1)
-        ax2.tick_params(labelsize=6)
-        ax2.yaxis.set_major_locator(plt.MaxNLocator(4))
-        ax2.legend(fontsize=8, frameon=False, loc="upper right",
-                bbox_to_anchor=(1.25, 1.1))
+        ax.yaxis.set_major_locator(plt.MaxNLocator(4))
 
     plt.tight_layout()
 

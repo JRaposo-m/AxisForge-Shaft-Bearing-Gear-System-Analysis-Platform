@@ -5,6 +5,8 @@ mesh/oneD/shaft/mesh_generation/mesh_1D.py
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import GearElement, ShaftSystem
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.SpurHelical_gear_system import SpurHelicalGearSystem
 from axisforge.core.materials import get_material
+from axisforge.core.loads import LoadPlane
+from axisforge.mesh.oneD.shaft.mesh_generation.mesh_grade import Grader
 from axisforge.config import MESH_MIN_NODE_DIST_MM
 
 
@@ -25,38 +27,19 @@ class Mesh1D:
         gear-mesh loads already injected via SpurHelicalGearSystem.resolve().
     """
 
-    def __init__(self, shaft_system: ShaftSystem):
+    def __init__(
+        self,
+        shaft_system: ShaftSystem,
+        extra_mandatory: list[float] | None = None,
+    ):
         self.shaft_system = shaft_system
         self._x_nodes: list[float] | None = None
-        self._extra_mandatory: list[float] = []
+        self._extra_mandatory: list[float] = extra_mandatory or []
+        self._graders: list[tuple["Grader", str]] = [] 
 
     # ------------------------------------------------------------------
     # Mandatory node positions
     # ------------------------------------------------------------------
-
-    def add_mandatory_positions(self, xs: list[float]) -> None:
-        """
-        Adiciona posições x extra que devem obrigatoriamente cair num nó,
-        além das mandatórias estruturais (secções, bearings, gears, loads).
-
-        Usado pelo estudo de convergência de malha (mesh_refinement) para
-        injetar os candidatos de bisecção de um distributed_radial_load,
-        sem alterar o ShaftSystem nem o SimpleFEMSolver.
-
-        Cumulativo: chamadas sucessivas somam-se (útil para bisecção
-        nível a nível, em que cada nível é sobreconjunto do anterior).
-        Usa clear_mandatory_positions() para reiniciar.
-
-        Invalida o cache de x_nodes — a próxima leitura de .x_nodes
-        recalcula a malha incluindo as novas posições.
-        """
-        self._extra_mandatory.extend(xs)
-        self._x_nodes = None
-
-    def clear_mandatory_positions(self) -> None:
-        """Remove todas as posições extra adicionadas via add_mandatory_positions."""
-        self._extra_mandatory.clear()
-        self._x_nodes = None
 
     def _mandatory_positions(self) -> list[float]:
         """
@@ -94,9 +77,14 @@ class Mesh1D:
         # distributed radial loads — x_lo and x_hi are discontinuities in V(x)
         for ld in shaft_system.distributed_radial_loads:
             x_mandatory += [ld.x_lo, ld.x_hi]
+            x_mandatory.append(ld.centroid(LoadPlane.XY))
+            x_mandatory.append(ld.centroid(LoadPlane.XY))
 
         # extra positions injected externally (e.g. mesh convergence study)
         x_mandatory += self._extra_mandatory
+
+        for grader, grade in self._graders:
+            x_mandatory += grader.get_grade(grade)
 
         return x_mandatory
 
@@ -131,3 +119,43 @@ class Mesh1D:
     @property
     def n_nodes(self) -> int:
         return len(self.x_nodes)
+
+    def show_nodes(self, print_output: bool = True) -> list[tuple[int, float]]:
+        """
+        Return a numbered list of all node positions in the current mesh.
+
+        Parameters
+        ----------
+        print_output : if True, prints the node table to stdout
+
+        Returns
+        -------
+        list of (node_index, x_position_mm) tuples
+        """
+        nodes = self.x_nodes
+        result = [(i, x) for i, x in enumerate(nodes)]
+
+        if print_output:
+            print(f"Mesh1D — {len(nodes)} nodes")
+            print("-" * 35)
+            for i, x in result:
+                print(f"  node {i:>3d}  :  {x:.4f} mm")
+            print("-" * 35)
+
+        return result
+
+    def add_grader(self, grader: "Grader", grade: str) -> None:
+        """
+        Inject a Grader + grade level as mandatory nodes.
+
+        Call AFTER the base mesh is built (x_nodes must already exist
+        so the Grader was constructed with a valid base node set).
+        Invalidates the node cache — next .x_nodes call rebuilds.
+        """
+        self._graders.append((grader, grade))
+        self._x_nodes = None
+
+    def clear_graders(self) -> None:
+        """Remove all injected graders. Invalidates cache."""
+        self._graders.clear()
+        self._x_nodes = None

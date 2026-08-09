@@ -104,85 +104,101 @@ class SimpleFEMSolver:
     # Public entry point
     # ------------------------------------------------------------------
 
-    def solve(self, shaft_system: ShaftSystem, mesh: Mesh1D | None = None) -> None:
-        shaft_system.validate_or_raise()
+    def solve(self, 
+                shaft_system: ShaftSystem,
+                extra_mandatory: list[float] | None = None) -> None:
+            shaft_system.validate_or_raise()
 
-        if mesh is None:
-            mesh = self._build_mesh(shaft_system)
-        x_nodes = mesh.x_nodes
-        elements = Elem.from_mesh(mesh)
+            mesh = Mesh1D(shaft_system, extra_mandatory=extra_mandatory or [])
+            x_nodes = mesh.x_nodes
+            elements = Elem.from_mesh(mesh)
 
-        K = self._builder.build_stiffness_matrix(mesh, elements)
+            self.K = self._builder.build_stiffness_matrix(mesh, elements)
 
-        free_dofs, constrained_dofs = self._boundary_dofs(x_nodes, shaft_system)
-        K_red = K[np.ix_(free_dofs, free_dofs)]
-        self._check_conditioning(K_red)
+            free_dofs, constrained_dofs = self._boundary_dofs(x_nodes, shaft_system)
+            K_red = self.K[np.ix_(free_dofs, free_dofs)]
+            self._check_conditioning(K_red)
 
-        # --- bending / axial: one load case per Load object, superposed ---
-        load_cases = self._build_load_cases(shaft_system)
+            load_cases = self._build_load_cases(shaft_system)
+            n_dofs = 3 * len(x_nodes)
 
-        n_dofs = 3 * len(x_nodes)
-        d_contributions = []
-        d_total_xz = np.zeros(n_dofs)
-        d_total_xy = np.zeros(n_dofs)
+            # --- assemble global load vectors ---
+            f_xz_ext = np.zeros(n_dofs)
+            f_xy_ext = np.zeros(n_dofs)
 
-        for lc in load_cases:
-            f_xz = self._assemble_load_vector(x_nodes, lc["radial_xz"],
-                                               lc["axial"], lc["moments_xz"])
-            f_xy = self._assemble_load_vector(x_nodes, lc["radial_xy"],
-                                               [], lc["moments_xy"])  # no axial here in order to have only 1 axial in the total ShaftSystem
+            for lc in load_cases:
+                f_xz = self._assemble_load_vector(x_nodes, lc["radial_xz"],
+                                                lc["axial"], lc["moments_xz"])
+                f_xy = self._assemble_load_vector(x_nodes, lc["radial_xy"],
+                                                [], lc["moments_xy"])
 
-            if lc.get("distributed_xz"):
-                for d in lc["distributed_xz"]:
-                    f_xz += self._assemble_distributed_load_vector(
-                        x_nodes, elements, d["x_lo"], d["x_hi"], d["q"],
-                        theta_fn=d.get("theta_fn"))
+                if lc.get("distributed_xz"):
+                    for d in lc["distributed_xz"]:
+                        f_xz += self._assemble_distributed_load_vector(
+                            x_nodes, elements, d["x_lo"], d["x_hi"], d["q"],
+                            theta_fn=d.get("theta_fn"))
 
+                if lc.get("distributed_xy"):
+                    for d in lc["distributed_xy"]:
+                        f_xy += self._assemble_distributed_load_vector(
+                            x_nodes, elements, d["x_lo"], d["x_hi"], d["q"],
+                            theta_fn=d.get("theta_fn"))
 
-            if lc.get("distributed_xy"):
-                for d in lc["distributed_xy"]:
-                    f_xy += self._assemble_distributed_load_vector(
-                        x_nodes, elements, d["x_lo"], d["x_hi"], d["q"],
-                        theta_fn=d.get("theta_fn"))
-                                        
-            d_xz = np.zeros(n_dofs)
-            d_xy = np.zeros(n_dofs)
-            d_xz[free_dofs] = np.linalg.solve(K_red, f_xz[free_dofs])
-            d_xy[free_dofs] = np.linalg.solve(K_red, f_xy[free_dofs])
+                f_xz_ext += f_xz
+                f_xy_ext += f_xy
 
-            d_contributions.append({
-                "label": lc["label"], "source": lc["source"],
-                "d_xz": d_xz, "d_xy": d_xy,
-            })
-            d_total_xz += d_xz
-            d_total_xy += d_xy
+            # --- global solve (single system) ---
+            d_total_xz = np.zeros(n_dofs)
+            d_total_xy = np.zeros(n_dofs)
+            d_total_xz[free_dofs] = np.linalg.solve(K_red, f_xz_ext[free_dofs])
+            d_total_xy[free_dofs] = np.linalg.solve(K_red, f_xy_ext[free_dofs])
 
-        f_xz_total = K @ d_total_xz
-        f_xy_total = K @ d_total_xy
+            f_xz_total = self.K @ d_total_xz
+            f_xy_total = self.K @ d_total_xy
 
-        # --- torsion: pure statics, same x_nodes, no DOF ---
-        T_total, tau_total, torsion_contributions = self._solve_torsion(
-            shaft_system, x_nodes)
+            # --- NOTE: per-load-case superposition (kept for reference) ---
+            # d_contributions = []
+            # d_total_xz = np.zeros(n_dofs)
+            # d_total_xy = np.zeros(n_dofs)
+            # for lc in load_cases:
+            #     f_xz = assemble(lc["radial_xz"], lc["axial"], lc["moments_xz"])
+            #     f_xy = assemble(lc["radial_xy"], [], lc["moments_xy"])
+            #     d_xz = np.zeros(n_dofs)
+            #     d_xy = np.zeros(n_dofs)
+            #     d_xz[free_dofs] = solve(K_red, f_xz[free_dofs])
+            #     d_xy[free_dofs] = solve(K_red, f_xy[free_dofs])
+            #     d_contributions.append({"label": lc["label"], "source": lc["source"],
+            #                             "d_xz": d_xz, "d_xy": d_xy})
+            #     d_total_xz += d_xz
+            #     d_total_xy += d_xy
+            # Superposition is numerically equivalent to the global solve above.
+            # Restore if per-load traceability in diagrams is needed.
 
-        # --- publish everything as public attributes ---
-        self.x_nodes = x_nodes
-        self.elements = elements
-        self.free_dofs = free_dofs
-        self.constrained_dofs = constrained_dofs
+            # --- torsion ---
+            T_total, tau_total, torsion_contributions = self._solve_torsion(
+                shaft_system, x_nodes)
 
-        self.d_total_xz = d_total_xz
-        self.d_total_xy = d_total_xy
-        self.f_xz_total = f_xz_total
-        self.f_xy_total = f_xy_total
+            # --- publish ---
+            self.x_nodes          = x_nodes
+            self.elements         = elements
+            self.free_dofs        = free_dofs
+            self.constrained_dofs = constrained_dofs
 
-        self.f_xz_reaction = f_xz_total - f_xz
-        self.f_xy_reaction = f_xy_total - f_xy
+            self.f_xz_ext         = f_xz_ext
+            self.f_xy_ext         = f_xy_ext
 
-        self.d_contributions = d_contributions
+            self.d_total_xz       = d_total_xz
+            self.d_total_xy       = d_total_xy
+            self.f_xz_total       = f_xz_total
+            self.f_xy_total       = f_xy_total
 
-        self.T_total = T_total
-        self.tau_total = tau_total
-        self.torsion_contributions = torsion_contributions
+            self.f_xz_reaction    = f_xz_total - f_xz_ext
+            self.f_xy_reaction    = f_xy_total - f_xy_ext
+
+            self.d_contributions  = None   # disabled — see NOTE above
+            self.T_total          = T_total
+            self.tau_total        = tau_total
+            self.torsion_contributions = torsion_contributions
 
     # ------------------------------------------------------------------
     # Load-case construction (decomposes RadialLoad/ExternalMoment by plane)
@@ -389,17 +405,11 @@ class SimpleFEMSolver:
         gear_label = label.split(":")[0]
         return gear_label in self._distribute_labels
 
-    def _build_mesh(self, shaft_system: ShaftSystem) -> Mesh1D:
-        """
-        Hook de construção da malha. Por omissão devolve uma Mesh1D "limpa".
-
-        Subclasses (ex.: estudos de convergência de malha, ou testes de
-        validação que precisam de forçar nós extra num intervalo de carga
-        distribuída) podem sobrepor este método para chamar
-        mesh.add_mandatory_positions(...) antes de devolver a malha —
-        sem tocar em mais nada do solve().
-        """
-        return Mesh1D(shaft_system)
+    def _find_node(x_nodes: list[float], x: float, tol: float = 1e-6) -> int:
+        for i, xi in enumerate(x_nodes):
+            if abs(xi - x) < tol:
+                return i
+        raise ValueError(f"Position {x:.4f} mm not found in x_nodes.")
     
 
     # ------------------------------------------------------------------
@@ -412,3 +422,73 @@ class SimpleFEMSolver:
                 "SimpleFEMSolver: reduced stiffness matrix is (near-)singular — "
                 "check bearing count/positions (mechanism / insufficient constraints)."
             )
+
+    # ------------------------------------------------------------------
+    # Return values for submodeling
+    # ------------------------------------------------------------------
+
+    def return_values(
+                    self,
+                    x_nodes: list[float],
+                    x: list[float]) -> dict[float, dict[str, float]]:
+        """
+        Extract nodal solution quantities for all nodes within the
+        interval [x[0], x[1]].
+
+        Parameters
+        ----------
+        x_nodes : mesh node positions of the current FEM solution
+        x       : [x_lo, x_hi] — interval bounds (must coincide with nodes)
+
+        Returns
+        -------
+        dict mapping each node position within [x_lo, x_hi] to its quantities:
+            {
+                x_i: {"v_xz": ..., "theta_xz": ..., "f1_xz": ..., "f2_xz": ...,
+                       "v_xy": ..., "theta_xy": ..., "f1_xy": ..., "f2_xy": ...},
+                ...
+            }
+
+        Notes
+        -----
+        v     : transverse displacement   [mm]
+        theta : rotation                  [rad]
+        f1    : nodal transverse force    [N]
+        f2    : nodal moment              [N·mm]
+
+        Raises
+        ------
+        RuntimeError if solve() has not been called yet.
+        ValueError   if x does not contain exactly two positions.
+        """
+        if self.d_total_xz is None:
+            raise RuntimeError(
+                "return_values() called before solve(). "
+                "Call solver.solve(shaft_system) first."
+            )
+
+        if len(x) != 2:
+            raise ValueError(
+                f"x must contain exactly [x_lo, x_hi], got {len(x)} values."
+            )
+
+        x_lo, x_hi = x[0], x[1]
+        result: dict[float, dict[str, float]] = {}
+
+        for i, xi in enumerate(x_nodes):
+            if x_lo - SOLVER_TOLERANCE <= xi <= x_hi + SOLVER_TOLERANCE:
+                result[xi] = {
+                    "u":            float(self.d_total_xz[3 * i]),
+                    "v_xz":         float(self.d_total_xz[3 * i + 1]),
+                    "theta_xz":     float(self.d_total_xz[3 * i + 2]),
+                    "f_u":          float(self.f_xy_total[3 * i]),
+                    "f_v_xz":       float(self.f_xz_total[3 * i + 1]),
+                    "f_theta_xz":   float(self.f_xz_total[3 * i + 2]),
+                    "v_xy":         float(self.d_total_xy[3 * i + 1]),
+                    "theta_xy":     float(self.d_total_xy[3 * i + 2]),
+                    "f1_xy":        float(self.f_xy_total[3 * i + 1]),
+                    "f2_xy":        float(self.f_xy_total[3 * i + 2]),
+                }
+
+        return result
+        

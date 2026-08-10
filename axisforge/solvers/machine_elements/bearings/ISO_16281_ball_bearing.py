@@ -51,12 +51,32 @@ seat, projected onto the plane of the resultant force:
 psi_xz / psi_xy are pre-computed by ShaftResultsReader and stored in
 BearingNodeData — this solver never accesses FEM arrays directly.
 
+Rolling element capacity — ISO/TS 16281 §4.3.1
+----------------------------------------------
+Q_ci / Q_ce (per-element dynamic capacity) are computed from the basic
+dynamic load ratings Cr (radial) or Ca (axial), supplied externally by
+the ISO 281 solver. This module never resolves Cr or Ca internally.
+
+    §4.3.1.2  Radial ball bearings          — eq.(19), (20)
+    §4.3.1.3  Thrust ball bearings, α ≠ 90° — eq.(21), (22)
+    §4.3.1.4  Thrust ball bearings, α = 90° — eq.(23), (24)
+
+Dynamic equivalent rolling element loads — ISO/TS 16281 §4.3.2
+--------------------------------------------------------------
+Q_ei / Q_ee from the load distribution, eq.(25)–(28).
+Convention: inner ring rotating (eq.25/27) — standard shaft application.
+
+§4.3.3 and beyond (L_10r, P_ref, L_nmr) are implemented in the
+ISO 281 solver, which consumes Q_ci, Q_ce, Q_ei, Q_ee as inputs.
+
 References
 ----------
-  ISO/TS 16281:2008 §4.2, eq. (12)-(15)
+  ISO/TS 16281:2008 §4.2, eq. (12)-(15); §4.3.1, eq.(19)-(28)
   Harris & Kotzalas, "Rolling Bearing Analysis", 5th ed., Ch.6
 """
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 import numpy as np
 from scipy.optimize import root, brentq
@@ -69,6 +89,42 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analys
     BearingNodeData,
 )
 from axisforge.config import NR_TOL, NR_MAX_ITER
+
+
+# ===========================================================================
+# Module-level helpers — §4.3.1 geometry bracket
+# ===========================================================================
+
+def _geometry_bracket(gamma: float, ri: float, re: float, Dw: float) -> float:
+    """
+    Common geometry factor for Q_ci / Q_ce (ISO/TS 16281 §4.3.1.2–.3).
+
+    Computes the full bracket ready for (1 + bracket):
+
+        bracket = 1.044 · ((1−γ)/(1+γ))^1.72 · [ (ri/re) · ((2re−Dw)/(2ri−Dw)) ]^0.41
+
+    Note: ^0.41 applies ONLY to the groove radii ratio term, not to the full product.
+    """
+    radii_ratio = (ri / re) * ((2.0 * re - Dw) / (2.0 * ri - Dw))
+    return (
+        1.044
+        * ((1.0 - gamma) / (1.0 + gamma)) ** 1.72
+        * radii_ratio ** 0.41
+    )
+
+
+def _check_geometry(ri: float, re: float, Dw: float, label: str) -> None:
+    """Guard: denominators in geometry bracket must be positive."""
+    if 2.0 * ri <= Dw:
+        raise ValueError(
+            f"Bearing '{label}': 2·ri ({2*ri:.4f}) ≤ Dw ({Dw:.4f}). "
+            f"Inner groove radius too small — check geometry."
+        )
+    if 2.0 * re <= Dw:
+        raise ValueError(
+            f"Bearing '{label}': 2·re ({2*re:.4f}) ≤ Dw ({Dw:.4f}). "
+            f"Outer groove radius too small — check geometry."
+        )
 
 
 # ===========================================================================
@@ -251,6 +307,324 @@ class BearingStiffnessState:
             Fr_xz=Fr_xz, delta_r_xz=delta_r_xz, Kr_xz=Kr_xz,
             Fr_xy=Fr_xy, delta_r_xy=delta_r_xy, Kr_xy=Kr_xy,
             Fa=Fa, delta_a=delta_a, Ka=Ka, Ka_regime=regime,
+        )
+
+
+# ===========================================================================
+# RollingElementCapacity — ISO/TS 16281 §4.3.1
+# ===========================================================================
+
+@dataclass(frozen=True)
+class RollingElementCapacity:
+    """
+    Per-element dynamic load capacity Q_ci / Q_ce for ball bearings.
+    ISO/TS 16281 §4.3.1.2 (radial) and §4.3.1.3 (thrust, α ≠ 90°) and
+    §4.3.1.4 (thrust, α = 90°).
+
+    Instantiate via the factory classmethods — do not call __init__ directly.
+
+    Cr / Ca are supplied externally by the ISO 281 solver; this module
+    never resolves them internally.
+
+    Attributes
+    ----------
+    label         : bearing label
+    Q_ci          : inner ring / shaft washer capacity per element [N]
+    Q_ce          : outer ring / housing washer capacity per element [N]
+    bearing_class : "radial" | "thrust_nonzero_alpha" | "thrust_90deg"
+    Cr            : dynamic radial load rating used [N]  (radial only; None otherwise)
+    Ca            : dynamic axial load rating used [N]   (thrust only; None otherwise)
+
+    References
+    ----------
+    ISO/TS 16281:2008 §4.3.1.2 eq.(19)–(20)
+                      §4.3.1.3 eq.(21)–(22)
+                      §4.3.1.4 eq.(23)–(24)
+    """
+    label         : str
+    Q_ci          : float
+    Q_ce          : float
+    bearing_class : str
+    Cr            : float | None
+    Ca            : float | None
+
+    # ------------------------------------------------------------------
+    # Factory — §4.3.1.2  Radial ball bearings
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def radial(cls,
+               bearing: "Bearing",
+               Cr: float,
+               label: str = "") -> "RollingElementCapacity":
+        """
+        Q_ci / Q_ce for a radial ball bearing — ISO/TS 16281 §4.3.1.2.
+
+        Requires bearing.setup_internal_geometry() already called
+        (ri, re, Dw, Dpw, Z, alpha_0 must be set).
+
+        Parameters
+        ----------
+        bearing : Bearing
+        Cr      : basic dynamic radial load rating [N]  — from ISO 281 catalogue
+        label   : identifier (defaults to bearing.label)
+        """
+        Z       = bearing.Z
+        alpha_i = bearing.alpha_0
+        ri      = bearing.ri
+        re      = bearing.re
+        Dw      = bearing.Dw
+        Dpw     = bearing.Dpw
+        gamma   = Dw * np.cos(alpha_i) / Dpw   # ISO/TS 16281 eq.(4)
+
+        _lbl = label or bearing.label
+        _check_geometry(ri, re, Dw, _lbl)
+
+        bracket      = _geometry_bracket(gamma, ri, re, Dw)
+        cos_alpha_07 = np.cos(alpha_i) ** 0.7
+
+        # eq.(19) — inner ring
+        Q_ci = (Cr / (0.407 * Z * cos_alpha_07)) \
+               * (1.0 + (bracket) ** (10.0 / 3.0)) ** (3.0 / 10.0)
+
+        # eq.(20) — outer ring
+        Q_ce = (Cr / (0.389 * Z * cos_alpha_07)) \
+               * (1.0 + (bracket) ** (-10.0 / 3.0)) ** (3.0 / 10.0)
+
+        return cls(
+            label=_lbl,
+            Q_ci=Q_ci, Q_ce=Q_ce,
+            bearing_class="radial",
+            Cr=Cr, Ca=None,
+        )
+
+    @classmethod
+    def radial_debug(cls,
+                     bearing: "Bearing",
+                     Cr: float,
+                     label: str = "") -> None:
+        """
+        Prints all intermediate values for Q_ci / Q_ce (§4.3.1.2).
+        Validation only — not for production.
+        """
+        Z            = bearing.Z
+        alpha_i      = bearing.alpha_0
+        ri           = bearing.ri
+        re           = bearing.re
+        Dw           = bearing.Dw
+        Dpw          = bearing.Dpw
+        gamma        = Dw * np.cos(alpha_i) / Dpw
+        radii_ratio  = (ri / re) * ((2.0 * re - Dw) / (2.0 * ri - Dw))
+        bracket      = _geometry_bracket(gamma, ri, re, Dw)
+        cos_alpha_07 = np.cos(alpha_i) ** 0.7
+        inner_term   = bracket ** (10.0 / 3.0)
+        outer_term   = bracket ** (-10.0 / 3.0)
+        denom_ci     = 0.407 * Z * cos_alpha_07
+        denom_ce     = 0.389 * Z * cos_alpha_07
+        factor_ci    = (1.0 + inner_term) ** 0.3
+        factor_ce    = (1.0 + outer_term) ** 0.3
+        Q_ci         = (Cr / denom_ci) * factor_ci
+        Q_ce         = (Cr / denom_ce) * factor_ce
+        _lbl         = label or bearing.label
+
+        print(f"\n  ┌── Q_ci/Q_ce debug — {_lbl} {'─'*30}┐")
+        print(f"  │  INPUT")
+        print(f"  │    Cr          = {Cr:.2f} N")
+        print(f"  │    Z           = {Z}")
+        print(f"  │    alpha_0     = {np.degrees(alpha_i):.6f}°")
+        print(f"  │    ri          = {ri:.6f} mm")
+        print(f"  │    re          = {re:.6f} mm")
+        print(f"  │    Dw          = {Dw:.6f} mm")
+        print(f"  │    Dpw         = {Dpw:.6f} mm")
+        print(f"  │  INTERMEDIATE")
+        print(f"  │    gamma            = {gamma:.8f}   [Dw·cos(α₀)/Dpw]")
+        print(f"  │    radii_ratio      = {radii_ratio:.8f}   [ri/re·(2re−Dw)/(2ri−Dw)]")
+        print(f"  │    bracket          = {bracket:.8f}   [1.044·(γ-term)^1.72·ratio^0.41]")
+        print(f"  │    cos(α₀)^0.7     = {cos_alpha_07:.8f}")
+        print(f"  │    bracket^(+10/3) = {inner_term:.8f}   → Q_ci eq.(19)")
+        print(f"  │    bracket^(−10/3) = {outer_term:.8f}   → Q_ce eq.(20)")
+        print(f"  │  CAPACITY")
+        print(f"  │    denom_ci  = 0.407·{Z}·{cos_alpha_07:.6f} = {denom_ci:.6f}")
+        print(f"  │    denom_ce  = 0.389·{Z}·{cos_alpha_07:.6f} = {denom_ce:.6f}")
+        print(f"  │    factor_ci = (1 + {inner_term:.6f})^0.3 = {factor_ci:.8f}")
+        print(f"  │    factor_ce = (1 + {outer_term:.6f})^0.3 = {factor_ce:.8f}")
+        print(f"  │    Q_ci      = {Cr:.2f}/{denom_ci:.4f} · {factor_ci:.6f} = {Q_ci:.4f} N")
+        print(f"  │    Q_ce      = {Cr:.2f}/{denom_ce:.4f} · {factor_ce:.6f} = {Q_ce:.4f} N")
+        print(f"  └{'─'*58}┘")
+
+    # ------------------------------------------------------------------
+    # Factory — §4.3.1.3  Thrust ball bearings, α ≠ 90°
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def thrust_nonzero_alpha(cls,
+                              bearing: "Bearing",
+                              Ca: float,
+                              label: str = "") -> "RollingElementCapacity":
+        """
+        Q_ci / Q_ce for a thrust ball bearing with α ≠ 90° — eq.(21)–(22).
+
+        Parameters
+        ----------
+        bearing : Bearing   (alpha_0 must be set via setup_internal_geometry)
+        Ca      : basic dynamic axial load rating [N]   — from ISO 281 catalogue
+        label   : identifier
+        """
+        Z      = bearing.Z
+        alpha  = bearing.alpha_0
+        ri     = bearing.ri
+        re     = bearing.re
+        Dw     = bearing.Dw
+        Dpw    = bearing.Dpw
+        gamma  = Dw * np.cos(alpha) / Dpw
+
+        _lbl = label or bearing.label
+        _check_geometry(ri, re, Dw, _lbl)
+
+        bracket = _geometry_bracket(gamma, ri, re, Dw)
+
+        # eq.(21) — inner ring / shaft washer
+        Q_ci = (Ca / (Z * np.sin(alpha))) \
+               * (1.0 + (bracket) ** (10.0 / 3.0)) ** (3.0 / 10.0)
+
+        # eq.(22) — outer ring / housing washer
+        Q_ce = (Ca / (Z * np.sin(alpha))) \
+               * (1.0 + (bracket) ** (-10.0 / 3.0)) ** (3.0 / 10.0)
+
+        return cls(
+            label=_lbl,
+            Q_ci=Q_ci, Q_ce=Q_ce,
+            bearing_class="thrust_nonzero_alpha",
+            Cr=None, Ca=Ca,
+        )
+
+    # ------------------------------------------------------------------
+    # Factory — §4.3.1.4  Thrust ball bearings, α = 90°
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def thrust_90deg(cls,
+                     bearing: "Bearing",
+                     Ca: float,
+                     label: str = "") -> "RollingElementCapacity":
+        """
+        Q_ci / Q_ce for a thrust ball bearing with α = 90° — eq.(23)–(24).
+
+        At α = 90°: cos(α) = 0 → γ = 0; geometry bracket collapses to
+        groove radii ratio only (no γ terms).
+
+        Parameters
+        ----------
+        bearing : Bearing   (ri, re, Dw, Z must be set)
+        Ca      : basic dynamic axial load rating [N]   — from ISO 281 catalogue
+        label   : identifier
+        """
+        Z   = bearing.Z
+        ri  = bearing.ri
+        re  = bearing.re
+        Dw  = bearing.Dw
+
+        _lbl = label or bearing.label
+        _check_geometry(ri, re, Dw, _lbl)
+
+        # γ = 0 → bracket reduces to groove ratio only
+        ratio_D = (2.0 * re - Dw) / (2.0 * ri - Dw)
+        bracket = (ri / re) * ratio_D
+
+        # eq.(23) — shaft washer
+        Q_ci = (Ca / Z) * (1.0 + (bracket ** 0.41) ** (10.0 / 3.0)) ** (3.0 / 10.0)
+
+        # eq.(24) — housing washer
+        Q_ce = (Ca / Z) * (1.0 + (bracket ** 0.41) ** (-10.0 / 3.0)) ** (3.0 / 10.0)
+
+        return cls(
+            label=_lbl,
+            Q_ci=Q_ci, Q_ce=Q_ce,
+            bearing_class="thrust_90deg",
+            Cr=None, Ca=Ca,
+        )
+
+
+# ===========================================================================
+# DynamicEquivalentRollingElementLoad — ISO/TS 16281 §4.3.2
+# ===========================================================================
+
+@dataclass(frozen=True)
+class DynamicEquivalentRollingElementLoad:
+    """
+    Dynamic equivalent rolling element loads Q_ei / Q_ee.
+    ISO/TS 16281 §4.3.2, eq.(25)–(28).
+
+    Convention
+    ----------
+    Inner ring rotating relative to load  → eq.(25): Q_ei = (1/Z · ΣQ_j³)^(1/3)
+    Inner ring stationary relative to load → eq.(26): Q_ei = (1/Z · ΣQ_j^(10/3))^(3/10)
+    Outer ring stationary relative to load → eq.(27): Q_ee = (1/Z · ΣQ_j^(10/3))^(3/10)
+    Outer ring rotating relative to load   → eq.(28): Q_ee = (1/Z · ΣQ_j³)^(1/3)
+
+    Default (shaft rotating, housing fixed):
+        inner_rotating = True   → eq.(25) for Q_ei
+        outer_rotating = False  → eq.(27) for Q_ee
+
+    Note: for a normal load distribution the difference between rotating
+    and stationary inner ring results is < 2% (ISO/TS 16281 §4.3.2).
+
+    Attributes
+    ----------
+    label          : bearing label
+    Q_ei           : dynamic equivalent load, inner ring [N]
+    Q_ee           : dynamic equivalent load, outer ring [N]
+    inner_rotating : bool — True if inner ring rotates relative to load
+    outer_rotating : bool — True if outer ring rotates relative to load
+    Q_j            : per-element contact forces [N],  shape (Z,)
+    """
+    label          : str
+    Q_ei           : float
+    Q_ee           : float
+    inner_rotating : bool
+    outer_rotating : bool
+    Q_j            : np.ndarray
+
+    @classmethod
+    def from_distribution(cls,
+                           bearing: "Bearing",
+                           result: "LoadDistributionResult",
+                           inner_rotating: bool = True,
+                           outer_rotating: bool = False,
+                           label: str = "") -> "DynamicEquivalentRollingElementLoad":
+        """
+        Compute Q_ei / Q_ee from a converged LoadDistributionResult.
+
+        Parameters
+        ----------
+        bearing        : Bearing  (cp must be set via compute_hertz_point_contact)
+        result         : LoadDistributionResult
+        inner_rotating : True → inner ring rotates relative to load (typical)
+        outer_rotating : True → outer ring rotates relative to load (rare)
+        label          : identifier (defaults to bearing.label)
+        """
+        Q_j = bearing.cp * np.maximum(result.delta_j, 0.0) ** 1.5
+        Z   = float(bearing.Z)
+
+        # Inner ring — eq.(25) rotating, eq.(26) stationary
+        if inner_rotating:
+            Q_ei = (np.sum(Q_j ** 3) / Z) ** (1.0 / 3.0)                   # eq.(25)
+        else:
+            Q_ei = (np.sum(Q_j ** (10.0 / 3.0)) / Z) ** (3.0 / 10.0)      # eq.(26)
+
+        # Outer ring — eq.(27) stationary, eq.(28) rotating
+        if not outer_rotating:
+            Q_ee = (np.sum(Q_j ** (10.0 / 3.0)) / Z) ** (3.0 / 10.0)      # eq.(27)
+        else:
+            Q_ee = (np.sum(Q_j ** 3) / Z) ** (1.0 / 3.0)                   # eq.(28)
+
+        return cls(
+            label=label or bearing.label,
+            Q_ei=Q_ei,
+            Q_ee=Q_ee,
+            inner_rotating=inner_rotating,
+            outer_rotating=outer_rotating,
+            Q_j=Q_j,
         )
 
 

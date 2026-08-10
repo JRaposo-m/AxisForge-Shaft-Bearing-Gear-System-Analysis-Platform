@@ -222,7 +222,7 @@ class Bearing:
         self.nu      = nu
         self.A       = ri + re - Dw
         self.alpha_0 = np.arccos(1.0 - s / (2.0 * self.A))
-        self.Ri      = (Dpw / 2.0) - (Dw / 2.0) * np.cos(self.contact_angle) 
+        self.Ri = self.Dpw / 2.0 + (self.ri - self.Dw / 2.0) * np.cos(self.alpha_0)
         self.phi_j   = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
 

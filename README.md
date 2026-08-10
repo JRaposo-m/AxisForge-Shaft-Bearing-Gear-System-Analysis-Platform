@@ -1,557 +1,462 @@
-# AxisForge — Shaft–Bearing–Gear System Analysis Platform
+# AxisForge
 
-AxisForge is an open-source, modular Python platform for the static, structural, and tribological analysis of shaft–bearing–gear mechanical systems. It prioritises transparency of calculation, modular extensibility, and traceable decision support over comprehensive feature breadth.
+**Modular CAE-style platform for mechanical transmission system analysis.**
 
-Gear geometry and force calculation is implemented natively according to ISO 21771. The GEARpie reference cases C14 and H501 are used exclusively for validation — AxisForge has no runtime dependency on GEARpie.
-
----
-
-## Axis Convention
-
-```
-x   = axial axis; datum = left end of shaft; increases rightward
-XZ  = horizontal plane  (Wt gear force, lateral loads)
-XY  = vertical plane    (Wr gear force, opposed direction of gravity)
-
-Positive radial load: Downard (XY), forward (XZ)
-      - The loads are inputed as positive however in the statics.py they are inported as -l.magnitude and are treated as the opposite direction for the rest of the class
-Reactions:  sign determined by equilibrium equations (not forced positive)
-Torsion T:  accumulates left-to-right; positive = CCW when viewed from +x
-```
-
-All internal arrays use this convention. Documented in `models/statics_result.py`. Must not be changed without updating all solvers and tests.
+AxisForge is a deterministic, solver-centric engineering platform for the analysis of shaft–bearing–gear systems. It is built around physical first principles and traceable standards — every quantity is explainable, every result linked to an equation and a reference. Solvers are fully independent of any GUI layer, expose all intermediate quantities for inspection, and are validated against textbook and standard reference cases.
 
 ---
 
-## System Architecture
+## Table of Contents
 
-### Directory Structure
+- [Overview](#overview)
+- [Stack](#stack)
+- [Repository Layout](#repository-layout)
+- [Analysis Pipeline](#analysis-pipeline)
+- [Module Reference](#module-reference)
+  - [core/machine_elements — Shaft](#coremachine_elements--shaft)
+  - [core/machine_elements — Bearings](#coremachine_elements--bearings)
+  - [core/machine_elements — Gears](#coremachine_elements--gears)
+  - [core/mechanical_system — Systems](#coremechanical_system--systems)
+  - [core/mechanical_system — Gear Meshing](#coremechanical_system--gear-meshing)
+  - [core — Loads](#core--loads)
+  - [core — Materials](#core--materials)
+  - [mesh — 1D Shaft Mesh](#mesh--1d-shaft-mesh)
+  - [solvers — Shaft FEM](#solvers--shaft-fem)
+  - [solvers — Bearings (ISO/TS 16281)](#solvers--bearings-isots-16281)
+  - [solvers — Gears](#solvers--gears)
+  - [models — Result Containers](#models--result-containers)
+  - [ui — Interactive Runner](#ui--interactive-runner)
+- [Design Principles](#design-principles)
+- [Roadmap](#roadmap)
+- [References](#references)
+
+---
+
+## Overview
+
+The platform targets the complete analysis pipeline of a multi-shaft parallel-axis transmission:
+
+- Static load distribution across multi-shaft gear trains
+- 1D FEM shaft deflection and internal force recovery (two-plane)
+- Internal rolling element load distribution in ball bearings
+- Bearing rating life inputs (per-element capacities and equivalent loads)
+- Spur / helical / internal gear geometry and mesh force integration
+- Planetary (epicyclic) train kinematics and ideal torque distribution
+- Fatigue analysis and failure susceptibility assessment *(future phases)*
+
+---
+
+## Stack
+
+- **Python 3.11+**
+- NumPy · SciPy · matplotlib
+- PySide6 *(GUI — future)*
+- SQLite *(data persistence — future)*
+- pytest
+
+Units are SI-consistent internally: **mm** for lengths, **N** for forces, **N·mm** for moments (torque propagates in **N·m** through the gear system and is converted at the boundary), **MPa** for stresses, **degrees** for input/output angles (**radians** internally).
+
+---
+
+## Repository Layout
 
 ```
 axisforge/
-│
-├── core/                          # Domain model — system entities and data structures
-│   ├── __init__.py
-│   ├── shaft.py                   # Shoulder, ShaftSection, Shaft
-│   ├── components.py              # Bearing, BearingType, GearElement
-│   ├── loads.py                   # RadialLoad, AxialLoad, TorqueLoad, ExternalMoment, LoadPlane
-│   ├── system.py                  # MechanicalSystem — top-level assembly container
-│   ├── materials.py               # Material, embedded library (S355, 42CrMo4, AISI 1045, AISI 4340)
-│   └── tolerances.py              # ISO 286 fit and tolerance data structures — Phase 3
-│
-├── models/                        # Result dataclasses — output of solvers
-│   ├── statics_result.py          # StaticsResult
-│   ├── stress_result.py           # StressResult, CriticalSection
-│   ├── bearing_result.py          # BearingLifeResult
-│   ├── gear_result.py             # GearGeometryResult, GearForceResult, GearStrengthResult
-│   └── system_report.py           # Aggregator of all results
-│
-├── solvers/                       # Analytical engines — organised by mechanical element
-│   ├── __init__.py                # Public interface — all solvers importable from here
-│   │
-│   ├── shaft/                     # Shaft analysis solvers
-│   │   ├── __init__.py
-│   │   ├── utils.py               # ka, kb, kc, kd, ke, kt, neuber, kf helpers — stress helpers internos
-│   │   ├── statics.py             # StaticsSolver — reactions, V(x), M(x), T(x)
-│   │   ├── static_failure.py      # StaticFailureSolver — Von Mises (DE), Tresca (MSS)
-│   │   ├── stress.py              # StressSolver — Kf/Kfs, Marin Se', Goodman, ASME-Elliptic
-│   │   ├── deflection.py          # DeflectionSolver — FEM-1D — Phase 4
-│   │   └── critical_speed.py      # CriticalSpeedSolver — Phase 5
-│   │
-│   ├── bearings/                  # Bearing analysis solvers
-│   │   ├── __init__.py
-│   │   ├── life.py                # BearingLifeSolver — L10h, C/P, S0 (ISO 281)
-│   │   ├── friction.py            # FrictionSolver — M_rr, M_sl, M_seal, M_drag, P_loss, T_steady (SKF friction model)
-│   │   ├── arrangement.py         # ArrangementSolver — fixed/floating, O/X logic — Phase 4
-│   │   └── misalignment.py        # MisalignmentSolver — bearing angle from FEM deflection — Phase 4
-│   │
-│   ├── gears/                     # Gear analysis solvers
-│   │   ├── __init__.py
-│   │   ├── utils.py               # involute, solve_alpha_tw, contact_ratio_*, undercut_z_min, HAP, HFP
-│   │   ├── geometry.py            # GearSolver — MAAG geometry, Ft/Fr/Fa (ISO 21771)
-│   │   ├── strength.py            # GearStrengthSolver — σ_H, σ_F, KA/KV/KHβ/KHα (ISO 6336-2/3) — Phase 2
-│   │   ├── profile_shift.py       # ProfileShiftSolver — optimal x1/x2 calculation — Phase 2
-│   │   └── micropitting.py        # MicropittingSolver — Phase 4
-│   │
-│   └── lubrication/               # Lubrication and film solvers
-│       ├── __init__.py
-│       ├── film.py                # FilmSolver — Hamrock–Dowson h_min, Λ parameter — Phase 4
-│       ├── regime.py              # RegimeSolver — EHL / mixed / boundary classification — Phase 4
-│       ├── grease.py              # GreaseSolver — NLGI selection, relubrication interval — Phase 4
-│       └── cfd_interface.py       # CFDInterface — OpenFOAM case generation and result import — Phase 5
-│
-├── integrations/
-│   ├── skf_connector.py           # SKF catalogue query — Phase 3
-│   └── openfoam/                  # OpenFOAM bridge — Phase 5
-│       ├── case_generator.py      # AxisForge system → OpenFOAM case structure
-│       ├── mesh_builder.py        # Hertz contact geometry → polyMesh
-│       └── results_reader.py      # postProcessing/ → Λ_CFD, T_max, h_min
-│
-├── database/                      # Phase 3
-│   ├── skf_bearings.db
-│   ├── materials.db
-│   └── schema/
-│       ├── bearings_schema.sql
-│       └── materials_schema.sql
-│
-├── selectors/                     # Decision-support logic — Phase 3–5
-│   ├── bearing_selector.py        # Filter catalogue by load, speed, space
-│   ├── arrangement_advisor.py     # Fixed/floating, O/X arrangement — Phase 4
-│   ├── lubrication_advisor.py     # Grease/oil selection, viscosity grade — Phase 4
-│   └── failure_assessor.py        # Failure Likelihood Assessment — Phase 3+
-│
-├── ui/                            # PySide6 graphical interface — Phase 2
-│   ├── main_window.py
-│   ├── shaft_canvas.py
-│   ├── component_panel.py
-│   ├── properties_panel.py
-│   ├── results_panel.py
-│   └── dialogs/
-│       ├── bearing_selector.py
-│       └── section_editor.py
-│
-├── reports/                       # Phase 3
-│   ├── report_generator.py
-│   └── templates/
-│       └── standard_report.html
-│
-├── tests/
-│   ├── conftest.py
-│   ├── test_core/
-│   ├── test_solvers/
-│   │   ├── test_shaft/
-│   │   │   ├── test_statics.py
-│   │   │   ├── test_static_failure.py
-│   │   │   └── test_stress.py
-│   │   ├── test_bearings/
-│   │   │   └── test_life.py
-│   │   ├── test_gears/
-│   │   │   ├── test_geometry.py       # C14 and H501 validation cases
-│   │   │   └── test_strength.py
-│   │   └── test_lubrication/
-│   ├── test_integrations/
-│   └── fixtures/
-│       ├── sample_systems.py
-│       └── expected_results.py        # Reference values with source citations
-│
-├── axisforge_cli.py               # CLI entry point (Phase 1 deliverable)
-├── config.py
-├── requirements.txt
-└── pyproject.toml
+├── core/
+│   ├── loads.py
+│   ├── materials.py
+│   └── machine_elements/
+│       ├── Shaft/
+│       │   └── shaft.py                # Shoulder, ShaftSection, Shaft
+│       ├── Bearings/
+│       │   ├── bearing.py              # Bearing
+│       │   └── bearing_types.py        # BearingType
+│       └── Gears/
+│           └── Parallel_Axis_gears/
+│               ├── spur_helical_gear.py    # SpurHelicalGear
+│               └── internal_gear.py        # InternalGear
+│   └── mechanical_system/
+│       └── Parallel_Axis_systems/
+│           ├── systems/spur_helicoidal_system/
+│           │   ├── shaft_system.py             # GearElement, ShaftSystem
+│           │   └── SpurHelical_gear_system.py  # SpurHelicalMeshLink, SpurHelicalGearSystem
+│           ├── gear_meshing/
+│           │   ├── spur_helical_gear_meshing.py    # SpurHelicalGearMeshing
+│           │   ├── internal_gear_meshing.py        # InternalGearMeshing
+│           │   └── planetary_gear_meshing.py       # PlanetaryGearMeshing, PlanetaryKinematics
+│           └── schematic.py                # assembly visualisation
+├── mesh/
+│   └── oneD/shaft/
+│       ├── mesh_generation/
+│       │   ├── mesh_1D.py                  # Mesh1D
+│       │   ├── mesh_grade.py               # Grader
+│       │   └── mesh_convergence_study.py   # RichardsonGCI, MeshConvergenceStudy
+│       └── Elements/
+│           ├── elem.py                     # Elem
+│           └── Timoshenko_Selective_Integration/
+│               └── timoshenko.py           # TimoshenkoBeam
+├── solvers/
+│   └── machine_elements/
+│       ├── shaft/oneD_analysis/
+│       │   ├── build_stiffness_matrix.py       # StiffnessMatrixBuilder
+│       │   ├── FEM_solvers/
+│       │   │   ├── simple_fem_solver.py        # SimpleFEMSolver
+│       │   │   └── submodel_solver.py          # SubmodelSolver, SubmodelResult
+│       │   └── static/
+│       │       └── static_analysis.py          # BearingNodeData, ShaftResults,
+│       │                                       #   SimpleFEMResultsLibrary, ShaftResultsReader
+│       ├── bearings/
+│       │   └── ISO_16281_ball_bearing.py       # IterativeBearingFEMSolver + capacity classes
+│       └── gears/
+│           ├── geometry.py                     # GearSolver
+│           └── utils.py                        # geometry helpers
+├── models/
+│   ├── gear_result.py                      # GearGeometryResult, GearForceResult
+│   └── stress_result.py                    # CriticalSection, StressResult
+├── ui/
+│   └── runner.py                           # interactive section runner (PySide6)
+└── tests/
+    └── ...                                 # unit / regression / validation tests
 ```
 
-### Import Dependency Rule
-
-```
-ui/ → solvers/ → core/
-      models/  ← solvers/
-```
-
-`core/` imports NumPy and stdlib only. No PySide6, matplotlib, or database calls inside `core/` or `solvers/`. The `solvers/__init__.py` exposes the public interface — the rest of the application imports `from solvers import StaticsSolver`, not `from solvers.shaft.statics import StaticsSolver`. Internal reorganisation never propagates outward.
+> **Note on legacy modules:** an earlier flat layout (`core/shaft.py`, `core/components.py`, `core/system.py`) coexists with the current `core/machine_elements/` package. New development targets the `machine_elements` structure; the flat modules are retained for backward compatibility during migration.
 
 ---
 
-## Implementation Status
+## Analysis Pipeline
 
-| Module | Status | Notes |
-|---|---|---|
-| `core/shaft.py` | ✅ Complete | 209/209 tests, 98% coverage |
-| `core/components.py` | ✅ Complete | — |
-| `core/loads.py` | ✅ Complete | — |
-| `core/materials.py` | ✅ Complete | — |
-| `core/system.py` | ✅ Complete | — |
-| `models/statics_result.py` | ✅ Complete | — |
-| `solvers/shaft/statics.py` | ✅ Complete | 296/296 tests, ≥90% coverage |
-| `solvers/shaft/static_failure.py` | ✅ Complete | Von Mises (DE), Tresca (MSS) |
-| `solvers/shaft/stress.py` | 🟡 In progress | Auxiliary functions done; `solve()` next |
-| `solvers/gears/geometry.py` | ✅ Complete | ISO 21771; validated C14 <0.00%, H501 <0.5% |
-| `solvers/bearings/life.py` | 🔲 Phase 1 Week 8 | — |
-| `solvers/gears/strength.py` | 🔲 Phase 2 | ISO 6336-2/3 |
-| `solvers/gears/profile_shift.py` | 🔲 Phase 2 | Optimal x1/x2 |
-| `solvers/bearings/friction.py` | 🔲 Phase 3 | SKF friction model |
-| `solvers/shaft/deflection.py` | 🔲 Phase 4 | FEM-1D |
-| `solvers/bearings/misalignment.py` | 🔲 Phase 4 | Requires deflection |
-| `solvers/lubrication/` | 🔲 Phase 4 | Full lubrication module |
-| `integrations/openfoam/` | 🔲 Phase 5 | CFD bridge |
-| `ui/` | 🔲 Phase 2 | — |
-| `database/` | 🔲 Phase 3 | — |
-| `selectors/` | 🔲 Phase 3+ | — |
+The canonical solve sequence for one shaft:
 
----
+```python
+# 1. Assemble the multi-shaft gear system and resolve power flow
+gearbox = SpurHelicalGearSystem(shafts, links, label="drivetrain")
+gearbox.resolve(P_W, rpm_in, rotation_dir_source=1)
 
-## Module and Class Definitions
+# 2. Mesh the shaft (mandatory nodes + optional grading at gears)
+fem = SimpleFEMSolver()
+fem.solve(shaft_system, extra_mandatory=gear_grade_nodes)
 
-### `core/shaft.py`
+# 3. Post-process FEM into a results library
+ShaftResultsReader(fem, shaft_system).read(library)
 
-**`Shoulder`** — geometric transition between two adjacent shaft sections.
+# 4. Solve internal bearing load distribution (ISO/TS 16281)
+coupled = IterativeBearingFEMSolver()
+load_dist = coupled.solve(shaft_system, bearings, library)
 
-| Attribute | Type | Description |
-|---|---|---|
-| `fillet_radius` | float | r [mm] |
-| `diameter_large` | float | D [mm] |
-| `diameter_small` | float | d [mm] |
-
-Derived: `r_over_d`, `D_over_d` — inputs to Peterson interpolation.
-
-**`ShaftSection`** — single uniform cylindrical segment.
-
-| Attribute | Type | Description |
-|---|---|---|
-| `length` | float | [mm] |
-| `diameter` | float | Outer diameter [mm] |
-| `inner_diameter` | float | 0.0 for solid [mm] |
-| `material_id` | str | Key into `core/materials.py` |
-| `surface_finish_ra` | float | Ra [μm]; used for Marin factor kₐ |
-| `shoulder_left` | `Shoulder \| None` | Left-side shoulder transition |
-| `shoulder_right` | `Shoulder \| None` | Right-side shoulder transition |
-| `label` | str | Optional identifier |
-
-**`Shaft`** — ordered collection of `ShaftSection` objects.
-
-| Method / Property | Returns | Description |
-|---|---|---|
-| `add_section(section)` | None | Appends section to right end |
-| `total_length` | float | Sum of section lengths [mm] |
-| `axial_start(index)` | float | Absolute start of section[index] [mm] |
-| `axial_end(index)` | float | Absolute end of section[index] [mm] |
-| `section_at(x)` | `tuple[ShaftSection, int]` | Section containing x |
-| `diameter_at(x)` | float | Outer diameter at x [mm] |
-| `I_at(x)` | float | Second moment of area at x [mm⁴] |
-| `J_at(x)` | float | Polar moment at x [mm⁴] |
-| `W_at(x)` | float | Bending section modulus at x [mm³] |
-| `Wt_at(x)` | float | Polar section modulus at x [mm³] |
-| `shoulders()` | `list[tuple[float, Shoulder]]` | All shoulders with axial positions |
-| `validate()` | `list[str]` | Geometry errors; empty if valid |
-| `validate_or_raise()` | None | Raises `ValueError` if invalid |
-
----
-
-### `core/components.py`
-
-**`Bearing`**
-
-| Attribute | Type | Description |
-|---|---|---|
-| `position` | float | Axial position from datum [mm] |
-| `designation` | str | e.g. `"6210"` |
-| `bearing_type` | `BearingType` | `DEEP_GROOVE_BALL`, `ANGULAR_CONTACT_BALL`, `CYLINDRICAL_ROLLER`, `TAPER_ROLLER`, `SPHERICAL_ROLLER` |
-| `C` | float | Basic dynamic load rating [N] |
-| `C0` | float | Basic static load rating [N] |
-| `arrangement` | str | `"fixed"` or `"floating"` |
-| `X` | float | Radial load factor (Phase 1: 1.0) |
-| `Y` | float | Axial load factor (Phase 1: 0.0) |
-| `label` | str | Optional identifier |
-
-Derived: `life_exponent` (3.0 ball, 10/3 roller).
-
-**`GearElement`**
-
-| Attribute | Type | Description |
-|---|---|---|
-| `position` | float | Axial position [mm] |
-| `tangential_force` | float | Wt [N] → XZ plane |
-| `radial_force` | float | Wr [N] → XY plane |
-| `axial_force` | float | Wa [N]; 0 for spur |
-| `pitch_diameter` | float | d [mm] |
-| `torque` | float | T [N·mm]; auto-computed from Wt×d/2 if zero |
-| `label` | str | Optional identifier |
-
----
-
-### `core/materials.py`
-
-**`Material`** — frozen dataclass.
-
-| Attribute | Type | Description |
-|---|---|---|
-| `material_id` | str | Unique key |
-| `Sut` | float | Ultimate tensile strength [MPa] |
-| `Sy` | float | Yield strength [MPa] |
-| `E` | float | Young's modulus [GPa] |
-| `Se_base` | float \| None | Specimen endurance limit; if None → min(0.5×Sut, 700 MPa) |
-
-Embedded library: `S355`, `CrMo42`, `AISI_1045`, `AISI_4340`.
-
----
-
-### `solvers/shaft/statics.py`
-
-**`StaticsSolver`** — two-support shaft, statically determinate. Planes solved independently.
-
-| Method | Returns | Description |
-|---|---|---|
-| `solve(system)` | `StaticsResult` | Reactions + discretised V(x), M(x), T(x) |
-
-`StaticsResult` fields: `x`, `V_xz`, `V_xy`, `M_xz`, `M_xy`, `M_res`, `T`, `axial_force`, `reactions`.
-Reaction keys: `"A_xz"`, `"A_xy"`, `"B_xz"`, `"B_xy"`, `"axial"`.
-
----
-
-### `solvers/shaft/stress.py`
-
-**`StressSolver`** — critical section identification, Kf/Kfs, Marin Se', fatigue criteria.
-
-| Method | Returns | Description |
-|---|---|---|
-| `solve(system, statics_result, material)` | `StressResult` | Full fatigue analysis at all shoulder sections |
-
-`StressResult`: list of `CriticalSection` sorted by `nf_goodman` ascending. Each exposes: `x`, `Kf`, `Kfs`, `sigma_a`, `tau_m`, `Se_prime`, `nf_goodman`, `nf_asme`, `von_mises_eq`.
-
-Phase 1 assumptions: `kc = 1.0`; D/d = 1.5 fixed for Peterson. Phase 2: Peterson 2D interpolation via `scipy.interpolate.RegularGridInterpolator`.
-
----
-
-### `solvers/gears/geometry.py`
-
-**`GearSolver`** — MAAG gear geometry and force calculation (ISO 21771). Native implementation; no external dependency.
-
-| Method | Returns | Description |
-|---|---|---|
-| `compute_geometry(mn, z1, z2, alpha_n_deg, beta_deg, al, x1, x2, b)` | `GearGeometryResult` | Full MAAG geometry including αtw, εα, εβ, all diameters |
-| `compute_forces(T1_Nm, geometry)` | `GearForceResult` | Ft, Fr, Fa in Newtons; T1, T2 in N·mm |
-
-Validated against GEARpie reference cases: C14 (spur, x≠0) desvio = 0.00%; H501 (helical, x≠0) desvio < 0.5%.
-
----
-
-### `solvers/gears/strength.py` *(Phase 2)*
-
-**`GearStrengthSolver`** — ISO 6336-2/3 contact and bending stress.
-
-| Method | Returns | Description |
-|---|---|---|
-| `solve(geometry, forces, material_pinion, material_wheel, load_factors)` | `GearStrengthResult` | σ_H, σ_F, safety factors SH and SF |
-
-Load factors: KA (application), KV (dynamic), KHβ (load distribution), KHα (transverse load distribution).
-
----
-
-### `solvers/bearings/life.py`
-
-**`BearingLifeSolver`** — ISO 281 L10 life and static safety.
-
-| Method | Returns | Description |
-|---|---|---|
-| `solve_bearing(bearing, Fr, Fa, speed_rpm, design_life_hours)` | `BearingLifeResult` | L10h, S₀, C/P, pass/fail |
-| `extract_bearing_forces(statics_result, system)` | `dict` | Fr and Fa per bearing label |
-
-Phase 1: X=1, Y=0. Phase 2: full ISO 281 Table 1 X/Y factors; aISO life modification factor.
-
----
-
-### `solvers/lubrication/film.py` *(Phase 4)*
-
-**`FilmSolver`** — EHL minimum film thickness and lambda ratio.
-
-| Method | Returns | Description |
-|---|---|---|
-| `solve(contact_geometry, lubricant, operating_conditions)` | `FilmResult` | h_min (Hamrock–Dowson), Λ = h_min / R_composite |
-| `classify_regime(lambda_ratio)` | str | `"full_film"` / `"mixed"` / `"partial_boundary"` / `"boundary"` |
-
-Regime thresholds: Λ > 3.0 → full-film EHL; 1.5–3.0 → mixed; 1.0–1.5 → partial boundary; < 1.0 → boundary lubrication.
-
-Phase 5: `FilmSolver` replaced or supplemented by `cfd_interface.py` for CFD-computed h_min.
-
----
-
-### `integrations/openfoam/` *(Phase 5)*
-
-**`CaseGenerator`** — generates complete OpenFOAM case structure from AxisForge system state.
-
-| Method | Returns | Description |
-|---|---|---|
-| `generate(contact_geometry, lubricant, conditions, output_path)` | `OpenFOAMCase` | Writes `0/`, `constant/`, `system/` directories |
-
-The generated case includes: velocity boundary conditions from surface speeds, transport properties from lubricant selection, Hertz contact geometry as polyMesh. The engineer does not interact with OpenFOAM directly.
-
-**`ResultsReader`** — imports OpenFOAM postProcessing output back into AxisForge.
-
-| Method | Returns | Description |
-|---|---|---|
-| `read(case_path)` | `CFDFilmResult` | Extracts h_min, T_max, p_max from field data |
-
-`CFDFilmResult` feeds directly into `FilmSolver` to replace the analytical Λ with the CFD-computed value, which then updates the Failure Likelihood Assessment.
-
----
-
-### `selectors/failure_assessor.py`
-
-**`FailureLikelihoodAssessor`** — deterministic multi-criteria scoring engine.
-
-Scoring model per failure mode Fᵢ:
-
-```
-score(Fᵢ) = Σ [ wⱼ × fⱼ(xⱼ) ]   for j = 1..N_drivers
+# 5. Compute per-element capacities and equivalent loads
+cap   = RollingElementCapacity.radial(bearing, Cr=C_rating)
+derel = DynamicEquivalentRollingElementLoad.from_distribution(bearing, result)
 ```
 
-Risk classification:
+---
 
-| Score | Class |
-|---|---|
-| < 0.25 | LOW |
-| 0.25 – 0.60 | MEDIUM |
-| > 0.60 | HIGH |
+## Module Reference
 
-Supported failure modes by phase:
+### core/machine_elements — Shaft
 
-| ID | Mode | Component | Phase |
-|---|---|---|---|
-| F01 | Rolling Contact Fatigue | Bearing | 3 |
-| F02 | Static Overload | Bearing | 2 |
-| F03 | Lubrication Starvation | Bearing | 4 |
-| F04 | Contamination Fatigue | Bearing | 4 |
-| F05 | False Brinelling | Bearing | 4 |
-| F06 | Shaft Bending Fatigue | Shaft | 2 |
-| F07 | Shoulder Stress Concentration | Shaft | 2 |
-| F08 | Gear Tooth Pitting | Gear | 3 |
-| F09 | Gear Micropitting | Gear | 4 |
-| F10 | Gear Scuffing | Gear | 4 |
-| F11 | Misalignment Sensitivity | System | 4 |
-| F12 | Thermal Degradation | Bearing | 5 |
+**`shaft.py`**
+
+| Class | Purpose |
+|-------|---------|
+| `Shoulder` | Fillet transition geometry between two adjacent sections (step change). |
+| `ShaftSection` | Single uniform cylindrical segment with cross-section properties. |
+| `Shaft` | Ordered sequence of `ShaftSection` objects forming a complete shaft. |
+
+**`Shoulder`** — dataclass carrying `fillet_radius`, `diameter_large`, `diameter_small`. Validates that the fillet is positive and does not exceed the step height.
+- `r_over_d` — r/d ratio (primary Peterson interpolation).
+- `D_over_d` — D/d ratio (secondary Peterson interpolation).
+- `validate()` — returns a list of geometry errors.
+
+**`ShaftSection`** — dataclass with `length`, `diameter`, `inner_diameter`, `material_id`, `surface_finish_ra`, optional `shoulder_left`/`shoulder_right`, and keyways.
+- `area` — cross-sectional area A [mm²].
+- `second_moment_of_area` — I = π/64·(d⁴−dᵢ⁴) [mm⁴].
+- `polar_moment` — J = π/32·(d⁴−dᵢ⁴) [mm⁴].
+- `section_modulus` — W = I/(d/2) [mm³], for σ_b = M/W.
+- `polar_section_modulus` — Wt = J/(d/2) [mm³], for τ = T/Wt.
+- `validate()` — geometry errors, delegating to shoulders and keyways.
+
+**`Shaft`** — datum x=0 is the left face of the first section; interior boundaries belong to the right section.
+- `add_section(section)` — append a section to the right end.
+- `total_length`, `n_sections` — aggregate properties.
+- `axial_start(index)`, `axial_end(index)` — absolute face positions [mm].
+- `section_at(x)` — returns `(ShaftSection, index)` containing position x.
+- `diameter_at(x)`, `I_at(x)`, `J_at(x)`, `W_at(x)`, `Wt_at(x)` — section properties at any axial position.
+- `shoulders()` — list of `(x_position, Shoulder)` for all steps.
+- `validate()` / `validate_or_raise()` — full geometry consistency check, including adjacent shoulder–diameter matching.
 
 ---
 
-## Incremental Development Principles
+### core/machine_elements — Bearings
 
-1. **Solvers are GUI-independent.** Fully testable before any Phase 2 work.
-2. **`core/` is the integration boundary.** Stable since Week 2. Changes here propagate everywhere.
-3. **Component positions are floats** (mm from datum), not section indices.
-4. **`solvers/__init__.py` is the public interface.** Internal solver paths are implementation detail.
-5. **Database not used in Phase 1–2.** C and C0 entered manually on `Bearing`.
-6. **Development order per solver:** data structure → test with reference value (TDD) → implement → pass.
-7. **Each solver sub-package is independently extensible.** Adding a new shaft solver requires one new file in `solvers/shaft/` — no changes to bearings, gears, or lubrication.
+**`bearing_types.py`**
 
----
+| Class | Purpose |
+|-------|---------|
+| `BearingType` | Enum of rolling bearing families (DGBB, angular contact, cylindrical / taper / spherical roller). Determines life exponent p. |
 
-## config.py Constants
+**`bearing.py`**
 
-| Constant | Value | Purpose |
-|---|---|---|
-| `SOLVER_RESOLUTION` | 1000 | Array length for discretised diagrams |
-| `BOUNDARY_MOMENT_TOLERANCE` | 500.0 N·mm | Max \|M\| at supports (validation check) |
-| `SOLVER_TOLERANCE` | 1e-6 | General numerical guard |
-| `DEFAULT_DESIGN_LIFE_HOURS` | 20 000 h | Bearing life default |
-| `SUT_ENDURANCE_CAP_MPa` | 1400 MPa | Se = 0.5×Sut valid below this (Shigley §6-2) |
-| `RELIABILITY_FACTOR_99` | 0.868 | ke at 99% reliability (Shigley Tab. 6-6) |
-| `MIN_FILLET_RADIUS_mm` | 0.01 mm | Guard for notch sensitivity calculation |
-| `FLA_THRESHOLD_LOW` | 0.25 | Risk classification boundary |
-| `FLA_THRESHOLD_HIGH` | 0.60 | Risk classification boundary |
-| `EHL_LAMBDA_FULL_FILM` | 3.0 | Λ above which full-film EHL is assumed |
-| `EHL_LAMBDA_BOUNDARY` | 1.0 | Λ below which boundary lubrication is assumed |
+**`Bearing`** — catalogue-level bearing definition plus ISO/TS 16281 internal geometry.
+- Constructor: bore `d`, outer `D`, width `b`, ratings `C`/`C0`, factors `X`/`Y`, `arrangement` (locating/floating), `contact_angle_deg`, `label`, `position`.
+- `is_locating()` — True if the bearing restrains axial displacement.
+- `equivalent_dynamic_load(Fr, Fa)` — P = X·Fr + Y·Fa (ISO 281).
+- `curvature_sum_inner/outer(Dw, Dpw, r)` — Σρ, ISO/TS 16281 eq.(5)/(6).
+- `curvature_difference_inner/outer(Dw, Dpw, r)` — F(ρ), eq.(7)/(8).
+- `chi_contact(F_rho)` — solves the contact ellipse ratio χ from eq.(2) via `brentq`.
+- `setup_internal_geometry(ri, re, Dw, Dpw, Z, s, E, nu)` — caches internal geometry; computes A = ri+re−Dw, initial contact angle α₀ = arccos(1−s/2A), Ri, and rolling element angular positions φ_j.
+- `compute_hertz_point_contact()` — Hertzian spring constant c_p, eq.(5)–(11).
 
 ---
 
-## Quality Criteria
+### core/machine_elements — Gears
 
-**Modularity:** Imports flow inward. No circular dependencies. `core/` has zero external library dependencies beyond NumPy and stdlib. Each solver sub-package has one clearly stated responsibility.
+**`spur_helical_gear.py`**
 
-**Testability:** Every solver is a pure function. No global state, no GUI calls inside solvers. Coverage target ≥ 90% for `solvers/` and `core/`. At least one textbook-validated reference case per solver. Tests mirror the solver directory structure.
+**`SpurHelicalGear`** — geometry model for an external spur (β=0) or helical (β>0) gear. Carries module `mn`, teeth `z`, profile shift `x`, pressure angle `alpha_n`, helix `beta`, face width `b`, surface finish, and axial `position`. Exposes reference/base/tip geometry and the attribute interface consumed by the meshing classes.
 
-**Physical validity:** Governing equation or standard referenced in every solver docstring. Simplifying assumptions documented explicitly. Results outside physically plausible ranges raise warnings before solvers run.
+**`internal_gear.py`**
 
-**Extensibility:** Adding a new solver requires one new file in the appropriate sub-package. No changes to existing solvers, data model, or tests outside that sub-package.
-
-**Numerical robustness:** NumPy throughout. Degenerate geometry caught at `validate_or_raise()` before any solver is called.
+**`InternalGear`** — ring (internal) gear model following the conventional KHK positive-z definition. Provides mesh-pair interference checks (`validate_mesh`) used by `InternalGearMeshing`.
 
 ---
 
-## Installation
+### core/mechanical_system — Systems
 
-```bash
-git clone https://github.com/<user>/axisforge.git
-cd axisforge
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python axisforge_cli.py
-```
+**`shaft_system.py`**
 
-**Runtime dependencies:**
+**`GearElement`** — thin wrapper binding a gear geometry object to a kinematic role on a shaft; carries no geometry of its own.
+- Constructor: `gear`, `role` ("driver"/"driven"), `rotation_dir` (±1, set only for the source gear), `label`.
+- `position` — delegates to the underlying gear.
+- `validate()` / `validate_or_raise()`.
 
-| Package | Version | Purpose |
-|---|---|---|
-| `numpy` | ≥ 1.26 | Numerical computation |
-| `scipy` | ≥ 1.12 | Integration, interpolation, Peterson 2D |
-| `PySide6` | ≥ 6.6 | GUI framework — Phase 2+ |
-| `matplotlib` | ≥ 3.8 | Diagram rendering — Phase 2+ |
-| `pandas` | ≥ 2.1 | Catalogue queries — Phase 3+ |
-| `weasyprint` | ≥ 61 | PDF report output — Phase 3+ |
+**`ShaftSystem`** — autonomous single-shaft container of bearings, gears and loads. Has no knowledge of other shafts; its `shaft_position` (global y,z offset) is normally set by the gear system during resolve.
+- `add_bearing(b)`, `add_gear(g)`, `add_load(ld)` — placement with axial-bounds checking (chainable).
+- `set_gear_loads(loads)` — idempotent replacement of all `gear_mesh`-sourced loads (safe to re-resolve).
+- Sorted accessors: `bearings`, `gears`, `loads`, `support_positions`.
+- Type-filtered accessors: `radial_loads`, `axial_loads`, `torque_loads`, `external_moments`, `distributed_radial_loads`.
+- `gear_extent(ge)`, `bearing_extent(b)` — axial [lo, hi] footprint (position is the centre of face/bearing width).
+- `validate()` / `validate_or_raise()`.
 
-**Dev dependencies:** `pytest`, `pytest-cov`, `ruff`, `mypy`
+**`SpurHelical_gear_system.py`**
 
----
+**`SpurHelicalMeshLink`** — one directed mesh, shaft_a (driver) → shaft_b (driven), carrying a meshing model and the global line-of-centres angle `phi_deg`. Optional `torque_split` selects fan-out mode; `distribute_loads` toggles distributed vs point gear loads.
+- `validate()` — self-mesh, torque_split range, and meshing-interface checks.
 
-## Testing
-
-```bash
-python -m pytest tests/ -v
-python -m pytest tests/ --cov=core --cov=solvers --cov-report=term-missing
-python tests/test_solvers/test_shaft/test_statics_solver.py # corre a parte do if: __main__ que permite mostrar os graficos e testes
-
-# Run a specific validation case
-python -m pytest tests/test_solvers/test_gears/test_geometry.py::TestGearSolverValidation::test_c14_forces -v
-```
-
-Validation cases in `tests/fixtures/expected_results.py` include source, chapter or standard reference, and expected values with tolerances. Current: 296 tests passing. Coverage: `core/` 98%, `solvers/shaft/statics.py` ≥ 90%.
+**`SpurHelicalGearSystem`** — single-source DAG of shafts connected by mesh links. Enforces exactly one source, no convergent merges, acyclicity, and fan-out torque_split consistency.
+- `resolve(P, rpm, rotation_dir_source, source_position)` — propagates power from the source through the DAG in topological order, computing torque, rotation sense and shaft placement, then injects the resulting mesh loads onto every shaft. Torque propagates in N·m.
+- `validate()` / `validate_or_raise()` — topology plus per-shaft validation.
+- Internal graph helpers: incoming-count, source detection, Kahn topological order, driver grouping, axial-alignment checks.
 
 ---
 
-## GEARpie Validation
+### core/mechanical_system — Gear Meshing
 
-The GEARpie reference cases C14 (spur, x≠0) and H501 (helical, x≠0) are used to validate `solvers/gears/geometry.py`. AxisForge does not call GEARpie at runtime — all gear geometry and force calculation is implemented natively according to ISO 21771. Validation results: Ft desvio = 0.00% (C14), < 0.5% (H501).
+**`spur_helical_gear_meshing.py`**
 
----
+**`SpurHelicalGearMeshing`** — external spur/helical pair. Computes working centre distance and transverse working pressure angle, contact ratios (εα, εβ, εγ), interference checks, and mesh forces.
+- Constructor accepts optional working centre distance `al`, profile-shift equalisation (`equalise_gs`), and addendum reduction.
+- `forces(T_in, phi_deg, rotation_dir_in)` — returns Ft, Fr, Fa and per-side load angles, plus output torque and rotation sense.
+- `al`, `u` — working centre distance and gear ratio, consumed by the gear system.
+- `correction_for_gs_equilibrium()` — Henriot method for profile-shift balancing.
 
-## MVP Scope (Phase 1 + Phase 2)
+**`internal_gear_meshing.py`**
 
-### In scope
+**`InternalGearMeshing`** — external + internal (ring) pair, using the difference form (z2−z1, x2−x1) throughout. Computes working geometry, path-of-contact points, Ohlendorf loss factor, contact ratios and mesh forces.
+- `forces(T_in, phi_deg, rotation_dir_in)` — same interface as the external pair; note internal meshing does **not** reverse rotation sense.
+- `gear_geometry(addendum_reduction)` — builds independent working-geometry copies of both gears.
+- `validate()` / `validate_or_raise()`, `summary()`.
 
-- Single horizontal shaft, two bearing supports (statically determinate)
-- Shaft defined by up to 10 cylindrical sections
-- Shoulder geometry at section transitions
-- Bearings, gear elements, and point loads at specified axial positions
-- Gear geometry and forces from native `GearSolver` (ISO 21771)
-- Static analysis: reactions, V(x), M(x), T(x)
-- Static failure: Von Mises (DE), Tresca (MSS)
-- Fatigue: combined bending + torsion at shoulder sections; Goodman, ASME-Elliptic
-- Bearing life: ISO 281 L10h with full X/Y factors (Phase 2)
-- PySide6 GUI with shaft schematic, component tree, results with diagrams
-- JSON project save/load
+**`planetary_gear_meshing.py`**
 
-### Explicitly excluded from MVP
+**`PlanetaryGearMeshing`** — single-stage epicyclic train (sun + k planets + ring + carrier) by composition of one external pair (sun–planet) and one internal pair (planet–ring). Owns train-specific logic only.
+- `planet_phi_deg(j)`, `planet_position(j)` — angular placement of planet j.
+- Structural conditions (coaxiality, assembly, neighbouring), Willis kinematics (F=1 and F=2 modes), and ideal torque distribution over members and planets.
 
-| Feature | Reason |
-|---|---|
-| Multi-bearing indeterminate systems | Requires deflection solver — Phase 4 |
-| SKF catalogue database | Phase 3 |
-| Shaft deflection (FEM-1D) | Phase 4 |
-| ISO 6336 gear strength | Phase 2 |
-| Failure Likelihood Assessment | Phase 3 |
-| Lubrication module | Phase 4 |
-| CFD integration | Phase 5 |
-| Critical speed | Phase 5 |
-| Report generation | Phase 3 |
+**`PlanetaryKinematics`** — frozen result of the Willis kinematic solve (ω per member in rad/s, operating-mode DoF, and Willis residual for numerical transparency).
+
+**`PlanetaryMember`** / **`MeshTag`** — enums tagging train members (sun/planet/ring/carrier) and tooth contacts.
 
 ---
 
-## Licence
+### core — Loads
 
-MIT Licence.
+**`loads.py`**
+
+| Class | Purpose |
+|-------|---------|
+| `LoadPlane` | Enum of principal bending planes (XY, XZ) used as a decomposition key. |
+| `Load` | Base class carrying `position`, `label`, `source` ("user"/"gear_mesh"/"bearing_reaction"). |
+| `RadialLoad` | Transverse point force at angular position θ, decomposed into Fy/Fz. |
+| `AxialLoad` | Force along the shaft axis (+X tensile). |
+| `TorqueLoad` | Torque about the shaft axis [N·m]. |
+| `ExternalMoment` | Applied bending moment at orientation θ, decomposed into My/Mz. |
+| `DistributedRadialLoad` | Transverse load distributed over [x_lo, x_hi] with uniform or callable intensity/direction. |
+| `LoadingProfile` | Fatigue cycle decomposition (stress ratio R → mean/amplitude factors). |
+
+`RadialLoad`/`ExternalMoment` expose `Fy`/`Fz` (or `My`/`Mz`) and `component(plane)`. `DistributedRadialLoad` provides `resultant_component`, `centroid`, `bending_moment_contribution` (closed-form for uniform loads, quadrature otherwise), and `as_point_load` for the constant-θ case.
+
+---
+
+### core — Materials
+
+**`materials.py`**
+
+| Class | Purpose |
+|-------|---------|
+| `Material` | Shaft/structural material (Shigley-based): Sut, Sy, E, density, Poisson ratio, endurance limit. |
+| `GearMaterial` | Gear material (ISO 6336-5): E, ν, ρ, thermal properties, σHlim, σFlim, quality class. |
+
+`Material` exposes `endurance_limit` (Shigley §6-2: 0.5·Sut capped at 700 MPa) and `shear_yield_strength` (0.577·Sy). `GearMaterial` exposes `equivalent_modulus(other)` for the Hertzian reduced modulus of a pair.
+
+Embedded shaft library: `S355`, `CrMo42` (42CrMo4), `AISI_1045`, `AISI_4340`. Embedded gear library: `GEAR_STEEL`, `GEAR_ADI`, `GEAR_POM`, `GEAR_PA66`.
+
+Lookups: `get_material(id)`, `available_materials()`.
+
+---
+
+### mesh — 1D Shaft Mesh
+
+**`mesh_1D.py` — `Mesh1D`**
+Generates the 1D FEM node grid for one `ShaftSystem` from mandatory positions (section boundaries, bearings, gears, loads) plus optional `extra_mandatory` nodes, enforcing a minimum node spacing.
+
+**`mesh_grade.py` — `Grader`**
+Produces standardised mesh grades for a subdomain [x_lo, x_hi] by successive elementwise bisection (`grade_0` = base nodes, `grade_N` = N bisections). Consumed by the convergence study and by gear-face refinement.
+- `get_grade("grade_N")` — sorted node positions at the requested refinement level.
+
+**`Elements/elem.py` — `Elem`**
+Single 1D beam element between two mesh nodes (length, E, I, A, Poisson ν, node indices).
+- `from_mesh(mesh)` — builds the full element list from a `Mesh1D`, reading section properties and materials.
+- `from_x_nodes(x_nodes, shaft_system)` — builds elements from an explicit node list (used by the submodel solver).
+- `find_node_index(x_nodes, x)` — locate a node within tolerance.
+- `validate()` — element sanity (positive length, plausible modulus units).
+
+**`Elements/Timoshenko_Selective_Integration/timoshenko.py` — `TimoshenkoBeam`**
+Timoshenko beam element with selective integration (shear factor 5/6).
+- `stiffness_element(elem)` — 6×6 element stiffness (axial + shear + bending).
+- `shape_functions`, `deformation_matrix`, `elasticity_matrix` — element interpolation and constitutive matrices.
+- Natural-coordinate mapping helpers for distributed-load integration.
+
+**`mesh_convergence_study.py` — `RichardsonGCI`, `MeshConvergenceStudy`**
+Grid Convergence Index via Richardson extrapolation on the resultant transverse displacement, across ≥3 refinement levels. Produces per-load convergence records and the union of extra nodes to lock into production runs. Includes `print_report`.
+
+---
+
+### solvers — Shaft FEM
+
+**`build_stiffness_matrix.py` — `StiffnessMatrixBuilder`**
+Assembles the global stiffness matrix from element contributions. Currently wires the Timoshenko beam theory; extensible via the `_BEAM_THEORIES` registry.
+- `build_stiffness_matrix(mesh, elements)` — global K (3 DOF/node: u, v, θ).
+
+**`FEM_solvers/simple_fem_solver.py` — `SimpleFEMSolver`**
+Orchestrates the full pipeline: `Mesh1D` → `Elem.from_mesh` → `StiffnessMatrixBuilder` → boundary conditions → two independent planar solves (XZ, XY) sharing the same K → superposition → torsion diagram on the same nodes. Every intermediate quantity is stored as a public attribute (numerical transparency).
+- `solve(shaft_system, extra_mandatory)` — runs the full solve; stores `x_nodes`, `elements`, `free_dofs`, displacement vectors `d_total_xz`/`d_total_xy`, external force vectors, torsion arrays `T_total`/`tau_total`, and reactions.
+- `return_values(x_nodes, [x_lo, x_hi])` — nodal solution quantities within an interval (for submodelling).
+- Options: `theory`, `constraint_bearing`, `distribute_gear_labels` (which gear mesh loads are treated as distributed over face width).
+
+**`FEM_solvers/submodel_solver.py` — `SubmodelSolver`, `SubmodelResult`**
+Wraps `SimpleFEMSolver` and restricts metric evaluation to a subdomain [x_lo, x_hi], with Lagrange-multiplier boundary injection at the cut nodes. Used exclusively by the convergence study. `SubmodelResult` carries the subdomain displacement vectors and cut-node reaction multipliers.
+
+**`static/static_analysis.py`**
+
+| Class | Purpose |
+|-------|---------|
+| `BearingNodeData` | Complete FEM nodal state at a bearing position (displacements, reactions, seat misalignment ψ). |
+| `ShaftResults` | Full FEM solution + post-processed engineering quantities for one shaft. |
+| `SimpleFEMResultsLibrary` | Registry of `ShaftResults` keyed by shaft name — the canonical source all downstream solvers read from. |
+| `ShaftResultsReader` | Post-processes a solved `SimpleFEMSolver` into a `ShaftResults` and stores it in the library. |
+
+`BearingNodeData` carries `Fr_xz`, `Fr_xy`, `Fr`, `Fa`, moment reactions, displacements, and the seat-slope misalignment `psi_xz`/`psi_xy` (gradient of v across the seat, or nodal θ for zero-width seats). `ShaftResults` is organised into mesh, raw FEM solution, post-processed engineering quantities (internal forces, deflections, section stresses σ_b, τ), and per-bearing node data. The library provides `store`/`get`/`get_or_none`/`remove`/`clear`/`names`/`iter`/`all_results`. `ShaftResultsReader.read(library)` recovers internal forces, deflections, section properties, bearing reactions and node data in one pass.
+
+---
+
+### solvers — Bearings (ISO/TS 16281)
+
+**`bearings/ISO_16281_ball_bearing.py`**
+
+**`IterativeBearingFEMSolver`** — coupled shaft–bearing solver using the prescribed-ψ formulation. Per bearing it performs a single 2-DOF root solve (δr, δa) in the plane of the resultant radial force, with misalignment prescribed from the FEM seat slope projected onto that plane.
+- `solve(shaft_system, bearings, library, Pd)` — returns `{label: LoadDistributionResult}` for all bearings, reading FEM data from the library via `BearingNodeData`.
+- `minimum_axial_load(bearing, ...)` — smallest axial preload Fa_min such that δa ≥ 0, via `brentq`.
+- Static post-processing helpers: `Q_j`, `phi_j_global`, `contact_distribution` (per-element φ and Q, global or local frame), `bearing_stiffness` (secant Kr_xz, Kr_xy, Ka).
+- Solver core uses `scipy.optimize.root` (`hybr` with `lm` fallback).
+
+**`LoadDistributionResult`** — output for one bearing: ring displacements δr/δa, prescribed misalignment ψ, resultant-force angle φ(Fr), per-element deflection δ_j and contact angle α_j, moment reaction Mz, solver diagnostics (iterations, residual, success flag).
+
+**`BearingStiffnessState`** — secant stiffness decomposed onto the global XZ/XY axes plus axial, with an axial engagement regime (`no_load` / `engaged` / `closing_clearance`). Built via `from_load_distribution`.
+
+**`RollingElementCapacity`** *(frozen dataclass)* — per-element dynamic capacity Q_ci / Q_ce, ISO/TS 16281 §4.3.1. Cr/Ca are supplied externally.
+- `radial(bearing, Cr)` — radial ball bearings, eq.(19)/(20).
+- `thrust_nonzero_alpha(bearing, Ca)` — thrust ball bearings α≠90°, eq.(21)/(22).
+- `thrust_90deg(bearing, Ca)` — thrust ball bearings α=90°, eq.(23)/(24).
+
+**`DynamicEquivalentRollingElementLoad`** *(frozen dataclass)* — dynamic equivalent rolling element loads Q_ei / Q_ee, ISO/TS 16281 §4.3.2, eq.(25)–(28), with inner/outer rotating convention. Built via `from_distribution`.
+
+Two module-level helpers, `_geometry_bracket` and `_check_geometry`, encapsulate the shared §4.3.1 geometry factor and its validity guards.
+
+---
+
+### solvers — Gears
+
+**`gears/geometry.py` — `GearSolver`**
+Cylindrical gear geometry and mesh force calculation (MAAG / ISO 21771 / Shigley §13-7). Pure functions, no internal state.
+- `compute_geometry(mn, z1, z2, alpha_n_deg, beta_deg, al, x1, x2, b)` — full pair geometry with optional profile shift; working centre distance from `al` or the involute equation (`brentq`); tip/root/working diameters; contact ratios. Returns `GearGeometryResult`.
+- `compute_forces(T1_Nm, geometry)` — Ft, Fr, Fa from input torque. Returns `GearForceResult`.
+- `to_gear_element(position, forces, geometry)` — assembles a `GearElement` for injection into the pipeline.
+
+**`gears/utils.py`** — geometry helpers: rack constants (HAP, HFP), `solve_alpha_tw` (involute equation), `contact_ratio_alpha`/`contact_ratio_beta`, `undercut_z_min`, `validate_geometry_inputs`.
+
+---
+
+### models — Result Containers
+
+**`gear_result.py`**
+- `GearGeometryResult` *(frozen)* — module, teeth, angles, reference/base/tip/root/working diameters, centre distances, contact ratios (εα, εβ, εγ).
+- `GearForceResult` *(frozen)* — Ft, Fr, Fa and derived torque quantities.
+
+**`stress_result.py`**
+- `CriticalSection` — per-section fatigue result (Goodman, ASME-elliptic, yield safety factors).
+- `StressResult` — collection with `most_critical`, `min_nf_goodman`, `min_nf_asme`, `min_ny`.
+
+---
+
+### ui — Interactive Runner
+
+**`runner.py`** — a PySide6-based section runner that executes user analysis scripts split into titled sections. Seeds a namespace with the core classes and solvers, captures stdout/stderr and validation errors per section, tracks names written, and renders matplotlib figures on demand. Includes `SectionParser`, `Section`, `SectionResult`.
+
+---
+
+## Design Principles
+
+- **Low coupling, high cohesion** — solvers depend only on explicit result containers, never on each other's internals.
+- **No hidden state** — every intermediate quantity is a public attribute; solvers expose their full working for inspection.
+- **GUI-independent solvers** — the analysis core runs headless; the UI is a thin consumer.
+- **Deterministic and explainable** — no black-box methods. Failure assessment (future) uses measurable physical drivers and traceable indices, not machine learning or probabilistic life prediction.
+- **Composition over inheritance** — e.g. the planetary train composes two pair-meshing objects rather than subclassing them.
+- **Fail fast on geometry** — validation happens at construction; invalid geometry is never silently accepted.
+
+---
+
+## Roadmap
+
+| Phase | Focus | Status |
+|-------|-------|--------|
+| 1 | Shaft FEM · ISO/TS 16281 bearing load distribution · gear force integration | **Active** |
+| 2 | ISO 6336 gear strength — bending and pitting resistance | Planned |
+| 3 | Fatigue analysis — Goodman / Morrow / Miner | Planned |
+| 4 | Lubrication assessment — EHD film, grease | Planned |
+| 5 | Failure susceptibility scoring · SQLite data layer | Planned |
+| 6 | PySide6 GUI | Planned |
 
 ---
 
 ## References
 
-- ISO 21771:2007 — *Gears — Cylindrical involute gears and gear pairs — Concepts and geometry*
-- ISO 281:2007 — *Rolling bearings — Dynamic load ratings and rating life*
-- ISO 76:2006 — *Rolling bearings — Static load ratings*
-- ISO 6336-1/2/3:2019 — *Calculation of load capacity of spur and helical gears*
-- ISO 286-1:2010 — *Geometrical product specifications — Limits and fits*
-- Shigley, J.E., Budynas, R.G., Nisbett, J.K. — *Mechanical Engineering Design*, 10th ed.
-- Peterson, R.E. — *Stress Concentration Factors*, 3rd ed.
-- SKF General Catalogue — *Rolling Bearings*, publication 10000 EN
-- Harris, T.A., Kotzalas, M.N. — *Rolling Bearing Analysis*, 5th ed.
-- Stachowiak, G.W., Batchelor, A.W. — *Engineering Tribology*, 4th ed.
-- Hamrock, B.J., Dowson, D. — *Ball Bearing Lubrication*, Wiley, 1981
-- Sadeghi, F. et al. — *A Review of Rolling Contact Fatigue*, ASME J. Tribology, 2009
-- SKF — *The SKF Model for Calculating the Frictional Moment*, publication 2013
+- ISO/TS 16281:2008 — *Rolling bearings: Methods for calculating the modified reference rating life for universally loaded bearings*
+- ISO 281:2007 — *Rolling bearings: Dynamic load ratings and rating life*
+- ISO 21771:2007 — *Gears: Cylindrical involute gears and gear pairs*
+- ISO 6336 — *Calculation of load capacity of spur and helical gears*
+- ISO 6336-5 — *Strength and quality of materials*
+- Harris & Kotzalas, *Rolling Bearing Analysis*, 5th ed., Wiley
+- Palmgren, *Grundlagen der Wälzlagertechnik*, 3rd ed., Franckh
+- Shigley, *Mechanical Engineering Design*, 10th ed.
+- MAAG Gear Book, 2nd ed.
+- Arnaudov & Karaivanov, *Planetary Gear Trains*

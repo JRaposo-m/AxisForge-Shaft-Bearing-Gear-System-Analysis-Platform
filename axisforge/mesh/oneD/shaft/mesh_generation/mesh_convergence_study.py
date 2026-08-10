@@ -243,11 +243,9 @@ class MeshConvergenceStudy:
         self._safety_factor = safety_factor
         self._max_levels    = max_levels
 
-    def run(
-        self,
-        shaft_system,
-        intervals: list[tuple[float, float, str]],
-    ) -> MeshRefinementResult:
+    def run(self,
+            shaft_system,
+            intervals: list[tuple[float, float, str]]) -> MeshRefinementResult:
         """
         Run the convergence study for the specified intervals.
 

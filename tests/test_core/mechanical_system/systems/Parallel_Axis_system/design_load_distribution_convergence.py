@@ -7,8 +7,9 @@ Pipeline per shaft:
   1. build ShaftSystem with deep-groove ball bearings (6204)
   2. setup_internal_geometry + compute_hertz_point_contact per bearing
   3. grade_3 nodes injected at gear intervals (mesh fixed, no convergence study)
-  4. IterativeBearingFEMSolver.solve  -> load distribution + coupled FEM
-  5. plots:
+  4. SimpleFEMSolver.solve -> ShaftResultsReader.read(library) -> SimpleFEMResultsLibrary
+  5. IterativeBearingFEMSolver.solve(library) -> load distribution
+  6. plots:
        - global deflection diagrams  (v_xz, v_xy, v_res)
        - polar load distribution per bearing (Q_j vs phi_j_global)
 
@@ -34,10 +35,13 @@ from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoi
     SpurHelicalMeshLink, SpurHelicalGearSystem,
 )
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
+from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import (
+    ShaftResultsReader,
+    SimpleFEMResultsLibrary,
+)
 from axisforge.solvers.machine_elements.bearings.ISO_16281_ball_bearing import IterativeBearingFEMSolver
 from axisforge.mesh.oneD.shaft.mesh_generation.mesh_1D import Mesh1D
 from axisforge.mesh.oneD.shaft.mesh_generation.mesh_grade import Grader
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import ShaftResultsReader
 
 # ===========================================================================
 # PARAMETERS
@@ -191,23 +195,29 @@ def gear_grade_nodes(sys: ShaftSystem, grade: str = GEAR_GRADE) -> list[float]:
 print(f"Building system (b = {B_STUDY} mm) ...")
 shaft_systems = build_systems(B_STUDY)
 
-coupled_solvers: dict[str, IterativeBearingFEMSolver] = {}
-load_results:    dict[str, dict] = {}
+# --- one library for the entire session ---
+library = SimpleFEMResultsLibrary()
+
+load_results: dict[str, dict] = {}
 
 for name, sys in shaft_systems.items():
     print(f"\n=== {name} ===")
 
-    bearings = {b.label: b for b in sys.bearings}
-
+    bearings    = {b.label: b for b in sys.bearings}
     extra_nodes = gear_grade_nodes(sys)
-    fem_base = SimpleFEMSolver()
-    fem_base.solve(sys, extra_mandatory=extra_nodes)
 
+    # 1. FEM solve
+    fem = SimpleFEMSolver()
+    fem.solve(sys, extra_mandatory=extra_nodes)
+
+    # 2. post-process + store in library (mandatory)
+    ShaftResultsReader(fem, sys).read(library)
+
+    # 3. ISO 16281 load distribution — reads from library, no raw FEM access
     print("  Coupled bearing-FEM solve ...")
-    coupled = IterativeBearingFEMSolver(tol=COUPLING_TOL, max_iter=COUPLING_MAX_ITER)
-    load_dist = coupled.solve(sys, bearings, fem=fem_base)
-    coupled_solvers[name] = coupled
-    load_results[name]    = load_dist
+    coupled   = IterativeBearingFEMSolver(tol=COUPLING_TOL, max_iter=COUPLING_MAX_ITER)
+    load_dist = coupled.solve(sys, bearings, library)
+    load_results[name] = load_dist
 
     # --- print resultados ISO 16281 ---
     print(f"\n  {'Bearing':<8}  {'Fr':>8}  {'Fa':>7}  {'phi_Fr':>8}  "
@@ -216,39 +226,49 @@ for name, sys in shaft_systems.items():
           f"{'[mm]':>10}  {'[mm]':>10}  {'':>10}")
     print("  " + "-" * 80)
 
+    # bearing_nodes indexed by label for clean access
+    shaft_res    = library.get(name)
+    node_by_label = {n.label: n for n in shaft_res.bearing_nodes}
+
     for lbl, res in load_dist.items():
-        data = coupled.bearing_data[lbl]
-        b_obj = next(b for b in sys.bearings if b.label == lbl)
+        node  = node_by_label[lbl]
+        b_obj = bearings[lbl]
 
-        # single call: (Z, 2) array -> col 0 = phi_j_global [rad], col 1 = Q_j [N]
-        dist = IterativeBearingFEMSolver.contact_distribution(b_obj, res)
-        phi, Q = dist[:, 0], dist[:, 1]
-
+        dist     = IterativeBearingFEMSolver.contact_distribution(b_obj, res)
+        phi, Q   = dist[:, 0], dist[:, 1]
         n_loaded = int((Q > 0).sum())
-        print(f"  {lbl:<8}  {data['Fr']:>8.1f}  {data['Fa']:>7.1f}  "
+
+        print(f"  {lbl:<8}  {node.Fr:>8.1f}  {node.Fa:>7.1f}  "
               f"{np.degrees(res.phi_Fr):>8.1f}  "
               f"{res.delta_r:>10.3e}  {res.delta_a:>10.3e}  "
               f"{n_loaded:>4}/{b_obj.Z}")
         print(f"  {'':8}  ok={res.ok}  residual={res.residual:.2e}  "
               f"nfev={res.n_iter}   Q_max={Q.max():.1f} N")
 
-        # --- bearing stiffness (secant, from converged distribution) ---
+        # --- bearing stiffness ---
         Kr_xz, Kr_xy, Ka = IterativeBearingFEMSolver.bearing_stiffness(
-            b_obj, res, Fr_xz=data['Fr_xz'], Fr_xy=data['Fr_xy'], Fa=data['Fa'])
+            b_obj, res, Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy, Fa=node.Fa)
         print(f"  {'':8}  stiffness: Kr_xz={Kr_xz:>12.4e} N/mm   "
               f"Kr_xy={Kr_xy:>12.4e} N/mm   Ka={Ka:>12.4e} N/mm")
 
-        # --- minimum axial preload to bring delta_a back to >= 0 ---
-        psi_xz, psi_xy = coupled._psi_from_displacement_gradient(fem_base, sys, b_obj)
+        # --- misalignment (psi) from BearingNodeData ---
+        psi_xz   = node.psi_xz
+        psi_xy   = node.psi_xy
         psi_proj = psi_xz * np.cos(res.phi_Fr) + psi_xy * np.sin(res.phi_Fr)
         print(f"  {'':8}  psi: psi_xz={np.degrees(psi_xz):>9.5f} deg  "
               f"psi_xy={np.degrees(psi_xy):>9.5f} deg  "
               f"psi_proj(Fr plane)={np.degrees(psi_proj):>9.5f} deg  "
               f"[= res.psi={np.degrees(res.psi):>9.5f} deg]")
+
+        # --- minimum axial preload ---
         Fa_min, res_min = coupled.minimum_axial_load(
-            b_obj, Fr_xz=data['Fr_xz'], Fr_xy=data['Fr_xy'],
-            psi_xz=psi_xz, psi_xy=psi_xy,
-            delta_r_init=res.delta_r, delta_a_init=res.delta_a,
+            b_obj,
+            Fr_xz        = node.Fr_xz,
+            Fr_xy        = node.Fr_xy,
+            psi_xz       = psi_xz,
+            psi_xy       = psi_xy,
+            delta_r_init = res.delta_r,
+            delta_a_init = res.delta_a,
         )
         if Fa_min == 0.0:
             print(f"  {'':8}  Fa_min: not needed (delta_a already >= 0)")
@@ -256,7 +276,7 @@ for name, sys in shaft_systems.items():
             print(f"  {'':8}  Fa_min={Fa_min:>10.2f} N   "
                   f"(delta_a -> {res_min.delta_a:.3e} mm at Fa_min)")
 
-        # per-element contact distribution — phi (global, deg) paired with Q [N]
+        # --- per-element contact distribution ---
         print(f"  {'':8}  per-element distribution (phi_global | Q):")
         for phi_i, Q_i in dist:
             tag = "  <-- loaded" if Q_i > 0 else ""
@@ -268,8 +288,7 @@ for name, sys in shaft_systems.items():
 # ===========================================================================
 
 for name, sys in shaft_systems.items():
-    slv     = coupled_solvers[name].fem_converged
-    results = ShaftResultsReader(slv, sys).read()
+    results = library.get(name)
 
     x    = results.x
     v_xz = results.v_xz
@@ -282,9 +301,9 @@ for name, sys in shaft_systems.items():
                  fontsize=11, fontweight="bold")
 
     for ax, data, label, color in [
-        (axes[0], v_xz * 1e3, "v_xz [µm]", "#2166ac"),
-        (axes[1], v_xy * 1e3, "v_xy [µm]", "#d62728"),
-        (axes[2], v    * 1e3, "v resultant [µm]", "#1a1a1a"),
+        (axes[0], v_xz, "v_xz [mm]", "#2166ac"),
+        (axes[1], v_xy, "v_xy [mm]", "#d62728"),
+        (axes[2], v,    "v resultant [mm]", "#1a1a1a"),
     ]:
         ax.plot(x, data, color=color, lw=1.5, label=label)
         ax.axhline(0, color="0.7", lw=0.5)
@@ -320,9 +339,7 @@ def plot_bearing_polar(name: str, sys: ShaftSystem, load_dist: dict):
                  fontweight="bold")
 
     for ax, b in zip(axes, bearings):
-        res = load_dist[b.label]
-
-        # single call: (Z, 2) -> phi_j_global [rad], Q_j [N], paired per element
+        res  = load_dist[b.label]
         dist = IterativeBearingFEMSolver.contact_distribution(b, res)
         phi, Q = dist[:, 0], dist[:, 1]
 

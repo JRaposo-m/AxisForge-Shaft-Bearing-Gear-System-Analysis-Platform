@@ -67,10 +67,24 @@ axisforge/
 │   ├── materials.py
 │   └── machine_elements/
 │       ├── Shaft/
-│       │   └── shaft.py                # Shoulder, ShaftSection, Shaft
+│       │   └── shaft.py                    # Shoulder, ShaftSection, Shaft
 │       ├── Bearings/
-│       │   ├── bearing.py              # Bearing
-│       │   └── bearing_types.py        # BearingType
+│       │   ├── __init__.py                 # package exports
+│       │   ├── bearing.py                  # Bearing (base)
+│       │   ├── bearing_types.py            # BearingType
+│       │   ├── bearing_factory.py          # make_bearing()
+│       │   ├── geometry/
+│       │   │   ├── __init__.py
+│       │   │   ├── base.py                 # BearingGeometry (ABC)
+│       │   │   ├── ball_geometry.py        # BallBearingGeometry
+│       │   │   └── roller_geometry.py      # RollerBearingGeometry (Phase 2)
+│       │   └── subtypes/
+│       │       ├── __init__.py
+│       │       ├── deep_groove_ball.py     # DeepGrooveBallBearing
+│       │       ├── angular_contact_ball.py # AngularContactBallBearing (Phase 2)
+│       │       ├── cylindrical_roller.py   # CylindricalRollerBearing  (Phase 2)
+│       │       ├── tapered_roller.py       # TaperedRollerBearing      (Phase 2)
+│       │       └── spherical_roller.py     # SphericalRollerBearing    (Phase 2)
 │       └── Gears/
 │           └── Parallel_Axis_gears/
 │               ├── spur_helical_gear.py    # SpurHelicalGear
@@ -188,23 +202,91 @@ derel = DynamicEquivalentRollingElementLoad.from_distribution(bearing, result)
 
 ### core/machine_elements — Bearings
 
+The bearing package is structured in three layers: a catalogue base class, type-specific geometry classes, and concrete subtypes — one file per concern.
+
+```
+Bearings/
+├── bearing.py          ← Bearing base: catalogue data, ISO 281, mounting
+├── bearing_types.py    ← BearingType enum
+├── bearing_factory.py  ← make_bearing() — type-dispatch factory
+├── geometry/
+│   ├── base.py         ← BearingGeometry ABC
+│   ├── ball_geometry.py    ← BallBearingGeometry  (point contact, ISO/TS 16281)
+│   └── roller_geometry.py  ← RollerBearingGeometry (line contact, Phase 2)
+└── subtypes/
+    ├── deep_groove_ball.py     ← DeepGrooveBallBearing
+    └── ...                     ← other subtypes (Phase 2)
+```
+
 **`bearing_types.py`**
 
 | Class | Purpose |
 |-------|---------|
-| `BearingType` | Enum of rolling bearing families (DGBB, angular contact, cylindrical / taper / spherical roller). Determines life exponent p. |
+| `BearingType` | Enum of rolling bearing families. Determines life exponent p in ISO 281 (p=3 ball, p=10/3 roller). |
 
-**`bearing.py`**
+**`bearing.py` — `Bearing`**
 
-**`Bearing`** — catalogue-level bearing definition plus ISO/TS 16281 internal geometry.
-- Constructor: bore `d`, outer `D`, width `b`, ratings `C`/`C0`, factors `X`/`Y`, `arrangement` (locating/floating), `contact_angle_deg`, `label`, `position`.
+Catalogue-level base class. Carries ISO 281 rating data, mounting arrangement, and geometry attribute slots (initialised to `None`; populated by subclass `setup_internal_geometry`). Solvers always access geometry via `bearing.Dw`, `bearing.ri`, `bearing.cp`, etc. — the interface is uniform regardless of subtype.
+
+- Constructor: bore `d`, outer `D`, width `b`, ratings `C`/`C0`, factors `X`/`Y`, `arrangement` (`"locating"` / `"floating"` / `"non-locating"`), `contact_angle_deg`, `label`, `position`.
 - `is_locating()` — True if the bearing restrains axial displacement.
 - `equivalent_dynamic_load(Fr, Fa)` — P = X·Fr + Y·Fa (ISO 281).
-- `curvature_sum_inner/outer(Dw, Dpw, r)` — Σρ, ISO/TS 16281 eq.(5)/(6).
-- `curvature_difference_inner/outer(Dw, Dpw, r)` — F(ρ), eq.(7)/(8).
-- `chi_contact(F_rho)` — solves the contact ellipse ratio χ from eq.(2) via `brentq`.
-- `setup_internal_geometry(ri, re, Dw, Dpw, Z, s, E, nu)` — caches internal geometry; computes A = ri+re−Dw, initial contact angle α₀ = arccos(1−s/2A), Ri, and rolling element angular positions φ_j.
-- `compute_hertz_point_contact()` — Hertzian spring constant c_p, eq.(5)–(11).
+- `has_internal_geometry()` — True if `setup_internal_geometry()` has been called.
+- `validate()` / `validate_or_raise()` — catalogue-level geometry and factor checks.
+- `summary()` / `__repr__()`.
+
+**`bearing_factory.py` — `make_bearing(bearing_type, **kwargs)`**
+
+Instantiates the correct subclass for a given `BearingType`. Useful when the type comes from a database, config file, or GUI — i.e. when the subclass is not known at write time.
+
+```python
+from axisforge.core.machine_elements.Bearings import make_bearing, BearingType
+
+b = make_bearing(BearingType.DEEP_GROOVE_BALL, d=20, D=47, C=12700, ...)
+```
+
+**`geometry/base.py` — `BearingGeometry` (ABC)**
+
+Abstract contract for internal geometry classes. Defines `setup(**kwargs)`, `hertz_spring_constant()`, and `load_deflection_exponent` (3/2 for ball, 10/9 for roller).
+
+**`geometry/ball_geometry.py` — `BallBearingGeometry`**
+
+Point contact geometry for ball bearings. ISO/TS 16281 eq.(2)–(11).
+
+- `setup(ri, re, Dw, Dpw, Z, E, nu, *, s=None, alpha_0_deg=None)` — exactly one clearance input required. Computes A = ri+re−Dw, then either `alpha_0 = arccos(1 − s/2A)` or `s = 2A·(1 − cos α₀)`, then Ri and φ_j.
+- `curvature_sum_inner()` / `curvature_sum_outer()` — Σρ, eq.(5)/(6).
+- `curvature_diff_inner()` / `curvature_diff_outer()` — F(ρ), eq.(7)/(8).
+- `hertz_spring_constant()` — c_p [N/mm^(3/2)], eq.(9)–(11) via elliptic integrals and `brentq`.
+
+**`geometry/roller_geometry.py` — `RollerBearingGeometry`**
+
+Line contact geometry placeholder. Phase 1 provides a Palmgren approximation for c_l; full ISO/TS 16281 line contact (crowning, tilt) is deferred to Phase 2.
+
+**`subtypes/deep_groove_ball.py` — `DeepGrooveBallBearing`**
+
+Concrete DGBB subtype. Delegates all internal geometry to `BallBearingGeometry` and mirrors computed attributes onto `self` for uniform solver access.
+
+- `setup_internal_geometry(ri, re, Dw, Dpw, Z, E, nu=0.3, **kwargs)` — `**kwargs` passes the clearance specification (`s` or `alpha_0_deg`) straight through to `BallBearingGeometry.setup()`. Populates `self.ri`, `self.re`, `self.Dw`, `self.Dpw`, `self.Z`, `self.s`, `self.E`, `self.nu`, `self.A`, `self.alpha_0`, `self.Ri`, `self.phi_j`.
+- `compute_hertz_point_contact()` — returns and caches `self.cp` [N/mm^(3/2)].
+- `validate()` — extends base validation with geometry guards (ri > Dw/2, re > Dw/2, s ≥ 0).
+
+```python
+from axisforge.core.machine_elements.Bearings import DeepGrooveBallBearing
+
+b = DeepGrooveBallBearing(d=20, D=47, b=14, C=12700, C0=6550,
+                           designation="6204", position=20.0,
+                           arrangement="locating", label="brg1a")
+
+# via diametral clearance
+b.setup_internal_geometry(ri=4.13, re=4.21, Dw=7.94, Dpw=33.5,
+                           Z=8, E=206000, s=0.010)
+
+# or via free contact angle
+b.setup_internal_geometry(ri=4.13, re=4.21, Dw=7.94, Dpw=33.5,
+                           Z=8, E=206000, alpha_0_deg=0.5)
+
+cp = b.compute_hertz_point_contact()
+```
 
 ---
 
@@ -430,8 +512,9 @@ Cylindrical gear geometry and mesh force calculation (MAAG / ISO 21771 / Shigley
 - **No hidden state** — every intermediate quantity is a public attribute; solvers expose their full working for inspection.
 - **GUI-independent solvers** — the analysis core runs headless; the UI is a thin consumer.
 - **Deterministic and explainable** — no black-box methods. Failure assessment (future) uses measurable physical drivers and traceable indices, not machine learning or probabilistic life prediction.
-- **Composition over inheritance** — e.g. the planetary train composes two pair-meshing objects rather than subclassing them.
+- **Composition over inheritance** — e.g. the planetary train composes two pair-meshing objects rather than subclassing them; bearing geometry is a component of the bearing subtype, not its identity.
 - **Fail fast on geometry** — validation happens at construction; invalid geometry is never silently accepted.
+- **One file per concern** — each bearing subtype, geometry class, and solver lives in its own module; imports are explicit and traceable.
 
 ---
 
@@ -440,7 +523,7 @@ Cylindrical gear geometry and mesh force calculation (MAAG / ISO 21771 / Shigley
 | Phase | Focus | Status |
 |-------|-------|--------|
 | 1 | Shaft FEM · ISO/TS 16281 bearing load distribution · gear force integration | **Active** |
-| 2 | ISO 6336 gear strength — bending and pitting resistance | Planned |
+| 2 | Angular contact, cylindrical/tapered/spherical roller bearing subtypes · ISO 6336 gear strength | Planned |
 | 3 | Fatigue analysis — Goodman / Morrow / Miner | Planned |
 | 4 | Lubrication assessment — EHD film, grease | Planned |
 | 5 | Failure susceptibility scoring · SQLite data layer | Planned |

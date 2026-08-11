@@ -29,8 +29,8 @@ import matplotlib.pyplot as plt
 
 from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_helical_gear import SpurHelicalGear
 from axisforge.core.mechanical_system.Parallel_Axis_systems.gear_meshing.spur_helical_gear_meshing import SpurHelicalGearMeshing
-from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
+from axisforge.core.machine_elements.Bearings.subtypes.deep_groove_ball import DeepGrooveBallBearing
 from axisforge.core.machine_elements.Shaft.shaft import Shaft, ShaftSection, Shoulder
 from axisforge.core.loads import RadialLoad, TorqueLoad
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import (
@@ -229,9 +229,8 @@ def make_stepped_shaft(name, total_length, d_seat, d_body,
 
 
 def BB6204(position, label, locating=False):
-    b = Bearing(
+    b = DeepGrooveBallBearing(
         d=20.0, D=47.0,
-        bearing_type=BearingType.DEEP_GROOVE_BALL,
         designation="6204",
         b=14.0, C=CR_6204, C0=6_550.0,
         arrangement="locating" if locating else "floating",
@@ -242,8 +241,9 @@ def BB6204(position, label, locating=False):
     b.setup_internal_geometry(
         ri=BB_GEOM["ri"], re=BB_GEOM["re"],
         Dw=BB_GEOM["Dw"], Dpw=BB_GEOM["Dpw"],
-        Z=BB_GEOM["Z"],  s=BB_GEOM["s"],
-        E=BB_GEOM["E"],  nu=BB_GEOM["nu"],
+        Z=BB_GEOM["Z"],
+        E=BB_GEOM["E"], nu=BB_GEOM["nu"],
+        s=BB_GEOM["s"],            # keyword-only a partir do *
     )
     b.compute_hertz_point_contact()
     return b

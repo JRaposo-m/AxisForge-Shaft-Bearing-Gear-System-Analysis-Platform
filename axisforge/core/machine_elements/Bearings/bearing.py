@@ -2,10 +2,11 @@
 core/machine_elements/Bearings/bearing.py
 
 Rolling bearing base class — catalog data, ISO 281 equivalent load,
-mounting arrangement, and geometry attribute slots.
+mounting arrangement.
 
-Internal geometry (ri, re, Dw, Dpw, Z, s, cp, ...) is declared here as None.
-Populated by subclass setup_internal_geometry() — keeps solver access uniform.
+Internal geometry slots are NOT declared here.
+Each subclass declares its own geometry attributes in __init__
+and overrides has_internal_geometry().
 
 References:
   - ISO 281:2007  — dynamic load rating, life calculation, X/Y factors
@@ -48,6 +49,9 @@ class Bearing:
         contact_angle_deg : nominal contact angle [°]
         label             : identifier for reporting/traceability
         position          : axial coordinate along the shaft [mm]
+
+        Internal geometry (Dw, Dpw, Z, ri, re, ...) is NOT declared here.
+        Each subclass declares its own geometry slots in __init__.
         """
         # --- metadata ---
         self.label        = label
@@ -72,22 +76,6 @@ class Bearing:
         self.position    = position
         self.arrangement = arrangement
 
-        # --- internal geometry slots (populated by subclass) ---
-        # Ball bearings (point contact)
-        self.ri      = None   # inner groove radius [mm]
-        self.re      = None   # outer groove radius [mm]
-        self.Dw      = None   # rolling element diameter [mm]
-        self.Dpw     = None   # pitch circle diameter [mm]
-        self.Z       = None   # number of rolling elements
-        self.s       = None   # diametral clearance [mm]
-        self.E       = None   # Young's modulus [MPa]
-        self.nu      = None   # Poisson's ratio
-        self.A       = None   # radial clearance auxiliary [mm]
-        self.alpha_0 = None   # free contact angle [rad]
-        self.Ri      = None   # inner raceway radius to contact [mm]
-        self.phi_j   = None   # rolling element angular positions [rad]
-        self.cp      = None   # Hertzian spring constant [N/mm^(3/2)]
-
     # ------------------------------------------------------------------
     # Derived / convenience
     # ------------------------------------------------------------------
@@ -100,8 +88,11 @@ class Bearing:
         return self.X * Fr + self.Y * Fa
 
     def has_internal_geometry(self) -> bool:
-        """True if setup_internal_geometry() has been called."""
-        return self.Dw is not None
+        """
+        True if setup_internal_geometry() has been called.
+        Base returns False — subclass overrides with its own sentinel check.
+        """
+        return False
 
     # ------------------------------------------------------------------
     # Validation

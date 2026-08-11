@@ -4,11 +4,16 @@ Bearings/subtypes/deep_groove_ball.py
 Deep Groove Ball Bearing — ISO/TS 16281 point contact.
 
 Extends Bearing base with:
+  - internal geometry slots declared in __init__
   - setup_internal_geometry()       → populates geometry slots on self
   - compute_hertz_point_contact()   → returns cp [N/mm^(3/2)]
+  - has_internal_geometry()         → sentinel: Dw is not None
 
 All internal geometry is delegated to BallBearingGeometry,
 then mirrored onto self for uniform solver access.
+
+References:
+  - ISO/TS 16281:2008 — internal load distribution, point contact
 """
 
 from __future__ import annotations
@@ -47,9 +52,35 @@ class DeepGrooveBallBearing(Bearing):
         kwargs.setdefault("bearing_type", BearingType.DEEP_GROOVE_BALL)
         kwargs.setdefault("contact_angle_deg", 0.0)
         super().__init__(**kwargs)
-        self._geometry = BallBearingGeometry(
-            contact_angle=self.contact_angle
-        )
+        self._geometry = BallBearingGeometry(contact_angle=self.contact_angle)
+
+        # --- internal geometry slots — ball / point contact ---
+        # Populated by setup_internal_geometry(); None until then.
+        self.ri      = None   # inner groove radius [mm]
+        self.re      = None   # outer groove radius [mm]
+        self.Dw      = None   # ball diameter [mm]
+        self.Dpw     = None   # pitch circle diameter [mm]
+        self.Z       = None   # number of balls
+        self.s       = None   # diametral operating clearance [mm]
+        self.E       = None   # Young's modulus [MPa]
+        self.nu      = None   # Poisson's ratio
+        self.A       = None   # radial clearance auxiliary: ri + re - Dw [mm]
+        self.alpha_0 = None   # free contact angle [rad]
+        self.Ri      = None   # inner raceway radius to contact [mm]
+        self.phi_j   = None   # rolling element angular positions [rad]
+        self.cp      = None   # Hertzian spring constant [N/mm^(3/2)]
+
+    # ------------------------------------------------------------------
+    # Geometry sentinel
+    # ------------------------------------------------------------------
+
+    def has_internal_geometry(self) -> bool:
+        """True if setup_internal_geometry() has been called."""
+        return self.Dw is not None
+
+    # ------------------------------------------------------------------
+    # Internal geometry setup
+    # ------------------------------------------------------------------
 
     def setup_internal_geometry(self,
                                 ri: float,
@@ -75,7 +106,7 @@ class DeepGrooveBallBearing(Bearing):
                      s           : diametral operating clearance [mm]
                      alpha_0_deg : free contact angle [°]
 
-        Populates attributes on self:
+        Populates on self:
             ri, re, Dw, Dpw, Z, s, E, nu, A, alpha_0, Ri, phi_j
         """
         self._geometry.setup(ri, re, Dw, Dpw, Z, E, nu, **kwargs)
@@ -83,6 +114,10 @@ class DeepGrooveBallBearing(Bearing):
         # Mirror onto self — solvers access bearing.Dw, bearing.ri, etc.
         for attr in _GEOMETRY_ATTRS:
             setattr(self, attr, getattr(self._geometry, attr))
+
+    # ------------------------------------------------------------------
+    # Hertzian spring constant
+    # ------------------------------------------------------------------
 
     def compute_hertz_point_contact(self) -> float:
         """
@@ -102,6 +137,10 @@ class DeepGrooveBallBearing(Bearing):
             )
         self.cp = self._geometry.hertz_spring_constant()
         return self.cp
+
+    # ------------------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------------------
 
     def validate(self) -> list[str]:
         errors = super().validate()

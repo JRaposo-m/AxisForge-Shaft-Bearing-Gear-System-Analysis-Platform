@@ -18,6 +18,10 @@ fixtures/
 │   ├── uniform.py                   # single-section uniform shaft
 │   └── hollow.py                    # hollow section (reserved for future extension)
 │
+├── gears/
+│   └── spur_helical.py              # make_spur_helical(z, mn, b, ...) factory
+│                                    # + named reference instances (e.g. SPUR_20T_MN2)
+│
 ├── bearings/
 │   ├── dgbb_generic.py              # parametric DGBB factory
 │   ├── crb_generic.py               # generic cylindrical roller bearing (e.g. N204)
@@ -118,23 +122,34 @@ fixtures/
 
 ---
 
-## Composition Pattern
+## Fixture Dependency Chain
+
+Each layer depends only on the layers below it:
+
+```
+integration/                         ← full pipeline scripts (copy + adjust PARAMETERS)
+    ↑
+systems/linear_gear_chain.py         ← assembles ShaftSystems + resolves power flow
+    ↑                   ↑                       ↑
+gears/spur_helical.py   shafts/      bearings/
+(SpurHelicalGear)       (Shaft)      (Bearing)
+    ↑
+axisforge core classes (never modified here)
+```
 
 A typical analysis script is assembled as follows:
 
 ```
-systems/linear_gear_chain.py         ← system build + power flow resolution
-  + shafts/stepped_3section.py       ← make_stepped_shaft (per shaft, independently)
-  + bearings/dgbb_generic.py         ← bearing factory (injected into builder)
+gears/spur_helical.py                ← SpurHelicalGear instances per stage
+  + shafts/stepped_3section.py       ← Shaft geometry per shaft
+  + bearings/dgbb_generic.py         ← Bearing factory (by type + subtype)
+  + systems/linear_gear_chain.py     ← system build + power flow resolution
   + solvers/fem_simple.py            ← FEM solve → results library
   + solvers/iso16281_coupled.py      ← ISO 16281 → BearingResult per bearing
   + outputs/console_bearing.py       ← structured console output
   + plots/deflection_3panel.py       ← deflection figure
   + plots/bearing_polar.py           ← polar load distribution figure
 ```
-
-The `integration/` pipelines combine all of the above. Copy and adjust
-the `PARAMETERS` block to produce a new `design_xxx.py`.
 
 ---
 
@@ -156,6 +171,7 @@ the `PARAMETERS` block to produce a new `design_xxx.py`.
 ## Usage Rules
 
 - Each fixture is self-contained and independently importable.
-- `integration/` files are the only entry points that combine the full pipeline.
+- The dependency chain runs: gears / shafts / bearings → systems → solvers → outputs / plots → integration.
+- `integration/` files are the only entry points that combine the full pipeline — copy and adjust the `PARAMETERS` block to produce a new `design_xxx.py`.
 - Fixtures marked `[remove post-validation]` are inherently temporary.
 - Do not modify a fixture for a specific case — duplicate and rename it instead.

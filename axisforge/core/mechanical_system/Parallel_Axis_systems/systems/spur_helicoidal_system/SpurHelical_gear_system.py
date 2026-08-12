@@ -15,6 +15,17 @@ Two classes:
 Scope: parallel-axis only (spur / helical / internal). No bevel/worm, no
 convergent torque merge, no multi-source graph — see the context pack §5.
 
+IMPORTANT — fan-out is detected by GearElement IDENTITY, not equality:
+A shared driver (e.g. one pinion meshing simultaneously with two wheels)
+is recognised ONLY if the SAME GearElement Python object is passed as
+gear_a to every link sharing that driver. Two GearElement instances that
+describe the identical physical gear (same SpurHelicalGear, same z, same
+position) but are DIFFERENT objects are treated as two unrelated drivers.
+_topology_errors() raises no error in that case; each link silently falls
+back to mode B (100% of available torque each) instead of mode A
+(torque_split share). See SpurHelicalMeshLink.torque_split and
+SpurHelicalGearSystem._driver_groups() below.
+
 Units: torque PROPAGATES and is STORED in N·m end-to-end (that is what
 meshing.forces() consumes and returns, and what TorqueLoad now stores).
 Force loads are in N and positions in mm; torque/moment is the one
@@ -55,6 +66,25 @@ class SpurHelicalMeshLink  :
     torque_split     : None       -> mode B (this driver takes 100% of T).
                        (0, 1]     -> mode A (simultaneous fan-out share).
                        See GearSystem §4.2.
+
+                       CAUTION: mode A only activates when two or more
+                       links share the SAME gear_a object (checked by
+                       id(), not by gear geometry). To fan out one
+                       physical pinion to several wheels, build ONE
+                       GearElement for that pinion and pass it as gear_a
+                       to every link:
+
+                           ge_z1  = GearElement(z1, role="driver", ...)
+                           link_a = SpurHelicalMeshLink(sys1, ge_z1, ..., torque_split=0.7)
+                           link_b = SpurHelicalMeshLink(sys1, ge_z1, ..., torque_split=0.3)
+
+                       Passing two separately-constructed GearElement
+                       instances for the same physical z1 (even with
+                       identical parameters) is NOT detected as fan-out:
+                       validate() raises nothing, and each link quietly
+                       resolves in mode B, delivering 100% of the
+                       available torque through EACH mesh independently
+                       — a silent double-counting of torque.
     """
 
     def __init__(self, shaft_a: ShaftSystem, gear_a: GearElement,
@@ -158,7 +188,20 @@ class SpurHelicalGearSystem:
         return order
 
     def _driver_groups(self) -> dict[int, list[SpurHelicalMeshLink]]:
-        """Group links by the *identity* of their driver GearElement."""
+
+        """
+        Group links by the *identity* of their driver GearElement.
+
+        Uses id(link.gear_a), i.e. Python object identity — NOT geometric
+        or logical equality. Two GearElement instances wrapping the same
+        physical SpurHelicalGear are two different keys here unless they
+        are literally the same object. This is the single mechanism that
+        decides mode A (fan-out, torque_split applies) vs mode B
+        (sequential/independent, 100% torque each) in resolve(). See the
+        module docstring and SpurHelicalMeshLink.torque_split for the
+        consequences of getting this wrong.
+        """
+        
         groups: dict[int, list[SpurHelicalMeshLink]] = defaultdict(list)
         for link in self.links:
             groups[id(link.gear_a)].append(link)

@@ -26,13 +26,8 @@ class BallBearingGeometry(BearingGeometry):
 
     load_deflection_exponent: float = 3.0 / 2.0
 
-    def __init__(self, contact_angle: float = 0.0):
-        """
-        Parameters
-        ----------
-        contact_angle : free contact angle [rad]
-        """
-        self.contact_angle = contact_angle
+    def __init__(self):
+        pass
 
     def setup(self,
               ri: float,
@@ -91,7 +86,7 @@ class BallBearingGeometry(BearingGeometry):
 
     def _gamma(self) -> float:
         """γ = Dw·cos(α) / Dpw"""
-        return self.Dw * np.cos(self.contact_angle) / self.Dpw
+        return self.Dw * np.cos(self.alpha_0) / self.Dpw
 
     def curvature_sum_inner(self) -> float:
         """Σρᵢ = (2/Dw)·(2 + γ/(1−γ) − Dw/(2rᵢ))   eq.(5)"""

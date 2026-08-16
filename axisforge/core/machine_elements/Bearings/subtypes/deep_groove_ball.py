@@ -50,9 +50,8 @@ class DeepGrooveBallBearing(Bearing):
 
     def __init__(self, **kwargs):
         kwargs.setdefault("bearing_type", BearingType.DEEP_GROOVE_BALL)
-        kwargs.setdefault("contact_angle_deg", 0.0)
         super().__init__(**kwargs)
-        self._geometry = BallBearingGeometry(contact_angle=self.contact_angle)
+        self._geometry = BallBearingGeometry()
 
         # --- internal geometry slots — ball / point contact ---
         # Populated by setup_internal_geometry(); None until then.

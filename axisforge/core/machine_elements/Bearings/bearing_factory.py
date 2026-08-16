@@ -23,12 +23,13 @@ from __future__ import annotations
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.machine_elements.Bearings.subtypes.deep_groove_ball import DeepGrooveBallBearing
+from axisforge.core.machine_elements.Bearings.subtypes.cylindrical_roller import CylindricalRollerBearing
 
 # Populated incrementally as subtypes are implemented
 _TYPE_MAP: dict[BearingType, type[Bearing]] = {
     BearingType.DEEP_GROOVE_BALL: DeepGrooveBallBearing,
     # BearingType.ANGULAR_CONTACT:    AngularContactBallBearing,   # Phase 2
-    # BearingType.CYLINDRICAL_ROLLER: CylindricalRollerBearing,    # Phase 2
+    BearingType.CYLINDRICAL_ROLLER: CylindricalRollerBearing,    # Phase 2
     # BearingType.TAPERED_ROLLER:     TaperedRollerBearing,        # Phase 2
     # BearingType.SPHERICAL_ROLLER:   SphericalRollerBearing,      # Phase 2
 }

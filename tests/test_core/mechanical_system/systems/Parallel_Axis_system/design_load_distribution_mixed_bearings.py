@@ -1,19 +1,52 @@
 """
-design_load_distribution_convergence.py
+design_load_distribution_mixed_bearings.py
 
-Coupled shaft-bearing analysis for the load-lifting gearbox at fixed b.
+Coupled shaft-bearing analysis for the load-lifting gearbox at fixed b,
+now with TWO bearing contact types per shaft: a locating deep-groove ball
+bearing (6204) plus a floating cylindrical roller bearing (NU204) — the
+"locating ball + floating roller" arrangement rolling_bearing_solver.py's
+module docstring calls out as a common real gearbox pairing.
+
+Duplicated from design_load_distribution_convergence.py rather than
+edited in place, per the fixtures contract (fixtures/README.md: "do not
+modify for a specific case — duplicate and rename"). Only the bearing
+construction (brgXb switches from BB6204 to CRNU204) and the per-type
+post-processing dispatch (BEARING_KITS below) are new; the FEM/gear
+pipeline itself (steps 1, 3, and the plotting) is unchanged.
 
 Pipeline per shaft:
-  1. build ShaftSystem with deep-groove ball bearings (6204)
-  2. setup_internal_geometry + compute_hertz_point_contact per bearing
+  1. build ShaftSystem — locating 6204 + floating NU204 per shaft
+  2. setup_internal_geometry (+ compute_hertz_point_contact /
+     compute_line_contact_spring_constant, per bearing type)
   3. grade_3 nodes injected at gear intervals (mesh fixed, no convergence study)
   4. SimpleFEMSolver.solve -> ShaftResultsReader.read(library) -> SimpleFEMResultsLibrary
-  5. RollingBearingSolver.solve(library) -> load distribution (dispatches by
-     BearingType to ISO16281BallSolver — the only type registered so far)
-  6. RollingElementCapacity (S4.3.1.2) + DynamicEquivalentRollingElementLoad (S4.3.2)
+  5. RollingBearingSolver.solve(library) -> load distribution, dispatched by
+     BearingType to ISO16281BallSolver (DEEP_GROOVE_BALL) or
+     ISO16281RollerSolver (CYLINDRICAL_ROLLER) — both registered now
+  6. per-type capacity + dynamic equivalent load, selected via BEARING_KITS
+     (RollingElementCapacity/DynamicEquivalentRollingElementLoad for ball —
+     both per-bearing scalars; RollerElementCapacity/LaminaDynamicEquivalentLoad
+     for roller — capacity is whole-roller (Q_ci/Q_ce) plus per-lamina
+     (q_ci/q_ce, eq.56-57), and the dynamic equivalent load is now genuinely
+     per-lamina (q_kei/q_kee, arrays of length n_s, eq.61-64) rather than a
+     single per-bearing figure, per ISO/TS 16281 S5.3.4 — see BEARING_KITS'
+     derel_summary for how this script reduces that array to a single
+     worst-lamina number for the console/plot output. See BEARING_KITS below
+     for why this dispatch lives here and not in RollingBearingSolver: the
+     orchestrator only unifies solve())
   7. plots:
        - global deflection diagrams  (v_xz, v_xy, v_res)
        - polar load distribution per bearing (Q_j vs phi_j_global)
+
+NOT executed end-to-end in the session that wrote this file — the FEM/gear
+machinery (SpurHelicalGear, ShaftSystem, SimpleFEMSolver, Mesh1D, ...) is
+this repo's own code, not something that session could responsibly stub.
+What WAS verified there, against real ISO16281BallSolver + ISO16281RollerSolver
+instances: CylindricalRollerBearing's construction/geometry pipeline,
+RollingBearingSolver's mixed-type dispatch (grouping, per-type solve,
+order-preserving merge), and both capacity classes evaluating without
+error. Run this once and sanity-check the printed output (Q_max fractions,
+n_loaded/Z, delta_r/delta_a signs) before trusting it for a real design.
 """
 
 from __future__ import annotations
@@ -25,6 +58,7 @@ from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_helical_gear
 from axisforge.core.mechanical_system.Parallel_Axis_systems.gear_meshing.spur_helical_gear_meshing import SpurHelicalGearMeshing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
 from axisforge.core.machine_elements.Bearings.subtypes.deep_groove_ball import DeepGrooveBallBearing
+from axisforge.core.machine_elements.Bearings.subtypes.cylindrical_roller import CylindricalRollerBearing
 from axisforge.core.machine_elements.Shaft.shaft import Shaft, ShaftSection, Shoulder
 from axisforge.core.loads import RadialLoad, TorqueLoad
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import (
@@ -43,15 +77,26 @@ from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bea
     RollingElementCapacity,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_postprocessing import (
-    contact_distribution,
-    bearing_stiffness,
-    DynamicEquivalentRollingElementLoad,
+    contact_distribution as ball_contact_distribution,
+    bearing_stiffness as ball_bearing_stiffness,
+    DynamicEquivalentRollingElementLoad as BallDynamicEquivalentRollingElementLoad,
+)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing import (
+    RollerElementCapacity,
+)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_postprocessing import (
+    contact_distribution as roller_contact_distribution,
+    bearing_stiffness as roller_bearing_stiffness,
+    LaminaDynamicEquivalentLoad,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.rolling_bearing_solver import (
     RollingBearingSolver,
 )
 from axisforge.mesh.oneD.shaft.mesh_generation.mesh_1D import Mesh1D
 from axisforge.mesh.oneD.shaft.mesh_generation.mesh_grade import Grader
+
+from dataclasses import dataclass
+from typing import Callable
 
 
 # ===========================================================================
@@ -69,6 +114,7 @@ SOLVER_TOL = 1.0e-6
 
 GEAR_GRADE = "grade_3"
 
+# --- locating bearing: deep-groove ball, 6204 (d=20, D=47, B=14) ---
 BB_GEOM = dict(
     Dw  = 7.94,
     Dpw = 33.5,
@@ -79,8 +125,120 @@ BB_GEOM = dict(
     E   = 206_000.0,
     nu  = 0.3,
 )
-
 CR_6204 = 12_700.0   # dynamic radial load rating [N]  (ISO 281, 6204)
+
+# --- floating bearing: cylindrical roller, NU204 (same d/D/B envelope as 6204) ---
+# d=20, D=47, B=14 and C=28.5 kN, C0=22 kN are real SKF NU 204 ECP catalogue
+# values (Explorer class, C-type cage). Internal geometry (Dwe, Lwe, Z, s)
+# is NOT published by the manufacturer — these are engineering estimates
+# for illustration, the same kind of approximation BB_GEOM's groove radii
+# (ri=0.52*Dw, re=0.53*Dw) already make above. Replace with manufacturer
+# internal-geometry data before using this for a real design.
+CR_GEOM = dict(
+    Dwe = 6.5,     # roller diameter [mm] — estimate
+    Lwe = 6.0,     # effective roller length [mm] — estimate
+    Dpw = 33.5,    # pitch circle diameter [mm] — same envelope as 6204
+    Z   = 12,      # roller count — estimate, typical for this envelope
+    s   = 0.015,   # diametral clearance [mm] — estimate, CN/normal-class order
+    n_s = 40,      # laminae per roller (>= 30 per ISO/TS 16281 S5.2.2)
+)
+CR_NU204 = 28_500.0   # dynamic radial load rating [N] (SKF NU 204 ECP, Explorer)
+
+
+# ===========================================================================
+# PER-BEARING-TYPE POST-PROCESSING DISPATCH
+#
+# RollingBearingSolver only unifies solve() (see its module docstring) —
+# everything downstream of a converged LoadDistributionResult (capacity,
+# dynamic equivalent load, secant stiffness, contact distribution) is
+# per-type, because the ball and roller postprocessing modules deliberately
+# don't import each other (see their own module docstrings). This script
+# is a caller that already knows each bearing's concrete BearingType, so it
+# owns the dispatch itself — a small registry keyed by BearingType, mirroring
+# the _SOLVER_MAP pattern inside rolling_bearing_solver.py, kept local to
+# this script rather than inside the library (a caller-specific convenience,
+# not a shared contract).
+# ===========================================================================
+
+def _ball_stiffness(b_obj, res, node):
+    return ball_bearing_stiffness(b_obj, res, Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy, Fa=node.Fa)
+
+
+def _roller_stiffness(b_obj, res, node):
+    # Roller bearings (NU/N-type) carry no axial load — bearing_stiffness()
+    # takes no Fa argument here; Ka comes back inf/"no_load" unconditionally.
+    return roller_bearing_stiffness(b_obj, res, Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy)
+
+
+def _ball_derel_summary(b_obj, derel):
+    """
+    Ball's DynamicEquivalentRollingElementLoad.Q_ei/Q_ee are already single
+    per-bearing scalars — nothing to reduce.
+    """
+    return ("Q_ei", float(derel.Q_ei), "Q_ee", float(derel.Q_ee))
+
+
+def _roller_derel_summary(b_obj, derel):
+    """
+    Roller's LaminaDynamicEquivalentLoad.q_kei/q_kee are (n_s,) arrays — one
+    value PER LAMINA (ISO/TS 16281 eq.61-64), not one per bearing (see the
+    module docstring in roller_bearing_postprocessing.py for why this
+    replaced the old per-roller DynamicEquivalentRollingElementLoad). For a
+    single-line console/plot summary this script reports the WORST lamina
+    (max q_kei / max q_kee) — the one that would govern a life check against
+    RollerElementCapacity's q_ci/q_ce (also per lamina, eq.56-57) — while the
+    full (n_s,) arrays remain available on `derel` itself for anyone who
+    wants the per-lamina detail (e.g. via lamina_distribution()-style plots).
+    """
+    n_s = b_obj.n_s
+    return (f"max q_kei (n_s={n_s})", float(derel.q_kei.max()),
+            f"max q_kee (n_s={n_s})", float(derel.q_kee.max()))
+
+
+def _roller_capacity_extra(cap) -> str | None:
+    """Per-lamina capacity (eq.56-57) — has no ball-bearing analogue."""
+    return f"q_ci (lamina) = {cap.q_ci:>9.2f} N    q_ce (lamina) = {cap.q_ce:>9.2f} N"
+
+
+def _ball_capacity_extra(cap) -> str | None:
+    return None
+
+
+@dataclass(frozen=True)
+class BearingKit:
+    """Per-BearingType post-processing bundle — see module note above."""
+    contact_distribution : Callable
+    stiffness             : Callable   # (b_obj, res, node) -> BearingStiffness
+    capacity_cls          : type       # .radial(bearing, Cr=...) -> capacity dataclass
+    derel_cls              : type       # .from_distribution(bearing, res, ...) -> derel dataclass
+    derel_summary          : Callable   # (b_obj, derel) -> (lbl_i, val_i, lbl_e, val_e), single-number view
+    capacity_extra          : Callable   # (cap) -> str | None, extra capacity line (roller-only: lamina q_ci/q_ce)
+    Cr                     : float
+    supports_axial         : bool       # False => skip minimum_axial_load entirely
+
+
+BEARING_KITS: dict[BearingType, BearingKit] = {
+    BearingType.DEEP_GROOVE_BALL: BearingKit(
+        contact_distribution = ball_contact_distribution,
+        stiffness             = _ball_stiffness,
+        capacity_cls          = RollingElementCapacity,
+        derel_cls              = BallDynamicEquivalentRollingElementLoad,
+        derel_summary          = _ball_derel_summary,
+        capacity_extra          = _ball_capacity_extra,
+        Cr                     = CR_6204,
+        supports_axial         = True,
+    ),
+    BearingType.CYLINDRICAL_ROLLER: BearingKit(
+        contact_distribution = roller_contact_distribution,
+        stiffness             = _roller_stiffness,
+        capacity_cls          = RollerElementCapacity,
+        derel_cls              = LaminaDynamicEquivalentLoad,
+        derel_summary          = _roller_derel_summary,
+        capacity_extra          = _roller_capacity_extra,
+        Cr                     = CR_NU204,
+        supports_axial         = False,
+    ),
+}
 
 
 # ===========================================================================
@@ -101,10 +259,10 @@ def _fmt_k(k: float) -> str:
     return f"{k:.4e}" if k != float("inf") else "    inf (rigid)"
 
 
-def print_bearing_result(lbl, b_obj, node, res, cap, derel,
-                         stiff, Fa_min, res_min):
+def print_bearing_result(lbl, b_obj, node, res, kit: BearingKit,
+                         cap, derel, stiff, Fa_min, res_min):
 
-    dist     = contact_distribution(b_obj, res)
+    dist     = kit.contact_distribution(b_obj, res)
     phi_arr  = dist[:, 0]
     Q_arr    = dist[:, 1]
     n_loaded = int((Q_arr > 0).sum())
@@ -114,8 +272,10 @@ def print_bearing_result(lbl, b_obj, node, res, cap, derel,
     psi_xy   = node.psi_xy
     psi_proj = psi_xz * np.cos(res.phi_Fr) + psi_xy * np.sin(res.phi_Fr)
 
+    kind = "point contact (ball)" if kit.supports_axial else "line contact (roller)"
+
     # ── header ────────────────────────────────────────────────────────
-    print(f"\n  +── Bearing  {lbl}  {'─'*(W-18)}+")
+    print(f"\n  +── Bearing  {lbl}  [{kind}]  {'─'*max(W-30-len(lbl)-len(kind), 4)}+")
 
     # ── reactions ─────────────────────────────────────────────────────
     print(f"  |")
@@ -150,18 +310,26 @@ def print_bearing_result(lbl, b_obj, node, res, cap, derel,
     # ── axial preload ─────────────────────────────────────────────────
     print(f"  |")
     print(f"  |  MINIMUM AXIAL PRELOAD")
-    if Fa_min == 0.0:
+    if not kit.supports_axial:
+        print(f"  |    N/A -- line-contact roller bearing (NU/N-type): no flange, "
+              f"no axial capacity")
+    elif Fa_min == 0.0:
         print(f"  |    Not required  (da = {res.delta_a:.4e} mm >= 0)")
     else:
         print(f"  |    Fa_min = {Fa_min:.2f} N  ->  da = {res_min.delta_a:.4e} mm at Fa_min")
 
-    # ── ISO/TS 16281 §4.3 ─────────────────────────────────────────────
+    # ── ISO/TS 16281 capacity + dynamic equivalent load ─────────────────
+    lbl_i, val_i, lbl_e, val_e = kit.derel_summary(b_obj, derel)
+    extra_cap_line = kit.capacity_extra(cap)
+
     print(f"  |")
-    print(f"  |  ISO/TS 16281  S4.3")
-    print(f"  |    S4.3.1.2  Q_ci (inner) = {cap.Q_ci:>9.2f} N    "
+    print(f"  |  ISO/TS 16281  CAPACITY / EQUIVALENT LOAD")
+    print(f"  |    Q_ci (inner) = {cap.Q_ci:>9.2f} N    "
           f"Q_ce (outer) = {cap.Q_ce:>9.2f} N")
-    print(f"  |    S4.3.2    Q_ei (inner) = {derel.Q_ei:>9.2f} N    "
-          f"Q_ee (outer) = {derel.Q_ee:>9.2f} N    "
+    if extra_cap_line is not None:
+        print(f"  |    {extra_cap_line}")
+    print(f"  |    {lbl_i} (inner) = {val_i:>9.2f} N    "
+          f"{lbl_e} (outer) = {val_e:>9.2f} N    "
           f"(inner_rotating = {derel.inner_rotating})")
 
     # ── load distribution ─────────────────────────────────────────────
@@ -202,12 +370,13 @@ def make_stepped_shaft(name, total_length, d_seat, d_body,
     return sh
 
 
-def BB6204(position, label, locating=False):
+def BB6204(position, label):
+    """Locating deep-groove ball bearing — always arrangement='locating'."""
     b = DeepGrooveBallBearing(
         d=20.0, D=47.0,
         designation="6204",
         b=14.0, C=CR_6204, C0=6_550.0,
-        arrangement="locating" if locating else "floating",
+        arrangement="locating",
         contact_angle_deg=0.0,
         label=label,
         position=position,
@@ -220,6 +389,27 @@ def BB6204(position, label, locating=False):
         s=BB_GEOM["s"],
     )
     b.compute_hertz_point_contact()
+    return b
+
+
+def CRNU204(position, label):
+    """
+    Floating cylindrical roller bearing — always arrangement='floating'
+    (CylindricalRollerBearing raises if given anything else: an NU/N-type
+    bearing has no flange, so it can never be the locating bearing).
+    """
+    b = CylindricalRollerBearing(
+        d=20.0, D=47.0,
+        designation="NU204",
+        b=14.0, C=CR_NU204, C0=22_000.0,
+        label=label,
+        position=position,
+    )
+    b.setup_internal_geometry(
+        Dwe=CR_GEOM["Dwe"], Lwe=CR_GEOM["Lwe"], Dpw=CR_GEOM["Dpw"],
+        Z=CR_GEOM["Z"], s=CR_GEOM["s"], n_s=CR_GEOM["n_s"],
+    )
+    b.compute_line_contact_spring_constant()
     return b
 
 
@@ -250,12 +440,14 @@ def build_systems(b: float) -> dict[str, ShaftSystem]:
     sys2.shaft_origin_x = sys1.shaft_origin_x + (z1.position - z2.position)
     sys3.shaft_origin_x = sys2.shaft_origin_x + (z3.position - z4.position)
 
-    sys1.add_bearing(BB6204(20.0,  "brg1a", locating=True))
-    sys1.add_bearing(BB6204(100.0, "brg1b"))
-    sys2.add_bearing(BB6204(25.0,  "brg2a", locating=True))
-    sys2.add_bearing(BB6204(125.0, "brg2b"))
-    sys3.add_bearing(BB6204(25.0,  "brg3a", locating=True))
-    sys3.add_bearing(BB6204(125.0, "brg3b"))
+    # brgXa: locating ball (6204).  brgXb: floating roller (NU204) — was
+    # BB6204(..., locating=False) in the single-type version of this script.
+    sys1.add_bearing(BB6204(20.0,  "brg1a"))
+    sys1.add_bearing(CRNU204(100.0, "brg1b"))
+    sys2.add_bearing(BB6204(25.0,  "brg2a"))
+    sys2.add_bearing(CRNU204(125.0, "brg2b"))
+    sys3.add_bearing(BB6204(25.0,  "brg3a"))
+    sys3.add_bearing(CRNU204(125.0, "brg3b"))
 
     ge_z1 = GearElement(z1, role="driver", rotation_dir=1, label="z1")
     ge_z2 = GearElement(z2, role="driven",                 label="z2")
@@ -272,7 +464,7 @@ def build_systems(b: float) -> dict[str, ShaftSystem]:
                                 phi_deg=270.0, distribute_loads=True, label="stage2")
 
     gearbox = SpurHelicalGearSystem([sys1, sys2, sys3], [link1, link2],
-                                    label="load-lifting")
+                                    label="load-lifting-mixed-bearings")
     gearbox.resolve(P_W, RPM_IN, rotation_dir_source=1, source_position=(0.0, 0.0))
 
     T3      = gearbox._resolved[id(sys3)]["T_out_Nm"]
@@ -304,8 +496,9 @@ def gear_grade_nodes(shaft_sys: ShaftSystem, grade: str = GEAR_GRADE) -> list[fl
 # ===========================================================================
 
 print(f"\n  +{'─'*(W-4)}+")
-print(f"  |  AXISFORGE -- Load-Lifting Gearbox Analysis{'':<{W-48}}|")
+print(f"  |  AXISFORGE -- Load-Lifting Gearbox Analysis (mixed bearings){'':<{W-64}}|")
 print(f"  |  Face width b = {B_STUDY} mm   P = {P_W} W   n_in = {RPM_IN} rpm{'':<{W-56}}|")
+print(f"  |  brgXa = 6204 (locating, ball)   brgXb = NU204 (floating, roller){'':<{W-70}}|")
 print(f"  +{'─'*(W-4)}+")
 
 shaft_systems = build_systems(B_STUDY)
@@ -328,10 +521,12 @@ for name, shaft_sys in shaft_systems.items():
     ShaftResultsReader(fem, shaft_sys).read(library)
     print(f"         done  --  {len(fem.x_nodes)} nodes")
 
-    # 2. ISO 16281 load distribution — orchestrated across bearing types
-    #    (only DEEP_GROOVE_BALL is registered so far, but the dispatch runs
-    #    regardless of how many types end up on this shaft)
-    print(f"\n  [2/3]  ISO/TS 16281 bearing solve ...")
+    # 2. ISO 16281 load distribution — orchestrated across bearing types.
+    #    Both DEEP_GROOVE_BALL and CYLINDRICAL_ROLLER are registered in
+    #    rolling_bearing_solver._SOLVER_MAP now, so brgXa/brgXb dispatch to
+    #    ISO16281BallSolver/ISO16281RollerSolver respectively and merge back
+    #    in the order `bearings` was built (brgXa before brgXb).
+    print(f"\n  [2/3]  ISO/TS 16281 bearing solve (mixed types) ...")
     solver    = RollingBearingSolver(tol=SOLVER_TOL)
     load_dist = solver.solve(shaft_sys, bearings, library)
     load_results[name] = load_dist
@@ -343,32 +538,35 @@ for name, shaft_sys in shaft_systems.items():
     shaft_res     = library.get(name)
     node_by_label = {n.label: n for n in shaft_res.bearing_nodes}
 
-    # Post-processing utilities and minimum_axial_load are per-type — every
-    # bearing here is known to be a DGBB, so call them on ISO16281BallSolver
-    # directly rather than through the orchestrator (which only unifies solve()).
+    # minimum_axial_load is ball-only (BEARING_KITS.supports_axial gates it
+    # per bearing below) and lives on ISO16281BallSolver itself, not as a
+    # free function — one instance, reused for every ball bearing on this shaft.
     ball_solver = ISO16281BallSolver(tol=SOLVER_TOL)
 
     for lbl, res in load_dist.items():
         node  = node_by_label[lbl]
         b_obj = bearings[lbl]
+        kit   = BEARING_KITS[b_obj.bearing_type]
 
-        stiff = bearing_stiffness(
-            b_obj, res, Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy, Fa=node.Fa)
+        stiff = kit.stiffness(b_obj, res, node)
 
-        psi_proj = node.psi_xz * np.cos(res.phi_Fr) + node.psi_xy * np.sin(res.phi_Fr)
-        Fa_min, res_min = ball_solver.minimum_axial_load(
-            b_obj,
-            Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy,
-            psi=psi_proj,
-            delta_r_init=res.delta_r, delta_a_init=res.delta_a,
-        )
+        if kit.supports_axial:
+            psi_proj = node.psi_xz * np.cos(res.phi_Fr) + node.psi_xy * np.sin(res.phi_Fr)
+            Fa_min, res_min = ball_solver.minimum_axial_load(
+                b_obj,
+                Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy,
+                psi=psi_proj,
+                delta_r_init=res.delta_r, delta_a_init=res.delta_a,
+            )
+        else:
+            Fa_min, res_min = None, None
 
-        cap   = RollingElementCapacity.radial(b_obj, Cr=CR_6204)
-        derel = DynamicEquivalentRollingElementLoad.from_distribution(
+        cap   = kit.capacity_cls.radial(b_obj, Cr=kit.Cr)
+        derel = kit.derel_cls.from_distribution(
             b_obj, res, inner_rotating=True, outer_rotating=False)
 
         print_bearing_result(
-            lbl=lbl, b_obj=b_obj, node=node, res=res,
+            lbl=lbl, b_obj=b_obj, node=node, res=res, kit=kit,
             cap=cap, derel=derel,
             stiff=stiff,
             Fa_min=Fa_min, res_min=res_min,
@@ -389,7 +587,7 @@ for name, shaft_sys in shaft_systems.items():
 
     fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
     fig.suptitle(
-        f"Deflection -- {name}  (b={B_STUDY} mm, mesh={GEAR_GRADE})",
+        f"Deflection -- {name}  (b={B_STUDY} mm, mesh={GEAR_GRADE}, mixed bearings)",
         fontsize=11, fontweight="bold",
     )
 
@@ -429,28 +627,32 @@ def plot_bearing_polar(name: str, shaft_sys: ShaftSystem, load_dist: dict):
                              subplot_kw={"projection": "polar"})
     if n == 1:
         axes = [axes]
-    fig.suptitle(f"Load distribution -- {name}  (ISO/TS 16281)",
+    fig.suptitle(f"Load distribution -- {name}  (ISO/TS 16281, mixed bearings)",
                  fontsize=11, fontweight="bold")
 
     for ax, b in zip(axes, bearings_list):
         res  = load_dist[b.label]
-        dist = contact_distribution(b, res)
+        kit  = BEARING_KITS[b.bearing_type]
+        dist = kit.contact_distribution(b, res)
         phi, Q = dist[:, 0], dist[:, 1]
 
         phi_c = np.append(phi, phi[0])
         Q_c   = np.append(Q,   Q[0])
 
-        ax.plot(phi_c, Q_c, color="#2166ac", lw=1.5, marker="o", ms=4)
-        ax.fill(phi_c, Q_c, color="#2166ac", alpha=0.12)
+        color = "#2166ac" if kit.supports_axial else "#d62728"
+        ax.plot(phi_c, Q_c, color=color, lw=1.5, marker="o", ms=4)
+        ax.fill(phi_c, Q_c, color=color, alpha=0.12)
 
-        cap   = RollingElementCapacity.radial(b, Cr=CR_6204)
-        derel = DynamicEquivalentRollingElementLoad.from_distribution(b, res)
+        cap   = kit.capacity_cls.radial(b, Cr=kit.Cr)
+        derel = kit.derel_cls.from_distribution(b, res)
+        kind  = "ball" if kit.supports_axial else "roller"
+        lbl_i, val_i, _, _ = kit.derel_summary(b, derel)
 
         ax.set_title(
-            f"{b.label}\n"
+            f"{b.label} ({kind})\n"
             f"Q_max = {Q.max():.0f} N   n_loaded = {int((Q>0).sum())}/{b.Z}\n"
             f"phi(Fr) = {np.degrees(res.phi_Fr):.1f} deg\n"
-            f"Q_ci = {cap.Q_ci:.0f} N   Q_ei = {derel.Q_ei:.0f} N",
+            f"Q_ci = {cap.Q_ci:.0f} N   {lbl_i} = {val_i:.0f} N",
             fontsize=7,
         )
         ax.set_theta_zero_location("E")

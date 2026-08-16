@@ -98,9 +98,8 @@ _LOG_ARG_EPS = 1e-12             # floor for the log() argument in the profile f
 # RollerElementCapacity — ISO/TS 16281 §5.3.1.2, eq.(47)-(49)
 # ---------------------------------------------------------------------------
 
-_LAMBDA_V_DEFAULT = 0.83   # eq.(49) — requires the detailed contact-stress
-                           # analysis of Refs [5],[6],[7] or eq.(60) of the
-                           # standard to justify a different value.
+_LAMBDA_V_RADIAL = 0.83   # eq.(49)
+_LAMBDA_V_TRUST  = 0.73 # eq.(52)    
 
 
 @dataclass(frozen=True)
@@ -143,8 +142,17 @@ class RollerElementCapacity:
     lambda_v : float
 
     @classmethod
+    def per_lamina(cls, bearing: Bearing, Q_ci: float, Q_ce: float):
+
+        n_s  = bearing.n_s
+        q_ci = Q_ci * (1.0 / n_s) ** (7.0 / 9.0)   # eq.(56)
+        q_ce = Q_ce * (1.0 / n_s) ** (7.0 / 9.0)   # eq.(57)
+
+        return cls(q_ci=q_ci, q_ce=q_ce)
+
+    @classmethod
     def radial(cls, bearing: Bearing, Cr: float, i: int = 1,
-               lambda_v: float = _LAMBDA_V_DEFAULT,
+               lambda_v: float = _LAMBDA_V_RADIAL,
                label: str = "") -> "RollerElementCapacity":
         """
         Radial roller bearing capacity — eq.(47)-(48), plus per-lamina
@@ -168,14 +176,63 @@ class RollerElementCapacity:
         Q_ci = (1.0 / lambda_v) * (Cr / (0.378 * Z * denom_a)) * (1.0 + base ** (9.0 / 2.0)) ** (2.0 / 9.0)
         Q_ce = (1.0 / lambda_v) * (Cr / (0.364 * Z * denom_a)) * (1.0 + base ** (-9.0 / 2.0)) ** (2.0 / 9.0)
 
-        n_s  = bearing.n_s
-        q_ci = Q_ci * (1.0 / n_s) ** (7.0 / 9.0)   # eq.(56)
-        q_ce = Q_ce * (1.0 / n_s) ** (7.0 / 9.0)   # eq.(57)
+        q_ci, q_ce = cls.per_lamina(bearing, Q_ci, Q_ce)
 
         return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, q_ci=q_ci, q_ce=q_ce,
                    Cr=Cr, i=i, lambda_v=lambda_v)
 
+    @classmethod
+    def thrust_nonzero_alpha(cls, bearing: Bearing, Ca: float,
+               lambda_v: float = _LAMBDA_V_TRUST,
+               label: str = "") -> "RollerElementCapacity":
 
+        Z, alpha = bearing.Z, bearing.alpha_0
+        Dwe, Dpw = bearing.Dwe, bearing.Dpw
+        gamma = Dwe * np.cos(alpha) / Dpw
+
+        _lbl = label or bearing.label
+        if not (0.0 < gamma < 1.0):
+            raise ValueError(
+                f"Bearing '{_lbl}': gamma = Dwe*cos(alpha)/Dpw = {gamma:.6f} "
+                f"is outside (0, 1) — check Dwe/Dpw/alpha_0."
+            )
+
+        base = ((1.0 - gamma) / (1.0 + gamma)) ** (143.0 / 108.0)
+        denom_a = Z * np.sin(alpha)
+
+        Q_ci = 1.0 / lambda_v * (Ca / denom_a) * (1.0 + base ** (9.0 / 2.0)) ** (2.0 / 9.0)
+        Q_ce = 1.0 / lambda_v * (Ca / denom_a) * (1.0 + base ** (-9.0 / 2.0)) ** (2.0 / 9.0)
+
+        q_ci, q_ce = cls.per_lamina(bearing, Q_ci, Q_ce)
+
+        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, q_ci=q_ci, q_ce=q_ce,
+                   Ca=Ca, lambda_v=lambda_v)
+
+    @classmethod
+    def thrust_90deg(cls, bearing: Bearing, Ca: float,
+               lambda_v: float = _LAMBDA_V_TRUST,
+               label: str = "") -> "RollerElementCapacity":
+
+        Z, alpha = bearing.Z, bearing.alpha_0
+        Dwe, Dpw = bearing.Dwe, bearing.Dpw
+        gamma = Dwe * np.cos(alpha) / Dpw
+
+        _lbl = label or bearing.label
+        if not (0.0 < gamma < 1.0):
+            raise ValueError(
+                f"Bearing '{_lbl}': gamma = Dwe*cos(alpha)/Dpw = {gamma:.6f} "
+                f"is outside (0, 1) — check Dwe/Dpw/alpha_0."
+            )
+
+        Q_ci = 1.0 / lambda_v * (Ca / Z) * 2 ** (2.0 / 9.0)
+        Q_ce = 1.0 / lambda_v * (Ca / Z) * 2 ** (2.0 / 9.0)
+
+        q_ci, q_ce = cls.per_lamina(bearing, Q_ci, Q_ce)
+
+        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, q_ci=q_ci, q_ce=q_ce,
+                   Ca=Ca, lambda_v=lambda_v)
+
+    
 # ---------------------------------------------------------------------------
 # RollerLoadDistributionResult — LoadDistributionResult + per-lamina data
 # ---------------------------------------------------------------------------
@@ -507,7 +564,7 @@ class ISO16281RollerSolver:
 # ---------------------------------------------------------------------------
 
 def debug_radial_capacity(bearing: Bearing, Cr: float, i: int = 1,
-                          lambda_v: float = _LAMBDA_V_DEFAULT, label: str = "") -> None:
+                          lambda_v: float = _LAMBDA_V_RADIAL, label: str = "") -> None:
     """
     Print all intermediate values for Q_ci / Q_ce (eq.47-49) — manual
     cross-check only. ASCII only, per project console-output convention.

@@ -124,31 +124,32 @@ class RollingElementCapacity:
     label         : str
     Q_ci          : float
     Q_ce          : float
+    i             : int
     bearing_class : str
     Cr            : float | None
     Ca            : float | None
 
     @classmethod
-    def radial(cls, bearing: Bearing, Cr: float,
+    def radial(cls, bearing: Bearing, Cr: float, i:int = 1,
                label: str = "") -> "RollingElementCapacity":
         """
         Radial ball bearing capacity — §4.3.1.2 eq.(19)–(20).
         Requires bearing.setup_internal_geometry() already called.
         """
-        Z, alpha_i = bearing.Z, bearing.alpha_0
+        Z, alpha = bearing.Z, bearing.alpha_0
         ri, re, Dw, Dpw = bearing.ri, bearing.re, bearing.Dw, bearing.Dpw
-        gamma = Dw * np.cos(alpha_i) / Dpw
+        gamma = Dw * np.cos(alpha) / Dpw
 
         _lbl = label or bearing.label
         _check_geometry(ri, re, Dw, _lbl)
 
         bracket      = _geometry_bracket(gamma, ri, re, Dw)
-        cos_alpha_07 = np.cos(alpha_i) ** 0.7
+        cos_alpha_07 = np.cos(alpha) * i ** 0.7
 
         Q_ci = (Cr / (0.407 * Z * cos_alpha_07)) * (1.0 + bracket ** (10.0/3.0)) ** 0.3
         Q_ce = (Cr / (0.389 * Z * cos_alpha_07)) * (1.0 + bracket ** (-10.0/3.0)) ** 0.3
 
-        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce,
+        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, i = i,
                    bearing_class="radial", Cr=Cr, Ca=None)
 
     @classmethod

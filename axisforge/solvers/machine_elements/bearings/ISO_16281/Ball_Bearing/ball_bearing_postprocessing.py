@@ -1,20 +1,34 @@
 """
-axisforge/solvers/machine_elements/bearings/ISO_16281/Radial_Ball_Bearing/radial_ball_bearing_postprocessing.py
+axisforge/solvers/machine_elements/bearings/ISO_16281/Ball_Bearing/ball_bearing_postprocessing.py
 
 Post-processing for POINT-CONTACT (ball) bearings — everything that CONSUMES
-an already-computed LoadDistributionResult (or BearingStiffness) to derive a
-further quantity, rather than producing a LoadDistributionResult itself.
+an already-computed BallLoadDistributionResult (or BallBearingStiffness) to
+derive a further quantity, rather than producing one itself.
 
 Scope
 -----
 Q_j(), phi_j_global(), contact_distribution(), bearing_stiffness() and
-DynamicEquivalentRollingElementLoad all take a converged LoadDistributionResult
-as input. None of them run scipy.optimize — the solve is already done by the
-time any of this file's functions are called. This file imports
-radial_ball_bearing.py only for typing (Bearing), never for its solver
-class, and radial_ball_bearing.py never imports this file — the dependency
+DynamicEquivalentRollingElementLoad all take a converged
+BallLoadDistributionResult as input. None of them run scipy.optimize — the
+solve is already done by the time any of this file's functions are called.
+This file imports ball_bearing.py only for typing (Bearing), never for its
+solver class, and ball_bearing.py never imports this file — the dependency
 is one-directional, post-processing depends on the solve output shape, not
 the other way around.
+
+BallLoadDistributionResult is imported from ball_bearing_results.py (the
+local library), not from the global library.py. BallBearingStiffness is
+defined directly in THIS file, not imported from library.py either — same
+reasoning as BallLoadDistributionResult: everything before the final,
+cross-type aggregation step (BearingResultsLibrary) belongs local, so this
+module never needs a real import from library.py at all. The secant
+stiffness projection (delta_r -> Kr_xz/Kr_xy/Ka) is identical for point and
+line contact, so RollerBearingStiffness in
+Roller_Bearing/roller_bearing_postprocessing.py duplicates the same
+formula rather than either side importing the other or importing a shared
+base from library.py — consistent with how RollerLoadDistributionResult /
+BallLoadDistributionResult are each self-contained rather than sharing a
+base.
 
 References
 ----------
@@ -29,9 +43,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
-from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
-    LoadDistributionResult,
-    BearingStiffness,
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import (
+    BallLoadDistributionResult,
 )
 
 
@@ -39,7 +52,7 @@ from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
 # Per-element contact force / global angular position
 # ---------------------------------------------------------------------------
 
-def Q_j(bearing: Bearing, result: LoadDistributionResult) -> np.ndarray:
+def Q_j(bearing: Bearing, result: BallLoadDistributionResult) -> np.ndarray:
     """
     Per-element contact force [N], point-contact law Q_j = cp * delta_j^1.5.
 
@@ -51,7 +64,7 @@ def Q_j(bearing: Bearing, result: LoadDistributionResult) -> np.ndarray:
     return bearing.cp * np.maximum(result.delta_j, 0.0) ** 1.5
 
 
-def phi_j_global(bearing: Bearing, result: LoadDistributionResult) -> np.ndarray:
+def phi_j_global(bearing: Bearing, result: BallLoadDistributionResult) -> np.ndarray:
     """
     Ball angular positions in the global frame [rad], wrapped to [0, 2*pi).
 
@@ -61,7 +74,7 @@ def phi_j_global(bearing: Bearing, result: LoadDistributionResult) -> np.ndarray
     return (bearing.phi_j + result.phi_Fr) % (2.0 * np.pi)
 
 
-def contact_distribution(bearing: Bearing, result: LoadDistributionResult,
+def contact_distribution(bearing: Bearing, result: BallLoadDistributionResult,
                          frame: str = "global") -> np.ndarray:
     """
     Per-element (angle, contact force) pairs, shape (Z, 2): [phi, Q_j].
@@ -81,14 +94,113 @@ def contact_distribution(bearing: Bearing, result: LoadDistributionResult,
 
 
 # ---------------------------------------------------------------------------
-# Secant stiffness — thin wrapper around the single implementation in library.py
+# BallBearingStiffness — self-contained, no import from library.py
 # ---------------------------------------------------------------------------
 
-def bearing_stiffness(bearing: Bearing, result: LoadDistributionResult,
+class BallBearingStiffness:
+    """
+    Secant stiffness of a point-contact (ball) bearing, decomposed onto the
+    XZ / XY / axial axes. Fully self-contained: no import, subclassing, or
+    other runtime dependency on library.py or on Roller_Bearing — see the
+    module docstring for why this is duplicated rather than shared.
+
+    Built from a converged BallLoadDistributionResult by projecting delta_r
+    back onto the global axes:
+
+        delta_r_xz = delta_r * cos(phi_Fr)
+        delta_r_xy = delta_r * sin(phi_Fr)
+        Kr_xz = Fr_xz / delta_r_xz
+        Kr_xy = Fr_xy / delta_r_xy
+        Ka    = Fa    / delta_a
+
+    Any stiffness component is set to float('inf') when the corresponding
+    displacement is negligible (rigid in that direction).
+
+    Fr_xz, Fr_xy, Fa and delta_a are NOT stored on this object — Fr_xz/Fr_xy/Fa
+    already live in BearingNodeData (SimpleFEMResultsLibrary) and delta_a
+    already lives on the BallLoadDistributionResult that from_result() was
+    built from; the caller has all three in scope by construction, since it
+    had to pass them in to call from_result() in the first place. Keeping
+    them here too would just be a second copy of data that already exists
+    elsewhere. Only what from_result() actually computes — the projected
+    displacements and the stiffnesses/regime derived from them — is stored.
+
+    Ka_regime
+    ---------
+    "no_load"           Fa = 0
+    "engaged"           delta_a >= 0 — axial contact active
+    "closing_clearance" delta_a < 0  — axial clearance not yet closed
+
+    Attributes
+    ----------
+    label      str
+    delta_r_xz float [mm]      delta_r projected onto the XZ plane
+    Kr_xz      float [N/mm]
+    delta_r_xy float [mm]      delta_r projected onto the XY plane
+    Kr_xy      float [N/mm]
+    Ka         float | None   [N/mm]
+    Ka_regime  str   | None
+    """
+
+    __slots__ = (
+        "label",
+        "delta_r_xz", "Kr_xz",
+        "delta_r_xy", "Kr_xy",
+        "Ka", "Ka_regime",
+    )
+
+    def __init__(self, label,
+                 delta_r_xz, Kr_xz,
+                 delta_r_xy, Kr_xy,
+                 Ka=None, Ka_regime=None):
+        self.label      = label
+        self.delta_r_xz = delta_r_xz
+        self.Kr_xz      = Kr_xz
+        self.delta_r_xy = delta_r_xy
+        self.Kr_xy      = Kr_xy
+        self.Ka         = Ka
+        self.Ka_regime  = Ka_regime
+
+    @classmethod
+    def from_result(cls,
+                    label: str,
+                    result: BallLoadDistributionResult,
+                    Fr_xz: float,
+                    Fr_xy: float,
+                    Fa: float,
+                    eps: float = 1e-9) -> "BallBearingStiffness":
+        """
+        Build from a converged BallLoadDistributionResult.
+
+        Fr_xz, Fr_xy, Fa are used only to compute Kr_xz/Kr_xy/Ka here — they
+        are not retained on the returned object (see class docstring).
+        """
+        delta_r_xz = result.delta_r * np.cos(result.phi_Fr)
+        delta_r_xy = result.delta_r * np.sin(result.phi_Fr)
+        delta_a    = result.delta_a
+
+        Kr_xz = (Fr_xz / delta_r_xz) if abs(delta_r_xz) > eps else float("inf")
+        Kr_xy = (Fr_xy / delta_r_xy) if abs(delta_r_xy) > eps else float("inf")
+
+        if Fa == 0.0:
+            Ka, regime = float("inf"), "no_load"
+        elif abs(delta_a) > eps:
+            Ka     = Fa / delta_a
+            regime = "engaged" if delta_a >= 0.0 else "closing_clearance"
+        else:
+            Ka, regime = float("inf"), "engaged"
+
+        return cls(label=label,
+                   delta_r_xz=delta_r_xz, Kr_xz=Kr_xz,
+                   delta_r_xy=delta_r_xy, Kr_xy=Kr_xy,
+                   Ka=Ka, Ka_regime=regime)
+
+
+def bearing_stiffness(bearing: Bearing, result: BallLoadDistributionResult,
                       Fr_xz: float, Fr_xy: float, Fa: float,
-                      eps: float = 1e-9) -> BearingStiffness:
-    """Secant stiffness (Kr_xz, Kr_xy, Ka) from a converged LoadDistributionResult."""
-    return BearingStiffness.from_result(
+                      eps: float = 1e-9) -> BallBearingStiffness:
+    """Secant stiffness (Kr_xz, Kr_xy, Ka) from a converged BallLoadDistributionResult."""
+    return BallBearingStiffness.from_result(
         label=bearing.label, result=result,
         Fr_xz=Fr_xz, Fr_xy=Fr_xy, Fa=Fa, eps=eps,
     )
@@ -148,7 +260,7 @@ class DynamicEquivalentRollingElementLoad:
     Q_j            : np.ndarray
 
     @classmethod
-    def from_distribution(cls, bearing: Bearing, result: LoadDistributionResult,
+    def from_distribution(cls, bearing: Bearing, result: BallLoadDistributionResult,
                           inner_rotating: bool = True,
                           outer_rotating: bool = False,
                           label: str = "") -> "DynamicEquivalentRollingElementLoad":

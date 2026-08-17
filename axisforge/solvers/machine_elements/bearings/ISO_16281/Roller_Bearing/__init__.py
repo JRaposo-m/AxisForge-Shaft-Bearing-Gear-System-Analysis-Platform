@@ -3,8 +3,11 @@ axisforge/solvers/machine_elements/bearings/ISO_16281/Roller_Bearing/__init__.py
 
 Public surface for the line-contact (radial cylindrical roller bearing)
 ISO/TS 16281 §5.2 lamina-model solver package. Mirrors the split kept by
-the sibling Ball_Bearing package: solving lives in
-roller_bearing.py, everything that consumes an already-solved
+the sibling Ball_Bearing package: solving lives in roller_bearing.py, the
+LOCAL library — both the result shape a solve produces
+(RollerLoadDistributionResult) and the registry that holds one per bearing
+label (RollerLoadDistributionLibrary) — lives together in
+roller_bearing_results.py, and everything that consumes an already-solved
 result lives in roller_bearing_postprocessing.py.
 
 roller_profile() (eq.42-44) is NOT re-exported here as a free function —
@@ -16,9 +19,12 @@ computed by this package at all — they must already be on the bearing
 """
 from .roller_bearing import (
     ISO16281RollerSolver,
-    RollerLoadDistributionResult,
     RollerElementCapacity,
     debug_radial_capacity,
+)
+from .roller_bearing_results import (
+    RollerLoadDistributionResult,
+    RollerLoadDistributionLibrary,
 )
 from .roller_bearing_postprocessing import (
     Q_j,
@@ -26,6 +32,7 @@ from .roller_bearing_postprocessing import (
     contact_distribution,
     lamina_distribution,
     bearing_stiffness,
+    RollerBearingStiffness,
     stress_riser_factor,
     LaminaDynamicEquivalentLoad,
 )
@@ -33,6 +40,7 @@ from .roller_bearing_postprocessing import (
 __all__ = [
     "ISO16281RollerSolver",
     "RollerLoadDistributionResult",
+    "RollerLoadDistributionLibrary",
     "RollerElementCapacity",
     "debug_radial_capacity",
     "Q_j",
@@ -40,6 +48,7 @@ __all__ = [
     "contact_distribution",
     "lamina_distribution",
     "bearing_stiffness",
+    "RollerBearingStiffness",
     "stress_riser_factor",
     "LaminaDynamicEquivalentLoad",
 ]

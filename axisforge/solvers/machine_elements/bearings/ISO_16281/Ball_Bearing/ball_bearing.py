@@ -1,38 +1,46 @@
 """
-axisforge/solvers/machine_elements/bearings/ISO_16281/Radial_Ball_Bearing/radial_ball_bearing.py
+axisforge/solvers/machine_elements/bearings/ISO_16281/Ball_Bearing/ball_bearing.py
 
 ISO/TS 16281 internal load distribution SOLVER for POINT-CONTACT bearings
 (deep groove and angular contact ball bearings — BearingType.DEEP_GROOVE_BALL
 and BearingType.ANGULAR_CONTACT). alpha_0 is a bearing attribute, not
 hardcoded, so both families are covered by the same kinematics.
 
-Scope of this file: only things that PRODUCE a LoadDistributionResult (or a
-capacity value from bearing geometry alone) live here. Anything that
-CONSUMES an already-computed LoadDistributionResult / BearingStiffness to
-derive a further quantity — contact force distribution, ball positions,
+Scope of this file: only things that PRODUCE a BallLoadDistributionResult
+(or a capacity value from bearing geometry alone) live here. Anything that
+CONSUMES an already-computed BallLoadDistributionResult / BallBearingStiffness
+to derive a further quantity — contact force distribution, ball positions,
 secant stiffness, dynamic equivalent load — lives in
-radial_ball_bearing_postprocessing.py instead. That file imports from this
+ball_bearing_postprocessing.py instead. That file imports from this
 one only for typing; this file never imports from it.
+
+solve() returns a BallLoadDistributionLibrary (ball_bearing_results.py) —
+a LOCAL, single-type registry — not a bare dict. This mirrors
+ISO16281RollerSolver.solve() returning a RollerLoadDistributionLibrary on
+the roller side. rolling_bearing_solver.RollingBearingSolver.solve() is
+what reads labels back out of it and merges it with any other per-type
+local library; this file never touches the final, cross-type
+BearingResultsLibrary in the global library.py.
 
 This module is one of several per-bearing-type solvers dispatched by
 rolling_bearing_solver.RollingBearingSolver (see BearingType in
-bearing_types.py). It lives in its own Radial_Ball_Bearing/ subfolder,
-sibling to a future e.g. Cylindrical_Roller_Bearing/ — it does not import,
-and is not imported by, any other contact-type solver. The two are
-independent and only share the neutral data contract, generic utilities,
-and results registry one level up, in bearings/ISO_16281/library.py.
+bearing_types.py). It lives in its own Ball_Bearing/ subfolder, sibling to
+Roller_Bearing/ — it does not import, and is not imported by, any other
+contact-type solver. The two are independent and only share the neutral
+data contract, generic utilities, and results registry one level up, in
+bearings/ISO_16281/library.py.
 
 The solve is performed in the plane of the resultant radial force:
 
     phi_Fr = arctan2(Fr_xy, Fr_xz)
-    Fr     = sqrt(Fr_xz² + Fr_xy²)
-    psi    = psi_xz·cos(phi_Fr) + psi_xy·sin(phi_Fr)   [prescribed misalignment]
+    Fr     = sqrt(Fr_xz^2 + Fr_xy^2)
+    psi    = psi_xz*cos(phi_Fr) + psi_xy*sin(phi_Fr)   [prescribed misalignment]
 
 A 2-equation root (delta_r, delta_a) enforces static equilibrium (§4.2.2.1),
-using the point-contact load-deflection law Q_j = cp · delta_j^1.5. Ball
+using the point-contact load-deflection law Q_j = cp * delta_j^1.5. Ball
 positions in the global frame (output/plots only):
 
-    phi_j_global = (bearing.phi_j + phi_Fr) % 2π
+    phi_j_global = (bearing.phi_j + phi_Fr) % 2*pi
 
 Inputs (Fr, Fa, psi_xz, psi_xy) come from a SimpleFEMResultsLibrary populated
 by ShaftResultsReader. The bearing solve is performed once per load case —
@@ -40,7 +48,7 @@ the resulting stiffness values are outputs, not fed back into FEM.
 
 References
 ----------
-ISO/TS 16281:2008 §4.2, eq.(12)–(15); §4.3.1, eq.(19)–(28)
+ISO/TS 16281:2008 §4.2, eq.(12)-(15); §4.3.1, eq.(19)-(28)
 Harris & Kotzalas, "Rolling Bearing Analysis", 5th ed., Ch. 6
 """
 from __future__ import annotations
@@ -58,10 +66,13 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analys
     BearingNodeData,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
-    LoadDistributionResult,
     check_bearing_ready,
     warn_if_floating_loaded,
     run_root,
+)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import (
+    BallLoadDistributionResult,
+    BallLoadDistributionLibrary,
 )
 from axisforge.config import SOLVER_TOLERANCE
 
@@ -72,9 +83,9 @@ from axisforge.config import SOLVER_TOLERANCE
 
 def _geometry_bracket(gamma: float, ri: float, re: float, Dw: float) -> float:
     """
-    Groove geometry factor for Q_ci / Q_ce (§4.3.1.2–.3):
+    Groove geometry factor for Q_ci / Q_ce (§4.3.1.2-.3):
 
-        1.044 · ((1−γ)/(1+γ))^1.72 · (ri/re · (2re−Dw)/(2ri−Dw))^0.41
+        1.044 * ((1-gamma)/(1+gamma))^1.72 * (ri/re * (2re-Dw)/(2ri-Dw))^0.41
     """
     radii_ratio = (ri / re) * ((2.0 * re - Dw) / (2.0 * ri - Dw))
     return 1.044 * ((1.0 - gamma) / (1.0 + gamma)) ** 1.72 * radii_ratio ** 0.41
@@ -83,12 +94,12 @@ def _geometry_bracket(gamma: float, ri: float, re: float, Dw: float) -> float:
 def _check_geometry(ri: float, re: float, Dw: float, label: str) -> None:
     if 2.0 * ri <= Dw:
         raise ValueError(
-            f"Bearing '{label}': 2·ri ({2*ri:.4f}) <= Dw ({Dw:.4f}) — "
+            f"Bearing '{label}': 2*ri ({2*ri:.4f}) <= Dw ({Dw:.4f}) — "
             f"inner groove radius too small."
         )
     if 2.0 * re <= Dw:
         raise ValueError(
-            f"Bearing '{label}': 2·re ({2*re:.4f}) <= Dw ({Dw:.4f}) — "
+            f"Bearing '{label}': 2*re ({2*re:.4f}) <= Dw ({Dw:.4f}) — "
             f"outer groove radius too small."
         )
 
@@ -105,9 +116,9 @@ class RollingElementCapacity:
     """
     Per-element dynamic load capacity Q_ci (inner) / Q_ce (outer).
 
-    ISO/TS 16281 §4.3.1.2  radial ball bearings      eq.(19)–(20)
-                 §4.3.1.3  thrust ball, alpha != 90°  eq.(21)–(22)
-                 §4.3.1.4  thrust ball, alpha = 90°   eq.(23)–(24)
+    ISO/TS 16281 §4.3.1.2  radial ball bearings      eq.(19)-(20)
+                 §4.3.1.3  thrust ball, alpha != 90°  eq.(21)-(22)
+                 §4.3.1.4  thrust ball, alpha = 90°   eq.(23)-(24)
 
     Point-contact only. Cr / Ca are supplied externally (ISO 281 catalogue);
     this module does not resolve them.
@@ -133,7 +144,7 @@ class RollingElementCapacity:
     def radial(cls, bearing: Bearing, Cr: float, i:int = 1,
                label: str = "") -> "RollingElementCapacity":
         """
-        Radial ball bearing capacity — §4.3.1.2 eq.(19)–(20).
+        Radial ball bearing capacity — §4.3.1.2 eq.(19)-(20).
         Requires bearing.setup_internal_geometry() already called.
         """
         Z, alpha = bearing.Z, bearing.alpha_0
@@ -155,7 +166,7 @@ class RollingElementCapacity:
     @classmethod
     def thrust_nonzero_alpha(cls, bearing: Bearing, Ca: float,
                               label: str = "") -> "RollingElementCapacity":
-        """Thrust ball bearing (alpha != 90°) — §4.3.1.3 eq.(21)–(22)."""
+        """Thrust ball bearing (alpha != 90°) — §4.3.1.3 eq.(21)-(22)."""
         Z, alpha = bearing.Z, bearing.alpha_0
         ri, re, Dw, Dpw = bearing.ri, bearing.re, bearing.Dw, bearing.Dpw
         gamma = Dw * np.cos(alpha) / Dpw
@@ -176,7 +187,7 @@ class RollingElementCapacity:
     def thrust_90deg(cls, bearing: Bearing, Ca: float,
                      label: str = "") -> "RollingElementCapacity":
         """
-        Thrust ball bearing (alpha = 90°) — §4.3.1.4 eq.(23)–(24).
+        Thrust ball bearing (alpha = 90°) — §4.3.1.4 eq.(23)-(24).
         At alpha=90°, gamma=0; the (1-gamma)/(1+gamma) term vanishes and the
         geometry bracket reduces to the groove radii ratio alone.
         """
@@ -213,7 +224,7 @@ class ISO16281BallSolver:
     Only solving lives on this class — Q_j(), phi_j_global(),
     contact_distribution() and bearing_stiffness() (all of which read an
     already-computed LoadDistributionResult rather than producing one) moved
-    to radial_ball_bearing_postprocessing.py as free functions.
+    to ball_bearing_postprocessing.py as free functions.
 
     Self-contained: does not import or depend on any other contact-type
     solver. rolling_bearing_solver.RollingBearingSolver dispatches to this
@@ -251,7 +262,7 @@ class ISO16281BallSolver:
               bearings: dict[str, Bearing],
               library: SimpleFEMResultsLibrary,
               psi_override: dict[str, float] | None = None,
-              ) -> dict[str, LoadDistributionResult]:
+              ) -> BallLoadDistributionLibrary:
         """
         Solve the internal load distribution for all point-contact bearings
         in `bearings`.
@@ -274,7 +285,11 @@ class ISO16281BallSolver:
 
         Returns
         -------
-        {label: LoadDistributionResult}
+        BallLoadDistributionLibrary — local registry, one entry per label in
+        `bearings`. rolling_bearing_solver.RollingBearingSolver.solve() is
+        what reads this back out and merges it with any other per-type
+        local library into the orchestrator's own result; this method never
+        touches the final, cross-type BearingResultsLibrary itself.
         """
         if self.psi_input and psi_override:
             unknown = set(psi_override) - set(bearings)
@@ -287,7 +302,7 @@ class ISO16281BallSolver:
         shaft_results = library.get(shaft_system.name)
         node_by_label = {n.label: n for n in shaft_results.bearing_nodes}
 
-        results: dict[str, LoadDistributionResult] = {}
+        results = BallLoadDistributionLibrary()
         for label, b in bearings.items():
             check_bearing_ready(b, label, _REQUIRED_ATTRS)
             node   = node_by_label[label]
@@ -304,7 +319,7 @@ class ISO16281BallSolver:
             else:
                 psi = node.psi_xz * np.cos(phi_Fr) + node.psi_xy * np.sin(phi_Fr)
 
-            results[label] = self._solve_bearing(
+            results.set(label, self._solve_bearing(
                 b,
                 Fr_xz        = Fr_xz,
                 Fr_xy        = Fr_xy,
@@ -313,7 +328,7 @@ class ISO16281BallSolver:
                 delta_a_init = node.u,
                 psi          = psi,
                 phi_Fr       = phi_Fr,
-            )
+            ))
 
         return results
 
@@ -380,7 +395,7 @@ class ISO16281BallSolver:
                        bearing: Bearing,
                        Fr_xz: float, Fr_xy: float, Fa: float,
                        delta_r_init: float, delta_a_init: float,
-                       psi: float, phi_Fr: float) -> LoadDistributionResult:
+                       psi: float, phi_Fr: float) -> BallLoadDistributionResult:
         """
         2-equation root (delta_r, delta_a) in the resultant-force plane.
 
@@ -388,8 +403,8 @@ class ISO16281BallSolver:
         the root problem and assembles the result.
 
         Equilibrium (§4.2.2.1):
-            Fr = cp · sum(delta_j^1.5 · cos(alpha_j) · cos(phi_j))
-            Fa = cp · sum(delta_j^1.5 · sin(alpha_j))
+            Fr = cp * sum(delta_j^1.5 * cos(alpha_j) * cos(phi_j))
+            Fa = cp * sum(delta_j^1.5 * sin(alpha_j))
         """
         Fr   = float(np.hypot(Fr_xz, Fr_xy))
         Vpsi = bearing.Ri * np.sin(psi) * np.cos(bearing.phi_j)
@@ -412,7 +427,7 @@ class ISO16281BallSolver:
             bearing, delta_r, delta_a, Vpsi)
         Mz = (bearing.Dpw / 2.0) * cp * float(np.sum(d32 * sa * cp_j))
 
-        return LoadDistributionResult(
+        return BallLoadDistributionResult(
             delta_r=delta_r, delta_a=delta_a, psi=psi, phi_Fr=phi_Fr,
             delta_j=delta_j, alpha_j=alpha_j,
             Mz=Mz, n_iter=nfev, residual=res, ok=ok,
@@ -430,7 +445,7 @@ class ISO16281BallSolver:
                             delta_r_init: float = 0.0,
                             delta_a_init: float = 0.0,
                             Fa_bracket: tuple[float, float] = (0.0, 5.0e4),
-                            xtol: float = 1e-6) -> tuple[float, LoadDistributionResult]:
+                            xtol: float = 1e-6) -> tuple[float, BallLoadDistributionResult]:
         """
         Minimum axial preload [N] such that delta_a >= 0 (contact closure).
         Uses brentq on delta_a(Fa). Raises ValueError if the upper bracket is
@@ -439,7 +454,7 @@ class ISO16281BallSolver:
         Parameters
         ----------
         psi : misalignment in the resultant-force plane [rad] — already projected
-              (use psi_xz·cos(phi_Fr) + psi_xy·sin(phi_Fr) if coming from FEM slopes)
+              (use psi_xz*cos(phi_Fr) + psi_xy*sin(phi_Fr) if coming from FEM slopes)
         """
         check_bearing_ready(bearing, bearing.label, _REQUIRED_ATTRS)
         phi_Fr = float(np.arctan2(Fr_xy, Fr_xz))

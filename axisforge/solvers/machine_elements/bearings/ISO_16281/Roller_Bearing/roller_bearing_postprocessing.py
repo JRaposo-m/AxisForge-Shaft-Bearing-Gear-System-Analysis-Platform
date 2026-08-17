@@ -3,8 +3,8 @@ axisforge/solvers/machine_elements/bearings/ISO_16281/Roller_Bearing/roller_bear
 
 Post-processing for LINE-CONTACT (radial cylindrical roller) bearings —
 everything that CONSUMES an already-computed RollerLoadDistributionResult
-(or BearingStiffness) to derive a further quantity, rather than producing
-one itself. Mirrors Ball_Bearing/ball_bearing_postprocessing.py.
+(or RollerBearingStiffness) to derive a further quantity, rather than
+producing one itself. Mirrors Ball_Bearing/ball_bearing_postprocessing.py.
 
 Scope
 -----
@@ -12,11 +12,22 @@ Q_j(), phi_j_global(), contact_distribution(), lamina_distribution(),
 bearing_stiffness(), stress_riser_factor() and LaminaDynamicEquivalentLoad
 all take a converged RollerLoadDistributionResult as input. None of them
 run scipy.optimize — the solve is already done by the time any of this
-file's functions are called. This file imports roller_bearing.py only for
-typing and for RollerLoadDistributionResult (needed to read q_jk/x_k off
-the result); roller_bearing.py never imports this file — the dependency
-is one-directional, post-processing depends on the solve output shape,
-not the other way around.
+file's functions are called. This file imports RollerLoadDistributionResult
+from roller_bearing_results.py (not from roller_bearing.py — the solving
+module is no longer a dependency of postprocessing at all); roller_bearing.py
+never imports this file — the dependency is one-directional, post-processing
+depends on the solve output shape, not the other way around.
+
+RollerBearingStiffness is defined directly in THIS file, not imported from
+the global library.py: everything before the final, cross-type aggregation
+step (BearingResultsLibrary) belongs local, so this module never needs a
+real import from library.py. The secant stiffness projection (delta_r ->
+Kr_xz/Kr_xy/Ka) is identical for point and line contact, so this duplicates
+the same formula as BallBearingStiffness in
+Ball_Bearing/ball_bearing_postprocessing.py rather than either side
+importing the other or importing a shared base from library.py — consistent
+with how RollerLoadDistributionResult / BallLoadDistributionResult are each
+self-contained rather than sharing a base.
 
 Dynamic equivalent load — now per lamina, not per roller (correction)
 -----------------------------------------------------------------------
@@ -76,8 +87,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
-from axisforge.solvers.machine_elements.bearings.ISO_16281.library import BearingStiffness
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_results import (
     RollerLoadDistributionResult,
 )
 
@@ -156,21 +166,113 @@ def lamina_distribution(bearing: Bearing, result: RollerLoadDistributionResult,
 
 
 # ---------------------------------------------------------------------------
-# Secant stiffness — thin wrapper around the single implementation in library.py
+# RollerBearingStiffness — self-contained, no import from library.py
 # ---------------------------------------------------------------------------
+
+class RollerBearingStiffness:
+    """
+    Secant stiffness of a line-contact (radial cylindrical roller) bearing,
+    decomposed onto the XZ / XY / axial axes. Fully self-contained: no
+    import, subclassing, or other runtime dependency on library.py or on
+    Ball_Bearing — see the module docstring for why this is duplicated
+    rather than shared.
+
+    Built from a converged RollerLoadDistributionResult by projecting
+    delta_r back onto the global axes:
+
+        delta_r_xz = delta_r * cos(phi_Fr)
+        delta_r_xy = delta_r * sin(phi_Fr)
+        Kr_xz = Fr_xz / delta_r_xz
+        Kr_xy = Fr_xy / delta_r_xy
+        Ka    = Fa    / delta_a
+
+    Any stiffness component is set to float('inf') when the corresponding
+    displacement is negligible (rigid in that direction).
+
+    Ka_regime
+    ---------
+    "no_load"           Fa = 0 — always the case here, since radial roller
+                        bearings (NU/N-type) carry no axial load
+    "engaged"           delta_a >= 0 — axial contact active
+    "closing_clearance" delta_a < 0  — axial clearance not yet closed
+
+    Attributes
+    ----------
+    label      str
+    delta_r_xz float [mm]      delta_r projected onto the XZ plane
+    Kr_xz      float [N/mm]
+    delta_r_xy float [mm]      delta_r projected onto the XY plane
+    Kr_xy      float [N/mm]
+    Ka         float | None   [N/mm]
+    Ka_regime  str   | None
+    """
+
+    __slots__ = (
+        "label",
+        "delta_r_xz", "Kr_xz",
+        "delta_r_xy", "Kr_xy",
+        "Ka", "Ka_regime",
+    )
+
+    def __init__(self, label,
+                 delta_r_xz, Kr_xz,
+                 delta_r_xy, Kr_xy,
+                 Ka=None, Ka_regime=None):
+        self.label      = label
+        self.delta_r_xz = delta_r_xz
+        self.Kr_xz      = Kr_xz
+        self.delta_r_xy = delta_r_xy
+        self.Kr_xy      = Kr_xy
+        self.Ka         = Ka
+        self.Ka_regime  = Ka_regime
+
+    @classmethod
+    def from_result(cls,
+                    label: str,
+                    result: RollerLoadDistributionResult,
+                    Fr_xz: float,
+                    Fr_xy: float,
+                    Fa: float,
+                    eps: float = 1e-9) -> "RollerBearingStiffness":
+        """
+        Build from a converged RollerLoadDistributionResult.
+
+        Fr_xz, Fr_xy, Fa are used only to compute Kr_xz/Kr_xy/Ka here — they
+        are not retained on the returned object (see class docstring).
+        """
+        delta_r_xz = result.delta_r * np.cos(result.phi_Fr)
+        delta_r_xy = result.delta_r * np.sin(result.phi_Fr)
+        delta_a    = result.delta_a
+
+        Kr_xz = (Fr_xz / delta_r_xz) if abs(delta_r_xz) > eps else float("inf")
+        Kr_xy = (Fr_xy / delta_r_xy) if abs(delta_r_xy) > eps else float("inf")
+
+        if Fa == 0.0:
+            Ka, regime = float("inf"), "no_load"
+        elif abs(delta_a) > eps:
+            Ka     = Fa / delta_a
+            regime = "engaged" if delta_a >= 0.0 else "closing_clearance"
+        else:
+            Ka, regime = float("inf"), "engaged"
+
+        return cls(label=label,
+                   delta_r_xz=delta_r_xz, Kr_xz=Kr_xz,
+                   delta_r_xy=delta_r_xy, Kr_xy=Kr_xy,
+                   Ka=Ka, Ka_regime=regime)
+
 
 def bearing_stiffness(bearing: Bearing, result: RollerLoadDistributionResult,
                       Fr_xz: float, Fr_xy: float,
-                      eps: float = 1e-9) -> BearingStiffness:
+                      eps: float = 1e-9) -> RollerBearingStiffness:
     """
     Secant stiffness (Kr_xz, Kr_xy) from a converged RollerLoadDistributionResult.
 
     Fa is always 0.0 here — radial roller bearings (NU/N-type) carry no
     axial load, so Ka comes back as float('inf') with regime "no_load"
-    (see BearingStiffness.from_result), which is the physically correct
-    statement rather than an edge case to special-case around.
+    (see RollerBearingStiffness.from_result), which is the physically
+    correct statement rather than an edge case to special-case around.
     """
-    return BearingStiffness.from_result(
+    return RollerBearingStiffness.from_result(
         label=bearing.label, result=result,
         Fr_xz=Fr_xz, Fr_xy=Fr_xy, Fa=0.0, eps=eps,
     )

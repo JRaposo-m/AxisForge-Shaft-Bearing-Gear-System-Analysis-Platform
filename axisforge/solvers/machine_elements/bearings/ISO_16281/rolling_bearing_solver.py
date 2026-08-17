@@ -3,41 +3,41 @@ axisforge/solvers/machine_elements/bearings/ISO_16281/rolling_bearing_solver.py
 
 Orchestrator for per-bearing-type ISO/TS 16281 solves.
 
-A shaft's bearing set can legitimately mix contact types — e.g. a locating
-deep-groove ball bearing plus a floating cylindrical roller bearing on the
-same shaft, a very common real gearbox arrangement. RollingBearingSolver
-groups the bearings passed to it by BearingType, dispatches each group to
-the registered per-type solver, and merges the results back into a single
-{label: LoadDistributionResult} dict — in the same order the caller supplied
-`bearings`, regardless of how the groups were split internally.
+A shaft's bearing set can mix contact types — e.g. a locating deep-groove
+ball bearing plus a floating cylindrical roller bearing on the same shaft.
+RollingBearingSolver groups bearings by BearingType, dispatches each group
+to the registered per-type solver, and merges the results back into one
+ordered {label: LoadDistributionResult} dict, in the caller's original
+`bearings` order.
 
-This is the ONLY module in the bearings/solvers package that knows about
-more than one contact type. Each per-type solver (ISO16281BallSolver,
-ISO16281RollerSolver) is self-contained and does not import, or get
-imported by, any other per-type solver — see library.py for what they do
-share (the neutral output contract, generic utilities, and the
-BearingResultsLibrary registry — no contact physics in any of it).
+This is the only module in the package that knows about more than one
+contact type. Each per-type solver (ISO16281BallSolver, ISO16281RollerSolver)
+stays self-contained and never imports the other.
 
-Dispatch mirrors axisforge/core/machine_elements/Bearings/bearing_factory.py:
-a _SOLVER_MAP keyed by BearingType, extended as new types are implemented,
-raising NotImplementedError (not a silent skip) for anything not yet
-registered — so an unimplemented bearing type fails loudly at solve time
-instead of quietly vanishing from the results.
+solve() vs postprocess_and_record()
+------------------------------------
+solve() only unifies the load-distribution solve. It never touches the
+final BearingResultsLibrary in library.py.
 
-Post-processing utilities that need the contact-type physics baked in
-(Q_j, contact_distribution, bearing_stiffness, minimum_axial_load,
-DynamicEquivalentRollingElementLoad, *ElementCapacity) are NOT re-exposed
-here — call them on the concrete per-type solver/module for a bearing whose
-type you already know (e.g. Ball_Bearing.ball_bearing.ISO16281BallSolver.
-minimum_axial_load(...), or Roller_Bearing.roller_bearing_postprocessing.
-bearing_stiffness(...)). The orchestrator only unifies solve(), which is
-the one operation that must span mixed-type bearing sets on a shaft. A
-caller iterating over a mixed result dict typically dispatches on
-`bearing.bearing_type` to pick the matching per-type module — see
-fixtures/integration/design_load_distribution_mixed_bearings.py for the
-pattern (a small BEARING_KIT registry keyed by BearingType).
+postprocess_and_record() [placeholder name] runs solve() (or accepts an
+already-solved dict), then computes capacity, dynamic equivalent load and
+secant stiffness per bearing via the correct per-type postprocessing
+module, and records everything into a BearingResultsLibrary. It's opt-in
+and separate from solve() because capacity/dynamic-equivalent-load need
+extra per-bearing inputs (catalogue Cr/Ca, rotating flags) that a bare
+solve() has no reason to require.
+
+Contact-type-specific postprocessing (Q_j, minimum_axial_load,
+lamina_distribution, stress_riser_factor, thrust_* capacity variants) is
+NOT re-exposed here — call it on the concrete per-type module directly.
+postprocess_and_record() only wires up what's uniform enough across
+contact types to automate: radial capacity, dynamic equivalent load,
+stiffness.
 """
 from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Callable, TYPE_CHECKING
 
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
@@ -46,34 +46,86 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analys
     SimpleFEMResultsLibrary,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
-    LoadDistributionResult,
-    RollingBearingTypeSolver,
+    BearingResultsLibrary,
 )
+
+# Type hint only, never constructed here — see library.py's own alias.
+if TYPE_CHECKING:
+    from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import (
+        BallLoadDistributionResult,
+    )
+    from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_results import (
+        RollerLoadDistributionResult,
+    )
+
+    LoadDistributionResult = BallLoadDistributionResult | RollerLoadDistributionResult
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing import (
     ISO16281BallSolver,
+    RollingElementCapacity,
+)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing import (
+    ball_bearing_postprocessing as _ball_pp,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing import (
     ISO16281RollerSolver,
+    RollerElementCapacity,
+)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing import (
+    roller_bearing_postprocessing as _roller_pp,
 )
 from axisforge.config import SOLVER_TOLERANCE
 
 
 # ---------------------------------------------------------------------------
-# Type dispatch table — extend as new per-type solvers are implemented.
-# Point-contact families (deep groove, angular contact) share the same
-# kinematics, so both map to ISO16281BallSolver. CYLINDRICAL_ROLLER maps to
-# ISO16281RollerSolver — line contact, §5.2 lamina model, no axial capacity.
-# TAPERED_ROLLER / SPHERICAL_ROLLER share the lamina mechanics but need an
-# additional coordinate transform (cone half-angle / crown-osculation) that
-# ISO16281RollerSolver does not implement — not wired in yet.
+# Type dispatch table
 # ---------------------------------------------------------------------------
 
 _SOLVER_MAP: dict[BearingType, type] = {
     BearingType.DEEP_GROOVE_BALL:  ISO16281BallSolver,
     BearingType.ANGULAR_CONTACT:   ISO16281BallSolver,
     BearingType.CYLINDRICAL_ROLLER: ISO16281RollerSolver,
-    # BearingType.TAPERED_ROLLER:     ISO16281RollerSolver-derived,  # Phase 2
-    # BearingType.SPHERICAL_ROLLER:   ISO16281RollerSolver-derived,  # Phase 2
+    # BearingType.TAPERED_ROLLER / SPHERICAL_ROLLER: needs an extra
+    # coordinate transform ISO16281RollerSolver doesn't implement — Phase 2.
+}
+
+
+# ---------------------------------------------------------------------------
+# Postprocessing dispatch — one adapter per contact-type family, absorbing
+# the signature mismatch between ball's bearing_stiffness() (takes Fa) and
+# roller's (doesn't — radial roller bearings carry no axial load).
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class _PostprocAdapter:
+    capacity_cls: type          # .radial(bearing, Cr, ...)
+    derel_cls: type             # .from_distribution(bearing, result, ...)
+    stiffness_fn: Callable      # (bearing, result, Fr_xz, Fr_xy, Fa, eps=1e-9)
+
+
+def _ball_stiffness(bearing, result, Fr_xz, Fr_xy, Fa, eps=1e-9):
+    return _ball_pp.bearing_stiffness(bearing, result, Fr_xz, Fr_xy, Fa, eps=eps)
+
+
+def _roller_stiffness(bearing, result, Fr_xz, Fr_xy, Fa, eps=1e-9):
+    return _roller_pp.bearing_stiffness(bearing, result, Fr_xz, Fr_xy, eps=eps)
+
+
+_POSTPROC_MAP: dict[BearingType, _PostprocAdapter] = {
+    BearingType.DEEP_GROOVE_BALL: _PostprocAdapter(
+        capacity_cls=RollingElementCapacity,
+        derel_cls=_ball_pp.DynamicEquivalentRollingElementLoad,
+        stiffness_fn=_ball_stiffness,
+    ),
+    BearingType.ANGULAR_CONTACT: _PostprocAdapter(
+        capacity_cls=RollingElementCapacity,
+        derel_cls=_ball_pp.DynamicEquivalentRollingElementLoad,
+        stiffness_fn=_ball_stiffness,
+    ),
+    BearingType.CYLINDRICAL_ROLLER: _PostprocAdapter(
+        capacity_cls=RollerElementCapacity,
+        derel_cls=_roller_pp.LaminaDynamicEquivalentLoad,
+        stiffness_fn=_roller_stiffness,
+    ),
 }
 
 
@@ -99,6 +151,7 @@ class RollingBearingSolver:
               bearings: dict[str, Bearing],
               library: SimpleFEMResultsLibrary,
               psi_override: dict[str, float] | None = None,
+              results: BearingResultsLibrary | None = None,
               ) -> dict[str, LoadDistributionResult]:
         """
         Solve every bearing in `bearings`, regardless of contact type.
@@ -110,8 +163,11 @@ class RollingBearingSolver:
         library       : SimpleFEMResultsLibrary — must contain results for
                         shaft_system.name
         psi_override  : {label: psi [rad]} — forwarded as-is to whichever
-                        per-type solver owns that label; see each per-type
-                        solver's solve() for the convention.
+                        per-type solver owns that label
+        results       : optional BearingResultsLibrary. When given, each
+                        per-type local library is handed to it wholesale
+                        via add_load_distribution_library() — one call per
+                        BearingType group. Omitted by default.
 
         Returns
         -------
@@ -137,14 +193,109 @@ class RollingBearingSolver:
                     f"Available: {[t.name for t in _SOLVER_MAP]}"
                 )
 
-            solver: RollingBearingTypeSolver = solver_cls(
-                tol=self.tol, psi_input=self.psi_input)
+            solver = solver_cls(tol=self.tol, psi_input=self.psi_input)
             group_override = (
                 {lbl: psi_override[lbl] for lbl in group if lbl in psi_override}
                 if psi_override else None
             )
-            merged.update(solver.solve(shaft_system, group, library,
-                                       psi_override=group_override))
+            local_lib = solver.solve(shaft_system, group, library,
+                                     psi_override=group_override)
+
+            if results is not None:
+                results.add_load_distribution_library(bearing_type, local_lib)
+
+            for label in group:
+                merged[label] = local_lib.get(label)
 
         # Preserve the caller's original ordering rather than the grouping order.
         return {label: merged[label] for label in bearings}
+
+    # ------------------------------------------------------------------
+    # Full pipeline — opt-in, separate from solve() (see module docstring)
+    # ------------------------------------------------------------------
+
+    def postprocess_and_record(self,
+              shaft_system: ShaftSystem,
+              bearings: dict[str, Bearing],
+              library: SimpleFEMResultsLibrary,
+              catalog: dict[str, dict],
+              load_distribution: dict[str, LoadDistributionResult] | None = None,
+              results: BearingResultsLibrary | None = None,
+              psi_override: dict[str, float] | None = None,
+              ) -> BearingResultsLibrary:
+        """
+        [PLACEHOLDER NAME] Full pipeline: solve() (if not already done) ->
+        capacity -> dynamic equivalent load -> stiffness -> recorded into a
+        BearingResultsLibrary, tagged with bearing_type.
+
+        Parameters
+        ----------
+        shaft_system, bearings, library, psi_override
+                      : same as solve()
+        catalog       : {label: {"capacity": {...}, "dynamic_equivalent_load": {...}}}
+                      per-bearing kwargs for the two postprocessing calls:
+                        catalog[label]["capacity"] -> forwarded to
+                          adapter.capacity_cls.<method>(bearing, **kwargs);
+                          <method> defaults to "radial". Pass
+                          {"method": "thrust_nonzero_alpha", "Ca": ...} (or
+                          "thrust_90deg") for thrust arrangements. Must
+                          include Cr (radial) or Ca (thrust).
+                        catalog[label]["dynamic_equivalent_load"] -> forwarded
+                          to adapter.derel_cls.from_distribution(bearing,
+                          result, **kwargs), typically {"inner_rotating":
+                          ..., "outer_rotating": ...}.
+                      A label may omit either sub-dict to skip that step.
+        load_distribution : reuse an already-computed solve() result instead
+                      of solving again. If None, calls self.solve() itself.
+        results       : BearingResultsLibrary to record into. A new one is
+                      created if not given.
+
+        Returns
+        -------
+        BearingResultsLibrary, populated for every label in `bearings` with
+        at least load_distribution, plus whichever of capacity /
+        dynamic_equivalent_load / stiffness `catalog` requested.
+        """
+        results = results or BearingResultsLibrary()
+
+        if load_distribution is None:
+            load_distribution = self.solve(shaft_system, bearings, library,
+                                           psi_override=psi_override,
+                                           results=results)
+        else:
+            for label, b in bearings.items():
+                results.set_load_distribution(label, load_distribution[label],
+                                              bearing_type=b.bearing_type)
+
+        shaft_results = library.get(shaft_system.name)
+        node_by_label = {n.label: n for n in shaft_results.bearing_nodes}
+
+        for label, b in bearings.items():
+            result = load_distribution[label]
+
+            adapter = _POSTPROC_MAP.get(b.bearing_type)
+            if adapter is None:
+                raise NotImplementedError(
+                    f"No postprocessing adapter registered for BearingType."
+                    f"{b.bearing_type.name} yet (bearing: '{label}'). "
+                    f"Available: {[t.name for t in _POSTPROC_MAP]}"
+                )
+
+            entry = catalog.get(label, {})
+
+            cap_kwargs = dict(entry.get("capacity", {}))
+            if cap_kwargs:
+                method = cap_kwargs.pop("method", "radial")
+                capacity_fn = getattr(adapter.capacity_cls, method)
+                results.set_capacity(label, capacity_fn(b, **cap_kwargs))
+
+            derel_kwargs = entry.get("dynamic_equivalent_load")
+            if derel_kwargs is not None:
+                derel = adapter.derel_cls.from_distribution(b, result, **derel_kwargs)
+                results.set_dynamic_equivalent_load(label, derel)
+
+            node = node_by_label[label]
+            stiff = adapter.stiffness_fn(b, result, node.Fr_xz, node.Fr_xy, node.Fa)
+            results.set_stiffness(label, stiff)
+
+        return results

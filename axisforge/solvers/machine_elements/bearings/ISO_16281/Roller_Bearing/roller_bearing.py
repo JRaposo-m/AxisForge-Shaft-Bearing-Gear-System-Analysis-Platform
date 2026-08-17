@@ -11,14 +11,17 @@ corrected for the roller's logarithmic profile (crowning) so a purely
 cylindrical roller's theoretical edge-stress singularity does not appear
 in the model. See ISO/TS 16281:2008 §5.2, eq.(34)-(46).
 
-Scope of this file: only things that PRODUCE a LoadDistributionResult (or a
-capacity value from bearing geometry alone) live here — mirrors the split
-used by Ball_Bearing/ball_bearing.py. Anything that CONSUMES
-an already-computed result to derive a further quantity (per-roller contact
-force, contact/lamina-pressure distributions, secant stiffness, dynamic
-equivalent load) lives in roller_bearing_postprocessing.py instead.
-That file imports from this one only for typing and for the
-RollerLoadDistributionResult class; this file never imports from it.
+Scope of this file: only things that RUN the iterative solve (the
+scipy.optimize.root problem and everything it needs on every iteration)
+live here — ISO16281RollerSolver, roller_profile(), and RollerElementCapacity
+(a closed-form calculation from bearing geometry + catalogue Cr/Ca alone,
+no solve state, so it stays with the other geometry-only formulas rather
+than moving to a "results" file). The RESULT SHAPE the solve hands back,
+RollerLoadDistributionResult, moved to roller_bearing_results.py — it is
+pure data (no formulas), consumed by roller_bearing_postprocessing.py and,
+via TYPE_CHECKING only, by the global BearingResultsLibrary registry in
+bearings/ISO_16281/library.py. This file imports RollerLoadDistributionResult
+from roller_bearing_results.py; it never imports roller_bearing_postprocessing.py.
 
 Why psi is an INPUT here, not a second unknown solved jointly with delta_r
 ------------------------------------------------------------------------
@@ -70,10 +73,13 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analys
     SimpleFEMResultsLibrary,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
-    LoadDistributionResult,
     check_bearing_ready,
     warn_if_floating_loaded,
     run_root,
+)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_results import (
+    RollerLoadDistributionResult,
+    RollerLoadDistributionLibrary,
 )
 from axisforge.config import SOLVER_TOLERANCE
 
@@ -99,7 +105,7 @@ _LOG_ARG_EPS = 1e-12             # floor for the log() argument in the profile f
 # ---------------------------------------------------------------------------
 
 _LAMBDA_V_RADIAL = 0.83   # eq.(49)
-_LAMBDA_V_TRUST  = 0.73 # eq.(52)    
+_LAMBDA_V_TRUST  = 0.73 # eq.(52)
 
 
 @dataclass(frozen=True)
@@ -179,7 +185,7 @@ class RollerElementCapacity:
         q_ci, q_ce = cls.per_lamina(bearing, Q_ci, Q_ce)
 
         return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, Cr=Cr,
-                   i=i, lambda_v=lambda_v, 
+                   i=i, lambda_v=lambda_v,
                    q_ci=q_ci, q_ce=q_ce,
 )
 
@@ -233,51 +239,6 @@ class RollerElementCapacity:
 
         return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, q_ci=q_ci, q_ce=q_ce,
                    Ca=Ca, lambda_v=lambda_v)
-
-    
-# ---------------------------------------------------------------------------
-# RollerLoadDistributionResult — LoadDistributionResult + per-lamina data
-# ---------------------------------------------------------------------------
-
-class RollerLoadDistributionResult(LoadDistributionResult):
-    """
-    LoadDistributionResult extended with the per-lamina data the §5.2 lamina
-    model produces, which the shared (Z,)-shaped delta_j/alpha_j slots in
-    library.py cannot hold (that class is deliberately kept free of any
-    contact-type-specific physics — see its module docstring). Defined here
-    rather than in library.py so line-contact-specific shape stays local to
-    this contact type.
-
-    Base-class fields keep their documented meaning, adapted for line
-    contact:
-      delta_r  : radial ring displacement [mm] — the one unknown solved
-      delta_a  : always 0.0 — radial roller bearings (NU/N-type) carry no
-                 axial load
-      delta_j  : roller-centreline deflection per roller (Z,) [mm],
-                 eq.(38), BEFORE the lamina/profile correction — the
-                 per-lamina deflection is delta_jk, not this
-      alpha_j  : bearing.alpha_0 broadcast to (Z,) — for a cylindrical
-                 roller the contact normal stays radial regardless of tilt,
-                 unlike a ball's alpha_j, which genuinely varies with load
-      Mz       : diagnostic reaction moment, eq.(46), evaluated at the
-                 converged (delta_r, psi) — NOT a solve constraint here,
-                 see module docstring
-
-    Extra fields (this subclass only)
-    ----------------------------------
-    x_k       ndarray(n_s,) [mm]     lamina positions, eq.(38)-figure 3
-    psi_j     ndarray(Z,)   [rad]    per-roller local misalignment, eq.(39)
-    delta_jk  ndarray(Z,n_s)[mm]     per-lamina elastic deflection, eq.(41)
-    q_jk      ndarray(Z,n_s)[N]      per-lamina contact force, eq.(36)
-    """
-    __slots__ = ("x_k", "psi_j", "delta_jk", "q_jk")
-
-    def __init__(self, *, x_k, psi_j, delta_jk, q_jk, **kwargs):
-        super().__init__(**kwargs)
-        self.x_k      = x_k
-        self.psi_j    = psi_j
-        self.delta_jk = delta_jk
-        self.q_jk     = q_jk
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +343,7 @@ class ISO16281RollerSolver:
               bearings: dict[str, Bearing],
               library: SimpleFEMResultsLibrary,
               psi_override: dict[str, float] | None = None,
-              ) -> dict[str, RollerLoadDistributionResult]:
+              ) -> RollerLoadDistributionLibrary:
         """
         Solve the internal load distribution for all line-contact roller
         bearings in `bearings`.
@@ -405,7 +366,11 @@ class ISO16281RollerSolver:
 
         Returns
         -------
-        {label: RollerLoadDistributionResult}
+        RollerLoadDistributionLibrary — local registry, one entry per label
+        in `bearings`. rolling_bearing_solver.RollingBearingSolver.solve()
+        is what reads this back out and merges it with any other per-type
+        local library into the orchestrator's own result; this method never
+        touches the final, cross-type BearingResultsLibrary itself.
         """
         if self.psi_input and psi_override:
             unknown = set(psi_override) - set(bearings)
@@ -418,7 +383,7 @@ class ISO16281RollerSolver:
         shaft_results = library.get(shaft_system.name)
         node_by_label = {n.label: n for n in shaft_results.bearing_nodes}
 
-        results: dict[str, RollerLoadDistributionResult] = {}
+        results = RollerLoadDistributionLibrary()
         for label, b in bearings.items():
             check_bearing_ready(b, label, _REQUIRED_ATTRS)
             self._check_lamina_count(b, label)
@@ -437,14 +402,14 @@ class ISO16281RollerSolver:
             else:
                 psi = node.psi_xz * np.cos(phi_Fr) + node.psi_xy * np.sin(phi_Fr)
 
-            results[label] = self._solve_bearing(
+            results.set(label, self._solve_bearing(
                 b,
                 Fr_xz        = Fr_xz,
                 Fr_xy        = Fr_xy,
                 delta_r_init = float(np.hypot(node.v_xz, node.v_xy)),
                 psi          = psi,
                 phi_Fr       = phi_Fr,
-            )
+            ))
 
         return results
 

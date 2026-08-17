@@ -44,14 +44,17 @@ Wraps `SimpleFEMSolver` and restricts metric evaluation to a subdomain [x_lo, x_
 
 ## solvers — Bearings (ISO/TS 16281)
 
-The bearings solver package is split by contact type, mirroring the `core/machine_elements/Bearings/subtypes` split (see [`core/README.md`](../core/README.md#coremachine_elements--bearings)), with a shared result library and a type-dispatching orchestrator on top:
+> **Pending re-verification (2026-08-17):** this package is being actively restructured — faster than this document could be re-checked against source in one pass. The `Ball_Bearing/` entries below are confirmed against the current file. Everything under "Not yet re-verified" further down was last checked before `ball_bearing.py` picked up its own `ball_bearing_results.py` split, so it likely still describes the previous shape (e.g. a shared `LoadDistributionResult` returned as a bare dict) rather than the current one. Treat that part as a lead, not a fact, until someone checks it against the file and removes this note.
+
+The bearings solver package is split by contact type, mirroring the `core/machine_elements/Bearings/subtypes` split (see [`core/README.md`](../core/README.md#coremachine_elements--bearings)), with a shared library of generic utilities and a type-dispatching orchestrator on top:
 
 ```
 ISO_16281/
-├── library.py                          ← shared result shapes, generic utilities, results registry
+├── library.py                          ← generic utilities, cross-type results registry
 ├── rolling_bearing_solver.py           ← RollingBearingSolver — per-BearingType dispatch
 ├── Ball_Bearing/
 │   ├── ball_bearing.py                 ← ISO16281BallSolver, RollingElementCapacity
+│   ├── ball_bearing_results.py         ← BallLoadDistributionResult, BallLoadDistributionLibrary
 │   └── ball_bearing_postprocessing.py  ← contact_distribution, bearing_stiffness,
 │                                          DynamicEquivalentRollingElementLoad
 └── Roller_Bearing/
@@ -60,65 +63,44 @@ ISO_16281/
     └── roller_bearing_postprocessing.py← Q_j, bearing_stiffness, LaminaDynamicEquivalentLoad
 ```
 
-**`library.py`** — shared data contract and generic utilities used by every per-type solver. Deliberately contains no contact physics — no kinematics, no capacity formulas, no load-deflection exponents; those live entirely inside each contact type's own module. Renamed from `common.py`; now also owns the per-bearing results registry.
+### Confirmed current
 
-| Class / function | Purpose |
-|-------|---------|
-| `LoadDistributionResult` | Output shape for one bearing's internal load distribution solve, identical regardless of contact type: ring displacements δr/δa, prescribed misalignment ψ, resultant-force angle φ(Fr), per-element deflection δ_j and contact angle α_j, moment reaction Mz, solver diagnostics (iterations, residual, success flag). Contact force per element (`Q_j = cp·δ_j^n`, n contact-type-dependent) is computed by each type solver's own `Q_j()`, not stored here. |
-| `BearingStiffness` | Secant stiffness (Kr_xz, Kr_xy, Ka) projected from a converged `LoadDistributionResult` onto the global axes, with an axial engagement regime (`no_load` / `engaged` / `closing_clearance`). Built via `from_result` — the single implementation every per-type `bearing_stiffness()` convenience wraps. Renamed from `BearingStiffnessState`. |
-| `RollingBearingTypeSolver` | `typing.Protocol` describing the `solve()` shape `RollingBearingSolver` expects from any per-type solver — satisfied by matching the shape, no subclassing required, keeping ball and roller solvers independent of each other and of the orchestrator. |
-| `check_bearing_ready(bearing, label, required_attrs)` | Raises if the bearing hasn't had its type-specific setup called yet. |
-| `warn_if_floating_loaded(bearing, label, Fa)` | Warns if a `"floating"` bearing carries a non-zero axial reaction — almost certainly a modelling error upstream. |
-| `run_root(fun, x0, tol)` | Shared `scipy.optimize.root` wrapper (`hybr` with `lm` fallback). |
-| `BearingResultBundle` | Every computed ISO/TS 16281 result for a single bearing, gathered under its label: `load_distribution`, `stiffness`, `capacity`, `dynamic_equivalent_load` (the latter two typed as plain `object`, since their concrete classes differ by contact type). |
-| `BearingResultsLibrary` | Registry of `BearingResultBundle` keyed by bearing label — mirrors `SimpleFEMResultsLibrary`'s usage pattern. `set_load_distribution`/`set_stiffness`/`set_capacity`/`set_dynamic_equivalent_load`, `get(label)`, `labels()`. |
+**`Ball_Bearing/ball_bearing.py` — `ISO16281BallSolver`**
 
-**`rolling_bearing_solver.py` — `RollingBearingSolver`**
+Coupled shaft–bearing solver for point-contact bearings, covering **both** `BearingType.DEEP_GROOVE_BALL` and `BearingType.ANGULAR_CONTACT` — the contact angle α₀ is read off the bearing instance rather than hardcoded, so one class covers both families. Uses the prescribed-ψ formulation: per bearing, a single 2-DOF root solve (δr, δa) in the plane of the resultant radial force, misalignment prescribed from the FEM seat slope projected onto that plane.
+- `solve(shaft_system, bearings, library, psi_override=None)` → a **`BallLoadDistributionLibrary`** (not a bare dict — see below).
+- `minimum_axial_load(bearing, Fr_xz, Fr_xy, psi, delta_r_init=0.0, delta_a_init=0.0, Fa_bracket=(0.0, 5e4), xtol=1e-6)` → `(Fa_min, BallLoadDistributionResult)` — smallest axial preload such that δa ≥ 0, via `brentq`.
+- `debug_radial_capacity(bearing, Cr, i=1, label="")` — module-level function, prints the full eq.(19)/(20) intermediate breakdown for a radial capacity check; not used by any production path.
+- Seeding for the root solve (`_initial_delta_r`, `_initial_delta_a`) trusts a non-negligible FEM hint (from shaft nodal displacements) and only falls back to a Hertz-scale estimate when the hint is ~0 (e.g. first solve of a load case).
 
-Orchestrator for a shaft's full bearing set, which can legitimately mix contact types (e.g. a locating deep-groove ball bearing plus a floating cylindrical roller bearing on the same shaft). Groups the bearings passed to it by `BearingType`, dispatches each group to the registered per-type solver, and merges results back into a single dict — in the caller's original order, regardless of how the groups were split internally. This is the only module in the package aware of more than one contact type; post-processing utilities that bake in contact-type physics (capacity, dynamic equivalent load, per-type `bearing_stiffness`) are **not** re-exposed here — call them on the concrete per-type module for a bearing whose type is already known.
-
-- `solve(shaft_system, bearings, library, psi_override=None)` → `{label: LoadDistributionResult}`.
-- `_SOLVER_MAP`: `DEEP_GROOVE_BALL` / `ANGULAR_CONTACT` → `ISO16281BallSolver`; `CYLINDRICAL_ROLLER` → `ISO16281RollerSolver`. An unregistered `BearingType` raises `NotImplementedError` at solve time (fails loudly rather than silently dropping bearings from the results).
-
-**`Ball_Bearing/ball_bearing.py` — `ISO16281BallSolver`** *(renamed from `IterativeBearingFEMSolver`)*
-
-Coupled shaft–bearing solver for point-contact (ball) bearings using the prescribed-ψ formulation. Per bearing it performs a single 2-DOF root solve (δr, δa) in the plane of the resultant radial force, with misalignment prescribed from the FEM seat slope projected onto that plane.
-- `solve(shaft_system, bearings, library, psi_override=None)` → `{label: LoadDistributionResult}` for all bearings, reading FEM data from the library via `BearingNodeData`.
-- `minimum_axial_load(bearing, ...)` — smallest axial preload Fa_min such that δa ≥ 0, via `brentq`.
-- Solver core uses `scipy.optimize.root` (`hybr` with `lm` fallback), via `library.run_root`.
-
-**`RollingElementCapacity`** *(frozen dataclass)* — per-element dynamic capacity Q_ci / Q_ce, ISO/TS 16281 §4.3.1. Cr/Ca are supplied externally.
+**`RollingElementCapacity`** *(frozen dataclass, in `ball_bearing.py`)* — per-element dynamic capacity Q_ci / Q_ce, ISO/TS 16281 §4.3.1. Cr/Ca supplied externally.
 - `radial(bearing, Cr, i=1)` — radial ball bearings, eq.(19)/(20).
 - `thrust_nonzero_alpha(bearing, Ca)` — thrust ball bearings α≠90°, eq.(21)/(22).
 - `thrust_90deg(bearing, Ca)` — thrust ball bearings α=90°, eq.(23)/(24).
 
-Module-level helpers `_geometry_bracket` and `_check_geometry` encapsulate the shared §4.3.1 geometry factor and its validity guards.
+**`Ball_Bearing/ball_bearing_results.py`** — new file, split out of `ball_bearing.py`. Holds the point-contact result shape and its registry, kept local to this contact type rather than in the cross-type `library.py`.
+- `BallLoadDistributionResult` — one bearing's solve output (δr, δa, ψ, φ(Fr), per-element δ_j/α_j, Mz, solver diagnostics), same field set `solve()`'s internals construct it with.
+- `BallLoadDistributionLibrary` — local, single-type registry `solve()` returns; built with `.set(label, result)` per bearing. `rolling_bearing_solver.RollingBearingSolver` is what reads it back out and merges it with the roller side's equivalent — this class itself never touches the cross-type `BearingResultsLibrary` in `library.py`.
+- *(Field-by-field detail and `BallLoadDistributionLibrary`'s full method list not yet confirmed — paste the file to fill this in.)*
 
-**`Ball_Bearing/ball_bearing_postprocessing.py`**
-- `phi_j_global(bearing, result)` — per-element angular position in the global frame: `(bearing.phi_j + phi_Fr) % 2π`.
-- `contact_distribution(bearing, result, frame="global")` — per-element (φ, Q_j) pairs, shape (Z, 2); `frame="local"` keeps φ as stored (debugging).
-- `bearing_stiffness(bearing, result, Fr_xz, Fr_xy, Fa)` — thin wrapper around `BearingStiffness.from_result`.
-- `DynamicEquivalentRollingElementLoad` *(frozen dataclass)* — dynamic equivalent rolling element loads Q_ei / Q_ee, ISO/TS 16281 §4.3.2, eq.(25)–(28), with independent `inner_rotating`/`outer_rotating` flags (not mutually exclusive, so a rotating-load case can be represented too). Built via `from_distribution`.
+### Not yet re-verified — likely describes an earlier version
 
-**`Roller_Bearing/roller_bearing.py` — `ISO16281RollerSolver`**
+Everything below matches what was true before the `ball_bearing_results.py` split above; it needs the same paste-and-check treatment before it can be trusted.
 
-ISO/TS 16281 §5.2 lamina-model internal load distribution solver for line-contact (`BearingType.CYLINDRICAL_ROLLER`, zero nominal contact angle, no axial capacity) bearings. Self-contained — does not import or depend on `ISO16281BallSolver`. The internal load distribution reduces to a single unknown, δr, solved from the radial force balance eq.(45); ψ is projected from FEM shaft slopes by default (`psi = psi_xz·cos(phi_Fr) + psi_xy·sin(phi_Fr)`), or taken from `psi_override` when `psi_input=True` — same convention as `ISO16281BallSolver`. Eq.(46) is evaluated afterwards as a diagnostic `Mz`, not a solve constraint.
-- `solve(shaft_system, bearings, library, psi_override=None)` → `{label: RollerLoadDistributionResult}`.
-- `roller_profile(x_k, Dwe, Lwe)` *(static)* — crowning depth P(x_k) [mm], eq.(42)–(44); two regimes depending on Lwe/Dwe (full-length logarithmic crown vs flat centre with end crowning).
-- Scope: `BearingType.CYLINDRICAL_ROLLER` (NU/N-type) only. Tapered and spherical roller bearings share the lamina mechanics but need an additional coordinate transform (cone half-angle / crown-osculation) not implemented here, and are not wired into `RollingBearingSolver`'s dispatch table yet.
+**`library.py`** — as last checked, held a *shared* `LoadDistributionResult` and `BearingStiffness` used by both contact types, plus `RollingBearingTypeSolver` (Protocol), `check_bearing_ready`, `warn_if_floating_loaded`, `run_root`, and the cross-type `BearingResultBundle`/`BearingResultsLibrary` registry. Given `ball_bearing.py` no longer imports `LoadDistributionResult` from here, this file's Block 1 (`LoadDistributionResult`, `BearingStiffness`) has probably changed shape too — possibly `BearingStiffness` now builds from either per-type result class instead of one shared one.
 
-**`RollerLoadDistributionResult`** *(extends `LoadDistributionResult`)* — adds lamina-level fields: `x_k` (lamina positions, eq.38), `psi_j` (per-roller local misalignment, eq.39), `delta_jk` (per-lamina elastic deflection, eq.41), `q_jk` (per-lamina contact force, eq.36) — both shape (Z, n_s).
+**`rolling_bearing_solver.py` — `RollingBearingSolver`** — as last checked, grouped bearings by `BearingType`, dispatched each group to its per-type solver, and merged the results into one `{label: LoadDistributionResult}` dict. With the ball side now returning a `BallLoadDistributionLibrary` instead of a dict, this merge step has almost certainly changed — probably now reads labels out of each per-type library object rather than dict-updating.
+- `_SOLVER_MAP`: `DEEP_GROOVE_BALL` / `ANGULAR_CONTACT` → `ISO16281BallSolver`; `CYLINDRICAL_ROLLER` → `ISO16281RollerSolver`. An unregistered `BearingType` raises `NotImplementedError` at solve time — this part is architectural and unlikely to have changed.
 
-**`RollerElementCapacity`** *(frozen dataclass)* — per-roller dynamic load capacity Q_ci / Q_ce, ISO/TS 16281 §5.3.1.2, eq.(47)–(48), plus the per-lamina dynamic load rating q_ci / q_ce, §5.3.2, eq.(56)–(57).
-- `radial(bearing, Cr, i=1, lambda_v=0.83)` — radial roller bearing capacity, eq.(47)–(49).
-- `per_lamina(bearing, Q_ci, Q_ce)` — q_ci/q_ce from the whole-roller Q_ci/Q_ce, eq.(56)–(57).
+**`Ball_Bearing/ball_bearing_postprocessing.py`** — as last checked, imported `LoadDistributionResult`/`BearingStiffness` from `library.py`; probably now imports `BallLoadDistributionResult` from `ball_bearing_results.py` instead. Functions: `phi_j_global`, `contact_distribution(frame="global"|"local")`, `bearing_stiffness(...)` (wraps `BearingStiffness.from_result`), and `DynamicEquivalentRollingElementLoad` *(frozen dataclass, Q_ei/Q_ee, §4.3.2 eq.25–28, independent `inner_rotating`/`outer_rotating` flags)`.
 
-**`Roller_Bearing/roller_bearing_postprocessing.py`** — mirrors `Ball_Bearing/ball_bearing_postprocessing.py` for line contact; all functions here consume an already-converged `RollerLoadDistributionResult`, none run `scipy.optimize`.
-- `Q_j(bearing, result)` — total contact force per roller [N], summed over its n_s laminae.
-- `contact_distribution`, `lamina_distribution(bearing, result, j)` — per-roller and per-lamina force distributions (the latter for inspecting edge loading on a specific roller).
-- `bearing_stiffness(bearing, result, Fr_xz, Fr_xy)` — thin wrapper around `BearingStiffness.from_result`; Fa is always 0.0 (radial roller bearings carry no axial load by design), so `Ka_regime` always comes back `"no_load"`.
-- `stress_riser_factor(n_s)` — ISO/TS 16281 §5.3.3 eq.(60) approximation for the edge-stress concentration factor f[k], used when the actual Hertzian contact pressure per lamina is not computed.
-- `LaminaDynamicEquivalentLoad` *(frozen dataclass)* — dynamic equivalent load **per lamina** k (arrays over k, not a scalar per bearing), ISO/TS 16281 §5.3.4, eq.(61)–(64), via `from_distribution(bearing, result, inner_rotating=True, outer_rotating=False)`. Corrects an earlier per-roller formulation that used the wrong quantity; compare its `q_kei`/`q_kee` against `RollerElementCapacity`'s per-lamina `q_ci`/`q_ce`, not against the whole-roller `Q_ci`/`Q_ce`. Combining across laminae into a single bearing rating life is ISO/TS 16281 §5.4, not implemented here.
+**`Roller_Bearing/roller_bearing.py` — `ISO16281RollerSolver`** — as last checked: ISO/TS 16281 §5.2 lamina-model solver for `BearingType.CYLINDRICAL_ROLLER` (zero contact angle, no axial capacity), self-contained from the ball side. Reduces to one unknown δr from the radial force balance eq.(45); ψ projected from FEM slopes or taken from `psi_override`; eq.(46) evaluated after as diagnostic `Mz`. `solve(...)` returned `{label: RollerLoadDistributionResult}` — check whether this mirrored the ball side and moved to a `RollerLoadDistributionLibrary` in its own `roller_bearing_results.py`. `roller_profile(x_k, Dwe, Lwe)` *(static)* — crowning depth, eq.(42)–(44). Scope stays NU/N-type only; tapered/spherical roller need an extra coordinate transform not implemented here.
+
+**`RollerLoadDistributionResult`** *(as last checked, extended the shared `LoadDistributionResult`)* — adds `x_k` (lamina positions), `psi_j` (per-roller misalignment), `delta_jk`/`q_jk` (per-lamina deflection/force, shape (Z, n_s)). If the ball side dropped its dependency on the shared base class, check whether this one still extends it or has been made local too.
+
+**`RollerElementCapacity`** *(frozen dataclass, in `roller_bearing.py`)* — per-roller Q_ci/Q_ce §5.3.1.2 eq.(47)–(48), plus per-lamina q_ci/q_ce §5.3.2 eq.(56)–(57) via `per_lamina()`. `radial(bearing, Cr, i=1, lambda_v=0.83)`.
+
+**`Roller_Bearing/roller_bearing_postprocessing.py`** — mirrors the ball postprocessing file for line contact. `Q_j`, `contact_distribution`, `lamina_distribution(bearing, result, j)`, `bearing_stiffness(...)` (Fa always 0.0 → `Ka_regime` always `"no_load"`), `stress_riser_factor(n_s)` (§5.3.3 eq.60 approximation), and `LaminaDynamicEquivalentLoad` *(frozen dataclass, per-lamina k, not per-roller — §5.3.4 eq.61–64; corrects an earlier per-roller version)*.
 
 ---
 

@@ -138,8 +138,8 @@ class RollerElementCapacity:
     q_ci     : float
     q_ce     : float
     Cr       : float
-    i        : int
     lambda_v : float
+    i        : int = 1
 
     @classmethod
     def per_lamina(cls, bearing: Bearing, Q_ci: float, Q_ce: float):
@@ -148,7 +148,7 @@ class RollerElementCapacity:
         q_ci = Q_ci * (1.0 / n_s) ** (7.0 / 9.0)   # eq.(56)
         q_ce = Q_ce * (1.0 / n_s) ** (7.0 / 9.0)   # eq.(57)
 
-        return cls(q_ci=q_ci, q_ce=q_ce)
+        return q_ci, q_ce
 
     @classmethod
     def radial(cls, bearing: Bearing, Cr: float, i: int = 1,
@@ -178,8 +178,10 @@ class RollerElementCapacity:
 
         q_ci, q_ce = cls.per_lamina(bearing, Q_ci, Q_ce)
 
-        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, q_ci=q_ci, q_ce=q_ce,
-                   Cr=Cr, i=i, lambda_v=lambda_v)
+        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, Cr=Cr,
+                   i=i, lambda_v=lambda_v, 
+                   q_ci=q_ci, q_ce=q_ce,
+)
 
     @classmethod
     def thrust_nonzero_alpha(cls, bearing: Bearing, Ca: float,

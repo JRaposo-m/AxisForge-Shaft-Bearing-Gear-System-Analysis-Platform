@@ -124,10 +124,10 @@ class RollingElementCapacity:
     label         : str
     Q_ci          : float
     Q_ce          : float
-    i             : int
     bearing_class : str
     Cr            : float | None
     Ca            : float | None
+    i             : int = 1
 
     @classmethod
     def radial(cls, bearing: Bearing, Cr: float, i:int = 1,

@@ -67,6 +67,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from axisforge.core.machine_elements.Bearings import bearing
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import ShaftSystem
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import (
@@ -281,58 +282,6 @@ class ISO16281RollerSolver:
         self.tol       = tol
         self.psi_input = psi_input
 
-    # ------------------------------------------------------------------
-    # Lamina profile — ISO/TS 16281 §5.2.3, eq.(42)-(44)
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def roller_profile(x_k: np.ndarray, Dwe: float, Lwe: float) -> np.ndarray:
-        """
-        Roller profile function P(x_k) [mm] — ISO/TS 16281 §5.2.3, eq.(42)-(44).
-
-        This is the crowning DEPTH; eq.(41) subtracts 2*P(x_k) from the raw
-        lamina deflection so a purely cylindrical roller's theoretical edge
-        stress singularity (from loading a truly flat-ended cylinder) does
-        not appear in the model.
-
-        x_k        : ndarray [mm] — bearing.x_k, the lamina midpoints the
-                     bearing's own geometry setup already computed (this
-                     solver does not construct x_k itself — see
-                     _REQUIRED_ATTRS / _check_lamina_count()). Must lie
-                     strictly within (-Lwe/2, Lwe/2), which a midpoint
-                     construction guarantees by never landing exactly on
-                     the roller ends.
-        Dwe, Lwe   : effective roller diameter / length [mm]
-
-        Two regimes, per the standard:
-          Lwe <= 2.5*Dwe : full-length logarithmic crown, eq.(42)
-          Lwe >  2.5*Dwe : flat centre + logarithmic crown only near the
-                           ends, eq.(43)-(44) (stepwise)
-
-        NOTE (per the standard): these are reference geometries giving
-        approximate values — actual manufacturer roller profiles, based on
-        the manufacturer's own expertise, can deviate significantly. Swap
-        this method for a manufacturer-supplied profile if better data
-        exists.
-        """
-        x_k = np.asarray(x_k, dtype=float)
-        P = np.zeros_like(x_k)
-
-        if Lwe <= 2.5 * Dwe:
-            arg = 1.0 - (2.0 * x_k / Lwe) ** 2
-            arg = np.maximum(arg, _LOG_ARG_EPS)
-            P = 0.000350 * Dwe * np.log(1.0 / arg)
-        else:
-            half_flat = (Lwe - 2.5 * Dwe) / 2.0
-            edge = np.abs(x_k) > half_flat
-            if np.any(edge):
-                xe = x_k[edge]
-                arg = 1.0 - ((2.0 * np.abs(xe) - (Lwe - 2.5 * Dwe)) / (2.5 * Dwe)) ** 2
-                arg = np.maximum(arg, _LOG_ARG_EPS)
-                P[edge] = 0.000500 * Dwe * np.log(1.0 / arg)
-            # flat centre region (|x_k| <= half_flat) stays 0.0 — eq.(43)
-
-        return P
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -458,8 +407,8 @@ class ISO16281RollerSolver:
         delta_j = delta_r * cp_j - s / 2.0                          # eq.(38)
         psi_j   = np.arctan(np.tan(psi) * cp_j)                     # eq.(39)
 
-        P_xk = self.roller_profile(x_k, bearing.Dwe, bearing.Lwe)   # eq.(42)-(44)
-
+        P_xk = bearing.P_xk   # eq.(42)-(44) -- cached on the bearing (Sec 6.2 profile)
+        
         delta_jk = (delta_j[:, None]
                     - x_k[None, :] * np.tan(psi_j)[:, None]
                     - 2.0 * P_xk[None, :])                          # eq.(41)

@@ -1,20 +1,27 @@
 """
-Bearings/geometry/roller_geometry.py
+core/machine_elements/Bearings/types/roller_bearing/roller_bearing.py
 
-Line contact internal geometry for roller bearings (CR, TR, SR).
-ISO/TS 16281 eq.(34)-(35), lamina positions per §5.2.2.
+Base class for line-contact ("roller") bearing calculations.
+ISO/TS 16281 eq.(34)-(37), lamina positions per §5.2.2.
+
+This class knows the line-contact math and NOTHING else: no catalog data,
+no bearing family, no §6 reference relations. It's the foundation every
+subtype in roller_bearing/subtype/ (CylindricalRollerBearing, and later
+tapered/spherical roller) builds on for its calculations.
 
 All parameters in mm / MPa. Angles in radians internally.
+
+References:
+  - ISO/TS 16281:2008 §5.2, eq.(34)-(46) — internal load distribution, line contact
 """
 
 from __future__ import annotations
 import numpy as np
-from .base import BearingGeometry
 
 
-class RollerBearingGeometry(BearingGeometry):
+class RollerBearingGeometry:
     """
-    Line contact geometry.
+    Line contact geometry — generic math, no family knowledge.
 
     Attributes populated by setup():
         Dwe, Lwe, Dpw, Z, n_s, s, alpha_0
@@ -46,8 +53,7 @@ class RollerBearingGeometry(BearingGeometry):
         alpha_0_deg : nominal contact angle [deg] — 0.0 for a radial
                       cylindrical roller bearing (NU/N-type). Non-zero
                       values are accepted here for future tapered/spherical
-                      subclasses, but ISO16281RollerSolver currently only
-                      supports BearingType.CYLINDRICAL_ROLLER (alpha_0 = 0).
+                      subtypes.
         """
         self.Dwe = Dwe
         self.Lwe = Lwe

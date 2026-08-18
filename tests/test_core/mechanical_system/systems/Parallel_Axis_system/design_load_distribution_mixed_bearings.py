@@ -57,8 +57,8 @@ import matplotlib.pyplot as plt
 from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_helical_gear import SpurHelicalGear
 from axisforge.core.mechanical_system.Parallel_Axis_systems.gear_meshing.spur_helical_gear_meshing import SpurHelicalGearMeshing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.core.machine_elements.Bearings.subtypes.deep_groove_ball import DeepGrooveBallBearing
-from axisforge.core.machine_elements.Bearings.subtypes.cylindrical_roller import CylindricalRollerBearing
+from axisforge.core.machine_elements.Bearings.types.ball_bearing.subtypes.deep_groove_ball import DeepGrooveBallBearing
+from axisforge.core.machine_elements.Bearings.types.roller_bearing.subtypes.cylindrical_roller import CylindricalRollerBearing
 from axisforge.core.machine_elements.Shaft.shaft import Shaft, ShaftSection, Shoulder
 from axisforge.core.loads import RadialLoad, TorqueLoad
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import (

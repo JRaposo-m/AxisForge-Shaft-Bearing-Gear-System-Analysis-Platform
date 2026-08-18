@@ -1,35 +1,29 @@
 """
-Bearings/subtypes/cylindrical_roller.py
+core/machine_elements/Bearings/types/roller_bearing/subtype/cylindrical_roller.py
 
 Cylindrical Roller Bearing — ISO/TS 16281 line contact (NU/N-type, zero
 nominal contact angle, no axial capacity).
 
-Extends Bearing base with:
-  - internal geometry slots declared in __init__
-  - setup_internal_geometry()             -> populates geometry slots on self
-  - compute_line_contact_spring_constant() -> returns cL [N/mm^(10/9)]
-  - has_internal_geometry()               -> sentinel: Dwe is not None
+All contact-mechanics math is delegated to RollerBearingGeometry
+(roller_bearing/roller_bearing.py), then mirrored onto self so solvers
+always access geometry via bearing.Dwe, bearing.x_k, bearing.cL, etc.,
+uniformly across every subtype.
 
-All internal geometry is delegated to RollerBearingGeometry, then mirrored
-onto self for uniform solver access — mirrors DeepGrooveBallBearing's split
-with BallBearingGeometry exactly (see subtypes/deep_groove_ball.py).
-
-Consumed by ISO16281RollerSolver (bearings/ISO_16281/Roller_Bearing/
-roller_bearing.py) via BearingType.CYLINDRICAL_ROLLER, dispatched through
-RollingBearingSolver alongside any DEEP_GROOVE_BALL / ANGULAR_CONTACT
-bearings on the same shaft.
 
 References:
   - ISO/TS 16281:2008 §5.2, eq.(34)-(46) — internal load distribution, line contact
+  - ISO/TS 16281:2008 §6.2 — reference roller profile, eq.(42)-(44) (not yet available)
 """
 
 from __future__ import annotations
+import numpy as np
+
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.core.machine_elements.Bearings.geometry.roller_geometry import RollerBearingGeometry
+from axisforge.core.machine_elements.Bearings.types.roller_bearing.roller_bearing import RollerBearingGeometry
 
-# Geometry attributes mirrored from RollerBearingGeometry onto self —
-# exactly the set ISO16281RollerSolver._REQUIRED_ATTRS checks for, plus x_k/phi_j.
+_LOG_ARG_EPS = 1e-12  # floor for the log() argument in the profile function
+
 _GEOMETRY_ATTRS = (
     "Dwe", "Lwe", "Dpw", "Z", "s", "n_s", "alpha_0",
     "x_k", "phi_j",
@@ -43,10 +37,7 @@ class CylindricalRollerBearing(Bearing):
     Always constructed with arrangement="floating": a cylindrical roller
     bearing (without a locating flange) cannot react an axial load, so it
     can never be the "locating" bearing on a shaft — that role stays with
-    a ball (or tapered/spherical roller, once implemented) bearing. Passing
-    arrangement="locating" explicitly raises, rather than silently building
-    a bearing that will trip warn_if_floating_loaded() the moment the shaft
-    has any axial reaction at this node.
+    a ball (or tapered/spherical roller, once implemented) bearing.
 
     Usage
     -----
@@ -71,19 +62,19 @@ class CylindricalRollerBearing(Bearing):
         super().__init__(**kwargs)
         self._geometry = RollerBearingGeometry()
 
-        # --- internal geometry slots — line contact ---
-        # Populated by setup_internal_geometry(); None until then.
-        self.Dwe     = None   # roller diameter [mm]
-        self.Lwe     = None   # effective roller length [mm]
-        self.Dpw     = None   # pitch circle diameter [mm]
-        self.Z       = None   # number of rollers
-        self.s       = None   # diametral operating clearance [mm]
-        self.n_s     = None   # number of laminae (>= 30)
-        self.alpha_0 = None   # nominal contact angle [rad] — 0.0 once set
-        self.x_k     = None   # lamina midpoint positions [mm]
-        self.phi_j   = None   # roller angular positions [rad]
-        self.cL      = None   # line-contact spring constant [N/mm^(10/9)]
-        self.cs      = None   # per-lamina spring constant [N/mm^(10/9)]
+        self.Dwe     = None
+        self.Lwe     = None
+        self.Dpw     = None
+        self.Z       = None
+        self.s       = None
+        self.n_s     = None
+        self.alpha_0 = None
+        self.x_k     = None
+        self.phi_j   = None
+        self.cL      = None
+        self.cs      = None
+        self._P_xk   = None   # cache for the P_xk property
+
 
     # ------------------------------------------------------------------
     # Geometry sentinel
@@ -93,6 +84,58 @@ class CylindricalRollerBearing(Bearing):
         """True if setup_internal_geometry() has been called."""
         return self.Dwe is not None
 
+    # ------------------------------------------------------------------
+    # Reference roller profile — ISO/TS 16281 §6.2, eq.(42)-(44)
+    # ------------------------------------------------------------------
+
+    @property
+    def P_xk(self) -> np.ndarray:
+        """
+        Roller profile P(x_k) [mm] -- ISO/TS 16281 Sec 6.2, eq.(42)-(44).
+        Crowning depth subtracted (as 2*P(x_k)) from the raw lamina
+        deflection in eq.(41) by the solver, so a purely cylindrical
+        roller's theoretical edge-stress singularity doesn't appear.
+
+        Lazily computed and cached on first access -- purely geometric
+        (depends only on x_k, Dwe, Lwe, none of which change during the
+        iterative solve), so it's computed once per setup_internal_geometry()
+        call rather than every root-finding iteration.
+        """
+        if not self.has_internal_geometry():
+            raise RuntimeError(
+                f"CylindricalRollerBearing(label={self.label!r}): "
+                f"P_xk requires setup_internal_geometry() to be called first."
+            )
+        if self._P_xk is None:
+            self._P_xk = self._compute_reference_roller_profile()
+        return self._P_xk
+
+    def _compute_reference_roller_profile(self) -> np.ndarray:
+        x_k, Dwe, Lwe = self.x_k, self.Dwe, self.Lwe
+        P = np.zeros_like(x_k)
+
+        if Lwe <= 2.5 * Dwe:
+            arg = 1.0 - (2.0 * x_k / Lwe) ** 2
+            arg = np.maximum(arg, _LOG_ARG_EPS)
+            P = 0.000350 * Dwe * np.log(1.0 / arg)
+        else:
+            half_flat = (Lwe - 2.5 * Dwe) / 2.0
+            edge = np.abs(x_k) > half_flat
+            if np.any(edge):
+                xe = x_k[edge]
+                arg = 1.0 - ((2.0 * np.abs(xe) - (Lwe - 2.5 * Dwe)) / (2.5 * Dwe)) ** 2
+                arg = np.maximum(arg, _LOG_ARG_EPS)
+                P[edge] = 0.000500 * Dwe * np.log(1.0 / arg)
+            # flat centre region (|x_k| <= half_flat) stays 0.0 -- eq.(43)
+
+        return P
+
+    def setup_internal_geometry(self, Dwe, Lwe, Dpw, Z, s, n_s=30, alpha_0_deg=0.0) -> None:
+        self._geometry.setup(Dwe=Dwe, Lwe=Lwe, Dpw=Dpw, Z=Z, s=s,
+                             n_s=n_s, alpha_0_deg=alpha_0_deg)
+        for attr in _GEOMETRY_ATTRS:
+            setattr(self, attr, getattr(self._geometry, attr))
+        self._P_xk = None   # geometry changed -- invalidate cache
     # ------------------------------------------------------------------
     # Internal geometry setup
     # ------------------------------------------------------------------
@@ -106,26 +149,22 @@ class CylindricalRollerBearing(Bearing):
                                 n_s: int = 30,
                                 alpha_0_deg: float = 0.0) -> None:
         """
-        Compute and cache internal geometry.
-
         Parameters
         ----------
         Dwe         : roller diameter [mm]
         Lwe         : effective roller length [mm]
         Dpw         : pitch circle diameter [mm]
         Z           : number of rollers
-        s           : diametral operating clearance [mm]
+        s           : diametral operating clearance [mm]  (idiomatic input
+                      for this family — no §6 default exists for it, unlike
+                      ri/re for the ball families)
         n_s         : number of laminae (>= 30 per ISO/TS 16281 §5.2.2)
         alpha_0_deg : nominal contact angle [deg] — 0.0 for a standard
                       radial NU/N-type bearing (default)
-
-        Populates on self:
-            Dwe, Lwe, Dpw, Z, s, n_s, alpha_0, x_k, phi_j
         """
         self._geometry.setup(Dwe=Dwe, Lwe=Lwe, Dpw=Dpw, Z=Z, s=s,
                              n_s=n_s, alpha_0_deg=alpha_0_deg)
 
-        # Mirror onto self — solvers access bearing.Dwe, bearing.x_k, etc.
         for attr in _GEOMETRY_ATTRS:
             setattr(self, attr, getattr(self._geometry, attr))
 
@@ -139,7 +178,6 @@ class CylindricalRollerBearing(Bearing):
         eq.(35), and the per-lamina c_s — eq.(37).
 
         Requires setup_internal_geometry() to have been called first.
-        Populates self.cL, self.cs; returns cL.
         """
         cL = self._geometry.hertz_spring_constant()
         self.cL = self._geometry.cL

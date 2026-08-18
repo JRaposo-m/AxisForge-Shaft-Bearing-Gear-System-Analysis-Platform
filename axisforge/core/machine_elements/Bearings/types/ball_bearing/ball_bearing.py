@@ -1,22 +1,29 @@
 """
-Bearings/geometry/ball_geometry.py
+core/machine_elements/Bearings/types/ball_bearing/ball_bearing.py
 
-Point contact internal geometry for ball bearings (DGBB, ACB).
-ISO/TS 16281 eq.(2)–(11).
+Base class for point-contact ("ball") bearing calculations.
+ISO/TS 16281 eq.(2)-(11).
+
+This class knows the Hertz point-contact math and NOTHING else: no
+catalog data, no bearing family, no §6 reference relations. It's the
+foundation every subtype in ball_bearing/subtype/ (DeepGrooveBallBearing,
+AngularContactBallBearing, ...) builds on for its calculations.
 
 All parameters in mm / MPa. Angles in radians internally.
+
+References:
+  - ISO/TS 16281:2008 §5 eq.(2)-(11) — point contact load distribution
 """
 
 from __future__ import annotations
 import numpy as np
 from scipy.special import ellipk, ellipe
 from scipy.optimize import brentq
-from .base import BearingGeometry
 
 
-class BallBearingGeometry(BearingGeometry):
+class BallBearingGeometry:
     """
-    Point contact geometry.
+    Point contact geometry — generic math, no family knowledge.
 
     Attributes populated by setup():
         ri, re, Dw, Dpw, Z, s, E, nu
@@ -25,9 +32,6 @@ class BallBearingGeometry(BearingGeometry):
     """
 
     load_deflection_exponent: float = 3.0 / 2.0
-
-    def __init__(self):
-        pass
 
     def setup(self,
               ri: float,

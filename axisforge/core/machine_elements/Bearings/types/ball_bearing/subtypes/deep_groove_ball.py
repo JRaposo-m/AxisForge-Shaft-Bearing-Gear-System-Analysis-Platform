@@ -1,31 +1,46 @@
 """
-Bearings/subtypes/deep_groove_ball.py
+core/machine_elements/Bearings/types/ball_bearing/subtype/deep_groove_ball.py
 
 Deep Groove Ball Bearing — ISO/TS 16281 point contact.
 
 Extends Bearing base with:
-  - internal geometry slots declared in __init__
-  - setup_internal_geometry()       → populates geometry slots on self
-  - compute_hertz_point_contact()   → returns cp [N/mm^(3/2)]
-  - has_internal_geometry()         → sentinel: Dw is not None
+  - internal geometry slots declared in __init__ (Bearing declares none)
+  - reference_raceway_radii()       -> ri, re from Dw alone (ISO/TS 16281 §6.3)
+  - setup_internal_geometry()       -> populates geometry slots on self
+  - compute_hertz_point_contact()   -> returns cp [N/mm^(3/2)]
+  - has_internal_geometry()         -> sentinel: Dw is not None
 
-All internal geometry is delegated to BallBearingGeometry,
-then mirrored onto self for uniform solver access.
+All contact-mechanics math is delegated to BallBearingGeometry
+(ball_bearing/ball_bearing.py — pure math, no family knowledge), then
+mirrored onto self so solvers always access geometry via bearing.Dw,
+bearing.ri, bearing.cp, etc., uniformly across every subtype.
+
+What THIS file owns: the ISO/TS 16281 §6.3 reference relation (what ri/re
+default to when catalog data isn't known) and the idiomatic input for this
+family (s — diametral operating clearance).
 
 References:
-  - ISO/TS 16281:2008 — internal load distribution, point contact
+  - ISO/TS 16281:2008 §5 eq.(2)-(11)    — point contact load distribution
+  - ISO/TS 16281:2008 §6.3 eq.(72),(73) — reference raceway groove radii
 """
 
 from __future__ import annotations
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.core.machine_elements.Bearings.geometry.ball_geometry import BallBearingGeometry
+from axisforge.core.machine_elements.Bearings.types.ball_bearing.ball_bearing import BallBearingGeometry
 
-# Geometry attributes mirrored from BallBearingGeometry onto self
+# Geometry attributes mirrored from BallBearingGeometry onto self.
 _GEOMETRY_ATTRS = (
     "ri", "re", "Dw", "Dpw", "Z", "s", "E", "nu",
     "A", "alpha_0", "Ri", "phi_j",
 )
+
+# ISO/TS 16281 §6.3 eq.(72)-(73) — reference raceway groove radii, as a
+# fraction of ball diameter D_w. Same two numbers used verbatim by
+# angular_contact.py (§6.3 groups both families under them) — duplicated
+# there rather than imported, so neither subtype depends on the other.
+_RI_OVER_DW = 0.52   # eq.(73) — inner ring
+_RE_OVER_DW = 0.53   # eq.(72) — outer ring
 
 
 class DeepGrooveBallBearing(Bearing):
@@ -34,16 +49,16 @@ class DeepGrooveBallBearing(Bearing):
 
     Usage
     -----
+    # Manufacturer catalog data known (preferred — overrides the §6.3
+    # reference geometry below):
     b = DeepGrooveBallBearing(d=40, D=80, b=18, C=29600, C0=17800,
                                designation="6208", position=50.0)
-
-    # via diametral clearance
     b.setup_internal_geometry(ri=6.6, re=6.85, Dw=12.0, Dpw=60.0,
                                Z=9, E=206000, s=0.015)
 
-    # or via free contact angle
-    b.setup_internal_geometry(ri=6.6, re=6.85, Dw=12.0, Dpw=60.0,
-                               Z=9, E=206000, alpha_0_deg=0.5)
+    # Manufacturer data NOT known — ri/re fall back to ISO/TS 16281 §6.3
+    # (r_e = 0.53*Dw, r_i = 0.52*Dw):
+    b.setup_internal_geometry(Dw=12.0, Dpw=60.0, Z=9, E=206000, s=0.015)
 
     cp = b.compute_hertz_point_contact()
     """
@@ -53,8 +68,7 @@ class DeepGrooveBallBearing(Bearing):
         super().__init__(**kwargs)
         self._geometry = BallBearingGeometry()
 
-        # --- internal geometry slots — ball / point contact ---
-        # Populated by setup_internal_geometry(); None until then.
+        # --- internal geometry slots — None until setup_internal_geometry() ---
         self.ri      = None   # inner groove radius [mm]
         self.re      = None   # outer groove radius [mm]
         self.Dw      = None   # ball diameter [mm]
@@ -64,10 +78,14 @@ class DeepGrooveBallBearing(Bearing):
         self.E       = None   # Young's modulus [MPa]
         self.nu      = None   # Poisson's ratio
         self.A       = None   # radial clearance auxiliary: ri + re - Dw [mm]
-        self.alpha_0 = None   # free contact angle [rad]
+        self.alpha_0 = None   # contact angle [rad]
         self.Ri      = None   # inner raceway radius to contact [mm]
         self.phi_j   = None   # rolling element angular positions [rad]
         self.cp      = None   # Hertzian spring constant [N/mm^(3/2)]
+
+        # Whether ri/re were supplied by the caller (catalog data) or fell
+        # back to the ISO/TS 16281 §6.3 reference geometry.
+        self.raceway_radii_from_reference: bool | None = None
 
     # ------------------------------------------------------------------
     # Geometry sentinel
@@ -78,36 +96,59 @@ class DeepGrooveBallBearing(Bearing):
         return self.Dw is not None
 
     # ------------------------------------------------------------------
+    # Reference geometry — ISO/TS 16281 §6.3 eq.(72)-(73)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def reference_raceway_radii(Dw: float) -> tuple[float, float]:
+        """
+        Approximate cross-sectional raceway groove radii for a standard
+        deep groove ball bearing, from ball diameter alone.
+
+            r_i = 0.52 * D_w   eq.(73)   inner ring groove radius
+            r_e = 0.53 * D_w   eq.(72)   outer ring groove radius
+
+        Approximate reference values only (§6.1) — pass explicit ri/re to
+        setup_internal_geometry() whenever catalog/drawing data is available.
+        """
+        return _RI_OVER_DW * Dw, _RE_OVER_DW * Dw
+
+    # ------------------------------------------------------------------
     # Internal geometry setup
     # ------------------------------------------------------------------
 
     def setup_internal_geometry(self,
-                                ri: float,
-                                re: float,
                                 Dw: float,
                                 Dpw: float,
                                 Z: int,
                                 E: float,
                                 nu: float = 0.3,
+                                ri: float | None = None,
+                                re: float | None = None,
                                 **kwargs) -> None:
         """
-        Compute and cache internal geometry.
-
         Parameters
         ----------
-        ri, re   : inner/outer groove radii [mm]
         Dw       : ball diameter [mm]
         Dpw      : pitch circle diameter [mm]
         Z        : number of balls
         E        : Young's modulus [MPa]
         nu       : Poisson's ratio
-        **kwargs : clearance — exactly one of:
+        ri, re   : inner/outer groove radii [mm]. Optional — when either is
+                   omitted it is filled in from reference_raceway_radii(Dw).
+        **kwargs : clearance — exactly one of, forwarded to
+                   BallBearingGeometry.setup():
                      s           : diametral operating clearance [mm]
+                                   (idiomatic input for this family)
                      alpha_0_deg : free contact angle [°]
-
-        Populates on self:
-            ri, re, Dw, Dpw, Z, s, E, nu, A, alpha_0, Ri, phi_j
         """
+        ref_ri, ref_re = self.reference_raceway_radii(Dw)
+        self.raceway_radii_from_reference = (ri is None) or (re is None)
+        if ri is None:
+            ri = ref_ri
+        if re is None:
+            re = ref_re
+
         self._geometry.setup(ri, re, Dw, Dpw, Z, E, nu, **kwargs)
 
         # Mirror onto self — solvers access bearing.Dw, bearing.ri, etc.
@@ -120,14 +161,9 @@ class DeepGrooveBallBearing(Bearing):
 
     def compute_hertz_point_contact(self) -> float:
         """
-        Hertzian spring constant c_p [N/mm^(3/2)].
-        ISO/TS 16281 eq.(5)–(11).
+        Hertzian spring constant c_p [N/mm^(3/2)]. ISO/TS 16281 eq.(5)-(11).
 
         Requires setup_internal_geometry() to have been called first.
-
-        Returns
-        -------
-        cp : float
         """
         if not self.has_internal_geometry():
             raise RuntimeError(

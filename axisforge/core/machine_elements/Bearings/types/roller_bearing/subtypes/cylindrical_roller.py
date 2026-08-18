@@ -20,7 +20,7 @@ import numpy as np
 
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.core.machine_elements.Bearings.types.roller_bearing.roller_bearing import RollerBearingGeometry
+from axisforge.core.machine_elements.Bearings.types.roller_bearing.roller_bearing_core import RollerBearingGeometry
 
 _LOG_ARG_EPS = 1e-12  # floor for the log() argument in the profile function
 

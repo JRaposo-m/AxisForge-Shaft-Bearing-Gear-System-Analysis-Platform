@@ -58,7 +58,7 @@ if TYPE_CHECKING:
     from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import ShaftSystem
     from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import SimpleFEMResultsLibrary
 
-    from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing import (
+    from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_solver import (
         RollingElementCapacity as BallRollingElementCapacity,
     )
     from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import (
@@ -68,7 +68,7 @@ if TYPE_CHECKING:
         BallBearingStiffness,
         DynamicEquivalentRollingElementLoad,
     )
-    from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing import (
+    from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_solver import (
         RollerElementCapacity,
     )
     from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_results import (

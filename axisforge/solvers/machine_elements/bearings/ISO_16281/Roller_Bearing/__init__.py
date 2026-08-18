@@ -17,7 +17,7 @@ _elements() is its only real consumer. Lamina midpoints (x_k) are not
 computed by this package at all — they must already be on the bearing
 (see RollerBearingGeometry.setup() / CylindricalRollerBearing).
 """
-from .roller_bearing import (
+from .roller_bearing_solver import (
     ISO16281RollerSolver,
     RollerElementCapacity,
     debug_radial_capacity,

@@ -1,5 +1,5 @@
 """
-axisforge/solvers/machine_elements/bearings/ISO_16281/Ball_Bearing/ball_bearing.py
+axisforge/solvers/machine_elements/bearings/ISO_16281/Ball_Bearing/ball_bearing_solver.py
 
 ISO/TS 16281 internal load distribution SOLVER for POINT-CONTACT bearings
 (deep groove and angular contact ball bearings — BearingType.DEEP_GROOVE_BALL

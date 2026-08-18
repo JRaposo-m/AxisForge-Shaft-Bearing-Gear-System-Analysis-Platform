@@ -59,14 +59,14 @@ if TYPE_CHECKING:
     )
 
     LoadDistributionResult = BallLoadDistributionResult | RollerLoadDistributionResult
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_solver import (
     ISO16281BallSolver,
     RollingElementCapacity,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing import (
     ball_bearing_postprocessing as _ball_pp,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_solver import (
     ISO16281RollerSolver,
     RollerElementCapacity,
 )

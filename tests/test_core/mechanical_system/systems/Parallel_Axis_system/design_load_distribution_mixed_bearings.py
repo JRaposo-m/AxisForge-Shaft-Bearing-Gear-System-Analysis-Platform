@@ -72,7 +72,7 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analys
     ShaftResultsReader,
     SimpleFEMResultsLibrary,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_solver import (
     ISO16281BallSolver,
     RollingElementCapacity,
 )
@@ -81,7 +81,7 @@ from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bea
     bearing_stiffness as ball_bearing_stiffness,
     DynamicEquivalentRollingElementLoad as BallDynamicEquivalentRollingElementLoad,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_solver import (
     RollerElementCapacity,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_postprocessing import (

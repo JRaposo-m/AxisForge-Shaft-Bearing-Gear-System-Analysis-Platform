@@ -38,7 +38,7 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analys
     ShaftResultsReader,
     SimpleFEMResultsLibrary,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_solver import (
     ISO16281BallSolver,
     RollingElementCapacity,
 )

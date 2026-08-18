@@ -22,7 +22,7 @@ import numpy as np
 
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.core.machine_elements.Bearings.types.ball_bearing.ball_bearing import BallBearingGeometry
+from axisforge.core.machine_elements.Bearings.types.ball_bearing.ball_bearing_core import BallBearingGeometry
 
 _GEOMETRY_ATTRS = (
     "ri", "re", "Dw", "Dpw", "Z", "s", "E", "nu",

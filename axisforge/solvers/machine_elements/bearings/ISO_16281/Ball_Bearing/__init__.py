@@ -9,7 +9,7 @@ one per bearing label (BallLoadDistributionLibrary) — lives together in
 ball_bearing_results.py, and everything that consumes an already-solved
 result lives in ball_bearing_postprocessing.py.
 """
-from .ball_bearing import (
+from .ball_bearing_solver import (
     ISO16281BallSolver,
     RollingElementCapacity,
     debug_radial_capacity,

@@ -1,5 +1,5 @@
 """
-axisforge/solvers/machine_elements/bearings/ISO_16281/Roller_Bearing/roller_bearing.py
+axisforge/solvers/machine_elements/bearings/ISO_16281/Roller_Bearing/roller_bearing_solver.py
 
 ISO/TS 16281 internal load distribution SOLVER for LINE-CONTACT radial
 roller bearings (BearingType.CYLINDRICAL_ROLLER — NU/N-type, zero nominal

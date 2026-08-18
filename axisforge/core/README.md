@@ -67,8 +67,9 @@ Bearings/
 │   └── roller_geometry.py  ← RollerBearingGeometry (line contact, ISO/TS 16281)
 └── subtypes/
     ├── deep_groove_ball.py     ← DeepGrooveBallBearing
+    ├── angular_contact.py      ← AngularContactBallBearing
     ├── cylindrical_roller.py   ← CylindricalRollerBearing
-    └── ...                     ← other subtypes (Phase 2)
+    └── ...                     ← tapered/spherical roller (Phase 2)
 ```
 
 The ISO/TS 16281 *solvers* that consume these objects live in a mirrored contact-type split under `solvers/machine_elements/bearings/ISO_16281/` — see [`solvers/README.md`](../solvers/README.md#solvers--bearings-isots-16281).
@@ -81,9 +82,11 @@ The ISO/TS 16281 *solvers* that consume these objects live in a mirrored contact
 
 **`bearing.py` — `Bearing`**
 
-Catalogue-level base class. Carries ISO 281 rating data, mounting arrangement, and geometry attribute slots (initialised to `None`; populated by subclass `setup_internal_geometry`). Solvers always access geometry via `bearing.Dw`, `bearing.ri`, `bearing.cp`, etc. — the interface is uniform regardless of subtype.
+Catalogue-level base class. Carries ISO 281 rating data, mounting arrangement, and geometry attribute slots (initialised to `None`; populated by subclass `setup_internal_geometry`). Solvers always access geometry via `bearing.Dw`, `bearing.ri`, `bearing.cp`, `bearing.alpha_0`, `bearing.gamma`, etc. — the interface is uniform regardless of subtype.
 
-- Constructor: bore `d`, outer `D`, width `b`, ratings `C`/`C0`, factors `X`/`Y`, `arrangement` (`"locating"` / `"floating"` / `"non-locating"`), `contact_angle_deg`, `label`, `position`.
+Contact angle is **not** a constructor input here — `alpha_0` (the real, geometry-derived contact angle, radians) is owned entirely by each subtype's `setup_internal_geometry()`, mirrored from its `Geometry` object. An earlier `contact_angle_deg` constructor argument was removed: it was never consumed by any solver or geometry calculation (everything reads `bearing.alpha_0`), so keeping it around only risked silently disagreeing with the real, computed angle.
+
+- Constructor: bore `d`, outer `D`, width `b`, ratings `C`/`C0`, factors `X`/`Y`, `arrangement` (`"locating"` / `"floating"` / `"non-locating"`), `label`, `position`.
 - `is_locating()` — True if the bearing restrains axial displacement.
 - `equivalent_dynamic_load(Fr, Fa)` — P = X·Fr + Y·Fa (ISO 281).
 - `has_internal_geometry()` — True if `setup_internal_geometry()` has been called.
@@ -93,6 +96,8 @@ Catalogue-level base class. Carries ISO 281 rating data, mounting arrangement, a
 **`bearing_factory.py` — `make_bearing(bearing_type, **kwargs)`**
 
 Instantiates the correct subclass for a given `BearingType`. Useful when the type comes from a database, config file, or GUI — i.e. when the subclass is not known at write time. Currently registered: `DEEP_GROOVE_BALL` → `DeepGrooveBallBearing`, `CYLINDRICAL_ROLLER` → `CylindricalRollerBearing`; any other `BearingType` raises `NotImplementedError` (loudly, not a silent skip) until its subtype is implemented.
+
+> **Open item:** `AngularContactBallBearing` now exists (see below) but hasn't been confirmed registered here yet — check `bearing_factory.py` and add `ANGULAR_CONTACT → AngularContactBallBearing` if it's still missing.
 
 ```python
 from axisforge.core.machine_elements.Bearings import make_bearing, BearingType
@@ -108,23 +113,28 @@ Abstract contract for internal geometry classes. Defines `setup(**kwargs)`, `her
 
 Point contact geometry for ball bearings. ISO/TS 16281 eq.(2)–(11).
 
-- `setup(ri, re, Dw, Dpw, Z, E, nu, *, s=None, alpha_0_deg=None)` — exactly one clearance input required. Computes A = ri+re−Dw, then either `alpha_0 = arccos(1 − s/2A)` or `s = 2A·(1 − cos α₀)`, then Ri and φ_j.
-- `curvature_sum_inner()` / `curvature_sum_outer()` — Σρ, eq.(5)/(6).
-- `curvature_diff_inner()` / `curvature_diff_outer()` — F(ρ), eq.(7)/(8).
+- `setup(ri, re, Dw, Dpw, Z, E, nu, *, s=None, alpha_0_deg=None)` — exactly one clearance input required. Computes A = ri+re−Dw, then either `alpha_0 = arccos(1 − s/2A)` or `s = 2A·(1 − cos α₀)`, then Ri and φ_j. Invalidates the cached `gamma` on every call.
+- `gamma` *(property)* — γ = Dw·cos(α₀)/Dpw, the ball-to-pitch-diameter ratio feeding the curvature formulas below. Lazily computed and cached on first access (purely geometric — nothing here changes after `setup()`). At α₀ = 90° (pure thrust) the cos(α) term is dropped and γ reduces to Dw/Dpw directly, rather than trusting floating-point `cos(π/2)` (~6e-17, sign not guaranteed) — same convention as `RollerBearingGeometry.gamma`.
+- `curvature_sum_inner()` / `curvature_sum_outer()` — Σρ, eq.(5)/(6), reads `self.gamma`.
+- `curvature_diff_inner()` / `curvature_diff_outer()` — F(ρ), eq.(7)/(8), reads `self.gamma`.
 - `hertz_spring_constant()` — c_p [N/mm^(3/2)], eq.(9)–(11) via elliptic integrals and `brentq`.
 
 **`geometry/roller_geometry.py` — `RollerBearingGeometry`**
 
-Line contact geometry for cylindrical (and, in future, tapered/spherical) roller bearings. ISO/TS 16281 eq.(34)–(35), lamina positions per §5.2.2.
+Line contact geometry for cylindrical (and, in future, tapered/spherical) roller bearings. ISO/TS 16281 eq.(34)–(35), lamina positions per §5.2.2. Deliberately knows only generic line-contact math — no catalog data, no family-specific reference relations (§6 profile geometry is out of scope here; see `CylindricalRollerBearing.P_xk` below for why it lives on the subtype instead).
 
-- `setup(Dwe, Lwe, Dpw, Z, s, n_s=30, alpha_0_deg=0.0)` — caches geometry; computes lamina midpoints `x_k` (§5.2.2, strictly inside (−Lwe/2, Lwe/2)) and roller angular positions `phi_j` (one per rolling element, not per lamina). `alpha_0_deg` is accepted for future tapered/spherical subclasses but stays 0.0 for a radial cylindrical roller bearing (NU/N-type).
+- `setup(Dwe, Lwe, Dpw, Z, s, n_s=30, alpha_0_deg=0.0)` — caches geometry; computes lamina midpoints `x_k` (§5.2.2, strictly inside (−Lwe/2, Lwe/2)) and roller angular positions `phi_j` (one per rolling element, not per lamina). `alpha_0_deg` is accepted for future tapered/spherical subclasses but stays 0.0 for a radial cylindrical roller bearing (NU/N-type). Invalidates the cached `gamma`.
+- `gamma` *(property)* — γ = Dwe·cos(α₀)/Dpw, reusable by the ISO/TS 16281 capacity formulas (`RollerElementCapacity`) and by ISO 281. Lazily computed and cached; same α₀=90° → Dwe/Dpw convention as the ball side.
 - `hertz_spring_constant()` — line-contact spring constant c_L [N/mm^(10/9)], eq.(35), plus the per-lamina spring constant c_s = c_L/n_s, eq.(37). Requires `setup()` first; caches `self.cL`, `self.cs`.
 
 **`subtypes/deep_groove_ball.py` — `DeepGrooveBallBearing`**
 
 Concrete DGBB subtype. Delegates all internal geometry to `BallBearingGeometry` and mirrors computed attributes onto `self` for uniform solver access.
 
-- `setup_internal_geometry(ri, re, Dw, Dpw, Z, E, nu=0.3, **kwargs)` — `**kwargs` passes the clearance specification (`s` or `alpha_0_deg`) straight through to `BallBearingGeometry.setup()`. Populates `self.ri`, `self.re`, `self.Dw`, `self.Dpw`, `self.Z`, `self.s`, `self.E`, `self.nu`, `self.A`, `self.alpha_0`, `self.Ri`, `self.phi_j`.
+A DGBB is specified by its catalog clearance class, not by a free contact angle (that's the angular-contact idiom) — so unlike the generic `BallBearingGeometry.setup()` underneath it, `setup_internal_geometry()` here accepts **only** `s`. Passing `alpha_0_deg` raises `TypeError` (it's simply not a parameter). Groove radii `ri`/`re` are likewise not inputs — always derived from `reference_raceway_radii(Dw)` (ISO/TS 16281 §6.3 eq.72–73), so a `DeepGrooveBallBearing` can't be built with geometry that contradicts what actually makes it this subtype.
+
+- `reference_raceway_radii(Dw)` *(static)* — `(ri, re) = (0.52·Dw, 0.53·Dw)`, ISO/TS 16281 §6.3 eq.(72)–(73).
+- `setup_internal_geometry(Dw, Dpw, Z, E, s, nu=0.3)` — populates `self.ri`, `self.re`, `self.Dw`, `self.Dpw`, `self.Z`, `self.s`, `self.E`, `self.nu`, `self.A`, `self.alpha_0`, `self.Ri`, `self.phi_j`, `self.gamma`.
 - `compute_hertz_point_contact()` — returns and caches `self.cp` [N/mm^(3/2)].
 - `validate()` — extends base validation with geometry guards (ri > Dw/2, re > Dw/2, s ≥ 0).
 
@@ -135,23 +145,40 @@ b = DeepGrooveBallBearing(d=20, D=47, b=14, C=12700, C0=6550,
                            designation="6204", position=20.0,
                            arrangement="locating", label="brg1a")
 
-# via diametral clearance
-b.setup_internal_geometry(ri=4.13, re=4.21, Dw=7.94, Dpw=33.5,
-                           Z=8, E=206000, s=0.010)
+b.setup_internal_geometry(Dw=7.94, Dpw=33.5, Z=8, E=206000, s=0.010)
 
-# or via free contact angle
-b.setup_internal_geometry(ri=4.13, re=4.21, Dw=7.94, Dpw=33.5,
-                           Z=8, E=206000, alpha_0_deg=0.5)
+cp = b.compute_hertz_point_contact()
+```
+
+**`subtypes/angular_contact.py` — `AngularContactBallBearing`**
+
+Point contact, same family of formulas as `DeepGrooveBallBearing` (both built on `BallBearingGeometry`) — the difference is purely in how the bearing is idiomatically specified. An ACB is specified by its nominal (free) contact angle (a catalog property, e.g. "7208B" → 40°); clearance is the secondary, derived quantity. Mirrors DGBB's split exactly, flipped: `setup_internal_geometry()` accepts **only** `alpha_0_deg` (not `s`), and `ri`/`re` are likewise not inputs — always `reference_raceway_radii(Dw)` (same §6.3 eq.72–73 formula, deliberately duplicated rather than imported from the DGBB file — each subtype owns its own reference geometry).
+
+Carries axial load (unlike DGBB in pure radial service) — commonly the locating bearing on a shaft, alone or in a paired arrangement (DB/DF/DT). Pairing arrangements are out of scope; this class models a single ring set.
+
+- `reference_raceway_radii(Dw)` *(static)* — same eq.(72)–(73) as DGBB.
+- `setup_internal_geometry(Dw, Dpw, Z, E, alpha_0_deg, nu=0.3)` — populates the same attribute set as DGBB (`ri`, `re`, `Dw`, `Dpw`, `Z`, `s`, `E`, `nu`, `A`, `alpha_0`, `Ri`, `phi_j`, `gamma`), just entered from the contact-angle side.
+- `compute_hertz_point_contact()` — returns and caches `self.cp`.
+- `validate()` — geometry guards as DGBB, plus `alpha_0 > 0` (checked once `has_internal_geometry()` is true — `alpha_0` doesn't exist before `setup_internal_geometry()` runs).
+
+```python
+from axisforge.core.machine_elements.Bearings import AngularContactBallBearing
+
+b = AngularContactBallBearing(d=40, D=80, b=18, C=35000, C0=26000,
+                               designation="7208B", position=50.0)
+
+b.setup_internal_geometry(Dw=11.5, Dpw=60.0, Z=13, E=206000, alpha_0_deg=40.0)
 
 cp = b.compute_hertz_point_contact()
 ```
 
 **`subtypes/cylindrical_roller.py` — `CylindricalRollerBearing`**
 
-NU/N-type cylindrical roller bearing — line contact, zero nominal contact angle, no axial capacity. Delegates all internal geometry to `RollerBearingGeometry` and mirrors computed attributes onto `self`, mirroring `DeepGrooveBallBearing`'s split with `BallBearingGeometry` exactly. Always constructed with `arrangement="floating"` — a cylindrical roller bearing has no flange to react axial load, so it can never be the locating bearing on a shaft; passing `arrangement="locating"` raises rather than silently building an invalid configuration that would only surface later as a `warn_if_floating_loaded()` warning.
+NU/N-type cylindrical roller bearing — line contact, zero nominal contact angle, no axial capacity. Delegates all internal geometry to `RollerBearingGeometry` and mirrors computed attributes onto `self`, mirroring `DeepGrooveBallBearing`'s split with `BallBearingGeometry`. Constructed with `arrangement="floating"` by default, and also accepts `arrangement="non-locating"` — an NU/N-type bearing has no flange to react axial load, so the only thing it can never be is `"locating"`; passing that raises rather than silently building an invalid configuration that would only surface later as a `warn_if_floating_loaded()` warning.
 
-- `setup_internal_geometry(Dwe, Lwe, Dpw, Z, s, n_s=30, alpha_0_deg=0.0)` — populates `self.Dwe`, `self.Lwe`, `self.Dpw`, `self.Z`, `self.s`, `self.n_s`, `self.alpha_0`, `self.x_k`, `self.phi_j`.
+- `setup_internal_geometry(Dwe, Lwe, Dpw, Z, s, n_s=30, alpha_0_deg=0.0)` — populates `self.Dwe`, `self.Lwe`, `self.Dpw`, `self.Z`, `self.s`, `self.n_s`, `self.alpha_0`, `self.x_k`, `self.phi_j`, `self.gamma`.
 - `compute_line_contact_spring_constant()` — returns and caches `self.cL` [N/mm^(10/9)] (and `self.cs`, per-lamina).
+- `P_xk` *(property)* — the ISO/TS 16281 §6.2 reference roller profile P(x_k), eq.(42)–(44) (crowning depth, subtracted as 2·P(x_k) from the raw lamina deflection so a purely cylindrical roller's theoretical edge-stress singularity doesn't appear in the load-distribution model). Lazily computed and cached on first access; purely geometric (`x_k`, `Dwe`, `Lwe` don't change after `setup_internal_geometry()`). Lives on the subtype rather than on `RollerBearingGeometry` because it's family-specific (tapered/spherical roller profiles use a different formula, eq.77-style), consistent with the geometry base class's "no §6 reference relations" scope.
 - `has_internal_geometry()` — sentinel: `Dwe is not None`.
 
 ```python
@@ -164,7 +191,7 @@ b.setup_internal_geometry(Dwe=6.5, Lwe=6.0, Dpw=33.5, Z=12, s=0.015, n_s=40)
 cL = b.compute_line_contact_spring_constant()
 ```
 
-Consumed by `ISO16281RollerSolver` (`solvers/machine_elements/bearings/ISO_16281/Roller_Bearing/roller_bearing.py`) via `BearingType.CYLINDRICAL_ROLLER`, dispatched through `RollingBearingSolver` alongside any `DEEP_GROOVE_BALL`/`ANGULAR_CONTACT` bearings on the same shaft.
+Consumed by `ISO16281RollerSolver` (`solvers/machine_elements/bearings/ISO_16281/Roller_Bearing/roller_bearing.py`) via `BearingType.CYLINDRICAL_ROLLER`, dispatched through `RollingBearingSolver` alongside any `DEEP_GROOVE_BALL`/`ANGULAR_CONTACT` bearings on the same shaft. `_elements()` there now reads the cached `bearing.P_xk` directly instead of recomputing the profile every root-solve iteration.
 
 ---
 

@@ -27,7 +27,7 @@ References:
 from __future__ import annotations
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.core.machine_elements.Bearings.types.ball_bearing.ball_bearing import BallBearingGeometry
+from axisforge.core.machine_elements.Bearings.types.ball_bearing.ball_bearing_core import BallBearingGeometry
 
 # Geometry attributes mirrored from BallBearingGeometry onto self.
 _GEOMETRY_ATTRS = (

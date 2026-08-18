@@ -26,7 +26,7 @@ _LOG_ARG_EPS = 1e-12  # floor for the log() argument in the profile function
 
 _GEOMETRY_ATTRS = (
     "Dwe", "Lwe", "Dpw", "Z", "s", "n_s", "alpha_0",
-    "x_k", "phi_j",
+    "x_k", "phi_j", "gamma",
 )
 
 
@@ -49,15 +49,15 @@ class CylindricalRollerBearing(Bearing):
 
     def __init__(self, **kwargs):
         kwargs.setdefault("bearing_type", BearingType.CYLINDRICAL_ROLLER)
-        kwargs.setdefault("contact_angle_deg", 0.0)
         arrangement = kwargs.setdefault("arrangement", "floating")
-        if arrangement != "floating":
+        if arrangement not in ("floating", "non-locating"):
             raise ValueError(
                 f"CylindricalRollerBearing(label={kwargs.get('label', '')!r}): "
                 f"arrangement={arrangement!r} is not valid — a cylindrical roller "
                 f"bearing (NU/N-type) has no flange to react axial load, so it "
-                f"cannot be 'locating'. Use a ball (or tapered/spherical roller) "
-                f"bearing for the locating position on this shaft."
+                f"cannot be 'locating'. Use 'floating' or 'non-locating' for this "
+                f"bearing, or a ball (or tapered/spherical roller) bearing for the "
+                f"locating position on this shaft."
             )
         super().__init__(**kwargs)
         self._geometry = RollerBearingGeometry()
@@ -71,6 +71,7 @@ class CylindricalRollerBearing(Bearing):
         self.alpha_0 = None
         self.x_k     = None
         self.phi_j   = None
+        self.gamma   = None   # Dwe*cos(alpha_0)/Dpw 
         self.cL      = None
         self.cs      = None
         self._P_xk   = None   # cache for the P_xk property

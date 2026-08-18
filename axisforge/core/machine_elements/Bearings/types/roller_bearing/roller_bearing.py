@@ -20,41 +20,10 @@ import numpy as np
 
 
 class RollerBearingGeometry:
-    """
-    Line contact geometry — generic math, no family knowledge.
-
-    Attributes populated by setup():
-        Dwe, Lwe, Dpw, Z, n_s, s, alpha_0
-        x_k, phi_j
-        cL, cs  (after hertz_spring_constant())
-    """
-
     load_deflection_exponent: float = 10.0 / 9.0
+    _gamma: float | None = None   # cache for the gamma property
 
-    def setup(self,
-              Dwe: float,
-              Lwe: float,
-              Dpw: float,
-              Z: int,
-              s: float,
-              n_s: int = 30,
-              alpha_0_deg: float = 0.0) -> None:
-        """
-        Cache internal geometry.
-
-        Parameters
-        ----------
-        Dwe         : roller diameter [mm]
-        Lwe         : effective roller length [mm]
-        Dpw         : pitch circle diameter [mm]
-        Z           : number of rollers
-        s           : diametral operating clearance [mm]
-        n_s         : number of laminae (>= 30 per ISO/TS 16281 §5.2.2)
-        alpha_0_deg : nominal contact angle [deg] — 0.0 for a radial
-                      cylindrical roller bearing (NU/N-type). Non-zero
-                      values are accepted here for future tapered/spherical
-                      subtypes.
-        """
+    def setup(self, Dwe, Lwe, Dpw, Z, s, n_s=30, alpha_0_deg=0.0) -> None:
         self.Dwe = Dwe
         self.Lwe = Lwe
         self.Dpw = Dpw
@@ -63,26 +32,52 @@ class RollerBearingGeometry:
         self.n_s = n_s
         self.alpha_0 = np.radians(alpha_0_deg)
 
-        # Lamina midpoints, eq.(38)-figure 3 — strictly inside (-Lwe/2, Lwe/2)
         lamina_length = Lwe / n_s
         self.x_k = lamina_length * (np.arange(n_s) + 0.5) - Lwe / 2.0
-
-        # Roller angular positions — one per rolling element, NOT per lamina.
         self.phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
-    # ------------------------------------------------------------------
-    # Line contact spring constants — ISO/TS 16281 eq.(34)-(37)
-    # ------------------------------------------------------------------
+        self._gamma = None   # geometry changed -- invalidate cache
 
     def hertz_spring_constant(self) -> float:
-        """
-        c_L  [N/mm^(10/9)] — eq.(35), contacting parts made of steel.
-        Also derives c_s [N/mm^(10/9)] — eq.(37) — the per-lamina spring
-        constant the lamina model (eq.36) uses.
-
-        Requires setup() to have been called first (needs self.Lwe, self.n_s).
-        Results cached as self.cL, self.cs.
-        """
-        self.cL = 35948.0 * self.Lwe ** (8.0 / 9.0)   # eq.(35)
-        self.cs = self.cL / self.n_s                   # eq.(37)
+        self.cL = 35948.0 * self.Lwe ** (8.0 / 9.0)
+        self.cs = self.cL / self.n_s
         return self.cL
+
+    # ------------------------------------------------------------------
+    # gamma -- ISO/TS 16281 §5.3.1.2, used throughout eq.(47)-(52)
+    # ------------------------------------------------------------------
+
+    @property
+    def gamma(self) -> float:
+        """
+        gamma = Dwe * cos(alpha_0) / Dpw -- roller-to-pitch-diameter ratio,
+        used throughout ISO/TS 16281 Sec 5.3.1.2 (eq.47-52) and reusable as-is
+        by ISO 281 life calculations. Lazily computed and cached on first
+        access; purely geometric (Dwe, Dpw, alpha_0 don't change after
+        setup()) -- kept at the bearing level so every consumer (solver,
+        ISO 281, debug utilities) reads the same cached value instead of
+        recomputing it.
+
+        alpha_0 = 90 deg (pure thrust) is a special case: cos(pi/2) doesn't
+        round to a clean 0.0 in floating point (~6e-17, sign depends on the
+        rounding path), which would either collapse gamma to a meaningless
+        near-zero value or falsely trip the (0,1) check below. At exactly
+        90 deg the cos(alpha) term is dropped and gamma reduces to Dwe/Dpw.
+
+        Raises
+        ------
+        ValueError : if gamma is outside (0, 1) -- checked once here instead
+                    of being repeated at every capacity call site.
+        """
+        if self._gamma is None:
+            if np.isclose(self.alpha_0, np.pi / 2, atol=1e-9):
+                g = self.Dwe / self.Dpw
+            else:
+                g = self.Dwe * np.cos(self.alpha_0) / self.Dpw
+            if not (0.0 < g < 1.0):
+                raise ValueError(
+                    f"gamma = Dwe*cos(alpha_0)/Dpw = {g:.6f} is outside "
+                    f"(0, 1) -- check Dwe/Dpw/alpha_0."
+                )
+            self._gamma = g
+        return self._gamma

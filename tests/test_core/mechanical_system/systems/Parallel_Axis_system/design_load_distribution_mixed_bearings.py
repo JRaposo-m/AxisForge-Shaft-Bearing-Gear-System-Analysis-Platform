@@ -119,8 +119,6 @@ BB_GEOM = dict(
     Dw  = 7.94,
     Dpw = 33.5,
     Z   = 8,
-    ri  = 0.52 * 7.94,
-    re  = 0.53 * 7.94,
     s   = 0.010,
     E   = 206_000.0,
     nu  = 0.3,
@@ -377,12 +375,10 @@ def BB6204(position, label):
         designation="6204",
         b=14.0, C=CR_6204, C0=6_550.0,
         arrangement="locating",
-        contact_angle_deg=0.0,
         label=label,
         position=position,
     )
     b.setup_internal_geometry(
-        ri=BB_GEOM["ri"], re=BB_GEOM["re"],
         Dw=BB_GEOM["Dw"], Dpw=BB_GEOM["Dpw"],
         Z=BB_GEOM["Z"],
         E=BB_GEOM["E"], nu=BB_GEOM["nu"],
@@ -394,9 +390,10 @@ def BB6204(position, label):
 
 def CRNU204(position, label):
     """
-    Floating cylindrical roller bearing — always arrangement='floating'
-    (CylindricalRollerBearing raises if given anything else: an NU/N-type
-    bearing has no flange, so it can never be the locating bearing).
+    Floating cylindrical roller bearing — defaults to arrangement='floating'
+    (CylindricalRollerBearing also accepts 'non-locating'; it raises only
+    for 'locating' -- an NU/N-type bearing has no flange, so it can never
+    be the locating bearing).
     """
     b = CylindricalRollerBearing(
         d=20.0, D=47.0,

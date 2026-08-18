@@ -4,9 +4,12 @@ core/machine_elements/Bearings/bearing.py
 Rolling bearing base class — catalog data, ISO 281 equivalent load,
 mounting arrangement.
 
-Internal geometry slots are NOT declared here.
-Each subclass declares its own geometry attributes in __init__
-and overrides has_internal_geometry().
+Internal geometry slots are NOT declared here. Each subclass declares its
+own geometry attributes in __init__ and overrides has_internal_geometry().
+Contact angle is part of that internal geometry too now — alpha_0, set by
+each subclass's setup_internal_geometry() (mirrored from its Geometry
+object), is the single source of truth for contact angle. There is no
+separate contact-angle input at this base level anymore.
 
 References:
   - ISO 281:2007  — dynamic load rating, life calculation, X/Y factors
@@ -31,7 +34,6 @@ class Bearing:
                  X: float = 1.0,
                  Y: float = 0.0,
                  arrangement: str = "locating",
-                 contact_angle_deg: float = 0.0,
                  label: str = "",
                  position: float = 0.0):
         """
@@ -46,12 +48,12 @@ class Bearing:
         C0                : static load rating [N]    (ISO 76)
         X, Y              : dynamic equivalent load factors (ISO 281)
         arrangement       : "locating" | "floating" | "non-locating"
-        contact_angle_deg : nominal contact angle [°]
         label             : identifier for reporting/traceability
         position          : axial coordinate along the shaft [mm]
 
-        Internal geometry (Dw, Dpw, Z, ri, re, ...) is NOT declared here.
-        Each subclass declares its own geometry slots in __init__.
+        Internal geometry (Dw, Dpw, Z, ri, re, alpha_0, ...) is NOT
+        declared here. Each subclass declares its own geometry slots in
+        __init__ and populates alpha_0 from setup_internal_geometry().
         """
         # --- metadata ---
         self.label        = label
@@ -67,10 +69,6 @@ class Bearing:
         self.X   = X
         self.Y   = Y
         self.dm  = 0.5 * (d + D)
-
-        # --- contact geometry ---
-        self.contact_angle_deg = contact_angle_deg
-        self.contact_angle     = np.radians(contact_angle_deg)
 
         # --- mounting ---
         self.position    = position
@@ -113,11 +111,6 @@ class Bearing:
                 f"{tag}: arrangement must be 'locating', 'floating', or "
                 f"'non-locating', got '{self.arrangement}'"
             )
-        if not (0.0 <= self.contact_angle_deg < 90.0):
-            errors.append(
-                f"{tag}: contact_angle_deg must be in [0, 90), "
-                f"got {self.contact_angle_deg}"
-            )
         if not (0.0 < self.X <= 1.0):
             errors.append(f"{tag}: X must be in (0, 1], got {self.X}")
         if self.Y < 0:
@@ -145,7 +138,6 @@ class Bearing:
             f"  b           : {self.b:.1f} mm",
             f"  C / C0      : {self.C:.0f} N / {self.C0:.0f} N",
             f"  X / Y       : {self.X:.3f} / {self.Y:.3f}",
-            f"  α           : {self.contact_angle_deg:.1f} °",
             f"  geometry    : {'set' if self.has_internal_geometry() else 'not set'}",
             "────────────────────────────────────────────────────",
         ]

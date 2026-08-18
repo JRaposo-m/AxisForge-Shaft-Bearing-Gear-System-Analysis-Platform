@@ -141,15 +141,15 @@ class RollingElementCapacity:
     i             : int = 1
 
     @classmethod
-    def radial(cls, bearing: Bearing, Cr: float, i:int = 1,
-               label: str = "") -> "RollingElementCapacity":
+    def radial(cls, bearing: Bearing, Cr: float, i: int = 1,
+            label: str = "") -> "RollingElementCapacity":
         """
         Radial ball bearing capacity — §4.3.1.2 eq.(19)-(20).
         Requires bearing.setup_internal_geometry() already called.
         """
         Z, alpha = bearing.Z, bearing.alpha_0
-        ri, re, Dw, Dpw = bearing.ri, bearing.re, bearing.Dw, bearing.Dpw
-        gamma = Dw * np.cos(alpha) / Dpw
+        ri, re, Dw = bearing.ri, bearing.re, bearing.Dw
+        gamma = bearing.gamma
 
         _lbl = label or bearing.label
         _check_geometry(ri, re, Dw, _lbl)
@@ -160,16 +160,16 @@ class RollingElementCapacity:
         Q_ci = (Cr / (0.407 * Z * cos_alpha_07)) * (1.0 + bracket ** (10.0/3.0)) ** 0.3
         Q_ce = (Cr / (0.389 * Z * cos_alpha_07)) * (1.0 + bracket ** (-10.0/3.0)) ** 0.3
 
-        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, i = i,
-                   bearing_class="radial", Cr=Cr, Ca=None)
+        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, i=i,
+                bearing_class="radial", Cr=Cr, Ca=None)
 
     @classmethod
     def thrust_nonzero_alpha(cls, bearing: Bearing, Ca: float,
-                              label: str = "") -> "RollingElementCapacity":
+                            label: str = "") -> "RollingElementCapacity":
         """Thrust ball bearing (alpha != 90°) — §4.3.1.3 eq.(21)-(22)."""
         Z, alpha = bearing.Z, bearing.alpha_0
-        ri, re, Dw, Dpw = bearing.ri, bearing.re, bearing.Dw, bearing.Dpw
-        gamma = Dw * np.cos(alpha) / Dpw
+        ri, re, Dw = bearing.ri, bearing.re, bearing.Dw
+        gamma = bearing.gamma
 
         _lbl = label or bearing.label
         _check_geometry(ri, re, Dw, _lbl)
@@ -181,11 +181,11 @@ class RollingElementCapacity:
         Q_ce = (Ca / (Z * sin_a)) * (1.0 + bracket ** (-10.0/3.0)) ** 0.3
 
         return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce,
-                   bearing_class="thrust_nonzero_alpha", Cr=None, Ca=Ca)
+                bearing_class="thrust_nonzero_alpha", Cr=None, Ca=Ca)
 
     @classmethod
     def thrust_90deg(cls, bearing: Bearing, Ca: float,
-                     label: str = "") -> "RollingElementCapacity":
+                    label: str = "") -> "RollingElementCapacity":
         """
         Thrust ball bearing (alpha = 90°) — §4.3.1.4 eq.(23)-(24).
         At alpha=90°, gamma=0; the (1-gamma)/(1+gamma) term vanishes and the
@@ -202,7 +202,7 @@ class RollingElementCapacity:
         Q_ce = (Ca / Z) * (1.0 + (ratio**0.41) ** (-10.0/3.0)) ** 0.3
 
         return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce,
-                   bearing_class="thrust_90deg", Cr=None, Ca=Ca)
+                bearing_class="thrust_90deg", Cr=None, Ca=Ca)
 
 
 # ---------------------------------------------------------------------------

@@ -159,23 +159,10 @@ class RollerElementCapacity:
 
     @classmethod
     def radial(cls, bearing: Bearing, Cr: float, i: int = 1,
-               lambda_v: float = _LAMBDA_V_RADIAL,
-               label: str = "") -> "RollerElementCapacity":
-        """
-        Radial roller bearing capacity — eq.(47)-(48), plus per-lamina
-        eq.(56)-(57). Requires bearing.Dwe, bearing.Dpw, bearing.Z,
-        bearing.alpha_0, bearing.n_s.
-        """
+            lambda_v: float = _LAMBDA_V_RADIAL, label: str = "") -> "RollerElementCapacity":
         Z, alpha = bearing.Z, bearing.alpha_0
-        Dwe, Dpw = bearing.Dwe, bearing.Dpw
-        gamma = Dwe * np.cos(alpha) / Dpw
-
+        gamma = bearing.gamma
         _lbl = label or bearing.label
-        if not (0.0 < gamma < 1.0):
-            raise ValueError(
-                f"Bearing '{_lbl}': gamma = Dwe*cos(alpha)/Dpw = {gamma:.6f} "
-                f"is outside (0, 1) — check Dwe/Dpw/alpha_0."
-            )
 
         base    = 1.038 * ((1.0 - gamma) / (1.0 + gamma)) ** (143.0 / 108.0)
         denom_a = np.cos(alpha) * (i ** (7.0 / 9.0))
@@ -184,62 +171,38 @@ class RollerElementCapacity:
         Q_ce = (1.0 / lambda_v) * (Cr / (0.364 * Z * denom_a)) * (1.0 + base ** (-9.0 / 2.0)) ** (2.0 / 9.0)
 
         q_ci, q_ce = cls.per_lamina(bearing, Q_ci, Q_ce)
+        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, Cr=Cr, i=i, lambda_v=lambda_v, q_ci=q_ci, q_ce=q_ce)
 
-        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, Cr=Cr,
-                   i=i, lambda_v=lambda_v,
-                   q_ci=q_ci, q_ce=q_ce,
-)
 
     @classmethod
     def thrust_nonzero_alpha(cls, bearing: Bearing, Ca: float,
-               lambda_v: float = _LAMBDA_V_TRUST,
-               label: str = "") -> "RollerElementCapacity":
-
+            lambda_v: float = _LAMBDA_V_TRUST, label: str = "") -> "RollerElementCapacity":
         Z, alpha = bearing.Z, bearing.alpha_0
-        Dwe, Dpw = bearing.Dwe, bearing.Dpw
-        gamma = Dwe * np.cos(alpha) / Dpw
-
+        gamma = bearing.gamma
         _lbl = label or bearing.label
-        if not (0.0 < gamma < 1.0):
-            raise ValueError(
-                f"Bearing '{_lbl}': gamma = Dwe*cos(alpha)/Dpw = {gamma:.6f} "
-                f"is outside (0, 1) — check Dwe/Dpw/alpha_0."
-            )
 
-        base = ((1.0 - gamma) / (1.0 + gamma)) ** (143.0 / 108.0)
+        base    = ((1.0 - gamma) / (1.0 + gamma)) ** (143.0 / 108.0)
         denom_a = Z * np.sin(alpha)
 
         Q_ci = 1.0 / lambda_v * (Ca / denom_a) * (1.0 + base ** (9.0 / 2.0)) ** (2.0 / 9.0)
         Q_ce = 1.0 / lambda_v * (Ca / denom_a) * (1.0 + base ** (-9.0 / 2.0)) ** (2.0 / 9.0)
 
         q_ci, q_ce = cls.per_lamina(bearing, Q_ci, Q_ce)
+        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, q_ci=q_ci, q_ce=q_ce, Ca=Ca, lambda_v=lambda_v)
 
-        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, q_ci=q_ci, q_ce=q_ce,
-                   Ca=Ca, lambda_v=lambda_v)
 
     @classmethod
     def thrust_90deg(cls, bearing: Bearing, Ca: float,
-               lambda_v: float = _LAMBDA_V_TRUST,
-               label: str = "") -> "RollerElementCapacity":
-
-        Z, alpha = bearing.Z, bearing.alpha_0
-        Dwe, Dpw = bearing.Dwe, bearing.Dpw
-        gamma = Dwe * np.cos(alpha) / Dpw
-
+            lambda_v: float = _LAMBDA_V_TRUST, label: str = "") -> "RollerElementCapacity":
+        Z = bearing.Z
+        _ = bearing.gamma   # geometry sanity check (Dwe/Dpw/alpha_0) -- unused in this formula
         _lbl = label or bearing.label
-        if not (0.0 < gamma < 1.0):
-            raise ValueError(
-                f"Bearing '{_lbl}': gamma = Dwe*cos(alpha)/Dpw = {gamma:.6f} "
-                f"is outside (0, 1) — check Dwe/Dpw/alpha_0."
-            )
 
         Q_ci = 1.0 / lambda_v * (Ca / Z) * 2 ** (2.0 / 9.0)
         Q_ce = 1.0 / lambda_v * (Ca / Z) * 2 ** (2.0 / 9.0)
 
         q_ci, q_ce = cls.per_lamina(bearing, Q_ci, Q_ce)
-
-        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, q_ci=q_ci, q_ce=q_ce,
-                   Ca=Ca, lambda_v=lambda_v)
+        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, q_ci=q_ci, q_ce=q_ce, Ca=Ca, lambda_v=lambda_v)
 
 
 # ---------------------------------------------------------------------------

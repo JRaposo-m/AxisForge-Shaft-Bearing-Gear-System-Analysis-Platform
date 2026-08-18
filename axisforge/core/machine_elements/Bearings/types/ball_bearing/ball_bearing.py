@@ -84,34 +84,58 @@ class BallBearingGeometry:
         self.Ri    = Dpw / 2.0 + (ri - Dw / 2.0) * np.cos(self.alpha_0)
         self.phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
+        self._gamma = None   # geometry changed -- invalidate cache
+
+
+    # ------------------------------------------------------------------
+    # gamma -- ISO/TS 16281 eq.(5)-(8), reusable as-is by ISO 281
+    # ------------------------------------------------------------------
+
+    @property
+    def gamma(self) -> float:
+        """
+        gamma = Dw * cos(alpha_0) / Dpw -- ball-to-pitch-diameter ratio
+        feeding the curvature sum/difference formulas below (eq.5-8), and
+        reusable as-is by ISO 281 life calculations. Lazily computed and
+        cached on first access; purely geometric (Dw, Dpw, alpha_0 don't
+        change after setup()).
+
+        alpha_0 = 90 deg (pure thrust ball bearing) is a special case: cos(pi/2)
+        doesn't round to a clean 0.0 in floating point (~6e-17, sign depends on
+        the rounding path). At exactly 90 deg the cos(alpha) term is dropped
+        and gamma reduces to Dw/Dpw -- same convention as RollerBearingGeometry.gamma.
+        """
+        if self._gamma is None:
+            if np.isclose(self.alpha_0, np.pi / 2, atol=1e-9):
+                self._gamma = self.Dw / self.Dpw
+            else:
+                self._gamma = self.Dw * np.cos(self.alpha_0) / self.Dpw
+        return self._gamma
+
     # ------------------------------------------------------------------
     # Curvature sums and differences — ISO/TS 16281 eq.(5)–(8)
     # ------------------------------------------------------------------
 
-    def _gamma(self) -> float:
-        """γ = Dw·cos(α) / Dpw"""
-        return self.Dw * np.cos(self.alpha_0) / self.Dpw
-
     def curvature_sum_inner(self) -> float:
-        """Σρᵢ = (2/Dw)·(2 + γ/(1−γ) − Dw/(2rᵢ))   eq.(5)"""
-        g = self._gamma()
+        """Sum(rho)_i = (2/Dw)*(2 + gamma/(1-gamma) - Dw/(2*ri))   eq.(5)"""
+        g = self.gamma
         return (2.0 / self.Dw) * (2.0 + g / (1.0 - g) - self.Dw / (2.0 * self.ri))
 
     def curvature_sum_outer(self) -> float:
-        """Σρₑ = (2/Dw)·(2 − γ/(1+γ) − Dw/(2rₑ))   eq.(6)"""
-        g = self._gamma()
+        """Sum(rho)_e = (2/Dw)*(2 - gamma/(1+gamma) - Dw/(2*re))   eq.(6)"""
+        g = self.gamma
         return (2.0 / self.Dw) * (2.0 - g / (1.0 + g) - self.Dw / (2.0 * self.re))
 
     def curvature_diff_inner(self) -> float:
-        """Fᵢ(ρ) = (γ/(1−γ) + Dw/(2rᵢ)) / (2 + γ/(1−γ) − Dw/(2rᵢ))   eq.(7)"""
-        g = self._gamma()
+        """F_i(rho) = (gamma/(1-gamma) + Dw/(2*ri)) / (2 + gamma/(1-gamma) - Dw/(2*ri))   eq.(7)"""
+        g = self.gamma
         num = g / (1.0 - g) + self.Dw / (2.0 * self.ri)
         den = 2.0 + g / (1.0 - g) - self.Dw / (2.0 * self.ri)
         return num / den
 
     def curvature_diff_outer(self) -> float:
-        """Fₑ(ρ) = (−γ/(1+γ) + Dw/(2rₑ)) / (2 − γ/(1+γ) − Dw/(2rₑ))   eq.(8)"""
-        g = self._gamma()
+        """F_e(rho) = (-gamma/(1+gamma) + Dw/(2*re)) / (2 - gamma/(1+gamma) - Dw/(2*re))   eq.(8)"""
+        g = self.gamma
         num = -g / (1.0 + g) + self.Dw / (2.0 * self.re)
         den = 2.0 - g / (1.0 + g) - self.Dw / (2.0 * self.re)
         return num / den

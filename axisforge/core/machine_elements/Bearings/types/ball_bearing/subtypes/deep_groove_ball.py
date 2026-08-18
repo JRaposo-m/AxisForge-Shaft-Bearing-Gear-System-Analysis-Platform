@@ -32,7 +32,7 @@ from axisforge.core.machine_elements.Bearings.types.ball_bearing.ball_bearing im
 # Geometry attributes mirrored from BallBearingGeometry onto self.
 _GEOMETRY_ATTRS = (
     "ri", "re", "Dw", "Dpw", "Z", "s", "E", "nu",
-    "A", "alpha_0", "Ri", "phi_j",
+    "A", "alpha_0", "Ri", "phi_j", "gamma",
 )
 
 # ISO/TS 16281 §6.3 eq.(72)-(73) — reference raceway groove radii, as a
@@ -81,6 +81,7 @@ class DeepGrooveBallBearing(Bearing):
         self.alpha_0 = None   # contact angle [rad]
         self.Ri      = None   # inner raceway radius to contact [mm]
         self.phi_j   = None   # rolling element angular positions [rad]
+        self.gamma   = None   # Dw*cos(alpha_0)/Dpw 
         self.cp      = None   # Hertzian spring constant [N/mm^(3/2)]
 
         # Whether ri/re were supplied by the caller (catalog data) or fell
@@ -122,34 +123,28 @@ class DeepGrooveBallBearing(Bearing):
                                 Dpw: float,
                                 Z: int,
                                 E: float,
-                                nu: float = 0.3,
-                                ri: float | None = None,
-                                re: float | None = None,
-                                **kwargs) -> None:
+                                s: float,
+                                nu: float = 0.3) -> None:
         """
         Parameters
         ----------
-        Dw       : ball diameter [mm]
-        Dpw      : pitch circle diameter [mm]
-        Z        : number of balls
-        E        : Young's modulus [MPa]
-        nu       : Poisson's ratio
-        ri, re   : inner/outer groove radii [mm]. Optional — when either is
-                   omitted it is filled in from reference_raceway_radii(Dw).
-        **kwargs : clearance — exactly one of, forwarded to
-                   BallBearingGeometry.setup():
-                     s           : diametral operating clearance [mm]
-                                   (idiomatic input for this family)
-                     alpha_0_deg : free contact angle [°]
-        """
-        ref_ri, ref_re = self.reference_raceway_radii(Dw)
-        self.raceway_radii_from_reference = (ri is None) or (re is None)
-        if ri is None:
-            ri = ref_ri
-        if re is None:
-            re = ref_re
+        Dw   : ball diameter [mm]
+        Dpw  : pitch circle diameter [mm]
+        Z    : number of balls
+        E    : Young's modulus [MPa]
+        s    : diametral operating clearance [mm] -- the only clearance input
+            accepted for this family (alpha_0_deg is the angular-contact
+            idiom, not this one).
+        nu   : Poisson's ratio
 
-        self._geometry.setup(ri, re, Dw, Dpw, Z, E, nu, **kwargs)
+        ri, re (inner/outer groove radii) are not inputs here -- always
+        derived from reference_raceway_radii(Dw). Accepting arbitrary ri/re
+        would let this constructor build something that isn't actually a
+        DeepGrooveBallBearing in the catalog-conformity sense.
+        """
+        ri, re = self.reference_raceway_radii(Dw)
+
+        self._geometry.setup(ri, re, Dw, Dpw, Z, E, nu, s=s)
 
         # Mirror onto self — solvers access bearing.Dw, bearing.ri, etc.
         for attr in _GEOMETRY_ATTRS:

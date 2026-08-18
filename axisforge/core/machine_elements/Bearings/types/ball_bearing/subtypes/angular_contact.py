@@ -18,13 +18,15 @@ References:
 """
 
 from __future__ import annotations
+import numpy as np   
+
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
 from axisforge.core.machine_elements.Bearings.types.ball_bearing.ball_bearing import BallBearingGeometry
 
 _GEOMETRY_ATTRS = (
     "ri", "re", "Dw", "Dpw", "Z", "s", "E", "nu",
-    "A", "alpha_0", "Ri", "phi_j",
+    "A", "alpha_0", "Ri", "phi_j", "gamma",
 )
 
 # ISO/TS 16281 §6.3 eq.(72)-(73) — same formula as DeepGrooveBallBearing;
@@ -71,6 +73,7 @@ class AngularContactBallBearing(Bearing):
         self.alpha_0 = None
         self.Ri      = None
         self.phi_j   = None
+        self.gamma   = None  
         self.cp      = None
 
         self.raceway_radii_from_reference: bool | None = None
@@ -101,11 +104,8 @@ class AngularContactBallBearing(Bearing):
                                 Dpw: float,
                                 Z: int,
                                 E: float,
-                                nu: float = 0.3,
-                                alpha_0_deg: float | None = None,
-                                s: float | None = None,
-                                ri: float | None = None,
-                                re: float | None = None) -> None:
+                                alpha_0_deg: float,
+                                nu: float = 0.3) -> None:
         """
         Parameters
         ----------
@@ -113,24 +113,22 @@ class AngularContactBallBearing(Bearing):
         Dpw         : pitch circle diameter [mm]
         Z           : number of balls
         E           : Young's modulus [MPa]
+        alpha_0_deg : nominal (free) contact angle [deg] -- the only contact
+                    input accepted for this family. An angular contact ball
+                    bearing is specified by its nominal contact angle (its
+                    catalog suffix, e.g. 7208B -> 40 deg), not by a clearance
+                    value -- s is the idiomatic input for deep groove ball
+                    bearings, not this one, so it's deliberately not accepted
+                    here.
         nu          : Poisson's ratio
-        alpha_0_deg : nominal (free) contact angle [°] — idiomatic input
-                      for this family.
-        s           : diametral operating clearance [mm] — alternative
-                      input; exactly one of alpha_0_deg / s is required.
-        ri, re      : inner/outer groove radii [mm]. Optional — when either
-                      is omitted it is filled in from
-                      reference_raceway_radii(Dw).
-        """
-        ref_ri, ref_re = self.reference_raceway_radii(Dw)
-        self.raceway_radii_from_reference = (ri is None) or (re is None)
-        if ri is None:
-            ri = ref_ri
-        if re is None:
-            re = ref_re
 
-        self._geometry.setup(ri, re, Dw, Dpw, Z, E, nu,
-                             s=s, alpha_0_deg=alpha_0_deg)
+        ri, re (inner/outer groove radii) are not inputs here -- always
+        derived from reference_raceway_radii(Dw), same reasoning as
+        DeepGrooveBallBearing.
+        """
+        ri, re = self.reference_raceway_radii(Dw)
+
+        self._geometry.setup(ri, re, Dw, Dpw, Z, E, nu, alpha_0_deg=alpha_0_deg)
 
         for attr in _GEOMETRY_ATTRS:
             setattr(self, attr, getattr(self._geometry, attr))
@@ -168,10 +166,10 @@ class AngularContactBallBearing(Bearing):
                 errors.append(f"{tag}: re must be > Dw/2 (conformity < 0.5)")
             if self.s < 0.0:
                 errors.append(f"{tag}: diametral clearance s must be >= 0")
-        if self.contact_angle_deg <= 0.0:
-            errors.append(
-                f"{tag}: contact_angle_deg should be > 0 for an angular "
-                f"contact ball bearing (got {self.contact_angle_deg})"
-            )
+            if self.alpha_0 <= 0.0:
+                errors.append(
+                    f"{tag}: contact angle should be > 0 for an angular "
+                    f"contact ball bearing (got {np.degrees(self.alpha_0):.2f} deg)"
+                )
 
         return errors

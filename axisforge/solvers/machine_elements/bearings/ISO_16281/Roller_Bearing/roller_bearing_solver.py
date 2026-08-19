@@ -2,35 +2,48 @@
 axisforge/solvers/machine_elements/bearings/ISO_16281/Roller_Bearing/roller_bearing_solver.py
 
 ISO/TS 16281 internal load distribution SOLVER for LINE-CONTACT radial
-roller bearings (BearingType.CYLINDRICAL_ROLLER — NU/N-type, zero nominal
-contact angle). Implements the §5.2 lamina model rather than the §4.2
+roller bearings (BearingType.CYLINDRICAL_ROLLER -- NU/N-type, zero nominal
+contact angle). Implements the Sec 5.2 lamina model rather than the Sec 4.2
 point-contact model used for balls: each roller is sliced into n_s
 identical laminae along its effective length L_we, and the load carried by
 each lamina is derived from the LOCAL elastic approach at that lamina,
 corrected for the roller's logarithmic profile (crowning) so a purely
 cylindrical roller's theoretical edge-stress singularity does not appear
-in the model. See ISO/TS 16281:2008 §5.2, eq.(34)-(46).
+in the model. See ISO/TS 16281:2008 Sec 5.2, eq.(34)-(46).
 
 Scope of this file: only things that RUN the iterative solve (the
 scipy.optimize.root problem and everything it needs on every iteration)
-live here — ISO16281RollerSolver, roller_profile(), and RollerElementCapacity
-(a closed-form calculation from bearing geometry + catalogue Cr/Ca alone,
-no solve state, so it stays with the other geometry-only formulas rather
-than moving to a "results" file). The RESULT SHAPE the solve hands back,
-RollerLoadDistributionResult, moved to roller_bearing_results.py — it is
-pure data (no formulas), consumed by roller_bearing_postprocessing.py and,
-via TYPE_CHECKING only, by the global BearingResultsLibrary registry in
-bearings/ISO_16281/library.py. This file imports RollerLoadDistributionResult
-from roller_bearing_results.py; it never imports roller_bearing_postprocessing.py.
+live here -- ISO16281RollerSolver and roller_profile(). The RESULT SHAPE
+the solve hands back, RollerLoadDistributionResult, lives in
+roller_bearing_results.py -- it is pure data (no formulas), consumed by
+roller_bearing_postprocessing.py and, via TYPE_CHECKING only, by the global
+BearingResultsLibrary registry in bearings/ISO_16281/library.py. This file
+imports RollerLoadDistributionResult from roller_bearing_results.py; it
+never imports roller_bearing_postprocessing.py.
+
+Capacity (Q_ci/Q_ce, per-lamina q_ci/q_ce) moved out of this file -- core
+cleanup
+------------------------------------------------------------------------
+This file used to carry its own RollerElementCapacity dataclass plus
+module constants _LAMBDA_V_RADIAL/_LAMBDA_V_TRUST, duplicating eq.(47)-(57)
+against core/machine_elements/Bearings/families/roller/{radial,thrust}/
+functions/capacity.py, which now owns the SAME formulas, tested, with
+lambda_v owned by each concrete subtype (CylindricalRollerFamily.
+LAMBDA_V_RADIAL, ThrustCylindricalRollerFamily/ThrustNeedleRollerFamily.
+LAMBDA_V_THRUST) rather than hardcoded here. rolling_bearing_solver.py now
+calls bearing.family.per_element_dynamic_capacity(bearing, Cr=...) /
+(bearing, Ca=...) directly -- see its module docstring. debug_radial_capacity()
+below is kept as a manual cross-check but also sources its numbers from
+bearing.family, not from a local reimplementation -- see its own docstring.
 
 Why psi is an INPUT here, not a second unknown solved jointly with delta_r
 ------------------------------------------------------------------------
-ISO/TS 16281 §5.2.4 poses eq.(45) (radial force balance) and eq.(46)
+ISO/TS 16281 Sec 5.2.4 poses eq.(45) (radial force balance) and eq.(46)
 (moment balance) together as "the equation system ... solved by iteration",
 which in the standard's own generic derivation leaves both delta_r and psi
 as unknowns. In this codebase's architecture the shaft FEM already supplies
 BOTH quantities eq.(46) would otherwise be used to find: the prescribed
-ring misalignment (BearingNodeData.psi_xz/psi_xy — the shaft centreline
+ring misalignment (BearingNodeData.psi_xz/psi_xy -- the shaft centreline
 slope across the bearing seat, exactly the input ISO16281BallSolver already
 treats as prescribed) and a moment reaction (BearingNodeData.M_xz/M_xy).
 Mirroring ISO16281BallSolver's treatment of psi keeps both per-type solvers
@@ -38,36 +51,34 @@ consistent and keeps the shaft <-> bearing coupling one-directional (FEM
 drives the bearing solve, not the reverse). So here: psi is taken from FEM
 (or from psi_override, exactly like the ball solver's psi_input mechanism),
 eq.(45) is solved for the single unknown delta_r, and eq.(46) is evaluated
-afterwards as a DIAGNOSTIC output (LoadDistributionResult.Mz) — usable to
+afterwards as a DIAGNOSTIC output (LoadDistributionResult.Mz) -- usable to
 sanity-check against the FEM's own M_xz/M_xy, exactly as the ball solver's
 Mz field is a byproduct, not a constraint. If a future case genuinely needs
 psi solved jointly with delta_r (e.g. an isolated bearing test rig with a
 prescribed external moment rather than a coupled shaft), that is a distinct
-mode this file does not implement — flag it if it comes up rather than
+mode this file does not implement -- flag it if it comes up rather than
 silently repurposing this solver for it.
 
-Scope limitation — cylindrical only
+Scope limitation -- cylindrical only
 ------------------------------------
 This module covers BearingType.CYLINDRICAL_ROLLER only. Tapered and
 spherical roller bearings share the lamina mechanics but need an additional
 coordinate transform (cone half-angle for tapered; crown/osculation for
-spherical) this module does not implement — they are NOT wired into
+spherical) this module does not implement -- they are NOT wired into
 rolling_bearing_solver.RollingBearingSolver's dispatch table yet.
 
 References
 ----------
-ISO/TS 16281:2008 §5.2, eq.(34)-(46) (lamina model, static equilibrium)
-              §5.3.1.2, eq.(47)-(49) (rating life, radial roller bearing)
+ISO/TS 16281:2008 Sec 5.2, eq.(34)-(46) (lamina model, static equilibrium)
+              Sec 5.3.1.2, eq.(47)-(49) (rating life, radial roller bearing)
 Harris & Kotzalas, "Rolling Bearing Analysis", 5th ed., Ch. 6
 """
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass
 
 import numpy as np
 
-from axisforge.core.machine_elements.Bearings import bearing
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import ShaftSystem
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import (
@@ -86,123 +97,18 @@ from axisforge.config import SOLVER_TOLERANCE
 
 
 # ---------------------------------------------------------------------------
-# Lamina geometry constants — ISO/TS 16281 §5.2.2-.3
+# Lamina geometry constants -- ISO/TS 16281 Sec 5.2.2-.3
 # ---------------------------------------------------------------------------
 
-_MIN_LAMINAE = 30                # §5.2.2 — "the number of laminae shall be at least n_s = 30"
-_LOG_ARG_EPS = 1e-12             # floor for the log() argument in the profile function
+_MIN_LAMINAE = 30                # Sec 5.2.2 -- "the number of laminae shall be at least n_s = 30"
 
-# x_k (the lamina midpoints) is NOT computed by this solver — it is one of
+# x_k (the lamina midpoints) is NOT computed by this solver -- it is one of
 # _REQUIRED_ATTRS below, precomputed by the bearing's own geometry setup
 # (mirrors bearing.phi_j being precomputed for ball bearings) and checked
-# for §5.2.2's n_s >= 30 minimum by _check_lamina_count() at solve time.
-# roller_profile() (eq.42-44) DOES live as a static method on
-# ISO16281RollerSolver below, since it is genuinely internal to the solve
-# — _elements() calls it every iteration — with no other consumer.
-
-
-# ---------------------------------------------------------------------------
-# RollerElementCapacity — ISO/TS 16281 §5.3.1.2, eq.(47)-(49)
-# ---------------------------------------------------------------------------
-
-_LAMBDA_V_RADIAL = 0.83   # eq.(49)
-_LAMBDA_V_TRUST  = 0.73 # eq.(52)
-
-
-@dataclass(frozen=True)
-class RollerElementCapacity:
-    """
-    Per-roller dynamic load capacity Q_ci (inner) / Q_ce (outer) for a
-    radial roller bearing — ISO/TS 16281 §5.3.1.2, eq.(47)-(48) — plus the
-    per-LAMINA dynamic load rating q_ci / q_ce, §5.3.2, eq.(56)-(57):
-
-        q_ci = Q_ci * (1/n_s)^(7/9)
-        q_ce = Q_ce * (1/n_s)^(7/9)
-
-    q_ci/q_ce are what a lamina's dynamic equivalent load (see
-    roller_bearing_postprocessing.LaminaDynamicEquivalentLoad, eq.61-64)
-    is meant to be compared against — Q_ci/Q_ce are the whole-roller
-    figures and are not the right denominator for a per-lamina check.
-
-    Line contact only. Cr is supplied externally (ISO 281 catalogue); this
-    module does not resolve it. Requires bearing.n_s for q_ci/q_ce (same
-    n_s _check_lamina_count() already validates for the solve).
-
-    Attributes
-    ----------
-    label     str
-    Q_ci      float [N]        eq.(47), whole roller, inner raceway
-    Q_ce      float [N]        eq.(48), whole roller, outer raceway
-    q_ci      float [N]        eq.(56), per lamina,   inner raceway
-    q_ce      float [N]        eq.(57), per lamina,   outer raceway
-    Cr        float [N]
-    i         int     number of roller rows
-    lambda_v  float   stress concentration factor, eq.(49)
-    """
-    label    : str
-    Q_ci     : float
-    Q_ce     : float
-    q_ci     : float
-    q_ce     : float
-    Cr       : float
-    lambda_v : float
-    i        : int = 1
-
-    @classmethod
-    def per_lamina(cls, bearing: Bearing, Q_ci: float, Q_ce: float):
-
-        n_s  = bearing.n_s
-        q_ci = Q_ci * (1.0 / n_s) ** (7.0 / 9.0)   # eq.(56)
-        q_ce = Q_ce * (1.0 / n_s) ** (7.0 / 9.0)   # eq.(57)
-
-        return q_ci, q_ce
-
-    @classmethod
-    def radial(cls, bearing: Bearing, Cr: float, i: int = 1,
-            lambda_v: float = _LAMBDA_V_RADIAL, label: str = "") -> "RollerElementCapacity":
-        Z, alpha = bearing.Z, bearing.alpha_0
-        gamma = bearing.gamma
-        _lbl = label or bearing.label
-
-        base    = 1.038 * ((1.0 - gamma) / (1.0 + gamma)) ** (143.0 / 108.0)
-        denom_a = np.cos(alpha) * (i ** (7.0 / 9.0))
-
-        Q_ci = (1.0 / lambda_v) * (Cr / (0.378 * Z * denom_a)) * (1.0 + base ** (9.0 / 2.0)) ** (2.0 / 9.0)
-        Q_ce = (1.0 / lambda_v) * (Cr / (0.364 * Z * denom_a)) * (1.0 + base ** (-9.0 / 2.0)) ** (2.0 / 9.0)
-
-        q_ci, q_ce = cls.per_lamina(bearing, Q_ci, Q_ce)
-        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, Cr=Cr, i=i, lambda_v=lambda_v, q_ci=q_ci, q_ce=q_ce)
-
-
-    @classmethod
-    def thrust_nonzero_alpha(cls, bearing: Bearing, Ca: float,
-            lambda_v: float = _LAMBDA_V_TRUST, label: str = "") -> "RollerElementCapacity":
-        Z, alpha = bearing.Z, bearing.alpha_0
-        gamma = bearing.gamma
-        _lbl = label or bearing.label
-
-        base    = ((1.0 - gamma) / (1.0 + gamma)) ** (143.0 / 108.0)
-        denom_a = Z * np.sin(alpha)
-
-        Q_ci = 1.0 / lambda_v * (Ca / denom_a) * (1.0 + base ** (9.0 / 2.0)) ** (2.0 / 9.0)
-        Q_ce = 1.0 / lambda_v * (Ca / denom_a) * (1.0 + base ** (-9.0 / 2.0)) ** (2.0 / 9.0)
-
-        q_ci, q_ce = cls.per_lamina(bearing, Q_ci, Q_ce)
-        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, q_ci=q_ci, q_ce=q_ce, Ca=Ca, lambda_v=lambda_v)
-
-
-    @classmethod
-    def thrust_90deg(cls, bearing: Bearing, Ca: float,
-            lambda_v: float = _LAMBDA_V_TRUST, label: str = "") -> "RollerElementCapacity":
-        Z = bearing.Z
-        _ = bearing.gamma   # geometry sanity check (Dwe/Dpw/alpha_0) -- unused in this formula
-        _lbl = label or bearing.label
-
-        Q_ci = 1.0 / lambda_v * (Ca / Z) * 2 ** (2.0 / 9.0)
-        Q_ce = 1.0 / lambda_v * (Ca / Z) * 2 ** (2.0 / 9.0)
-
-        q_ci, q_ce = cls.per_lamina(bearing, Q_ci, Q_ce)
-        return cls(label=_lbl, Q_ci=Q_ci, Q_ce=Q_ce, q_ci=q_ci, q_ce=q_ce, Ca=Ca, lambda_v=lambda_v)
+# for Sec 5.2.2's n_s >= 30 minimum by _check_lamina_count() at solve time.
+# roller profile (eq.42-44) is owned by each subtype's own
+# _reference_roller_profile() in core/ now (cached onto bearing.P_xk at
+# assembly) -- this solver just reads bearing.P_xk, it does not compute it.
 
 
 # ---------------------------------------------------------------------------
@@ -214,8 +120,8 @@ _REQUIRED_ATTRS = ("Z", "Dwe", "Lwe", "Dpw", "phi_j", "s", "n_s", "x_k", "cL", "
 
 class ISO16281RollerSolver:
     """
-    ISO/TS 16281 §5.2 lamina-model internal load distribution solver, line
-    contact (radial cylindrical roller bearings — BearingType.CYLINDRICAL_
+    ISO/TS 16281 Sec 5.2 lamina-model internal load distribution solver, line
+    contact (radial cylindrical roller bearings -- BearingType.CYLINDRICAL_
     ROLLER, zero nominal contact angle, no axial capacity).
 
     Takes bearing reactions and shaft slopes from a SimpleFEMResultsLibrary
@@ -238,13 +144,12 @@ class ISO16281RollerSolver:
                       True: per-bearing psi values supplied via psi_override in
                       solve() take precedence when present; any bearing not
                       covered by psi_override falls back to the FEM projection.
-                      Same convention as ISO16281BallSolver — see its docstring.
+                      Same convention as ISO16281BallSolver -- see its docstring.
     """
 
     def __init__(self, tol: float = SOLVER_TOLERANCE, psi_input: bool = False):
         self.tol       = tol
         self.psi_input = psi_input
-
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -262,23 +167,23 @@ class ISO16281RollerSolver:
 
         Each bearing must already carry: Z, Dwe, Lwe, Dpw, phi_j, s, n_s,
         x_k (lamina midpoints, precomputed by the bearing's own geometry
-        setup — mirrors bearing.phi_j being precomputed for ball bearings;
+        setup -- mirrors bearing.phi_j being precomputed for ball bearings;
         n_s >= 30 and len(x_k) == n_s are checked at solve time, see
         _check_lamina_count()), cL, cs (eq.(35), eq.(37)), alpha_0.
 
         Parameters
         ----------
-        shaft_system  : ShaftSystem — fully resolved
-        bearings      : {label: Bearing} — all line-contact (cylindrical roller)
-        library       : SimpleFEMResultsLibrary — must contain results for
+        shaft_system  : ShaftSystem -- fully resolved
+        bearings      : {label: Bearing} -- all line-contact (cylindrical roller)
+        library       : SimpleFEMResultsLibrary -- must contain results for
                         shaft_system.name (populated by ShaftResultsReader.read())
-        psi_override  : {label: psi [rad]} — see class docstring. Labels not
+        psi_override  : {label: psi [rad]} -- see class docstring. Labels not
                         present here fall back to the FEM projection; labels
                         present here but not in `bearings` trigger a warning.
 
         Returns
         -------
-        RollerLoadDistributionLibrary — local registry, one entry per label
+        RollerLoadDistributionLibrary -- local registry, one entry per label
         in `bearings`. rolling_bearing_solver.RollingBearingSolver.solve()
         is what reads this back out and merges it with any other per-type
         local library into the orchestrator's own result; this method never
@@ -288,7 +193,7 @@ class ISO16281RollerSolver:
             unknown = set(psi_override) - set(bearings)
             if unknown:
                 warnings.warn(
-                    f"psi_override has labels not in `bearings`: {sorted(unknown)} — "
+                    f"psi_override has labels not in `bearings`: {sorted(unknown)} -- "
                     f"check for typos; these entries are ignored."
                 )
 
@@ -328,26 +233,26 @@ class ISO16281RollerSolver:
     @staticmethod
     def _check_lamina_count(bearing: Bearing, label: str) -> None:
         """
-        §5.2.2 requires at least _MIN_LAMINAE (30) laminae, and bearing.x_k
+        Sec 5.2.2 requires at least _MIN_LAMINAE (30) laminae, and bearing.x_k
         (whatever precomputed it) must actually have one entry per bearing.n_s
-        — this solver never constructs x_k itself, so a mismatch here is a
+        -- this solver never constructs x_k itself, so a mismatch here is a
         bearing-setup bug, not something _elements() can catch cleanly deep
         inside a root-finding call.
         """
         n_s = bearing.n_s
         if n_s < _MIN_LAMINAE:
             raise ValueError(
-                f"Bearing '{label}': n_s = {n_s} < {_MIN_LAMINAE} — "
-                f"ISO/TS 16281 §5.2.2 requires at least {_MIN_LAMINAE} laminae."
+                f"Bearing '{label}': n_s = {n_s} < {_MIN_LAMINAE} -- "
+                f"ISO/TS 16281 Sec 5.2.2 requires at least {_MIN_LAMINAE} laminae."
             )
         if len(bearing.x_k) != n_s:
             raise ValueError(
-                f"Bearing '{label}': len(x_k) = {len(bearing.x_k)} != n_s = {n_s} — "
+                f"Bearing '{label}': len(x_k) = {len(bearing.x_k)} != n_s = {n_s} -- "
                 f"x_k must have exactly one lamina midpoint per n_s."
             )
 
     # ------------------------------------------------------------------
-    # Element/lamina kinematics — ISO/TS 16281 eq.(36)-(41), §5.2.1-.4
+    # Element/lamina kinematics -- ISO/TS 16281 eq.(36)-(41), Sec 5.2.1-.4
     # ------------------------------------------------------------------
 
     def _elements(self, bearing: Bearing, delta_r: float, psi: float):
@@ -371,7 +276,7 @@ class ISO16281RollerSolver:
         psi_j   = np.arctan(np.tan(psi) * cp_j)                     # eq.(39)
 
         P_xk = bearing.P_xk   # eq.(42)-(44) -- cached on the bearing (Sec 6.2 profile)
-        
+
         delta_jk = (delta_j[:, None]
                     - x_k[None, :] * np.tan(psi_j)[:, None]
                     - 2.0 * P_xk[None, :])                          # eq.(41)
@@ -405,9 +310,9 @@ class ISO16281RollerSolver:
         """
         1-equation root (delta_r) in the resultant-force plane, psi
         prescribed. Mz is evaluated afterwards from the converged state as a
-        diagnostic (eq.(46)) — see module docstring.
+        diagnostic (eq.(46)) -- see module docstring.
 
-        Equilibrium (§5.2.4.1, eq.(45)):
+        Equilibrium (Sec 5.2.4.1, eq.(45)):
             Fr = sum_j cos(phi_j) * sum_k q_j,k
         """
         Fr = float(np.hypot(Fr_xz, Fr_xy))
@@ -425,7 +330,7 @@ class ISO16281RollerSolver:
         delta_j, psi_j, delta_jk, q_jk, cp_j = self._elements(bearing, delta_r, psi)
         x_k = bearing.x_k
 
-        # eq.(46) — diagnostic, not a solve constraint (see module docstring)
+        # eq.(46) -- diagnostic, not a solve constraint (see module docstring)
         Mz = float(np.sum(cp_j * np.sum(x_k[None, :] * q_jk, axis=1)))
 
         alpha_j = np.full(bearing.Z, bearing.alpha_0, dtype=float)
@@ -439,56 +344,42 @@ class ISO16281RollerSolver:
 
 
 # ---------------------------------------------------------------------------
-# DEBUG / VALIDATION UTILITIES — not used in production pipelines
+# DEBUG / VALIDATION UTILITY -- not used in production pipelines
 # ---------------------------------------------------------------------------
 
 def debug_radial_capacity(bearing: Bearing, Cr: float, i: int = 1,
-                          lambda_v: float = _LAMBDA_V_RADIAL, label: str = "") -> None:
+                          lambda_v: float | None = None, label: str = "") -> None:
     """
-    Print all intermediate values for Q_ci / Q_ce (eq.47-49) — manual
-    cross-check only. ASCII only, per project console-output convention.
+    Print Q_ci/Q_ce/q_ci/q_ce for a radial roller bearing -- manual
+    cross-check only.
+
+    Sources the numbers from bearing.family.per_element_dynamic_capacity(),
+    the SAME call rolling_bearing_solver.postprocess_and_record() makes --
+    this file no longer carries its own copy of eq.(47)-(57), so a debug
+    print here can never silently drift from what production returns.
+    lambda_v defaults to the bearing's own subtype value (e.g.
+    CylindricalRollerFamily.LAMBDA_V_RADIAL) when not overridden, same as
+    the family method itself.
     """
-    Z, alpha = bearing.Z, bearing.alpha_0
-    Dwe, Dpw = bearing.Dwe, bearing.Dpw
-    gamma    = Dwe * np.cos(alpha) / Dpw
-    base     = 1.038 * ((1.0 - gamma) / (1.0 + gamma)) ** (143.0 / 108.0)
-    denom_a  = np.cos(alpha) * (i ** (7.0 / 9.0))
-    inner_term = base ** (9.0 / 2.0)
-    outer_term = base ** (-9.0 / 2.0)
-    denom_ci = 0.378 * Z * denom_a
-    denom_ce = 0.364 * Z * denom_a
-    factor_ci = (1.0 + inner_term) ** (2.0 / 9.0)
-    factor_ce = (1.0 + outer_term) ** (2.0 / 9.0)
-    Q_ci = (1.0 / lambda_v) * (Cr / denom_ci) * factor_ci
-    Q_ce = (1.0 / lambda_v) * (Cr / denom_ce) * factor_ce
     _lbl = label or bearing.label
+    Q_ci, Q_ce = bearing.family.per_element_dynamic_capacity(
+        bearing, Cr=Cr, i=i, lambda_v=lambda_v,
+    )
+    q_ci, q_ce = bearing.family.per_lamina_dynamic_capacity(bearing, Q_ci, Q_ce)
 
     print(f"\n  +-- Q_ci/Q_ce debug (roller) -- {_lbl} {'-'*20}+")
     print(f"  |  INPUT")
     print(f"  |    Cr          = {Cr:.2f} N")
-    print(f"  |    Z           = {Z}")
+    print(f"  |    Z           = {bearing.Z}")
     print(f"  |    i (rows)    = {i}")
-    print(f"  |    lambda_v    = {lambda_v:.4f}")
-    print(f"  |    alpha_0     = {np.degrees(alpha):.6f} deg")
-    print(f"  |    Dwe         = {Dwe:.6f} mm")
-    print(f"  |    Dpw         = {Dpw:.6f} mm")
-    print(f"  |  INTERMEDIATE")
-    print(f"  |    gamma           = {gamma:.8f}   [Dwe*cos(alpha)/Dpw]")
-    print(f"  |    base            = {base:.8f}   [1.038*((1-g)/(1+g))^(143/108)]")
-    print(f"  |    base^(+9/2)     = {inner_term:.8f}   -> Q_ci eq.(47)")
-    print(f"  |    base^(-9/2)     = {outer_term:.8f}   -> Q_ce eq.(48)")
-    print(f"  |  CAPACITY")
-    print(f"  |    denom_ci  = 0.378*{Z}*{denom_a:.6f} = {denom_ci:.6f}")
-    print(f"  |    denom_ce  = 0.364*{Z}*{denom_a:.6f} = {denom_ce:.6f}")
-    print(f"  |    factor_ci = (1 + {inner_term:.6f})^(2/9) = {factor_ci:.8f}")
-    print(f"  |    factor_ce = (1 + {outer_term:.6f})^(2/9) = {factor_ce:.8f}")
-    print(f"  |    Q_ci      = (1/{lambda_v:.4f})*{Cr:.2f}/{denom_ci:.4f} * {factor_ci:.6f} = {Q_ci:.4f} N")
-    print(f"  |    Q_ce      = (1/{lambda_v:.4f})*{Cr:.2f}/{denom_ce:.4f} * {factor_ce:.6f} = {Q_ce:.4f} N")
-
-    n_s  = bearing.n_s
-    q_ci = Q_ci * (1.0 / n_s) ** (7.0 / 9.0)
-    q_ce = Q_ce * (1.0 / n_s) ** (7.0 / 9.0)
-    print(f"  |  LAMINA (eq.56-57, n_s={n_s})")
-    print(f"  |    q_ci = Q_ci*(1/{n_s})^(7/9) = {q_ci:.4f} N")
-    print(f"  |    q_ce = Q_ce*(1/{n_s})^(7/9) = {q_ce:.4f} N")
+    print(f"  |    alpha_0     = {np.degrees(bearing.alpha_0):.6f} deg")
+    print(f"  |    Dwe         = {bearing.Dwe:.6f} mm")
+    print(f"  |    Dpw         = {bearing.Dpw:.6f} mm")
+    print(f"  |    gamma       = {bearing.gamma:.8f}")
+    print(f"  |  OUTPUT (via bearing.family.per_element_dynamic_capacity)")
+    print(f"  |    Q_ci        = {Q_ci:.4f} N")
+    print(f"  |    Q_ce        = {Q_ce:.4f} N")
+    print(f"  |  LAMINA (eq.56-57, n_s={bearing.n_s})")
+    print(f"  |    q_ci        = {q_ci:.4f} N")
+    print(f"  |    q_ce        = {q_ce:.4f} N")
     print(f"  +{'-'*58}+")

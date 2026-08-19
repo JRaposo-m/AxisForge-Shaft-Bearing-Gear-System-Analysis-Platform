@@ -1,104 +1,138 @@
 """
 core/machine_elements/Bearings/bearing.py
 
-Rolling bearing base class — catalog data, ISO 281 equivalent load,
-mounting arrangement.
+Bearing -- the orchestrator. Catalogue data + family-derived geometry,
+assembled ONCE via Bearing.assemble() and immutable from then on. Never
+learns about load cases, X/Y, life, or any analysis result -- those live
+in solvers/, each with its own result object.
 
-Internal geometry slots are NOT declared here. Each subclass declares its
-own geometry attributes in __init__ and overrides has_internal_geometry().
-Contact angle is part of that internal geometry too now — alpha_0, set by
-each subclass's setup_internal_geometry() (mirrored from its Geometry
-object), is the single source of truth for contact angle. There is no
-separate contact-angle input at this base level anymore.
-
-References:
-  - ISO 281:2007  — dynamic load rating, life calculation, X/Y factors
-  - ISO 76:2006   — static load rating
+Do not instantiate directly -- always go through Bearing.assemble().
 """
-
 from __future__ import annotations
-import numpy as np
-from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
+from typing import Any
+
+from axisforge.core.machine_elements.Bearings.catalog import BearingCatalog
+from axisforge.core.machine_elements.Bearings.family import BearingFamily
 
 
 class Bearing:
 
-    def __init__(self,
-                 d: float,
-                 D: float,
-                 bearing_type: BearingType = BearingType.DEEP_GROOVE_BALL,
-                 designation: str = "",
-                 b: float = 0.0,
-                 C: float = 0.0,
-                 C0: float = 0.0,
-                 X: float = 1.0,
-                 Y: float = 0.0,
-                 arrangement: str = "locating",
-                 label: str = "",
-                 position: float = 0.0):
+    def __init__(self, catalog: BearingCatalog, family: BearingFamily):
+        self.d = catalog.d
+        self.D = catalog.D
+        self.b = catalog.b
+        self.C = catalog.C
+        self.C0 = catalog.C0
+        self.designation = catalog.designation
+        self.label = catalog.label
+        self.position = catalog.position
+        self.arrangement = catalog.arrangement
+        self.dm = 0.5 * (catalog.d + catalog.D)
+
+        self._family = family
+        self._enabled_analyses: frozenset[str] = frozenset()
+        self._assembled = False   # __setattr__ refuses writes once True
+
+    @classmethod
+    def assemble(cls,
+                 family: BearingFamily,
+                 catalog: BearingCatalog,
+                 geometry: dict[str, Any],
+                 analyses: dict[str, bool] | None = None) -> "Bearing":
         """
-        Parameters
-        ----------
-        d                 : bore diameter [mm]
-        D                 : outer diameter [mm]
-        bearing_type      : BearingType enum
-        designation       : manufacturer designation, e.g. "6208"
-        b                 : bearing width [mm]
-        C                 : dynamic load rating [N]   (ISO 281)
-        C0                : static load rating [N]    (ISO 76)
-        X, Y              : dynamic equivalent load factors (ISO 281)
-        arrangement       : "locating" | "floating" | "non-locating"
-        label             : identifier for reporting/traceability
-        position          : axial coordinate along the shaft [mm]
-
-        Internal geometry (Dw, Dpw, Z, ri, re, alpha_0, ...) is NOT
-        declared here. Each subclass declares its own geometry slots in
-        __init__ and populates alpha_0 from setup_internal_geometry().
+        family   : BearingFamily instance, passed directly
+        catalog  : BearingCatalog
+        geometry : raw kwargs -> family.assemble_geometry(catalog, **geometry)
+        analyses : {name: True/False} -- validated against
+                   family.CAPABILITIES / REQUIRED_FOR, never dispatched
         """
-        # --- metadata ---
-        self.label        = label
-        self.designation  = designation
-        self.bearing_type = bearing_type
+        catalog.validate_or_raise()
+        bearing = cls(catalog, family)
 
-        # --- catalog / rating data ---
-        self.b   = b
-        self.d   = d
-        self.D   = D
-        self.C   = C
-        self.C0  = C0
-        self.X   = X
-        self.Y   = Y
-        self.dm  = 0.5 * (d + D)
+        enabled = {name for name, on in (analyses or {}).items() if on}
+        unsupported = enabled - family.CAPABILITIES
+        if unsupported:
+            raise NotImplementedError(
+                f"{catalog.label or catalog.designation}: family "
+                f"'{family.name}' does not support: {sorted(unsupported)}. "
+                f"Supported: {sorted(family.CAPABILITIES)}"
+            )
 
-        # --- mounting ---
-        self.position    = position
-        self.arrangement = arrangement
+        computed = family.assemble_geometry(catalog, **geometry)
+        for attr, value in computed.items():
+            setattr(bearing, attr, value)
+        bearing.duty = family.DUTY
 
-    # ------------------------------------------------------------------
-    # Derived / convenience
-    # ------------------------------------------------------------------
+        missing_by_analysis: dict[str, list[str]] = {}
+        for analysis in enabled:
+            required = family.REQUIRED_FOR.get(analysis, frozenset())
+            missing = [f for f in required if getattr(bearing, f, None) is None]
+            if missing:
+                missing_by_analysis[analysis] = missing
+        if missing_by_analysis:
+            details = "; ".join(f"{a}: missing {m}" for a, m in missing_by_analysis.items())
+            raise RuntimeError(
+                f"{catalog.label or catalog.designation}: geometry insufficient "
+                f"for the requested analyses -- {details}"
+            )
+
+        bearing._enabled_analyses = frozenset(enabled)
+        bearing._assembled = True
+        return bearing
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if getattr(self, "_assembled", False):
+            raise AttributeError(
+                f"Bearing(label={getattr(self, 'label', '')!r}) is immutable "
+                f"after assemble() -- cannot set '{name}'. Analysis results "
+                f"belong in the solver's own result object, not on the Bearing."
+            )
+        super().__setattr__(name, value)
+
+    def is_enabled(self, analysis: str) -> bool:
+        return analysis in self._enabled_analyses
+
+    def has_internal_geometry(self) -> bool:
+        return self._assembled
 
     def is_locating(self) -> bool:
         return self.arrangement == "locating"
 
-    def equivalent_dynamic_load(self, Fr: float, Fa: float) -> float:
-        """P = X·Fr + Y·Fa   (ISO 281)"""
-        return self.X * Fr + self.Y * Fa
-
-    def has_internal_geometry(self) -> bool:
+    @property
+    def family(self) -> BearingFamily:
         """
-        True if setup_internal_geometry() has been called.
-        Base returns False — subclass overrides with its own sentinel check.
+        The BearingFamily instance this Bearing was assembled with. Public
+        so callers (scripts, solvers) can dispatch family-specific methods
+        (e.g. per_element_dynamic_capacity()) off the bearing itself,
+        without re-importing/tracking the concrete subtype class --
+        bearing.family.per_element_dynamic_capacity(bearing) instead of
+        DeepGrooveBallFamily.per_element_dynamic_capacity(bearing).
         """
-        return False
-
-    # ------------------------------------------------------------------
-    # Validation
-    # ------------------------------------------------------------------
+        return self._family
 
     def validate(self) -> list[str]:
+        """
+        Call-site compatibility with ShaftSystem.validate() (which does
+        `errors.extend(f"{tag}.bearing: {e}" for e in b.validate())` for
+        every bearing on the shaft) -- the old pre-rewrite bearing classes
+        exposed this as a post-hoc check.
+
+        In normal use this can never actually find anything:
+        catalog.validate_or_raise() already ran inside assemble(), and the
+        instance is immutable from that point on (__setattr__ refuses
+        further writes), so a Bearing that exists has already been proven
+        valid and cannot have drifted since. Re-checked here anyway,
+        against this instance's own copied attributes (the original
+        BearingCatalog is discarded after assemble(), only its fields
+        survive on self) -- genuine defense-in-depth (e.g. against
+        __setattr__ being bypassed via object.__setattr__), not an
+        unconditional [].
+        """
         errors: list[str] = []
         tag = self.label or self.designation or self.__class__.__name__
+
+        if not self._assembled:
+            errors.append(f"{tag}: not assembled -- Bearing.assemble() never completed")
 
         if self.position < 0:
             errors.append(f"{tag}: position must be >= 0, got {self.position}")
@@ -111,43 +145,39 @@ class Bearing:
                 f"{tag}: arrangement must be 'locating', 'floating', or "
                 f"'non-locating', got '{self.arrangement}'"
             )
-        if not (0.0 < self.X <= 1.0):
-            errors.append(f"{tag}: X must be in (0, 1], got {self.X}")
-        if self.Y < 0:
-            errors.append(f"{tag}: Y must be >= 0, got {self.Y}")
+
+        for analysis in self._enabled_analyses:
+            required = self._family.REQUIRED_FOR.get(analysis, frozenset())
+            missing = [f for f in required if getattr(self, f, None) is None]
+            if missing:
+                errors.append(f"{tag}: enabled analysis '{analysis}' missing {missing}")
 
         return errors
 
-    def validate_or_raise(self) -> None:
-        errors = self.validate()
-        if errors:
-            raise ValueError("\n".join(errors))
-
-    # ------------------------------------------------------------------
-    # Summary / repr
-    # ------------------------------------------------------------------
-
     def summary(self) -> str:
         tag = self.label or self.designation or "Bearing"
+        header = f"-- {tag} "
         lines = [
-            f"── {tag} ─────────────────────────────────",
-            f"  type        : {self.bearing_type.name}",
+            header + "-" * max(0, 44 - len(header)),
+            f"  family      : {self._family.name}",
+            f"  bearing_type: {getattr(self, 'bearing_type', None)}",
+            f"  duty        : {getattr(self, 'duty', None)}",
             f"  position    : {self.position:.2f} mm",
             f"  arrangement : {self.arrangement}",
             f"  d / D       : {self.d:.1f} mm / {self.D:.1f} mm",
             f"  b           : {self.b:.1f} mm",
             f"  C / C0      : {self.C:.0f} N / {self.C0:.0f} N",
-            f"  X / Y       : {self.X:.3f} / {self.Y:.3f}",
-            f"  geometry    : {'set' if self.has_internal_geometry() else 'not set'}",
-            "────────────────────────────────────────────────────",
+            f"  geometry    : {'assembled' if self._assembled else 'not assembled'}",
+            f"  analyses    : {sorted(self._enabled_analyses) or '(none enabled)'}",
+            "-" * 44,
         ]
         return "\n".join(lines)
 
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}("
-            f"type={self.bearing_type.name}, "
-            f"designation='{self.designation}', "
+            f"family={self._family.name!r}, "
+            f"designation={self.designation!r}, "
             f"position={self.position:.2f} mm, "
-            f"arrangement='{self.arrangement}')"
+            f"arrangement={self.arrangement!r})"
         )

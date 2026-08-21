@@ -29,6 +29,28 @@ gathered under one label, so a future module (lubrication, fatigue) can
 find everything about a bearing without knowing which per-type solver
 produced each piece. It computes nothing itself.
 
+Multi-row storage -- UPDATE, this turn (Option A)
+---------------------------------------------------
+bundle.load_distribution and bundle.dynamic_equivalent_load are now always
+LISTS -- length 1 for an ordinary single-row bearing, length i for a
+multi-row bearing's i rows, index-aligned with bearing.rows. This is a
+deliberate breaking change (Option A, chosen over a separate parallel
+"row_results" slot left None for ordinary bearings): every consumer of
+bundle.load_distribution / bundle.dynamic_equivalent_load now indexes [0]
+explicitly rather than the shape silently differing per bearing. See
+rolling_bearing_solver.py's module docstring for the caller-side half of
+this change (solve()/postprocess_and_record() now populate these as lists).
+
+bundle.capacity is UNCHANGED -- still a single (Q_ci, Q_ce) pair, never a
+list, even for a multi-row bearing. Capacity (per_element_dynamic_capacity)
+is a geometry-level property computed once per bearing, not once per row --
+this was already established and confirmed correct earlier this session
+(the 6204 Q_ci/Q_ce value is identical across every shaft and scenario,
+single-row or double-row, because it depends on contact geometry, not on
+which row's load distribution was solved). Row-count effects on capacity
+(the i**0.7 scaling, Formula 29) live entirely inside
+bearing.family.per_element_dynamic_capacity() / dynamic_multirow(), not here.
+
 Capacity type -- core cleanup
 ------------------------------
 BearingResultBundle.capacity used to be typed as
@@ -158,19 +180,35 @@ class BearingResultBundle:
     ----------
     label                    str
     bearing_type             BearingType | None
-    load_distribution        BallLoadDistributionResult | RollerLoadDistributionResult | None
+    load_distribution        list[BallLoadDistributionResult | RollerLoadDistributionResult] | None
+                             length 1 (single-row) or i (multi-row, index-
+                             aligned with bearing.rows) -- see module
+                             docstring, "Multi-row storage" section.
     stiffness                BearingStiffness | None
+                             ALWAYS single, even for a multi-row bearing --
+                             computed from row 0's shared ring displacement
+                             (see rolling_bearing_solver.py's
+                             postprocess_and_record()).
     capacity                 CapacityResult | None    (Q_ci, Q_ce) from
-                             bearing.family.per_element_dynamic_capacity()
-    dynamic_equivalent_load  DynamicEquivalentRollingElementLoad | LaminaDynamicEquivalentLoad | None
-    extra                    dict[str, object]   e.g. {"lubrication": ...}
+                             bearing.family.per_element_dynamic_capacity() --
+                             ALWAYS single, never row-indexed, even for a
+                             multi-row bearing -- see module docstring.
+    dynamic_equivalent_load  list[DynamicEquivalentRollingElementLoad | LaminaDynamicEquivalentLoad] | None
+                             length 1 (single-row) or i (multi-row) -- same
+                             indexing as load_distribution.
+    extra                    dict[str, object]   e.g. {"lubrication": ...,
+                             "multirow_result": MultiRowBallLoadDistribution
+                             Result}   -- the full multi-row solve (row f_r/
+                             f_a split, n_iter, residual, ok) is stashed
+                             here for a multi-row bearing, since none of
+                             that fits load_distribution's per-row list.
     """
     label: str
     bearing_type: "BearingType | None" = None
-    load_distribution: "BallLoadDistributionResult | RollerLoadDistributionResult | None" = None
+    load_distribution: "list[BallLoadDistributionResult | RollerLoadDistributionResult] | None" = None
     stiffness: "BearingStiffness | None" = None
     capacity: "CapacityResult | None" = None
-    dynamic_equivalent_load: "DynamicEquivalentRollingElementLoad | LaminaDynamicEquivalentLoad | None" = None
+    dynamic_equivalent_load: "list[DynamicEquivalentRollingElementLoad | LaminaDynamicEquivalentLoad] | None" = None
     extra: dict[str, object] = field(default_factory=dict)
 
 
@@ -185,8 +223,8 @@ class BearingResultsLibrary:
         lib.set_stiffness("brg1a", stiff)
         lib.set_extra("brg1a", "lubrication", lube_result)
         ...
-        lib.get("brg1a").load_distribution.delta_r
-        lib.get("brg1a").capacity   # (Q_ci, Q_ce)
+        lib.get("brg1a").load_distribution[0].delta_r   # [0]: row 0 / the only row
+        lib.get("brg1a").capacity   # (Q_ci, Q_ce) -- always single, see below
         lib.load_distribution_library(BearingType.CYLINDRICAL_ROLLER)   # whole sub-library back
 
     Computes nothing -- only organizes and retrieves results computed
@@ -217,24 +255,37 @@ class BearingResultsLibrary:
         BearingType. `local_library` must duck-type labels() and get(label).
 
         Back-fills bundle.bearing_type and bundle.load_distribution for
-        every label already in `local_library`, by reference.
+        every label already in `local_library`, by reference. Every label
+        coming through this path is single-row by construction (this is
+        only ever called with a per-type LOCAL library, e.g.
+        BallLoadDistributionLibrary, which never holds a multi-row result --
+        see rolling_bearing_solver.py's solve()), so the single result is
+        wrapped in a length-1 list here, uniformly with the multi-row case
+        (see module docstring, "Multi-row storage" section).
         """
         self._load_distribution_libraries[bearing_type] = local_library
         for label in local_library.labels():
             bundle = self._bundle(label)
             bundle.bearing_type = bearing_type
-            bundle.load_distribution = local_library.get(label)
+            bundle.load_distribution = [local_library.get(label)]
 
     def load_distribution_library(self, bearing_type: BearingType):
         """The whole local sub-library recorded for one BearingType, or None."""
         return self._load_distribution_libraries.get(bearing_type)
 
-    def set_load_distribution(self, label: str, result: "LoadDistributionResult",
+    def set_load_distribution(self, label: str, result: "list[LoadDistributionResult]",
                               bearing_type: BearingType | None = None) -> None:
         """
         Set a single label's load distribution directly, bypassing a local
         library. Prefer add_load_distribution_library() when a whole
         per-type group is available.
+
+        `result` is a LIST -- length 1 for a single-row bearing, length i
+        for a multi-row bearing's i rows (the caller wraps a single result
+        itself, e.g. rolling_bearing_solver.py passes
+        mr_result.row_results directly for a multi-row bearing, or
+        [single_result] for a single-row one). This method does not wrap
+        for you -- see module docstring, "Multi-row storage" section.
         """
         bundle = self._bundle(label)
         bundle.load_distribution = result
@@ -251,6 +302,11 @@ class BearingResultsLibrary:
         self._bundle(label).capacity = capacity
 
     def set_dynamic_equivalent_load(self, label: str, derel) -> None:
+        """
+        `derel` is a LIST -- length 1 (single-row) or i (multi-row),
+        matching load_distribution's indexing. Not wrapped here -- see
+        set_load_distribution()'s docstring, same convention.
+        """
         self._bundle(label).dynamic_equivalent_load = derel
 
     def set_extra(self, label: str, key: str, value) -> None:

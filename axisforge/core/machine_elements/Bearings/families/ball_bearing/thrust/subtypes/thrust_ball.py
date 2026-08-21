@@ -1,8 +1,8 @@
 """
 core/machine_elements/Bearings/families/ball/thrust/subtypes/thrust_ball.py
 
-ThrustBallFamily -- BearingFamily implementation for thrust ball bearings,
-ISO/TS 16281 point contact, thrust duty.
+SingleRowThrustBallFamily -- BearingFamily implementation for a SINGLE ROW
+thrust ball bearing, ISO/TS 16281 point contact, thrust duty.
 
 Same point-contact math as DeepGrooveBallFamily/AngularContactFamily (all
 three built on ../functions/contact_stiffness.py) -- idiom matches
@@ -13,30 +13,42 @@ the bound already enforced on the radial side (AngularContactFamily caps
 at 45 from below; this family starts there and goes to 90).
 
 Owns its own ISO 281:2007 Table 1 constants -- Table No. 4 "Thrust ball
-bearings": ri = re = 0.535*Dw, lambda = 0.90, BOTH independent of row
-count -- unlike DGBB (separate table rows for single/double) or even ACB
-(capped at i in {1, 2} since its table row is literally titled "single
-and double row"), Table No. 4 has no row-count column at all, so i here
-is NOT restricted to {1, 2} -- a thrust ball bearing can stack n rows.
-lambda is a single scalar (REDUCTION_FACTOR), not a per-i dict. Confirmed
-directly against the ISO 281:2007 Table 1 image.
+bearings": ri = re = 0.535*Dw, lambda = 0.90. Confirmed directly against
+the ISO 281:2007 Table 1 image.
 
-eta (the OTHER Table 1 column, needed for Formula (20)/(21)'s Ca) is now
-also confirmed: eta = 1 - sin(alpha)/3. NOT wired into BearingCapacity.dynamic()
-yet -- Formula (20)/(21)'s full text still isn't provided, and i (row
-count) matters there per your own note ("vou tratar disso depois") --
-left stubbed deliberately, only the coefficient itself is recorded here
-so it isn't lost.
+eta (the OTHER Table 1 column, needed for Formula (18)-(20)/(23)-(25)'s
+Ca) is confirmed: eta = 1 - sin(alpha)/3.
 
-Capacity dispatch (per_element_dynamic_capacity): alpha_0 == 90deg exactly
-routes to RollingElementCapacity.thrust_90deg(); anything else routes to
-thrust_nonzero_alpha() -- per your instruction, this family always takes
-alpha_0 as the input and the 90deg-vs-not split happens downstream at the
-capacity call, not at assembly.
+No `i` (row count) anywhere in this file anymore -- previously ThrustBallFamily
+carried an `i` kwarg that dynamic_capacity() used to fake multi-row support
+by repeating this SAME geometry i times (identical rows, forced). That was
+wrong for two reasons: (1) it silently assumed identical rows with no way
+to express otherwise, and (2) it doesn't fit how a real multi-row thrust
+bearing is bought -- ONE catalog part (one C/C0/d/D/b), not i independent
+catalog rows, and Bearing.__init__ only ever takes one BearingCatalog (see
+bearing.py). This family now only ever describes ONE row -- clean single-
+row point contact, nothing else. Multi-row (i >= 2) lives in
+MultiRowThrustBallFamily (thrust_ball_multirow.py, same directory), which
+wraps this class: it calls SingleRowThrustBallFamily().assemble_geometry()
+once per row (not Bearing.assemble() -- no per-row catalog exists) and
+combines the resulting per-row Ca's via BearingCapacity.dynamic_multirow()
+(Sec 6.4, Formula (29)). See that file for the actual multi-row wiring.
+
+dynamic_capacity_from_fields() is the reusable core of dynamic_capacity()
+below, split out specifically so MultiRowThrustBallFamily can compute each
+row's Ca from a plain row dict (no Bearing object, no catalog) instead of
+duplicating the alpha_0==90deg dispatch logic.
+
+Capacity dispatch (per_element_dynamic_capacity / dynamic_capacity):
+alpha_0 == 90deg exactly routes to the *_90deg() variant; anything else
+routes to the *_nonzero_alpha() variant -- per your instruction, this
+family always takes alpha_0 as the input and the 90deg-vs-not split
+happens downstream at the capacity call, not at assembly.
 
 Reference:
   ISO 281:2007 Table 1 (Table No. 4) -- raceway groove radius, reduction
   factor and eta, thrust ball bearings.
+  ISO 281:2007 Sec 6.3, Formula (18)-(20)/(23)-(25) -- Ca, single row.
 """
 from __future__ import annotations
 import numpy as np
@@ -48,15 +60,15 @@ from ..functions import contact_stiffness as bc
 from ..functions import capacity as bcap
 
 
-class ThrustBallFamily(BearingFamily):
+class SingleRowThrustBallFamily(BearingFamily):
     """
     Usage
     -----
     bearing = Bearing.assemble(
-        family=ThrustBallFamily(),
+        family=SingleRowThrustBallFamily(),
         catalog=BearingCatalog(d=40, D=68, b=15, C=28000, C0=44000,
                                 designation="51208", position=50.0),
-        geometry=dict(Dw=9.0, Dpw=54.0, Z=14, E=206000, alpha_0_deg=90.0, i=1),
+        geometry=dict(Dw=9.0, Dpw=54.0, Z=14, E=206000, alpha_0_deg=90.0),
         analyses={"point_contact": True},
     )
     """
@@ -73,24 +85,20 @@ class ThrustBallFamily(BearingFamily):
         }),
     }
 
-    # ISO 281:2007 Table 1, Table No. 4 -- "Thrust ball bearings". No
-    # row-count column -- lambda is a single scalar, i is unrestricted.
+    # ISO 281:2007 Table 1, Table No. 4 -- "Thrust ball bearings".
     RI_OVER_DW = 0.535
     RE_OVER_DW = 0.535
-    REDUCTION_FACTOR = 0.90   # lambda -- independent of i
+    REDUCTION_FACTOR = 0.90   # lambda
 
     # eta = 1 - sin(alpha)/3 -- ISO 281:2007 Table 1, Table No. 4, eta column.
-    # Recorded for when Formula (20)/(21) gets implemented; not consumed yet.
     @staticmethod
     def eta(alpha_0: float) -> float:
-        """Reduction factor eta for Formula (20)/(21) -- NOT wired into
-        BearingCapacity.dynamic() yet, that formula's full text is still
-        pending. alpha_0 in radians."""
+        """Reduction factor eta for Formula (18)-(20)/(23)-(25). alpha_0 in radians."""
         return 1.0 - np.sin(alpha_0) / 3.0
 
     @property
     def name(self) -> str:
-        return "thrust_ball"
+        return "thrust_ball_single_row"
 
     @classmethod
     def reference_raceway_radii(cls, Dw: float) -> tuple[float, float]:
@@ -104,37 +112,32 @@ class ThrustBallFamily(BearingFamily):
                            Z: int,
                            E: float,
                            alpha_0_deg: float,
-                           nu: float = 0.3,
-                           i: int = 1) -> dict:
+                           nu: float = 0.3) -> dict:
         """
         alpha_0_deg : nominal contact angle [deg], in (45, 90] -- thrust
                       duty per ISO 281 classification (AngularContactFamily
                       covers (0, 45]). 90 = pure thrust; anything else is
                       handled the same way at assembly (contact_stiffness.gamma()
                       already special-cases 90deg) -- the split only matters
-                      later, at capacity time (see
-                      ThrustBallFamily.per_element_dynamic_capacity()).
-        i           : number of rows, >= 1 (default 1). Table No. 4 has no
-                      row-count column -- lambda doesn't depend on i for
-                      this family, and i is not capped at 2 (a thrust ball
-                      bearing can stack n rows). i still matters for
-                      Formula (20)/(21) later.
+                      later, at capacity time (see per_element_dynamic_capacity()
+                      / dynamic_capacity() below).
+
+        No `i` here -- this family is always exactly one row. See module
+        docstring for where multi-row lives.
         """
         if not (45.0 < alpha_0_deg <= 90.0):
             raise ValueError(
-                f"ThrustBallFamily: alpha_0_deg must be in (45, 90], got "
+                f"SingleRowThrustBallFamily: alpha_0_deg must be in (45, 90], got "
                 f"{alpha_0_deg} -- 45deg and below is radial duty (see "
                 f"AngularContactFamily)."
             )
-        if not isinstance(i, int) or i < 1:
-            raise ValueError(f"ThrustBallFamily: i (number of rows) must be a positive integer, got {i}")
 
         ri, re = self.reference_raceway_radii(Dw)
 
         if ri <= Dw / 2.0:
-            raise ValueError(f"ThrustBallFamily: ri must be > Dw/2, got ri={ri}, Dw={Dw}")
+            raise ValueError(f"SingleRowThrustBallFamily: ri must be > Dw/2, got ri={ri}, Dw={Dw}")
         if re <= Dw / 2.0:
-            raise ValueError(f"ThrustBallFamily: re must be > Dw/2, got re={re}, Dw={Dw}")
+            raise ValueError(f"SingleRowThrustBallFamily: re must be > Dw/2, got re={re}, Dw={Dw}")
 
         A = ri + re - Dw
         alpha_0, s = bc.contact_angle_and_clearance(A, alpha_0_deg=alpha_0_deg)
@@ -148,14 +151,12 @@ class ThrustBallFamily(BearingFamily):
             ri=ri, re=re, Dw=Dw, Dpw=Dpw, Z=Z, s=s, E=E, nu=nu,
             A=A, alpha_0=alpha_0, Ri=Ri, phi_j=phi_j, gamma=g, cp=cp,
             raceway_radii_from_reference=True,
-            i=i, reduction_factor=self.REDUCTION_FACTOR,
+            reduction_factor=self.REDUCTION_FACTOR,
         )
 
     # ------------------------------------------------------------------
-    # Capacity -- dispatches on alpha_0 == 90deg (thrust_90deg) vs not
-    # (thrust_nonzero_alpha), per your instruction. dynamic_capacity()
-    # (Ca, Formula 20/21) deliberately not added yet -- pending that
-    # formula's text and i's exact role in it.
+    # Capacity -- both methods dispatch on alpha_0 == 90deg (thrust_90deg
+    # / dynamic_90deg) vs not (thrust_nonzero_alpha / dynamic_nonzero_alpha).
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -165,7 +166,8 @@ class ThrustBallFamily(BearingFamily):
 
         Ca defaults to bearing.C (catalog dynamic rating -- thrust duty
         rates on the axial capacity, published under the same generic C
-        field) if not overridden."""
+        field) if not overridden. Use dynamic_capacity(bearing) if you want
+        the theoretical Ca instead of the catalog one."""
         Ca_val = Ca if Ca is not None else bearing.C
         if np.isclose(bearing.alpha_0, np.pi / 2, atol=1e-9):
             return bcap.RollingElementCapacity.thrust_90deg(
@@ -174,4 +176,43 @@ class ThrustBallFamily(BearingFamily):
         return bcap.RollingElementCapacity.thrust_nonzero_alpha(
             Z=bearing.Z, alpha_0=bearing.alpha_0, ri=bearing.ri, re=bearing.re,
             Dw=bearing.Dw, gamma=bearing.gamma, Ca=Ca_val,
+        )
+
+    @classmethod
+    def dynamic_capacity_from_fields(cls, Z: int, Dw: float, alpha_0: float,
+                                      ri: float, re: float, gamma: float,
+                                      reduction_factor: float) -> float:
+        """
+        Ca [N] -- ISO 281:2007 Formula (18)/(19)/(20) (alpha_0 != 90deg) or
+        Formula (23)/(24)/(25) (alpha_0 = 90deg), Sec 6.3, single row.
+
+        Takes raw fields directly rather than a Bearing object -- this is
+        the reusable core dynamic_capacity() wraps below, and what
+        MultiRowThrustBallFamily calls once per row (a row has no Bearing/
+        catalog of its own, just a geometry dict from assemble_geometry()).
+        alpha_0 in RADIANS.
+
+        NOT VALIDATED beyond the fc magnitude sanity check already done on
+        BearingCapacity.dynamic_nonzero_alpha()/dynamic_90deg() themselves
+        (see ../functions/capacity.py) -- no literature reference value has
+        been checked against a specific bearing's numbers yet.
+        """
+        eta_val = cls.eta(alpha_0)
+        if np.isclose(alpha_0, np.pi / 2, atol=1e-9):
+            return bcap.BearingCapacity.dynamic_90deg(
+                Z=Z, Dw=Dw, ri=ri, re=re, gamma=gamma, lam=reduction_factor, eta=eta_val,
+            )
+        return bcap.BearingCapacity.dynamic_nonzero_alpha(
+            Z=Z, Dw=Dw, alpha_0=alpha_0, ri=ri, re=re, gamma=gamma,
+            lam=reduction_factor, eta=eta_val,
+        )
+
+    @classmethod
+    def dynamic_capacity(cls, bearing) -> float:
+        """Ca [N] -- thin wrapper around dynamic_capacity_from_fields(),
+        pulling fields off an assembled single-row Bearing."""
+        return cls.dynamic_capacity_from_fields(
+            Z=bearing.Z, Dw=bearing.Dw, alpha_0=bearing.alpha_0,
+            ri=bearing.ri, re=bearing.re, gamma=bearing.gamma,
+            reduction_factor=bearing.reduction_factor,
         )

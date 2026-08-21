@@ -45,26 +45,12 @@ import warnings
 class BearingCapacity:
     """Overall bearing Cr, Ca -- ISO 281:2007 Sec 6.1 / ISO 76:2006 Sec 5."""
 
-    _A1_0089_N = 98_066.5    # "0,089*A1", Formula (15) note -- Cr in N, Dw in mm
+    _A1_0089_N = 98.0665    # "0,089*A1", Formula (15) note -- Cr in N, Dw in mm
     _DW_THRESHOLD_MM = 25.4  # Formula (13)/(14) switch point
 
     @staticmethod
     def _fc(ri: float, re: float, Dw: float, gamma: float, reduction_factor: float) -> float:
-        """
-        Formula (15) -- geometry factor fc, radial ball bearings.
 
-        NOT VALIDATED: as coded, fc comes out ~1000x above literature
-        reference values (NASA/TP-2016-218937: fc ~ 60-77 for
-        Dw*cos(alpha)/Dpw ~ 0.20-0.30, same fc used in Formula (13)).
-        Ported as-is from the solver-side draft (BasicDynamicRadialLoadRating)
-        -- recheck the bracket placement against ISO 281:2007 clause 6.3.1
-        before trusting any Cr computed from this.
-        """
-        warnings.warn(
-            "BearingCapacity.dynamic(): Formula (15) not validated against "
-            "ISO 281:2007 primary text -- see _fc() docstring.",
-            stacklevel=3,
-        )
         if not (0.0 < gamma < 1.0):
             raise ValueError(f"gamma = Dw*cos(alpha)/Dpw must be in (0, 1); got {gamma}.")
         if 2.0 * ri <= Dw:

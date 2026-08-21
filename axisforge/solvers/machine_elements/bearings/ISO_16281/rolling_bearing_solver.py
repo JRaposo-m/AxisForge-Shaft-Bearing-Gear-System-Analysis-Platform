@@ -56,11 +56,35 @@ subtype's per_element_dynamic_capacity() docstring in core/ for its exact
 kwargs. _PostprocAdapter therefore only carries derel_cls and stiffness_fn
 now -- the two things that genuinely still differ per contact type and
 have no core/ equivalent (dynamic equivalent load, secant stiffness).
+
+Multi-row dispatch -- UPDATE, this turn
+-----------------------------------------
+solve() and postprocess_and_record() now detect a multi-row bearing
+(getattr(bearing, "rows", None) with len >= 2 -- see _is_multirow() below)
+and route it to ISO16281MultiRowBallSolver / multirow_dynamic_equivalent_
+load() instead of silently mis-handling it through the single-row
+_SOLVER_MAP/_POSTPROC_MAP path. Only point-contact multi-row is supported:
+a multi-row bearing whose BearingType does not resolve to ISO16281BallSolver
+in _SOLVER_MAP (i.e. not DEEP_GROOVE_BALL/ANGULAR_CONTACT today) still
+raises NotImplementedError -- there is no multi-row roller/other solver yet.
+
+This is a breaking change to solve()'s return shape, deliberately chosen
+(Option A, confirmed by the user over the alternative of a separate
+parallel slot): every value in the returned {label: ...} dict, and every
+BearingResultBundle.load_distribution / .dynamic_equivalent_load, is now a
+LIST -- length 1 for an ordinary single-row bearing, length i for a
+multi-row bearing's i rows. A single-row result is never unwrapped back to
+a bare object; callers index [0] explicitly. capacity is NOT a list -- see
+library.py's own module docstring for why that stays a single (Q_ci, Q_ce)
+pair regardless of row count.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Callable, TYPE_CHECKING
+
+import numpy as np
 
 from axisforge.core.machine_elements.Bearings.bearing import Bearing
 from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
@@ -70,6 +94,7 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analys
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
     BearingResultsLibrary,
+    warn_if_floating_loaded,
 )
 
 # Type hint only, never constructed here -- see library.py's own alias.
@@ -87,6 +112,12 @@ from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bea
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing import (
     ball_bearing_postprocessing as _ball_pp,
+)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_multirow_solver import (
+    ISO16281MultiRowBallSolver,
+)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_multirow_postprocessing import (
+    multirow_dynamic_equivalent_load,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_solver import (
     ISO16281RollerSolver,
@@ -112,6 +143,23 @@ _SOLVER_MAP: dict[BearingType, type] = {
     # BearingType.TAPERED_ROLLER / SPHERICAL_ROLLER: needs an extra
     # coordinate transform ISO16281RollerSolver doesn't implement -- Phase 2.
 }
+
+
+# ---------------------------------------------------------------------------
+# Multi-row detection -- UPDATE, this turn
+#
+# A bearing counts as multi-row when it exposes >=2 rows (the same
+# threshold ISO16281MultiRowBallSolver.solve_bearing() itself enforces).
+# Whether a multi-row bearing can actually be SOLVED is a separate question
+# (see the BearingType check in solve()/postprocess_and_record() below) --
+# this helper only answers "does this bearing have row structure at all",
+# so it stays correct even after a second multi-row solver (e.g. roller)
+# is eventually added.
+# ---------------------------------------------------------------------------
+
+def _is_multirow(bearing: Bearing) -> bool:
+    rows = getattr(bearing, "rows", None)
+    return bool(rows) and len(rows) >= 2
 
 
 # ---------------------------------------------------------------------------
@@ -159,9 +207,11 @@ class RollingBearingSolver:
     Parameters
     ----------
     tol       float   residual tolerance, forwarded to every per-type solver
+                      (single-row and multi-row alike)
     psi_input bool    forwarded to every per-type solver -- see
                       ISO16281BallSolver's / ISO16281RollerSolver's docstring
                       for the psi_override plane convention this implies.
+                      Also honoured for multi-row bearings (see solve()).
     """
 
     def __init__(self, tol: float = SOLVER_TOLERANCE, psi_input: bool = False):
@@ -174,37 +224,61 @@ class RollingBearingSolver:
               library: SimpleFEMResultsLibrary,
               psi_override: dict[str, float] | None = None,
               results: BearingResultsLibrary | None = None,
-              ) -> dict[str, LoadDistributionResult]:
+              ) -> dict[str, list["LoadDistributionResult"]]:
         """
-        Solve every bearing in `bearings`, regardless of contact type.
+        Solve every bearing in `bearings`, regardless of contact type or
+        row count.
 
         Parameters
         ----------
         shaft_system  : ShaftSystem -- fully resolved
-        bearings      : {label: Bearing} -- may mix BearingType values
-        library       : SimpleFEMResultsLibrary -- must contain results for
-                        shaft_system.name
+        bearings      : {label: Bearing} -- may mix BearingType values and
+                        single-row/multi-row bearings
         psi_override  : {label: psi [rad]} -- forwarded as-is to whichever
-                        per-type solver owns that label
-        results       : optional BearingResultsLibrary. When given, each
-                        per-type local library is handed to it wholesale
-                        via add_load_distribution_library() -- one call per
-                        BearingType group. Omitted by default.
+                        per-type solver owns that label; honoured for
+                        multi-row bearings too (same plane convention as
+                        ISO16281BallSolver -- see its class docstring).
+        results       : optional BearingResultsLibrary. Single-row groups
+                        are handed over wholesale via
+                        add_load_distribution_library(), one call per
+                        BearingType group. Multi-row bearings are recorded
+                        one at a time via set_load_distribution(), plus the
+                        full MultiRowBallLoadDistributionResult (row f_r/f_a
+                        split, n_iter, residual, ok) stashed under
+                        bundle.extra["multirow_result"] so a caller that
+                        wants the convergence diagnostics doesn't have to
+                        re-solve to get them.
 
         Returns
         -------
-        {label: LoadDistributionResult}, ordered to match `bearings`.
+        {label: [LoadDistributionResult, ...]}, ordered to match `bearings`.
+        Every value is a list -- length 1 for a single-row bearing, length i
+        for a multi-row bearing's i rows (index-aligned with
+        bearing.rows). This is Option A (confirmed): callers index [0]
+        explicitly rather than the shape silently changing per bearing.
 
         Raises
         ------
-        NotImplementedError : if any bearing's BearingType has no solver
-                               registered in _SOLVER_MAP yet.
+        NotImplementedError : if any single-row bearing's BearingType has no
+                               solver registered in _SOLVER_MAP yet, or if a
+                               multi-row bearing's BearingType does not
+                               resolve to ISO16281BallSolver (no multi-row
+                               roller/other solver exists yet).
         """
-        groups: dict[BearingType, dict[str, Bearing]] = {}
+        single_row: dict[str, Bearing] = {}
+        multi_row: dict[str, Bearing] = {}
         for label, b in bearings.items():
+            (multi_row if _is_multirow(b) else single_row)[label] = b
+
+        merged: dict[str, list["LoadDistributionResult"]] = {}
+
+        # ------------------------------------------------------------
+        # Single-row: existing per-BearingType dispatch, unchanged.
+        # ------------------------------------------------------------
+        groups: dict[BearingType, dict[str, Bearing]] = {}
+        for label, b in single_row.items():
             groups.setdefault(b.bearing_type, {})[label] = b
 
-        merged: dict[str, LoadDistributionResult] = {}
         for bearing_type, group in groups.items():
             solver_cls = _SOLVER_MAP.get(bearing_type)
             if solver_cls is None:
@@ -227,7 +301,58 @@ class RollingBearingSolver:
                 results.add_load_distribution_library(bearing_type, local_lib)
 
             for label in group:
-                merged[label] = local_lib.get(label)
+                merged[label] = [local_lib.get(label)]
+
+        # ------------------------------------------------------------
+        # Multi-row: route to ISO16281MultiRowBallSolver -- UPDATE, this turn.
+        # Point-contact only (see _is_multirow()/module docstring): a
+        # multi-row bearing whose BearingType does not resolve to
+        # ISO16281BallSolver in _SOLVER_MAP raises, it is never silently
+        # solved as if it were single-row.
+        # ------------------------------------------------------------
+        if multi_row:
+            shaft_results  = library.get(shaft_system.name)
+            node_by_label  = {n.label: n for n in shaft_results.bearing_nodes}
+            mr_solver      = ISO16281MultiRowBallSolver(tol=self.tol)
+
+            for label, b in multi_row.items():
+                solver_cls = _SOLVER_MAP.get(b.bearing_type)
+                if solver_cls is not ISO16281BallSolver:
+                    n_rows = len(b.rows)
+                    raise NotImplementedError(
+                        f"No multi-row ISO/TS 16281 solver registered for "
+                        f"BearingType.{b.bearing_type.name} yet (bearing: "
+                        f"'{label}', {n_rows} rows). Multi-row dispatch "
+                        f"currently only covers point-contact types that "
+                        f"resolve to ISO16281BallSolver in single-row form "
+                        f"(DEEP_GROOVE_BALL, ANGULAR_CONTACT)."
+                    )
+
+                node   = node_by_label[label]
+                Fr_xz, Fr_xy, Fa = node.Fr_xz, node.Fr_xy, node.Fa
+                phi_Fr = float(np.arctan2(Fr_xy, Fr_xz))
+
+                warn_if_floating_loaded(b, label, Fa)
+
+                # Same psi resolution as ISO16281BallSolver.solve() -- see
+                # that class's docstring for the plane convention.
+                if (self.psi_input
+                        and psi_override is not None
+                        and label in psi_override):
+                    psi = float(psi_override[label])
+                else:
+                    psi = node.psi_xz * np.cos(phi_Fr) + node.psi_xy * np.sin(phi_Fr)
+
+                mr_result = mr_solver.solve_bearing(
+                    b, Fr_xz=Fr_xz, Fr_xy=Fr_xy, Fa=Fa, psi=psi, label=label,
+                )
+                merged[label] = mr_result.row_results
+
+                if results is not None:
+                    results.set_load_distribution(
+                        label, mr_result.row_results, bearing_type=b.bearing_type,
+                    )
+                    results.set_extra(label, "multirow_result", mr_result)
 
         # Preserve the caller's original ordering rather than the grouping order.
         return {label: merged[label] for label in bearings}
@@ -241,7 +366,7 @@ class RollingBearingSolver:
               bearings: dict[str, Bearing],
               library: SimpleFEMResultsLibrary,
               catalog: dict[str, dict],
-              load_distribution: dict[str, LoadDistributionResult] | None = None,
+              load_distribution: dict[str, list["LoadDistributionResult"]] | None = None,
               results: BearingResultsLibrary | None = None,
               psi_override: dict[str, float] | None = None,
               ) -> BearingResultsLibrary:
@@ -262,13 +387,21 @@ class RollingBearingSolver:
                           family, {"Ca": 12_500.0} for a thrust family. The
                           family itself picks the right ISO/TS 16281 formula
                           (no "method" key anymore -- see module docstring).
+                          Always a single (Q_ci, Q_ce) pair, even for a
+                          multi-row bearing -- capacity is not row-indexed
+                          here (see library.py's own module docstring).
                         catalog[label]["dynamic_equivalent_load"] -> forwarded
                           to adapter.derel_cls.from_distribution(bearing,
-                          result, **kwargs), typically {"inner_rotating":
-                          ..., "outer_rotating": ...}.
+                          result, **kwargs) for a single-row bearing, or to
+                          multirow_dynamic_equivalent_load(bearing, ...,
+                          **kwargs) for a multi-row one -- typically
+                          {"inner_rotating": ..., "outer_rotating": ...} in
+                          both cases (same kwarg names). Always recorded as
+                          a list -- length 1 or i.
                       A label may omit either sub-dict to skip that step.
         load_distribution : reuse an already-computed solve() result instead
                       of solving again. If None, calls self.solve() itself.
+                      Same shape as solve()'s return: {label: list[...]}.
         results       : BearingResultsLibrary to record into. A new one is
                       created if not given.
 
@@ -293,7 +426,7 @@ class RollingBearingSolver:
         node_by_label = {n.label: n for n in shaft_results.bearing_nodes}
 
         for label, b in bearings.items():
-            result = load_distribution[label]
+            row_results = load_distribution[label]   # list[LoadDistributionResult], len 1 or i
 
             # Fail fast, same guard as before the capacity migration: a
             # bearing type with no stiffness/derel adapter yet (e.g. the new
@@ -317,11 +450,33 @@ class RollingBearingSolver:
 
             derel_kwargs = entry.get("dynamic_equivalent_load")
             if derel_kwargs is not None:
-                derel = adapter.derel_cls.from_distribution(b, result, **derel_kwargs)
-                results.set_dynamic_equivalent_load(label, derel)
+                if _is_multirow(b):
+                    # Row-by-row, via the SAME orchestration-only function
+                    # design_bearing_combination_comparison.py already calls
+                    # directly -- multirow_dynamic_equivalent_load() only
+                    # ever reads mr_result.row_results, so a bare
+                    # SimpleNamespace carrying just that is a legitimate
+                    # stand-in for the full MultiRowBallLoadDistributionResult
+                    # here (no need to keep it around from solve() just for
+                    # this call).
+                    derel_list = multirow_dynamic_equivalent_load(
+                        b, SimpleNamespace(row_results=row_results), **derel_kwargs,
+                    )
+                else:
+                    derel_list = [
+                        adapter.derel_cls.from_distribution(b, row_results[0], **derel_kwargs)
+                    ]
+                results.set_dynamic_equivalent_load(label, derel_list)
 
+            # Stiffness always reads row 0 -- for a multi-row bearing every
+            # row shares the same rigid-ring (delta_r, delta_a) at
+            # convergence (the co-located-rows idealization --
+            # MultiRowBallLoadDistributionResult.delta_r/.delta_a already
+            # pick row 0 as the representative for the same reason), so
+            # row_results[0] is correct for BOTH the single-row (len==1) and
+            # multi-row (len==i) case without branching.
             node = node_by_label[label]
-            stiff = adapter.stiffness_fn(b, result, node.Fr_xz, node.Fr_xy, node.Fa)
+            stiff = adapter.stiffness_fn(b, row_results[0], node.Fr_xz, node.Fr_xy, node.Fa)
             results.set_stiffness(label, stiff)
 
         return results

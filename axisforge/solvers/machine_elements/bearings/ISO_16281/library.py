@@ -29,17 +29,17 @@ gathered under one label, so a future module (lubrication, fatigue) can
 find everything about a bearing without knowing which per-type solver
 produced each piece. It computes nothing itself.
 
-Multi-row storage -- UPDATE, this turn (Option A)
----------------------------------------------------
-bundle.load_distribution and bundle.dynamic_equivalent_load are now always
+Multi-row storage (Option A)
+-------------------------------
+bundle.load_distribution and bundle.dynamic_equivalent_load are always
 LISTS -- length 1 for an ordinary single-row bearing, length i for a
 multi-row bearing's i rows, index-aligned with bearing.rows. This is a
-deliberate breaking change (Option A, chosen over a separate parallel
+deliberate design choice (Option A, chosen over a separate parallel
 "row_results" slot left None for ordinary bearings): every consumer of
-bundle.load_distribution / bundle.dynamic_equivalent_load now indexes [0]
+bundle.load_distribution / bundle.dynamic_equivalent_load indexes [0]
 explicitly rather than the shape silently differing per bearing. See
 rolling_bearing_solver.py's module docstring for the caller-side half of
-this change (solve()/postprocess_and_record() now populate these as lists).
+this (solve()/postprocess_and_record() populate these as lists).
 
 bundle.capacity is UNCHANGED -- still a single (Q_ci, Q_ce) pair, never a
 list, even for a multi-row bearing. Capacity (per_element_dynamic_capacity)
@@ -50,6 +50,34 @@ single-row or double-row, because it depends on contact geometry, not on
 which row's load distribution was solved). Row-count effects on capacity
 (the i**0.7 scaling, Formula 29) live entirely inside
 bearing.family.per_element_dynamic_capacity() / dynamic_multirow(), not here.
+
+UPDATE, this turn -- unwrap .rows, not the bare container
+-----------------------------------------------------------------------
+Ball_Bearing/ and Roller_Bearing/ were reconstructed so every per-type
+local library (BallLoadDistributionLibrary, RollerLoadDistributionLibrary)
+now stores a BallBearingResult/RollerBearingResult CONTAINER per label
+(ISO16281BallSolver.solve()/ISO16281RollerSolver.solve() each wrap their
+per-label solve_contact() output via .single() before recording it) --
+`local_library.get(label)` returns that container, not the bare per-row
+result the way it used to. add_load_distribution_library() below used to
+read `[local_library.get(label)]`, wrapping the CONTAINER itself in a
+length-1 list -- that produced `[BallBearingResult]` instead of the
+`list[BallLoadDistributionResult]` bundle.load_distribution is documented
+to hold. Fixed to `local_library.get(label).rows`, which unwraps the
+container back to the actual per-row list (length 1 here, always, since
+every label reaching this method comes from a single-row per-type local
+library). Same fix applied on the caller side in
+rolling_bearing_solver.py's solve() -- see that module's own docstring.
+
+Similarly, ISO16281MultiRowBallSolver.solve_bearing() used to return its
+own MultiRowBallLoadDistributionResult (retired), whose per-row list was
+named `.row_results`; it now returns a BallBearingResult via `.multirow()`,
+named `.rows` like every other result this package produces. Every
+docstring reference below that used to say `.row_results` /
+MultiRowBallLoadDistributionResult is updated to `.rows` / BallBearingResult
+accordingly -- this file's own code never touched that attribute directly
+(callers pass the already-unwrapped list to set_load_distribution()), so
+only documentation changes were needed here, not logic changes.
 
 Capacity type -- core cleanup
 ------------------------------
@@ -95,6 +123,7 @@ if TYPE_CHECKING:
 
     from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import (
         BallLoadDistributionResult,
+        BallBearingResult,
     )
     from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_postprocessing import (
         BallBearingStiffness,
@@ -102,6 +131,7 @@ if TYPE_CHECKING:
     )
     from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_results import (
         RollerLoadDistributionResult,
+        RollerBearingResult,
     )
     from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_postprocessing import (
         RollerBearingStiffness,
@@ -114,6 +144,13 @@ if TYPE_CHECKING:
     # own return type -- a plain (Q_ci, Q_ce) pair -- for every family, ball or
     # roller alike. No per-contact-type import needed for it anymore.
     CapacityResult = tuple[float, float]
+    # The full multi-row solve result -- stashed under
+    # bundle.extra["multirow_result"] (see set_extra() usage in
+    # rolling_bearing_solver.py). Not a formally-typed field on
+    # BearingResultBundle (extra is a plain dict[str, object]) -- named
+    # here only so this module's own docstrings have something concrete to
+    # point at.
+    MultirowResult = BallBearingResult | RollerBearingResult
 
 
 # ===========================================================================
@@ -197,11 +234,13 @@ class BearingResultBundle:
                              length 1 (single-row) or i (multi-row) -- same
                              indexing as load_distribution.
     extra                    dict[str, object]   e.g. {"lubrication": ...,
-                             "multirow_result": MultiRowBallLoadDistribution
-                             Result}   -- the full multi-row solve (row f_r/
-                             f_a split, n_iter, residual, ok) is stashed
-                             here for a multi-row bearing, since none of
-                             that fits load_distribution's per-row list.
+                             "multirow_result": BallBearingResult}   -- the
+                             full multi-row solve (row f_r/f_a split,
+                             n_iter, residual, ok -- see
+                             ball_bearing_results.py's BallBearingResult.
+                             multirow()) is stashed here for a multi-row
+                             bearing, since none of that fits
+                             load_distribution's per-row list.
     """
     label: str
     bearing_type: "BearingType | None" = None
@@ -236,8 +275,9 @@ class BearingResultsLibrary:
     orchestrator calls each per-type solver once per BearingType group and
     hands the whole local library (RollerLoadDistributionLibrary,
     BallLoadDistributionLibrary, ...) here as a sub-container.
-    bundle.load_distribution is populated from the SAME object reference,
-    so `results.get(label).load_distribution` works without needing the type.
+    bundle.load_distribution is populated FROM that same object's entries
+    (via `.rows`, see add_load_distribution_library()'s own docstring), so
+    `results.get(label).load_distribution` works without needing the type.
     """
 
     def __init__(self):
@@ -255,19 +295,27 @@ class BearingResultsLibrary:
         BearingType. `local_library` must duck-type labels() and get(label).
 
         Back-fills bundle.bearing_type and bundle.load_distribution for
-        every label already in `local_library`, by reference. Every label
-        coming through this path is single-row by construction (this is
-        only ever called with a per-type LOCAL library, e.g.
-        BallLoadDistributionLibrary, which never holds a multi-row result --
-        see rolling_bearing_solver.py's solve()), so the single result is
-        wrapped in a length-1 list here, uniformly with the multi-row case
-        (see module docstring, "Multi-row storage" section).
+        every label already in `local_library`, by reference.
+
+        local_library.get(label) returns a BallBearingResult/
+        RollerBearingResult CONTAINER (see module docstring, "unwrap .rows,
+        not the bare container") -- `.rows` is the actual
+        list[LoadDistributionResult] bundle.load_distribution is documented
+        to hold. Every label coming through this path is single-row by
+        construction (this is only ever called with a per-type LOCAL
+        library, e.g. BallLoadDistributionLibrary, which never holds a
+        multi-row result -- see rolling_bearing_solver.py's solve()), so
+        `.rows` is length 1 here, always -- but reading it off the
+        container rather than re-wrapping a bare object keeps this uniform
+        with how a multi-row bundle's load_distribution is populated
+        elsewhere (set_load_distribution(), called directly with
+        mr_result.rows -- also already a list, also never re-wrapped).
         """
         self._load_distribution_libraries[bearing_type] = local_library
         for label in local_library.labels():
             bundle = self._bundle(label)
             bundle.bearing_type = bearing_type
-            bundle.load_distribution = [local_library.get(label)]
+            bundle.load_distribution = local_library.get(label).rows
 
     def load_distribution_library(self, bearing_type: BearingType):
         """The whole local sub-library recorded for one BearingType, or None."""
@@ -281,11 +329,13 @@ class BearingResultsLibrary:
         per-type group is available.
 
         `result` is a LIST -- length 1 for a single-row bearing, length i
-        for a multi-row bearing's i rows (the caller wraps a single result
-        itself, e.g. rolling_bearing_solver.py passes
-        mr_result.row_results directly for a multi-row bearing, or
-        [single_result] for a single-row one). This method does not wrap
-        for you -- see module docstring, "Multi-row storage" section.
+        for a multi-row bearing's i rows. The caller passes an
+        already-unwrapped list, e.g. rolling_bearing_solver.py passes
+        mr_result.rows directly for a multi-row bearing (mr_result being a
+        BallBearingResult, from ISO16281MultiRowBallSolver.solve_bearing()'s
+        .multirow() classmethod), or local_library.get(label).rows for a
+        single-row one. This method does not wrap or unwrap for you -- see
+        module docstring, "Multi-row storage" section.
         """
         bundle = self._bundle(label)
         bundle.load_distribution = result
@@ -305,7 +355,10 @@ class BearingResultsLibrary:
         """
         `derel` is a LIST -- length 1 (single-row) or i (multi-row),
         matching load_distribution's indexing. Not wrapped here -- see
-        set_load_distribution()'s docstring, same convention.
+        set_load_distribution()'s docstring, same convention. Typically the
+        return value of adapter.derel_cls.from_bearing_result(...) in
+        rolling_bearing_solver.py's postprocess_and_record(), which already
+        returns a list of exactly this shape.
         """
         self._bundle(label).dynamic_equivalent_load = derel
 

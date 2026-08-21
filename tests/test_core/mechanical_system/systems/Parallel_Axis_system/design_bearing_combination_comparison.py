@@ -14,6 +14,14 @@ case -- duplicate and rename").
 Output: one comparison table per shaft, grouped by scenario.
 
 Changelog (most recent first):
+  - synced to the BallBearingResult/RollerBearingResult unification:
+    REQUIRED_ATTRS (was _REQUIRED_ATTRS), families.ball/families.roller
+    import paths, mr_result.outer_ok/.outer_n_iter/.outer_residual (was
+    .ok/.n_iter/.residual), _contact_distribution() wraps a ball row in
+    BallBearingResult(rows=[row]) before calling contact_distribution()
+    (roller's own contact_distribution() still takes the raw row directly
+    -- see roller_bearing_postprocessing.py's module docstring for why
+    that side stays row-level).
   - capacity / Q_ei/Q_ee / Ka now computed via RollingBearingSolver.
     postprocess_and_record() for both single-row and double-row bearings,
     instead of ad hoc calls (_stiffness() removed). Two behavior changes:
@@ -40,7 +48,11 @@ Changelog (most recent first):
   - comparison table regrouped: scenario outer, shaft/slot inner.
 
 Known gaps (not implemented here):
-  - roller (line-contact) Q_ei/Q_ee -- formula not available, left None.
+  - roller (line-contact) Q_ei/Q_ee -- LaminaDynamicEquivalentLoad exists
+    now (roller_bearing_postprocessing.py), but it's per-lamina (q_kei/
+    q_kee arrays, not a scalar per row like ball's Q_ei/Q_ee), so it
+    doesn't fit this table's per-row-scalar format as-is -- left None,
+    not wired in.
   - double-row "global" stiffness beyond row-0's representative Ka.
   - L10 life (P = X*Fr + Y*Fa) -- out of scope.
 """
@@ -74,7 +86,13 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analys
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_solver import (
     ISO16281BallSolver,
-    _REQUIRED_ATTRS,
+    REQUIRED_ATTRS,
+)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import (
+    BallBearingResult,
+)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_results import (
+    RollerBearingResult,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
     BearingResultsLibrary,
@@ -161,7 +179,7 @@ def CRNU204(position, label) -> Bearing:
 # built once), so per_element_dynamic_capacity() can be called on each row
 # directly rather than guessed at via a stripped SimpleNamespace.
 def _row_attrs(b: Bearing) -> dict:
-    return {a: getattr(b, a) for a in _REQUIRED_ATTRS}
+    return {a: getattr(b, a) for a in REQUIRED_ATTRS}
 
 
 DR_ROW_BEARINGS = [
@@ -175,7 +193,7 @@ DR_ROW_BEARINGS = [
     for j in range(2)
 ]
 
-# DR_ROWS -- the 2 rows' _REQUIRED_ATTRS dicts for ISO16281MultiRowBallSolver.
+# DR_ROWS -- the 2 rows' REQUIRED_ATTRS dicts for ISO16281MultiRowBallSolver.
 DR_ROWS = [_row_attrs(b) for b in DR_ROW_BEARINGS]
 
 
@@ -294,8 +312,15 @@ def gear_grade_nodes(shaft_sys: ShaftSystem, grade: str = GEAR_GRADE) -> list[fl
 
 
 def _contact_distribution(b_obj, res):
-    return ball_contact_distribution(b_obj, res) if b_obj.bearing_type != BearingType.CYLINDRICAL_ROLLER \
-        else roller_contact_distribution(b_obj, res)
+    """
+    res is bundle.load_distribution[0] -- a bare per-row result. Both
+    ball's and roller's contact_distribution() now take the
+    BallBearingResult/RollerBearingResult wrapper and return a list (one
+    per row) -- wrap res in a length-1 container and unwrap [0] either way.
+    """
+    if b_obj.bearing_type == BearingType.CYLINDRICAL_ROLLER:
+        return roller_contact_distribution(b_obj, RollerBearingResult(rows=[res]))[0]
+    return ball_contact_distribution(b_obj, BallBearingResult(rows=[res]))[0]
 
 
 def _capacity_Cr(b_obj: Bearing) -> float:
@@ -328,9 +353,9 @@ def _format_double_row_result(node, bundle, mr_result) -> dict:
     formatting: capacity/Q_ei/Q_ee/Ka come from `bundle` (populated by
     RollingBearingSolver.postprocess_and_record()); only Q_j/phi_global/
     Q_max/n_loaded/dist_traces (this script's own table/plot fields) are
-    computed here. `mr_result` (bundle.extra["multirow_result"]) carries
-    the outer multi-row convergence diagnostics, which postprocess_and_
-    record() does not store on the bundle itself.
+    computed here. `mr_result` (bundle.extra["multirow_result"]) is now a
+    BallBearingResult (via .multirow()) -- its outer-solve diagnostics are
+    named outer_ok/outer_n_iter/outer_residual, not ok/n_iter/residual.
     """
     row_results = bundle.load_distribution
     row_eq      = bundle.dynamic_equivalent_load
@@ -360,12 +385,12 @@ def _format_double_row_result(node, bundle, mr_result) -> dict:
         kind="deep_groove_ball_double_row [REAL 2-row solve, via RollingBearingSolver]",
         Fr=node.Fr, Fa=node.Fa,
         Q_max=Q_max, n_loaded=n_loaded, Z=Z_total,
-        Ka=bundle.stiffness.Ka, ok=mr_result.ok,
+        Ka=bundle.stiffness.Ka, ok=mr_result.outer_ok,
         delta_r=mr_result.delta_r, delta_a=mr_result.delta_a, psi=mr_result.psi,
         dist_traces=dist_traces,
         # outer (multi-row) load-split convergence diagnostics -- None for
         # an ordinary single-row bearing (no outer solve to report).
-        mr_n_iter=mr_result.n_iter, mr_residual=mr_result.residual,
+        mr_n_iter=mr_result.outer_n_iter, mr_residual=mr_result.outer_residual,
         mr_f_r=mr_result.f_r, mr_f_a=mr_result.f_a,
         Q_ei=[e.Q_ei for e in row_eq], Q_ee=[e.Q_ee for e in row_eq],
         Q_ci=Q_ci, Q_ce=Q_ce,
@@ -494,8 +519,7 @@ if __name__ == "__main__":
             # "capacity" is omitted for dr_label: the duck-typed multi-row
             # view has no .family, so it's patched in manually afterward
             # using the real DR6204() Bearing instead. "dynamic_equivalent_
-            # load" is omitted for the roller (line-contact formula not
-            # available).
+            # load" is omitted for the roller (see "Known gaps" above).
             catalog: dict[str, dict] = {}
             for lbl, b_real in bearings.items():
                 entry: dict = {}

@@ -13,13 +13,33 @@ in the model. See ISO/TS 16281:2008 Sec 5.2, eq.(34)-(46).
 
 Scope of this file: only things that RUN the iterative solve (the
 scipy.optimize.root problem and everything it needs on every iteration)
-live here -- ISO16281RollerSolver and roller_profile(). The RESULT SHAPE
-the solve hands back, RollerLoadDistributionResult, lives in
-roller_bearing_results.py -- it is pure data (no formulas), consumed by
+live here -- ISO16281RollerSolver and roller_profile(). The RESULT SHAPES
+the solve hands back, RollerLoadDistributionResult and RollerBearingResult,
+live in roller_bearing_results.py -- pure data (no formulas), consumed by
 roller_bearing_postprocessing.py and, via TYPE_CHECKING only, by the global
 BearingResultsLibrary registry in bearings/ISO_16281/library.py. This file
-imports RollerLoadDistributionResult from roller_bearing_results.py; it
-never imports roller_bearing_postprocessing.py.
+imports both from roller_bearing_results.py; it never imports
+roller_bearing_postprocessing.py.
+
+RECONSTRUCTED, this turn -- public seam, mirroring Ball_Bearing
+-------------------------------------------------------------------
+_solve_bearing() is renamed solve_contact() and is now PUBLIC, and
+_REQUIRED_ATTRS is renamed REQUIRED_ATTRS, mirroring the exact same rename
+in Ball_Bearing/ball_bearing_solver.py. Nothing outside this class calls
+solve_contact() TODAY -- there is no ISO16281MultiRowRollerSolver, unlike
+the ball side where ball_bearing_multirow_solver.py was already reaching
+into the private method. This rename is done here anyway, proactively, so
+that IF a multi-row roller solver is ever written, it composes against the
+same kind of public, documented seam Ball_Bearing already established,
+rather than needing this same rename done retroactively at that point.
+_elements(), _initial_delta_r() and _check_lamina_count() stay private --
+internal to how one solve_contact() call converges, not part of the seam.
+
+solve() now wraps its per-label solve_contact() output in
+RollerBearingResult.single() before recording it (see
+roller_bearing_results.py) -- so RollerLoadDistributionLibrary.get(label)
+returns the same result TYPE Ball_Bearing's BallLoadDistributionLibrary
+does, differing only in the per-row content, not the container shape.
 
 Capacity (Q_ci/Q_ce, per-lamina q_ci/q_ce) moved out of this file -- core
 cleanup
@@ -65,7 +85,11 @@ This module covers BearingType.CYLINDRICAL_ROLLER only. Tapered and
 spherical roller bearings share the lamina mechanics but need an additional
 coordinate transform (cone half-angle for tapered; crown/osculation for
 spherical) this module does not implement -- they are NOT wired into
-rolling_bearing_solver.RollingBearingSolver's dispatch table yet.
+rolling_bearing_solver.RollingBearingSolver's dispatch table yet. Multi-row
+cylindrical roller bearings are likewise not implemented -- see this
+module's own "RECONSTRUCTED, this turn" note and
+roller_bearing_results.py's module docstring for what is and is not
+prepared for that case.
 
 References
 ----------
@@ -91,6 +115,7 @@ from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_results import (
     RollerLoadDistributionResult,
+    RollerBearingResult,
     RollerLoadDistributionLibrary,
 )
 from axisforge.config import SOLVER_TOLERANCE
@@ -103,7 +128,7 @@ from axisforge.config import SOLVER_TOLERANCE
 _MIN_LAMINAE = 30                # Sec 5.2.2 -- "the number of laminae shall be at least n_s = 30"
 
 # x_k (the lamina midpoints) is NOT computed by this solver -- it is one of
-# _REQUIRED_ATTRS below, precomputed by the bearing's own geometry setup
+# REQUIRED_ATTRS below, precomputed by the bearing's own geometry setup
 # (mirrors bearing.phi_j being precomputed for ball bearings) and checked
 # for Sec 5.2.2's n_s >= 30 minimum by _check_lamina_count() at solve time.
 # roller profile (eq.42-44) is owned by each subtype's own
@@ -115,7 +140,9 @@ _MIN_LAMINAE = 30                # Sec 5.2.2 -- "the number of laminae shall be 
 # ISO16281RollerSolver
 # ---------------------------------------------------------------------------
 
-_REQUIRED_ATTRS = ("Z", "Dwe", "Lwe", "Dpw", "phi_j", "s", "n_s", "x_k", "cL", "cs", "alpha_0")
+# PUBLIC, this turn -- formerly _REQUIRED_ATTRS. Mirrors the same rename in
+# Ball_Bearing/ball_bearing_solver.py -- see module docstring.
+REQUIRED_ATTRS = ("Z", "Dwe", "Lwe", "Dpw", "phi_j", "s", "n_s", "x_k", "cL", "cs", "alpha_0")
 
 
 class ISO16281RollerSolver:
@@ -134,7 +161,10 @@ class ISO16281RollerSolver:
     other contact-type solver. rolling_bearing_solver.RollingBearingSolver
     dispatches to this class for BearingType.CYLINDRICAL_ROLLER; it can also
     be used directly when the caller already knows all bearings on a shaft
-    are this type.
+    are this type. solve_contact() (the per-row/per-bearing seam, public --
+    see module docstring) is not called from outside this class today, but
+    is the entry point a future multi-row roller solver would compose
+    against, mirroring ISO16281MultiRowBallSolver on the ball side.
 
     Parameters
     ----------
@@ -152,7 +182,7 @@ class ISO16281RollerSolver:
         self.psi_input = psi_input
 
     # ------------------------------------------------------------------
-    # Public entry point
+    # Public entry point -- batch solve over a shaft's bearing set
     # ------------------------------------------------------------------
 
     def solve(self,
@@ -183,11 +213,14 @@ class ISO16281RollerSolver:
 
         Returns
         -------
-        RollerLoadDistributionLibrary -- local registry, one entry per label
-        in `bearings`. rolling_bearing_solver.RollingBearingSolver.solve()
-        is what reads this back out and merges it with any other per-type
-        local library into the orchestrator's own result; this method never
-        touches the final, cross-type BearingResultsLibrary itself.
+        RollerLoadDistributionLibrary -- local registry, one BallBearingResult-
+        shaped RollerBearingResult per label in `bearings` (each wrapping
+        exactly 1 row -- this method only ever produces single-row results;
+        see RollerBearingResult.single() in roller_bearing_results.py).
+        rolling_bearing_solver.RollingBearingSolver.solve() is what reads
+        this back out and merges it with any other per-type local library
+        into the orchestrator's own result; this method never touches the
+        final, cross-type BearingResultsLibrary itself.
         """
         if self.psi_input and psi_override:
             unknown = set(psi_override) - set(bearings)
@@ -202,7 +235,7 @@ class ISO16281RollerSolver:
 
         results = RollerLoadDistributionLibrary()
         for label, b in bearings.items():
-            check_bearing_ready(b, label, _REQUIRED_ATTRS)
+            check_bearing_ready(b, label, REQUIRED_ATTRS)
             self._check_lamina_count(b, label)
             node   = node_by_label[label]
             Fr_xz  = node.Fr_xz
@@ -219,14 +252,15 @@ class ISO16281RollerSolver:
             else:
                 psi = node.psi_xz * np.cos(phi_Fr) + node.psi_xy * np.sin(phi_Fr)
 
-            results.set(label, self._solve_bearing(
+            row = self.solve_contact(
                 b,
                 Fr_xz        = Fr_xz,
                 Fr_xy        = Fr_xy,
                 delta_r_init = float(np.hypot(node.v_xz, node.v_xy)),
                 psi          = psi,
                 phi_Fr       = phi_Fr,
-            ))
+            )
+            results.set(label, RollerBearingResult.single(row))
 
         return results
 
@@ -253,6 +287,8 @@ class ISO16281RollerSolver:
 
     # ------------------------------------------------------------------
     # Element/lamina kinematics -- ISO/TS 16281 eq.(36)-(41), Sec 5.2.1-.4
+    # Private: internal to how one solve_contact() call converges, not
+    # part of the cross-module seam.
     # ------------------------------------------------------------------
 
     def _elements(self, bearing: Bearing, delta_r: float, psi: float):
@@ -299,18 +335,26 @@ class ISO16281RollerSolver:
         return gap + line_hertz
 
     # ------------------------------------------------------------------
-    # Single-bearing solve
+    # Single-row/single-bearing solve -- THE SEAM. Public: mirrors
+    # ISO16281BallSolver.solve_contact() -- see module docstring for why
+    # this is renamed even though nothing outside this class calls it yet.
+    # Formerly _solve_bearing().
     # ------------------------------------------------------------------
 
-    def _solve_bearing(self,
-                       bearing: Bearing,
-                       Fr_xz: float, Fr_xy: float,
-                       delta_r_init: float,
-                       psi: float, phi_Fr: float) -> RollerLoadDistributionResult:
+    def solve_contact(self,
+                      bearing: Bearing,
+                      Fr_xz: float, Fr_xy: float,
+                      delta_r_init: float,
+                      psi: float, phi_Fr: float) -> RollerLoadDistributionResult:
         """
         1-equation root (delta_r) in the resultant-force plane, psi
         prescribed. Mz is evaluated afterwards from the converged state as a
         diagnostic (eq.(46)) -- see module docstring.
+
+        `bearing` may be a real Bearing, or any object exposing
+        REQUIRED_ATTRS -- same convention as ISO16281BallSolver.solve_contact(),
+        kept for consistency even though no per-row SimpleNamespace view
+        construction exists on the roller side yet (see module docstring).
 
         Equilibrium (Sec 5.2.4.1, eq.(45)):
             Fr = sum_j cos(phi_j) * sum_k q_j,k
@@ -347,7 +391,7 @@ class ISO16281RollerSolver:
 # DEBUG / VALIDATION UTILITY -- not used in production pipelines
 # ---------------------------------------------------------------------------
 
-def debug_radial_capacity(bearing: Bearing, Cr: float, i: int = 1,
+def debug_radial_capacity(bearing: Bearing, Cr: float, i: int | None = None,
                           lambda_v: float | None = None, label: str = "") -> None:
     """
     Print Q_ci/Q_ce/q_ci/q_ce for a radial roller bearing -- manual
@@ -360,10 +404,19 @@ def debug_radial_capacity(bearing: Bearing, Cr: float, i: int = 1,
     lambda_v defaults to the bearing's own subtype value (e.g.
     CylindricalRollerFamily.LAMBDA_V_RADIAL) when not overridden, same as
     the family method itself.
+
+    `i` is informational only, mirroring Ball_Bearing/ball_bearing_solver.py's
+    own debug_radial_capacity() -- CylindricalRollerFamily.
+    per_element_dynamic_capacity() already reads bearing.i internally (see
+    cylindrical_roller.py's module docstring), it does not take an `i`
+    keyword at all, so passing one here can never change the computed
+    Q_ci/Q_ce; it only lets the printout echo a different value than
+    bearing.i if that's useful for a manual cross-check (e.g. "what would
+    this print as if it were rated i=2"), same convention as the ball side.
     """
     _lbl = label or bearing.label
     Q_ci, Q_ce = bearing.family.per_element_dynamic_capacity(
-        bearing, Cr=Cr, i=i, lambda_v=lambda_v,
+        bearing, Cr=Cr, lambda_v=lambda_v,
     )
     q_ci, q_ce = bearing.family.per_lamina_dynamic_capacity(bearing, Q_ci, Q_ce)
 
@@ -371,7 +424,7 @@ def debug_radial_capacity(bearing: Bearing, Cr: float, i: int = 1,
     print(f"  |  INPUT")
     print(f"  |    Cr          = {Cr:.2f} N")
     print(f"  |    Z           = {bearing.Z}")
-    print(f"  |    i (rows)    = {i}")
+    print(f"  |    i (rows)    = {i if i is not None else bearing.i}")
     print(f"  |    alpha_0     = {np.degrees(bearing.alpha_0):.6f} deg")
     print(f"  |    Dwe         = {bearing.Dwe:.6f} mm")
     print(f"  |    Dpw         = {bearing.Dpw:.6f} mm")

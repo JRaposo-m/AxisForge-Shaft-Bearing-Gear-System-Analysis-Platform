@@ -5,12 +5,38 @@ Multi-row thrust ball bearing load distribution -- ORCHESTRATION ONLY.
 
 This module does NOT reimplement any ISO/TS 16281 point-contact kinematics.
 Every row is solved by the EXISTING ISO16281BallSolver (ball_bearing_solver.py),
-called once per row per outer iteration via its `_solve_bearing()` method --
-the same private, single-bearing entry point that takes raw scalar loads
+called once per row per outer iteration via its PUBLIC solve_contact()
+method -- the same single-bearing entry point that takes raw scalar loads
 (Fr_xz, Fr_xy, Fa, psi, phi_Fr) directly, bypassing the ShaftSystem/library
 batch path (`solve()`). Reusing it here, rather than duplicating eq.(12)-(28)
 a second time, is the entire point of this file: one Q_j(delta) implementation,
 one place it can have a bug.
+
+RECONSTRUCTED, this turn -- thin orchestration over a public seam
+---------------------------------------------------------------------
+Two changes from the previous version of this file, both purely structural
+-- the outer/inner iteration itself (physics, convergence behaviour, the
+Fr~0 singular-Jacobian fix) is UNCHANGED, see below:
+
+  1. self._row_solver._solve_bearing(...) -> self._row_solver.solve_contact(...).
+     That inner call always reached into another class's method; it just
+     used to be named with a leading underscore despite being called from
+     outside ISO16281BallSolver. ball_bearing_solver.py now exposes
+     solve_contact() (and REQUIRED_ATTRS) as public, formalizing exactly
+     the contract this file was already relying on.
+
+  2. This file no longer defines its own result container.
+     MultiRowBallLoadDistributionResult is retired -- solve_bearing() now
+     returns a BallBearingResult (ball_bearing_results.py), built via
+     BallBearingResult.multirow(rows=row_results, f_r=f_r, f_a=f_a,
+     n_iter=nfev, residual=res_norm, ok=ok). This is the SAME type
+     ISO16281BallSolver.solve() now wraps its own single-row output in
+     (via BallBearingResult.single()) -- so single-row and multi-row solves
+     hand back one uniform result type, differing only in how many rows
+     `.rows` holds and whether the outer-iteration fields are populated.
+     `.delta_r` / `.delta_a` / `.psi` (reading row 0) are inherited from
+     BallBearingResult unchanged from what this file's own
+     MultiRowBallLoadDistributionResult used to provide directly.
 
 Physical problem
 -----------------
@@ -44,7 +70,7 @@ never as a fitted approximation). Each outer root-find iteration:
      current fraction guess -- SAME phi_Fr direction for every row (only the
      magnitude is split; all rows sit on one ring seeing one applied force
      direction, so splitting the direction itself would not be physical);
-  2. solves each row INDEPENDENTLY via ISO16281BallSolver._solve_bearing();
+  2. solves each row INDEPENDENTLY via ISO16281BallSolver.solve_contact();
   3. residual = every row's (delta_r, delta_a) minus row 0's (delta_r, delta_a).
 
 At convergence (residual ~ 0) every row reports the same ring displacement --
@@ -56,12 +82,12 @@ Starts from an equal split (Fr_j = Fr/i, Fa_j = Fa/i for every row) --
 your "começar com as forças a serem 50/50 [1/i for i rows] e depois
 avançando" -- and lets run_root() converge it (the SAME helper
 ball_bearing_solver.py already uses for the inner (delta_r, delta_a) solve).
-CONFIRMED against the real library.py (pasted after this file was first
-written): run_root() is `scipy.optimize.root(fun, x0, method="hybr", tol=tol)`
-with an "lm" fallback if "hybr" doesn't converge -- genuinely dimension-
-general, x0 can be any length as long as fun(x0) returns a same-length
-array (a square system), which is exactly what this file's 2*(i-1)-unknown/
-2*(i-1)-residual outer problem is. No longer an assumption.
+CONFIRMED against the real library.py: run_root() is
+`scipy.optimize.root(fun, x0, method="hybr", tol=tol)` with an "lm"
+fallback if "hybr" doesn't converge -- genuinely dimension-general, x0 can
+be any length as long as fun(x0) returns a same-length array (a square
+system), which is exactly what this file's 2*(i-1)-unknown/2*(i-1)-residual
+outer problem is.
 
 FIXED, not just flagged -- this bit for real in local testing (see below):
 when Fr_xz = Fr_xy = 0 (this repo's centered-Fa thrust-bearing comparison
@@ -87,17 +113,11 @@ heterogeneous case (Z=14 + Z=8 rows, pure Fa) converges to f_a =
 share to match the softer row's delta_a -- also with ok=True, where before
 this fix the same case came back ok=False despite an already-correct answer.
 
-Cross-checked against the real ball_bearing_results.py, library.py and
-rolling_bearing_solver.py (all three pasted after this file was first
-written) -- _REQUIRED_ATTRS/BallLoadDistributionResult's field set,
-check_bearing_ready()'s getattr-based check, and run_root()'s dimension-
-generality all match what this file assumed.
-
 Locally verified (not against the real repo -- see caveat below) with a
 throwaway script exercising real SingleRowThrustBallFamily/
 MultiRowThrustBallFamily geometry: (a) 2 identical rows under pure Fa
 converge to an exact 50/50 split, and each row's delta_a matches, to
-numerical precision, a DIRECT single-row _solve_bearing() call at Fa/2 --
+numerical precision, a DIRECT single-row solve_contact() call at Fa/2 --
 the correct closed-form answer for that symmetric case; (b) 2 heterogeneous
 rows (Z=14 vs Z=8) converge to an unequal split favoring the stiffer
 (more-balls) row, the physically expected direction. Still NOT run against
@@ -119,50 +139,13 @@ from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_solver import (
     ISO16281BallSolver,
-    _REQUIRED_ATTRS,
+    REQUIRED_ATTRS,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import (
     BallLoadDistributionResult,
+    BallBearingResult,
 )
 from axisforge.config import SOLVER_TOLERANCE
-
-
-class MultiRowBallLoadDistributionResult:
-    """
-    Per-row BallLoadDistributionResult list plus the converged split
-    fractions -- NOT a single BallLoadDistributionResult, because there is
-    no single (delta_j, alpha_j) array once more than one row is involved:
-    each row has its own Z balls. row_results[j] is exactly what
-    ISO16281BallSolver would have produced had row j been solved alone with
-    its converged share of the total load.
-
-    delta_r / delta_a / psi properties read row 0 -- at convergence every
-    row agrees (that agreement IS the convergence criterion), so any row
-    would do; row 0 is picked for definiteness, not because it's special.
-    """
-    __slots__ = ("row_results", "f_r", "f_a", "n_iter", "residual", "ok")
-
-    def __init__(self, row_results: list[BallLoadDistributionResult],
-                 f_r: np.ndarray, f_a: np.ndarray,
-                 n_iter: int, residual: float, ok: bool):
-        self.row_results = row_results
-        self.f_r         = f_r
-        self.f_a         = f_a
-        self.n_iter       = n_iter
-        self.residual     = residual
-        self.ok           = ok
-
-    @property
-    def delta_r(self) -> float:
-        return self.row_results[0].delta_r
-
-    @property
-    def delta_a(self) -> float:
-        return self.row_results[0].delta_a
-
-    @property
-    def psi(self) -> float:
-        return self.row_results[0].psi
 
 
 class ISO16281MultiRowBallSolver:
@@ -170,16 +153,15 @@ class ISO16281MultiRowBallSolver:
     Orchestration-only multi-row thrust ball bearing solver -- see module
     docstring for the physical idealization and method. Does not
     reimplement any ISO/TS 16281 kinematics; every row's contact problem is
-    solved by ISO16281BallSolver._solve_bearing(), unmodified.
+    solved by ISO16281BallSolver.solve_contact(), unmodified.
 
     Deliberately does NOT subclass or get registered into
-    rolling_bearing_solver.py's _SOLVER_MAP/_POSTPROC_MAP -- its output
-    shape (MultiRowBallLoadDistributionResult, a list of per-row results)
-    is not interchangeable with BallLoadDistributionResult, so it cannot
-    be dropped into that dispatch table unmodified. Call it directly, the
-    same way design_bearing_combination_comparison.py's
-    capacity_only_multirow_comparison() calls bearing.family.dynamic_capacity()
-    directly rather than through RollingBearingSolver.
+    rolling_bearing_solver.py's _SOLVER_MAP/_POSTPROC_MAP -- its result is a
+    BallBearingResult with len(rows) >= 2, structurally indistinguishable
+    at the type level from a single-row one, but the routing decision
+    upstream (rolling_bearing_solver.RollingBearingSolver) is made on
+    `.rows` count, not on which solver class produced the result -- see
+    that module's own docstring for how it dispatches to this class today.
     """
 
     def __init__(self, tol: float = SOLVER_TOLERANCE, outer_tol: float = 1e-6):
@@ -191,19 +173,21 @@ class ISO16281MultiRowBallSolver:
                        bearing: Bearing,
                        Fr_xz: float, Fr_xy: float, Fa: float,
                        psi: float,
-                       label: str = "") -> MultiRowBallLoadDistributionResult:
+                       label: str = "") -> BallBearingResult:
         """
         bearing must be a MultiRowThrustBallFamily Bearing -- i.e. expose
-        `.rows` (list[dict], each already carrying _REQUIRED_ATTRS from
+        `.rows` (list[dict], each already carrying REQUIRED_ATTRS from
         SingleRowThrustBallFamily.assemble_geometry()) and `.i`.
 
         Fr_xz, Fr_xy, Fa, psi -- same meaning/units as
-        ISO16281BallSolver._solve_bearing()'s own arguments: the TOTAL
+        ISO16281BallSolver.solve_contact()'s own arguments: the TOTAL
         reaction/misalignment for the whole (all-rows) bearing, exactly what
-        a SimpleFEMResultsLibrary node already carries. This method is what
-        would sit between that node and i separate _solve_bearing() calls
-        -- it is the "additional class that handles only the multi-row case
-        and orchestrates the other class's calculation" you asked for.
+        a SimpleFEMResultsLibrary node already carries.
+
+        Returns
+        -------
+        BallBearingResult, built via .multirow() -- len(rows) == i,
+        f_r/f_a/outer_n_iter/outer_residual/outer_ok all populated.
         """
         rows  = bearing.rows
         i     = len(rows)
@@ -214,17 +198,14 @@ class ISO16281MultiRowBallSolver:
         # SimpleNamespace views, not Bearing objects -- rows are plain dicts
         # (MultiRowThrustBallFamily never assembles a per-row Bearing/catalog,
         # see that family's own docstring), so this is the lightest way to
-        # give ISO16281BallSolver._solve_bearing() the attribute access
+        # give ISO16281BallSolver.solve_contact() the attribute access
         # (bearing.A, .alpha_0, ...) it expects. check_bearing_ready() is the
         # SAME readiness check ball_bearing_solver.py runs on a real Bearing
-        # before solving -- reused here rather than a hand-rolled duplicate,
-        # now that library.py's real signature is confirmed to work by
-        # getattr() (so it applies to a SimpleNamespace exactly as it would
-        # to a Bearing).
+        # before solving -- reused here rather than a hand-rolled duplicate.
         row_views = []
         for j, row in enumerate(rows):
             rv = SimpleNamespace(**row, label=f"{label}-row{j}")
-            check_bearing_ready(rv, rv.label, _REQUIRED_ATTRS)
+            check_bearing_ready(rv, rv.label, REQUIRED_ATTRS)
             row_views.append(rv)
 
         phi_Fr = float(np.arctan2(Fr_xy, Fr_xz))
@@ -233,18 +214,10 @@ class ISO16281MultiRowBallSolver:
         # makes the radial-split unknowns genuinely unconstrained: every
         # row sees Fr_xz_j = Fr_xy_j = 0 regardless of f_r, so those
         # Jacobian columns are identically zero. Verified directly against
-        # the real solver (not just argued): with both radial and axial
-        # unknowns free at Fr=0, scipy's "hybr" wanders the radial unknown
-        # to a nonsensical value (seen: f_r0 = 49.9) while still reporting
-        # a near-zero residual (~1e-11, dominated by the equally-tiny axial
-        # residual) -- and run_root()'s hybr-vs-lm fallback only swaps to
-        # lm's well-behaved answer (f_r0 = 0.5) when lm's residual norm is
-        # STRICTLY smaller, which it usually isn't at that scale, so `ok`
-        # can come back False even though the axial split/delta_a agreement
-        # (the only physically meaningful part of the answer here) is
-        # correct. Fix: drop the radial unknowns entirely below this
-        # threshold and fix f_r at 1/i -- removes the singular columns
-        # instead of hoping the optimizer tolerates them.
+        # the real solver (not just argued) -- see module docstring. Fix:
+        # drop the radial unknowns entirely below this threshold and fix
+        # f_r at 1/i -- removes the singular columns instead of hoping the
+        # optimizer tolerates them.
         FR_NEGLIGIBLE_EPS = 1.0e-9   # [N]
         Fr = float(np.hypot(Fr_xz, Fr_xy))
         split_radial = Fr > FR_NEGLIGIBLE_EPS
@@ -262,7 +235,7 @@ class ISO16281MultiRowBallSolver:
 
         def solve_rows(f_r: np.ndarray, f_a: np.ndarray) -> list[BallLoadDistributionResult]:
             return [
-                self._row_solver._solve_bearing(
+                self._row_solver.solve_contact(
                     rv,
                     Fr_xz=f_r[j] * Fr_xz, Fr_xy=f_r[j] * Fr_xy, Fa=f_a[j] * Fa,
                     delta_r_init=0.0, delta_a_init=0.0,
@@ -288,7 +261,7 @@ class ISO16281MultiRowBallSolver:
         f_r, f_a    = fractions(np.asarray(x))
         row_results = solve_rows(f_r, f_a)
 
-        return MultiRowBallLoadDistributionResult(
-            row_results=row_results, f_r=f_r, f_a=f_a,
+        return BallBearingResult.multirow(
+            rows=row_results, f_r=f_r, f_a=f_a,
             n_iter=nfev, residual=res_norm, ok=ok,
         )

@@ -101,7 +101,7 @@ class SpurHelicalGear:
             z_min = 2*cos(β)/sin²(αt) * (haP - x)
         """
         z_min = 2.0 * (np.cos(self.beta) / (np.sin(self.alphat) ** 2)) * (self.haP - self.x)
-        return self.z < z_min
+        return bool(self.z < z_min)
 
     # ------------------------------------------------------------------
     # Validation

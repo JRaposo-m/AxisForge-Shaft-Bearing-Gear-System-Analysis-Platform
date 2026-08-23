@@ -30,20 +30,18 @@ because a radial roller bearing carries no axial load at all (delta_a is
 always 0.0 on every RollerLoadDistributionResult, roller or not) -- there
 is no axial split to iterate here, unlike the ball case.
 
-IDEALIZATION, deliberately chosen this turn -- FORCE SPLIT ONLY, no moment
+IDEALIZATION, deliberately chosen -- FORCE SPLIT ONLY, no moment
 -----------------------------------------------------------------------------
 Rows are treated as CO-LOCATED (zero axial offset between their contact
 planes), exactly like ball_bearing_multirow_solver.py's own idealization
-for thrust ball rows -- see that file's module docstring for the same
-argument applied here: representing a real axial offset between rows would
-need the offset itself plus a per-row psi correction, which this solver
-does not attempt. Dropping the offset collapses the compatibility condition
-from "consistent displacement at each row's own offset position" down to
-"identical delta_r at every row" -- which is what is actually enforced
-below.
+for thrust ball rows -- representing a real axial offset between rows
+would need the offset itself plus a per-row psi correction, which this
+solver does not attempt. Dropping the offset collapses the compatibility
+condition from "consistent displacement at each row's own offset position"
+down to "identical delta_r at every row" -- which is what is actually
+enforced below.
 
-THIS IS A KNOWN SIMPLIFICATION, NOT A COMPLETE MODEL -- flagged explicitly
-per instruction, for follow-up:
+THIS IS A KNOWN SIMPLIFICATION, NOT A COMPLETE MODEL:
 A real double-row cylindrical roller bearing (e.g. NNU/NN-type) usually has
 its rows genuinely separated along the bearing's axial width, not
 co-located. An external moment on the shaft could then load the two rows
@@ -55,12 +53,10 @@ balance) is exactly the single-row mechanism that would need a multi-row
 counterpart -- a genuine "does the compatibility condition include a
 per-row moment share" question -- to model that correctly. This file does
 NOT attempt it: only Fr is split across rows below; psi is a single
-FEM-projected input shared unchanged by every row (same convention as the
-ball side), and no inter-row moment balance is solved or enforced. TODO:
-revisit once the row-offset / moment-sharing question has been worked out
--- until then, treat a converged result from this solver as "correct under
-the co-located-rows idealization", not as a full moment-aware multi-row
-solve.
+FEM-projected input shared unchanged by every row, and no inter-row moment
+balance is solved or enforced. Treat a converged result from this solver
+as "correct under the co-located-rows idealization", not as a full
+moment-aware multi-row solve.
 
 Method -- outer Gauss-Seidel / fixed-point load split, inner exact solves
 ---------------------------------------------------------------------------
@@ -83,9 +79,7 @@ single-row solver instead of a new joint nonlinear system.
 
 Starts from an equal split (Fr_j = Fr/i for every row) and lets run_root()
 converge it -- the SAME helper roller_bearing_solver.py already uses for
-the inner delta_r solve. Mirrors ball_bearing_multirow_solver.py's own
-starting point exactly (see that file for the run_root() dimension-
-generality argument, which applies unchanged here).
+the inner delta_r solve.
 
 Fr ~= 0 degenerate case -- simpler than the ball side's, not the same fix
 -----------------------------------------------------------------------------
@@ -144,12 +138,11 @@ class ISO16281MultiRowRollerSolver:
     kinematics; every row's contact problem is solved by
     ISO16281RollerSolver.solve_contact(), unmodified.
 
-    Deliberately does NOT get registered into rolling_bearing_solver.py's
-    _SOLVER_MAP/_POSTPROC_MAP, mirroring ISO16281MultiRowBallSolver's own
-    reasoning -- routing to this class from the orchestrator still needs
-    that module to learn to dispatch by contact type instead of always
-    reaching for ISO16281MultiRowBallSolver (see rolling_bearing_solver.py's
-    own known-breakage notes); not addressed by this file.
+    Registers itself onto ISO16281RollerSolver.MULTIROW_SOLVER at the
+    bottom of this module -- see ball_bearing_multirow_solver.py for the
+    same pattern and rolling_bearing_solver.py for the routing logic
+    upstream (structural _is_multirow() check, then a match on the row's
+    own attribute set against the single-row registry).
     """
 
     def __init__(self, tol: float = SOLVER_TOLERANCE, outer_tol: float = 1e-6):
@@ -245,3 +238,6 @@ class ISO16281MultiRowRollerSolver:
             rows=row_results, f_r=f_r,
             n_iter=nfev, residual=res_norm, ok=ok,
         )
+
+
+ISO16281RollerSolver.MULTIROW_SOLVER = ISO16281MultiRowRollerSolver

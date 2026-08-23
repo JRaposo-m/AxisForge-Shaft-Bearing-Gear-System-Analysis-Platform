@@ -138,7 +138,7 @@ class AngularContactFamily(BearingFamily):
         """(Q_ci, Q_ce) [N] -- ISO/TS 16281 Sec 4.3.1.2 eq.(19)-(20).
 
         Cr defaults to bearing.C (catalog value) if not overridden."""
-        return bcap.per_element_dynamic_capacity_radial(
+        return bcap.RollingElementCapacity.radial(
             Z=bearing.Z, alpha_0=bearing.alpha_0, ri=bearing.ri, re=bearing.re,
             Dw=bearing.Dw, gamma=bearing.gamma, Cr=Cr if Cr is not None else bearing.C,
             i=bearing.i,

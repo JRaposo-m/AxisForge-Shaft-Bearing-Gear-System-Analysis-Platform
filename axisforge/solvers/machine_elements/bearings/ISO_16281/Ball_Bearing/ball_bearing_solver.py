@@ -9,7 +9,7 @@ solve_contact() below, so is a single row of a multi-row thrust ball
 bearing (BearingType.THRUST_BALL): the 2-equation point-contact problem
 this file solves does not know or care whether alpha_0 is a radial
 bearing's small contact angle or a thrust bearing's 90deg -- only the
-_REQUIRED_ATTRS geometry matters, and MultiRowThrustBallFamily's row dicts
+REQUIRED_ATTRS geometry matters, and MultiRowThrustBallFamily's row dicts
 already carry it (see ball_bearing_multirow_solver.py).
 
 Scope of this file: only things that PRODUCE a BallLoadDistributionResult
@@ -19,54 +19,22 @@ contact force distribution, ball positions, secant stiffness, dynamic
 equivalent load -- lives in ball_bearing_postprocessing.py instead. That
 file imports from this one only for typing; this file never imports from it.
 
-Capacity (Q_ci/Q_ce, Cr/Ca) moved out of this file -- core cleanup
-------------------------------------------------------------------
-This file used to carry its own RollingElementCapacity dataclass plus
-_geometry_bracket()/_check_geometry() helpers, duplicating eq.(19)-(24)
-against core/machine_elements/Bearings/families/ball/{radial,thrust}/
-functions/capacity.py -- which now owns the SAME formulas, tested, and is
-the one every new ball subtype (self-aligning, thrust) is already wired
-through via bearing.family.per_element_dynamic_capacity(bearing, Cr=...)
-/ (bearing, Ca=...). Recomputing eq.(19)-(24) here risked drifting from
-that single source of truth, so the dataclass and its geometry helpers are
-gone; rolling_bearing_solver.py now calls bearing.family directly (see its
-module docstring). debug_radial_capacity() below is kept as a manual
-cross-check but also sources its numbers from bearing.family, not from a
-local reimplementation -- see its own docstring.
+Capacity (Q_ci/Q_ce, Cr/Ca) lives in core/ -- every subtype's BearingFamily
+knows which of its own capacity formulas applies
+(bearing.family.per_element_dynamic_capacity(bearing, Cr=...) /
+(bearing, Ca=...)). rolling_bearing_solver.py calls that directly.
+debug_radial_capacity() below is a manual cross-check, sourced from
+bearing.family too -- see its own docstring.
 
-solve() returns a BallLoadDistributionLibrary (ball_bearing_results.py) --
-a LOCAL, single-type registry, one BallBearingResult per label -- not a
-bare dict. This mirrors ISO16281RollerSolver.solve() returning a
-RollerLoadDistributionLibrary on the roller side. rolling_bearing_solver.
-RollingBearingSolver.solve() is what reads labels back out of it and merges
-it with any other per-type local library; this file never touches the
-final, cross-type BearingResultsLibrary in the global library.py.
+Dispatch: this class is looked up by dispatch.resolve_solver_cls() via
+CAPABILITY + REQUIRED_ATTRS, not by BearingType -- see dispatch.py.
+solve_contact() is the seam ISO16281MultiRowBallSolver composes against,
+one row per outer iteration -- see ball_bearing_multirow_solver.py.
 
-RECONSTRUCTED, this turn -- the single-row/multi-row seam is now public
--------------------------------------------------------------------------
-_solve_bearing() is renamed to solve_contact() and is now PUBLIC. It was
-already being called from outside this class -- ball_bearing_multirow_solver.
-py reached into self._row_solver._solve_bearing() to run each row's inner
-solve -- so the underscore was never actually protecting anything; it was
-just an undeclared cross-module contract. solve_contact() makes that
-contract explicit: it is THE seam a multi-row (or any future per-row)
-orchestration composes against, one row/bearing at a time, taking raw
-scalar loads (Fr_xz, Fr_xy, Fa, psi, phi_Fr) rather than a ShaftSystem/
-library batch. _REQUIRED_ATTRS is renamed REQUIRED_ATTRS for the same
-reason -- ball_bearing_multirow_solver.py imports it to validate each row's
-geometry via the SAME check_bearing_ready() this class's own solve() uses,
-so it is part of that same public contract now, not a private detail.
-
-_elements(), _initial_delta_r(), _initial_delta_a() stay private -- they
-are internal to how ONE solve_contact() call converges, not part of the
-seam anything outside this class composes against.
-
-This module is one of several per-bearing-type solvers dispatched by
-rolling_bearing_solver.RollingBearingSolver (see BearingType in
-bearing_types.py). It lives in its own Ball_Bearing/ subfolder, sibling to
-Roller_Bearing/ -- it does not import, and is not imported by, any other
-contact-type solver. The two are independent and only share the neutral
-data contract, generic utilities, and results registry one level up, in
+This module is self-contained: it does not import, and is not imported by,
+any other contact-type solver. It lives in its own Ball_Bearing/ subfolder,
+sibling to Roller_Bearing/. The two only share the neutral data contract,
+generic utilities and results registry one level up, in
 bearings/ISO_16281/library.py.
 
 The solve is performed in the plane of the resultant radial force:
@@ -108,6 +76,7 @@ from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
     warn_if_floating_loaded,
     run_root,
 )
+from axisforge.solvers.machine_elements.bearings.ISO_16281.dispatch import register_contact_solver
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import (
     BallLoadDistributionResult,
     BallBearingResult,
@@ -120,11 +89,10 @@ from axisforge.config import SOLVER_TOLERANCE
 # ISO16281BallSolver
 # ---------------------------------------------------------------------------
 
-# PUBLIC, this turn -- formerly _REQUIRED_ATTRS. Part of the seam
-# ball_bearing_multirow_solver.py composes against (see module docstring).
 REQUIRED_ATTRS = ("A", "alpha_0", "phi_j", "Ri", "cp", "Dpw", "Z")
 
 
+@register_contact_solver
 class ISO16281BallSolver:
     """
     ISO/TS 16281 internal load distribution solver, point contact
@@ -140,13 +108,14 @@ class ISO16281BallSolver:
     ball_bearing_postprocessing.py as free functions. Capacity (Q_ci/Q_ce,
     Cr/Ca) lives in core/ -- see module docstring.
 
-    Self-contained: does not import or depend on any other contact-type
-    solver. rolling_bearing_solver.RollingBearingSolver dispatches to this
-    class for BearingType.DEEP_GROOVE_BALL and BearingType.ANGULAR_CONTACT;
-    it can also be used directly when the caller already knows all bearings
-    on a shaft are point-contact. solve_contact() (the per-row/per-bearing
-    seam) is also called directly by ISO16281MultiRowBallSolver, once per
-    row per outer iteration -- see ball_bearing_multirow_solver.py.
+    Dispatched by rolling_bearing_solver.RollingBearingSolver via
+    CAPABILITY + REQUIRED_ATTRS (dispatch.py) for any family that declares
+    "point_contact" -- DGBB, angular contact, self-aligning, single-row
+    thrust ball. Can also be used directly when the caller already knows
+    all bearings on a shaft are point-contact. solve_contact() (the
+    per-row/per-bearing seam) is also called directly by
+    ISO16281MultiRowBallSolver, once per row per outer iteration -- see
+    ball_bearing_multirow_solver.py.
 
     Parameters
     ----------
@@ -164,6 +133,10 @@ class ISO16281BallSolver:
                       geometric slope is not a valid substitute unless phi_Fr
                       is also fixed across the cases being compared.
     """
+
+    CAPABILITY = "point_contact"
+    REQUIRED_ATTRS = REQUIRED_ATTRS
+    MULTIROW_SOLVER: type | None = None   # ligado por ball_bearing_multirow_solver.py
 
     def __init__(self, tol: float = SOLVER_TOLERANCE, psi_input: bool = False):
         self.tol       = tol
@@ -313,7 +286,7 @@ class ISO16281BallSolver:
     # Single-row/single-bearing solve -- THE SEAM. Public: this is the
     # per-row entry point ISO16281MultiRowBallSolver composes against
     # (once per row per outer iteration) -- see ball_bearing_multirow_
-    # solver.py's module docstring. Formerly _solve_bearing().
+    # solver.py's module docstring.
     # ------------------------------------------------------------------
 
     def solve_contact(self,
@@ -423,11 +396,11 @@ def debug_radial_capacity(bearing: Bearing, Cr: float, i: int | None = None,
 
     Sources the numbers from bearing.family.per_element_dynamic_capacity(),
     the SAME call rolling_bearing_solver.postprocess_and_record() makes --
-    this file no longer carries its own copy of eq.(19)-(20), so a debug
-    print here can never silently drift from what production returns.
-    `i` is informational only (DGBB/ACB/self-aligning already read row
-    count off bearing.i internally); pass it just to echo it in the
-    printout if it differs from bearing.i for some reason.
+    this file carries no copy of eq.(19)-(20), so a debug print here can
+    never silently drift from what production returns. `i` is informational
+    only (DGBB/ACB/self-aligning already read row count off bearing.i
+    internally); pass it just to echo it in the printout if it differs from
+    bearing.i for some reason.
     """
     _lbl = label or bearing.label
     Q_ci, Q_ce = bearing.family.per_element_dynamic_capacity(bearing, Cr=Cr)

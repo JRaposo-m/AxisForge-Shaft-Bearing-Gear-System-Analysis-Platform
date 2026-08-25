@@ -171,10 +171,35 @@ class CylindricalRollerFamily(BearingFamily):
     # ------------------------------------------------------------------
     # Capacity -- given an assembled Bearing (this family), pulls the
     # right attributes and calls the shared functions/capacity.py math.
-    # dynamic_capacity()/static_capacity() upstream (BearingCapacity) are
-    # still NotImplementedError -- f_c/f_0 text not provided yet.
+    # dynamic_capacity() (BearingCapacity.dynamic(), overall Cr) is now
+    # implemented -- see below. static_capacity() (BearingCapacity.static(),
+    # Ca) is still NotImplementedError -- f_0 text not provided yet.
     # ------------------------------------------------------------------
-
+ 
+    @staticmethod
+    def dynamic_capacity(bearing, reduction_factor: float) -> float:
+        """
+        Cr [N] -- overall bearing dynamic load rating, ISO 281:2007 Sec 6.2
+        Formula (33)/(34), via functions/capacity.py's
+        BearingCapacity.dynamic().
+ 
+        reduction_factor, nu : Formula (34) inputs -- ISO 281:2007 Table 2's
+        row/subtype-dependent factor and the formula's other factor,
+        respectively. Neither has a confirmed table value transcribed into
+        this codebase yet, so both are required here rather than class
+        constants -- unlike LAMBDA_V_RADIAL above, which IS a confirmed
+        table value but for a different quantity (ISO/TS 16281's lambda_v,
+        consumed by per_element_dynamic_capacity() below, NOT this method).
+        Do not pass LAMBDA_V_RADIAL as reduction_factor or nu -- see
+        functions/capacity.py's module docstring "IMPORTANT" note for why
+        they are unrelated despite both stemming from a table numbered 2.
+        """
+        return rcap.BearingCapacity.dynamic(
+            Z=bearing.Z, Dwe=bearing.Dwe, Lwe=bearing.Lwe, alpha_0=bearing.alpha_0,
+            gamma=bearing.gamma, reduction_factor=reduction_factor,
+            i=bearing.i,
+        )
+ 
     @staticmethod
     def per_element_dynamic_capacity(bearing, Cr: float | None = None,
                                       lambda_v: float | None = None) -> tuple[float, float]:
@@ -182,7 +207,7 @@ class CylindricalRollerFamily(BearingFamily):
         (Q_ci, Q_ce) [N] -- whole-roller dynamic capacity, ISO/TS 16281
         Sec 5.3.1.2 eq.(47)-(48). Cr defaults to bearing.C (catalog value)
         if not overridden.
-
+ 
         CHANGED, this turn: `i` is no longer a keyword here -- reads
         bearing.i (set at assemble_geometry() time) instead, mirroring
         DeepGrooveBallFamily.per_element_dynamic_capacity(). See module
@@ -194,10 +219,11 @@ class CylindricalRollerFamily(BearingFamily):
             lambda_v=lambda_v if lambda_v is not None else CylindricalRollerFamily.LAMBDA_V_RADIAL,
             i=bearing.i,
         )
-
+ 
     @staticmethod
     def per_lamina_dynamic_capacity(bearing, Q_ci: float, Q_ce: float) -> tuple[float, float]:
         """(q_ci, q_ce) [N] -- per-lamina dynamic load rating, ISO/TS 16281
         Sec 5.3.2 eq.(56)-(57). Takes the whole-roller Q_ci/Q_ce from
         per_element_dynamic_capacity() -- not resolved here."""
         return rcap.RollingElementCapacity.per_lamina(Q_ci, Q_ce, bearing.n_s)
+ 

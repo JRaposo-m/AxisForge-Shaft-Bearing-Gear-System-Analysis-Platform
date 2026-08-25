@@ -10,7 +10,65 @@ bearing (BearingType.THRUST_BALL): the 2-equation point-contact problem
 this file solves does not know or care whether alpha_0 is a radial
 bearing's small contact angle or a thrust bearing's 90deg -- only the
 REQUIRED_ATTRS geometry matters, and MultiRowThrustBallFamily's row dicts
-already carry it (see ball_bearing_multirow_solver.py).
+already carry it.
+
+UPDATED, this turn -- elements() promoted private -> public, MULTIROW_SOLVER
+now registered by the shared-displacement solver
+------------------------------------------------------------------------
+Two changes, both consequences of adopting
+ISO16281MultiRowBallSolverSharedDisplacement (see
+ball_bearing_multirow_solver_shared_displacement.py) as the multi-row
+solver actually wired into dispatch:
+
+  1. _elements() -> elements() (no leading underscore). It used to be
+     private: internal to how one solve_contact() root-find converges,
+     never called from outside this class. That stopped being true once
+     ISO16281MultiRowBallSolverSharedDisplacement started calling it
+     directly (bypassing solve_contact()'s own root-find, on purpose --
+     see that file's "Formulation" section) once per row per residual
+     evaluation, rather than composing via solve_contact() the way
+     ISO16281MultiRowBallSolver (the older, fraction-based multi-row
+     solver) does. Reaching past a leading underscore from another module
+     was flagged as a deliberate, acknowledged trade-off in that solver's
+     own docstring at the time ("consider promoting _elements() to a
+     non-underscored, explicitly-public staticmethod... if this file is
+     adopted") -- it has now been adopted (see point 2), so the promotion
+     is made here. Behavior is unchanged; only the name and its section
+     comment below changed. solve_contact() itself just calls
+     self.elements(...) instead of self._elements(...) -- two call sites,
+     both updated.
+
+  2. MULTIROW_SOLVER is now registered by
+     ball_bearing_multirow_solver_shared_displacement.py instead of
+     ball_bearing_multirow_solver.py (see that class attribute's own
+     comment below, and rolling_bearing_solver.py's import). Reason:
+     empirical, not just theoretical -- running both solvers side by side
+     on the same real gearbox model
+     (design_bearing_combination_comparison.py's "SOLVER COMPARISON"
+     section) showed ISO16281MultiRowBallSolver (fraction-based) fails to
+     converge (outer_ok=False, residual stuck ~6e-3, hits its iteration
+     cap) for a double-row bearing with Fa~=0 (a purely radially-loaded
+     shaft -- the common case) AND heterogeneous rows (different cp per
+     row) -- most likely the axial-side counterpart of the already-known
+     Fr~=0 degeneracy that solver's own FR_NEGLIGIBLE_EPS handles (when
+     Fa_total~=0, ANY per-row axial load-split fraction satisfies
+     f_a_row*Fa_total=0, so that Jacobian column goes singular) --
+     unhandled on the axial side. ISO16281MultiRowBallSolverSharedDisplacement
+     does not share this failure mode by construction (it never divides by
+     a possibly-zero total; it sums each row's own Hertzian reaction
+     directly) and converged cleanly (outer_ok=True, residual ~1e-6..1e-7)
+     on every case tested, including the ones where the fraction-based
+     solver failed. ball_bearing_multirow_solver.py is NOT deleted -- it
+     stays in the codebase for reference/comparison (and the comparison
+     script continues to run both side by side) -- it is simply no longer
+     the one rolling_bearing_solver.py's dispatch reaches by default.
+
+     Roller side (ISO16281RollerSolver.MULTIROW_SOLVER, currently
+     roller_bearing_multirow_solver.py) is UNCHANGED this turn -- an
+     analogous shared-displacement solver for line contact (lamina-summed,
+     e=9/8) has not been written yet. Flagged here, not silently left
+     inconsistent: this file's own multi-row story and the roller side's
+     are temporarily on different footings until that's done.
 
 Scope of this file: only things that PRODUCE a BallLoadDistributionResult
 live here. Anything that CONSUMES an already-computed BallLoadDistributionResult
@@ -28,8 +86,13 @@ bearing.family too -- see its own docstring.
 
 Dispatch: this class is looked up by dispatch.resolve_solver_cls() via
 CAPABILITY + REQUIRED_ATTRS, not by BearingType -- see dispatch.py.
-solve_contact() is the seam ISO16281MultiRowBallSolver composes against,
-one row per outer iteration -- see ball_bearing_multirow_solver.py.
+solve_contact() is the seam ISO16281MultiRowBallSolver (fraction-based,
+no longer registered as MULTIROW_SOLVER but still importable and still
+composed the same way internally) uses, one row per outer iteration.
+elements() (see point 1 above) is the seam
+ISO16281MultiRowBallSolverSharedDisplacement (the currently-registered
+MULTIROW_SOLVER) uses instead, once per row per residual evaluation, with
+no nested root-find.
 
 This module is self-contained: it does not import, and is not imported by,
 any other contact-type solver. It lives in its own Ball_Bearing/ subfolder,
@@ -115,7 +178,10 @@ class ISO16281BallSolver:
     all bearings on a shaft are point-contact. solve_contact() (the
     per-row/per-bearing seam) is also called directly by
     ISO16281MultiRowBallSolver, once per row per outer iteration -- see
-    ball_bearing_multirow_solver.py.
+    ball_bearing_multirow_solver.py. elements() (see this module's
+    docstring, "UPDATED this turn") is the analogous seam for
+    ISO16281MultiRowBallSolverSharedDisplacement -- the currently-registered
+    MULTIROW_SOLVER, see below.
 
     Parameters
     ----------
@@ -136,7 +202,14 @@ class ISO16281BallSolver:
 
     CAPABILITY = "point_contact"
     REQUIRED_ATTRS = REQUIRED_ATTRS
-    MULTIROW_SOLVER: type | None = None   # ligado por ball_bearing_multirow_solver.py
+    # Set at import time -- see this module's docstring, "UPDATED this turn",
+    # point 2. Currently registered by
+    # ball_bearing_multirow_solver_shared_displacement.py (was
+    # ball_bearing_multirow_solver.py). rolling_bearing_solver.py's own
+    # import comment ("regista ISO16281BallSolver.MULTIROW_SOLVER") is what
+    # actually triggers the registration, on import, at orchestrator
+    # start-up.
+    MULTIROW_SOLVER: type | None = None
 
     def __init__(self, tol: float = SOLVER_TOLERANCE, psi_input: bool = False):
         self.tol       = tol
@@ -227,15 +300,20 @@ class ISO16281BallSolver:
 
     # ------------------------------------------------------------------
     # Element kinematics -- ISO/TS 16281 eq.(12)/(15), Sec 4.2.2.1
-    # Private: internal to how one solve_contact() call converges, not
-    # part of the cross-module seam.
+    # UPDATED, this turn -- promoted from _elements() (private) to
+    # elements() (public): it IS part of the cross-module seam now,
+    # called directly (not through solve_contact()'s own root-find) by
+    # ISO16281MultiRowBallSolverSharedDisplacement, the class now
+    # registered as ISO16281BallSolver.MULTIROW_SOLVER -- see this
+    # module's docstring changelog and that solver's own module
+    # docstring ("Encapsulation note", now resolved there too).
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _elements(bearing: Bearing,
-                  delta_r: float,
-                  delta_a: float,
-                  Vpsi: np.ndarray):
+    def elements(bearing: Bearing,
+                 delta_r: float,
+                 delta_a: float,
+                 Vpsi: np.ndarray):
         """
         Per-element elastic deflection and effective contact angle.
         phi_j is local: 0 aligned with the resultant radial force.
@@ -315,7 +393,7 @@ class ISO16281BallSolver:
 
         def residual(u):
             dr, da = u
-            _, _, ca, sa, cp_j, d32 = self._elements(bearing, dr, da, Vpsi)
+            _, _, ca, sa, cp_j, d32 = self.elements(bearing, dr, da, Vpsi)
             return np.array([
                 Fr - cp * np.sum(d32 * ca * cp_j),
                 Fa - cp * np.sum(d32 * sa),
@@ -326,7 +404,7 @@ class ISO16281BallSolver:
         x, nfev, res, ok  = run_root(residual, [dr0, da0], self.tol)
         delta_r, delta_a  = float(x[0]), float(x[1])
 
-        delta_j, alpha_j, _, sa, cp_j, d32 = self._elements(
+        delta_j, alpha_j, _, sa, cp_j, d32 = self.elements(
             bearing, delta_r, delta_a, Vpsi)
         Mz = (bearing.Dpw / 2.0) * cp * float(np.sum(d32 * sa * cp_j))
 

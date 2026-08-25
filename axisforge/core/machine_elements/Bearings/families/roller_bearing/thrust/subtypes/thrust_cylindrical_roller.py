@@ -115,12 +115,39 @@ class ThrustCylindricalRollerFamily(BearingFamily):
         return P
 
     # ------------------------------------------------------------------
-    # Capacity -- alpha_0 is fixed at 90deg for this family, so this
-    # always dispatches to RollingElementCapacity.thrust_90deg().
-    # dynamic_capacity() (Ca, upstream BearingCapacity) still stubbed --
-    # formula text not provided yet.
+    # Capacity -- alpha_0 is fixed at 90deg for this family, so both
+    # dynamic_capacity() and per_element_dynamic_capacity() always
+    # dispatch to their respective *_90deg() function. dynamic_capacity()
+    # (Ca, overall bearing) is now implemented -- see below.
+    # static_capacity() (BearingCapacity.static(), Ca0) is still
+    # NotImplementedError -- formula text not provided yet.
     # ------------------------------------------------------------------
-
+ 
+    @staticmethod
+    def dynamic_capacity(bearing, reduction_factor: float, nu: float, eta: float) -> float:
+        """
+        Ca [N] -- overall bearing dynamic axial load rating, ISO 281:2007
+        Sec 6.6.2 Formula (41)/(42) (alpha_0 fixed at 90deg for this
+        family), via functions/capacity.py's BearingCapacity.dynamic_90deg().
+ 
+        reduction_factor, nu, eta : Formula (42) inputs -- ISO 281:2007
+        Table 2's row/subtype-dependent factor and the formula's other two
+        factors. None has a confirmed table value transcribed into this
+        codebase yet, so all three are required here rather than class
+        constants -- unlike LAMBDA_V_THRUST above, which IS a confirmed
+        table value but for a different quantity (ISO/TS 16281's lambda_v,
+        consumed by per_element_dynamic_capacity() below, NOT this method).
+        Do not pass LAMBDA_V_THRUST as reduction_factor, nu, or eta -- see
+        functions/capacity.py's module docstring for why they are
+        unrelated despite all stemming from a table numbered 2.
+ 
+        Single row only -- see module docstring's "UPDATED, this turn"
+        note if this family is ever assembled with more than one row.
+        """
+        return rcap.BearingCapacity.dynamic_90deg(
+            Z=bearing.Z, Dwe=bearing.Dwe, Lwe=bearing.Lwe, gamma=bearing.gamma,
+            reduction_factor=reduction_factor, nu=nu, eta=eta,
+        )
     @classmethod
     def per_element_dynamic_capacity(cls, bearing, Ca: float | None = None,
                                       lambda_v: float | None = None) -> tuple[float, float]:

@@ -11,17 +11,38 @@ BallBearingResult per bearing label (BallLoadDistributionLibrary) -- lives
 together in ball_bearing_results.py, and everything that consumes an
 already-solved result lives in ball_bearing_postprocessing.py.
 
-UPDATED, this turn -- reflects the single/multi-row unification
+UPDATED, this turn -- shared-displacement multi-row solver re-exported
 -------------------------------------------------------------------
-Two things this file used to export no longer exist, and are removed here:
+ISO16281MultiRowBallSolverSharedDisplacement (in
+ball_bearing_multirow_solver_shared_displacement.py) is now re-exported
+here too, alongside ISO16281MultiRowBallSolver. Same status as that
+solver already had before this turn: NOT part of RollingBearingSolver's
+dispatch table (_SOLVER_MAP / _POSTPROC_MAP in rolling_bearing_solver.py)
+-- if anything, LESS wired in than ISO16281MultiRowBallSolver, since it
+was written explicitly as a side-by-side comparison against the fraction-
+based solver, not as a candidate replacement in the dispatch path (see its
+own module docstring's "Formulation" and "Encapsulation note" sections for
+the full trade-off writeup, and
+design_bearing_combination_comparison.py's "SOLVER COMPARISON" section for
+the actual side-by-side numeric comparison). It returns the exact same
+BallBearingResult type as ISO16281MultiRowBallSolver (via the same
+.multirow() classmethod), so nothing downstream needs a new type import to
+consume either solver's output. Call it directly, the same way
+ISO16281MultiRowBallSolver is called directly today (see that solver's own
+note above about not going through the orchestrator).
+
+Two things this file used to export no longer exist, and are removed here
+(unchanged from before this turn, restated for completeness):
 
   MultiRowBallLoadDistributionResult (used to live in
   ball_bearing_multirow_solver.py) -- retired. ISO16281MultiRowBallSolver.
   solve_bearing() now returns a BallBearingResult (via its .multirow()
   classmethod) instead, the exact same type ISO16281BallSolver.solve()
-  returns (via .single()). Import BallBearingResult below to type either
-  one -- there is no longer a separate multi-row-only result class to
-  import.
+  returns (via .single()). Import BallBearingResult below to type any of
+  the three call paths (single-row solve, ISO16281MultiRowBallSolver,
+  ISO16281MultiRowBallSolverSharedDisplacement) -- there is no longer a
+  separate multi-row-only result class to import, and the new solver never
+  needed one either.
 
   ball_bearing_multirow_postprocessing.py and its one function,
   multirow_dynamic_equivalent_load() -- retired outright, the file is
@@ -56,6 +77,9 @@ from .ball_bearing_solver import (
 from .ball_bearing_multirow_solver import (
     ISO16281MultiRowBallSolver,
 )
+from .ball_bearing_multirow_solver_shared_displacement import (
+    ISO16281MultiRowBallSolverSharedDisplacement,
+)
 from .ball_bearing_results import (
     BallLoadDistributionResult,
     BallBearingResult,
@@ -74,6 +98,7 @@ __all__ = [
     "ISO16281BallSolver",
     "debug_radial_capacity",
     "ISO16281MultiRowBallSolver",
+    "ISO16281MultiRowBallSolverSharedDisplacement",
     "BallLoadDistributionResult",
     "BallBearingResult",
     "BallLoadDistributionLibrary",

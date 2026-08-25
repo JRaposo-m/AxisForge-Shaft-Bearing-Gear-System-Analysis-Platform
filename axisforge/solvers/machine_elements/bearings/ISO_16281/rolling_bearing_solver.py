@@ -1,6 +1,37 @@
 """Orquestrador ISO/TS 16281. Agrupa bearings pelo solver que
 dispatch.resolve_solver_cls() lhes atribui e junta os resultados em
-{label: [LoadDistributionResult, ...]}, na ordem de `bearings`."""
+{label: [LoadDistributionResult, ...]}, na ordem de `bearings`.
+
+UPDATED, this turn -- import trocado para registar o novo MULTIROW_SOLVER
+do lado ball: passou de ball_bearing_multirow_solver (fraction-based) para
+ball_bearing_multirow_solver_shared_displacement (shared-displacement).
+Motivo: evidencia empirica de que o solver antigo nao converge (outer_ok=
+False) num caso real com Fa~=0 + rows heterogeneas (ver o changelog em
+ball_bearing_solver.py e em ball_bearing_multirow_solver_shared_
+displacement.py para o detalhe). ball_bearing_multirow_solver.py continua
+no codebase, so deixou de ser o registado por omissao. Nenhum outro codigo
+deste ficheiro mudou -- o contrato publico de solve_bearing() e' identico
+nos dois solvers (bearing, Fr_xz, Fr_xy, Fa, psi, label -> BallBearingResult
+via .multirow()), por isso _multirow_solver_cls_for()/solve()/
+postprocess_and_record() nao precisaram de nenhuma alteracao.
+
+UPDATED, this turn (2) -- o mesmo import-swap feito agora tambem do lado
+roller: roller_bearing_multirow_solver (fraction-based) ->
+roller_bearing_multirow_solver_shared_displacement (shared-displacement),
+por paridade estrutural com o lado ball, a pedido explicito. IMPORTANTE:
+ao contrario do lado ball, esta troca NAO tem a mesma evidencia empirica
+por tras -- nao existe hoje nenhuma family em core/ que produza uma
+CYLINDRICAL_ROLLER bearing com `rows` genuinamente >= 2 (o caso multi-row
+da CylindricalRollerFamily e' so o multiplicador `i` de sempre, mesma
+raceway; a family que teria produzido rows>=2, MultiRowCylindricalRollerFamily,
+foi tentada e retirada -- ver roller_bearing_results.py). Por isso nenhum
+dos dois solvers de roller (o antigo nem o novo) tem hoje uma bearing real
+para resolver -- ver o docstring de roller_bearing_multirow_solver_shared_
+displacement.py para o detalhe completo desta ressalva. Mesma logica de
+"contrato publico identico, zero mudanca no resto do ficheiro" aplica-se
+aqui tambem (solve_bearing(bearing, Fr_xz, Fr_xy, psi, label) ->
+RollerBearingResult via .multirow(), sem Fa -- ver esse ficheiro).
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,13 +56,13 @@ from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bea
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import BallBearingResult
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing import ball_bearing_postprocessing as _ball_pp
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing import (
-    ball_bearing_multirow_solver as _ball_multirow_solver,  # noqa: F401 -- regista ISO16281BallSolver.MULTIROW_SOLVER
+    ball_bearing_multirow_solver_shared_displacement as _ball_multirow_solver,  # noqa: F401 -- regista ISO16281BallSolver.MULTIROW_SOLVER (shared-displacement, ver docstring deste ficheiro)
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_solver import ISO16281RollerSolver
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_results import RollerBearingResult
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing import roller_bearing_postprocessing as _roller_pp
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing import (
-    roller_bearing_multirow_solver as _roller_multirow_solver,  # noqa: F401 -- regista ISO16281RollerSolver.MULTIROW_SOLVER
+    roller_bearing_multirow_solver_shared_displacement as _roller_multirow_solver,  # noqa: F401 -- regista ISO16281RollerSolver.MULTIROW_SOLVER (shared-displacement; ver docstring deste ficheiro e a ressalva de validacao)
 )
 from axisforge.config import SOLVER_TOLERANCE
 

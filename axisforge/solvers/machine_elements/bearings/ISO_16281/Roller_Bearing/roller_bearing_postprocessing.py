@@ -113,14 +113,18 @@ through inner_rotating vs outer_rotating (i.e. only if one raceway rotates
 relative to the load and the other doesn't) -- the underlying q_j,k data
 and f[k] weighting are otherwise identical between the two.
 
-This class stops at eq.(64). Combining q_kei[k]/q_kee[k] across all n_s
-laminae into a single bearing rating life is ISO/TS 16281 §5.4 (Basic
-rating life), which the excerpt available in this session does not
-include -- no combination rule is invented here.
+Basic reference rating life / Pref -- ISO/TS 16281 §5.3.5-.6, eq.(65)-(67)
+-----------------------------------------------------------------------
+Same structure as the ball side: BasicReferenceRatingLife.from_loads() is
+the single-row primitive (eq.65 -- sums q_kci/q_kei/q_kce/q_kee over all
+n_s laminae into that row's L10r), combine_row_L10r() combines rows
+(Zaretsky eq.49a, e=9/8 line contact), basic_reference_rating_life() is
+the row-aware wrapper. q_kci/q_kce (per-lamina capacity) are NOT computed
+here -- see RollerElementCapacity.radial() (eq.56-57).
 
 References
 ----------
-ISO/TS 16281:2008 §5.2, eq.(36)-(46); §5.3.2-.4, eq.(56)-(64)
+ISO/TS 16281:2008 §5.2, eq.(36)-(46); §5.3.2-.6, eq.(56)-(67)
 """
 from __future__ import annotations
 
@@ -458,8 +462,7 @@ class LaminaDynamicEquivalentLoad:
     One value PER LAMINA (n_s,) -- NOT one per bearing. Compare against
     RollerElementCapacity.radial()'s q_ci/q_ce (eq.56-57, also per lamina),
     not against Q_ci/Q_ce (whole-roller). Combining across laminae into a
-    single bearing life is ISO/TS 16281 §5.4, not implemented here (see
-    module docstring).
+    single bearing life is basic_reference_rating_life() below.
 
     Attributes
     ----------
@@ -548,3 +551,96 @@ def _lamina_mean(q_jk: np.ndarray, rotating: bool) -> np.ndarray:
     p = _P_ROTATING if rotating else _P_STATIONARY
     Z = q_jk.shape[0]
     return (np.sum(q_jk ** p, axis=0) / Z) ** (1.0 / p)
+
+
+# ---------------------------------------------------------------------------
+# BasicReferenceRatingLife / DynamicEquivalentReferenceLoad -- eq.(65)-(67),
+# ISO/TS 16281 §5.3.5 (L10r), §5.3.6 (Pref)
+# ---------------------------------------------------------------------------
+
+_E_ROLLER = 9.0 / 8.0   # Weibull slope, line contact -- Zaretsky eq.(49a)/(49b)
+
+
+@dataclass(frozen=True)
+class BasicReferenceRatingLife:
+    """L10r for one row/raceway pair -- eq.(65), summed over n_s laminae."""
+    label : str
+    L10r  : float
+    q_kci : np.ndarray
+    q_kei : np.ndarray
+    q_kce : np.ndarray
+    q_kee : np.ndarray
+
+    @classmethod
+    def from_loads(cls, label: str, q_kci: np.ndarray, q_kei: np.ndarray,
+                   q_kce: np.ndarray, q_kee: np.ndarray) -> "BasicReferenceRatingLife":
+        if np.any(q_kci <= 0.0) or np.any(q_kce <= 0.0):
+            raise ValueError(
+                f"BasicReferenceRatingLife.from_loads({label!r}): q_kci/q_kce (capacity) must be positive."
+            )
+        if np.any(q_kei < 0.0) or np.any(q_kee < 0.0):
+            raise ValueError(
+                f"BasicReferenceRatingLife.from_loads({label!r}): q_kei/q_kee must be non-negative."
+            )
+        # (q_kci/q_kei)^-4.5 == (q_kei/q_kci)^4.5 -- rewritten this way so an
+        # unloaded lamina (q_kei/q_kee = 0, e.g. a crowned profile's zero-
+        # load edge) contributes 0 to the sum instead of dividing by zero.
+        terms = (q_kei / q_kci) ** 4.5 + (q_kee / q_kce) ** 4.5
+        L10r = float(np.sum(terms) ** (-8.0 / 9.0))
+        return cls(label=label, L10r=L10r, q_kci=q_kci, q_kei=q_kei, q_kce=q_kce, q_kee=q_kee)
+
+
+def combine_row_L10r(L10r_rows: list[float], e: float = _E_ROLLER) -> float:
+    """Bearing-level L10r from n rows -- Zaretsky eq.(49a): L^-e = sum(Li^-e)."""
+    if len(L10r_rows) < 2:
+        raise ValueError(f"combine_row_L10r needs >= 2 rows; got {len(L10r_rows)}.")
+    if any(L <= 0.0 for L in L10r_rows):
+        raise ValueError(f"All L10r_rows must be positive; got {list(L10r_rows)}.")
+    return sum(L ** (-e) for L in L10r_rows) ** (-1.0 / e)
+
+
+def basic_reference_rating_life(
+    label: str,
+    q_kci_rows: list[np.ndarray], q_kei_rows: list[np.ndarray],
+    q_kce_rows: list[np.ndarray], q_kee_rows: list[np.ndarray],
+    e: float = _E_ROLLER,
+) -> tuple[list[BasicReferenceRatingLife], float]:
+    """Per-row L10r (eq.65) + combined bearing L10r (combine_row_L10r() for n>=2)."""
+    n = len(q_kci_rows)
+    if not (len(q_kei_rows) == len(q_kce_rows) == len(q_kee_rows) == n):
+        raise ValueError("basic_reference_rating_life: row lists must all be the same length.")
+    if n == 0:
+        raise ValueError("basic_reference_rating_life: got 0 rows.")
+
+    per_row = [
+        BasicReferenceRatingLife.from_loads(
+            label=f"{label}-row{j}" if n > 1 else label,
+            q_kci=q_kci_rows[j], q_kei=q_kei_rows[j],
+            q_kce=q_kce_rows[j], q_kee=q_kee_rows[j],
+        )
+        for j in range(n)
+    ]
+    L10r_bearing = (per_row[0].L10r if n == 1
+                    else combine_row_L10r([r.L10r for r in per_row], e=e))
+    return per_row, L10r_bearing
+
+
+@dataclass(frozen=True)
+class DynamicEquivalentReferenceLoad:
+    """Pref -- eq.(66)-(67): Pref_r = Cr/L10r^(3/10), Pref_a = Ca/L10r^(3/10)."""
+    label  : str
+    Pref_r : float | None
+    Pref_a : float | None
+
+    @classmethod
+    def from_L10r(cls, label: str, L10r: float,
+                  Cr: float | None = None, Ca: float | None = None
+                  ) -> "DynamicEquivalentReferenceLoad":
+        if Cr is None and Ca is None:
+            raise ValueError(f"DynamicEquivalentReferenceLoad.from_L10r({label!r}): need Cr and/or Ca.")
+        if L10r <= 0.0:
+            raise ValueError(f"L10r must be positive; got {L10r}.")
+        denom = L10r ** (3.0 / 10.0)
+        return cls(label=label,
+                   Pref_r=(Cr / denom) if Cr is not None else None,
+                   Pref_a=(Ca / denom) if Ca is not None else None)

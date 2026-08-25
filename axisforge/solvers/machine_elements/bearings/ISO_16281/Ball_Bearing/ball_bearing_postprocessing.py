@@ -50,11 +50,22 @@ BallLoadDistributionResult -- is UNCHANGED and still does all the actual
 ISO/TS 16281 eq.(25)-(28) math. from_bearing_result() is a new, thin
 wrapper that calls it once per row; it does not reimplement it.
 
+BasicReferenceRatingLife/combine_row_L10r/DynamicEquivalentReferenceLoad
+(eq.29-31) below are ball-specific: eq.(29)'s exponents (10/3, 9/10) are
+§4.3.3 of ISO/TS 16281, the point-contact section. Roller's own rating
+life is a different formula entirely (§5.3.1.2, lamina-based, not yet
+implemented) -- it will NOT reuse this code, it gets its own version in
+roller_bearing_postprocessing.py.
+
+Row combination uses Zaretsky, E.V., "Rolling Bearing Life Prediction,
+Theory, and Application", NASA/TP-2013-215305/REV1, 2016, eq.(49a)/(49b):
+1/L^e = 1/L1^e + ... + 1/Li^e (e=10/9 ball). Pref (eq.30-31) is back-
+derived from L10r, not an independent equivalent-load formula.
+
 References
 ----------
 ISO/TS 16281:2008 §4.2 eq.(12)-(15) (kinematics), §4.3.2 eq.(25)-(28)
-(dynamic equivalent load)
-Harris & Kotzalas, "Rolling Bearing Analysis", 5th ed., Ch. 6
+(dynamic equivalent load), §4.3.3 eq.(29) (L10r), §4.3.4 eq.(30)-(31) (Pref)
 """
 from __future__ import annotations
 
@@ -416,3 +427,88 @@ def _equivalent(Q: np.ndarray, rotating: bool) -> float:
     """eq.(25)/(28) if rotating relative to the load, else eq.(26)/(27)."""
     p = _P_ROTATING if rotating else _P_STATIONARY
     return float(np.mean(Q ** p) ** (1.0 / p))
+
+
+# ---------------------------------------------------------------------------
+# BasicReferenceRatingLife / DynamicEquivalentReferenceLoad -- eq.(29)-(31)
+# ---------------------------------------------------------------------------
+
+_E_BALL = 10.0 / 9.0   # Weibull slope, point contact -- Zaretsky eq.(49a)/(49b)
+
+
+@dataclass(frozen=True)
+class BasicReferenceRatingLife:
+    """L10r for one row/raceway pair -- eq.(29)."""
+    label : str
+    L10r  : float
+    Q_ci  : float
+    Q_ei  : float
+    Q_ce  : float
+    Q_ee  : float
+
+    @classmethod
+    def from_loads(cls, label: str, Q_ci: float, Q_ei: float,
+                   Q_ce: float, Q_ee: float) -> "BasicReferenceRatingLife":
+        if Q_ci <= 0.0 or Q_ei <= 0.0 or Q_ce <= 0.0 or Q_ee <= 0.0:
+            raise ValueError(
+                f"BasicReferenceRatingLife.from_loads({label!r}): all loads must be positive."
+            )
+        L10r = ((Q_ci / Q_ei) ** (-10.0 / 3.0)
+                + (Q_ce / Q_ee) ** (-10.0 / 3.0)) ** (-9.0 / 10.0)
+        return cls(label=label, L10r=L10r, Q_ci=Q_ci, Q_ei=Q_ei, Q_ce=Q_ce, Q_ee=Q_ee)
+
+
+def combine_row_L10r(L10r_rows: list[float], e: float = _E_BALL) -> float:
+    """Bearing-level L10r from n rows -- Zaretsky eq.(49a): L^-e = sum(Li^-e)."""
+    if len(L10r_rows) < 2:
+        raise ValueError(f"combine_row_L10r needs >= 2 rows; got {len(L10r_rows)}.")
+    if any(L <= 0.0 for L in L10r_rows):
+        raise ValueError(f"All L10r_rows must be positive; got {list(L10r_rows)}.")   
+    return sum(L ** (-e) for L in L10r_rows) ** (-1.0 / e)
+
+
+def basic_reference_rating_life(
+    label: str,
+    Q_ci_rows: list[float], Q_ei_rows: list[float],
+    Q_ce_rows: list[float], Q_ee_rows: list[float],
+    e: float = _E_BALL,
+) -> tuple[list[BasicReferenceRatingLife], float]:
+    """Per-row L10r (eq.29) + combined bearing L10r (combine_row_L10r() for n>=2)."""
+    n = len(Q_ci_rows)
+    if not (len(Q_ei_rows) == len(Q_ce_rows) == len(Q_ee_rows) == n):
+        raise ValueError("basic_reference_rating_life: row lists must all be the same length.")
+    if n == 0:
+        raise ValueError("basic_reference_rating_life: got 0 rows.")
+
+    per_row = [
+        BasicReferenceRatingLife.from_loads(
+            label=f"{label}-row{j}" if n > 1 else label,
+            Q_ci=Q_ci_rows[j], Q_ei=Q_ei_rows[j],
+            Q_ce=Q_ce_rows[j], Q_ee=Q_ee_rows[j],
+        )
+        for j in range(n)
+    ]
+    L10r_bearing = (per_row[0].L10r if n == 1
+                    else combine_row_L10r([r.L10r for r in per_row], e=e))
+    return per_row, L10r_bearing
+
+
+@dataclass(frozen=True)
+class DynamicEquivalentReferenceLoad:
+    """Pref -- eq.(30)-(31): Pref_r = Cr/L10r^(1/3), Pref_a = Ca/L10r^(1/3)."""
+    label  : str
+    Pref_r : float | None
+    Pref_a : float | None
+
+    @classmethod
+    def from_L10r(cls, label: str, L10r_bearing: float,
+                  Cr: float | None = None, Ca: float | None = None
+                  ) -> "DynamicEquivalentReferenceLoad":
+        if Cr is None and Ca is None:
+            raise ValueError(f"DynamicEquivalentReferenceLoad.from_L10r({label!r}): need Cr and/or Ca.")
+        if L10r_bearing <= 0.0:
+            raise ValueError(f"L10r_bearing must be positive; got {L10r_bearing}.")
+        denom = L10r_bearing ** (1.0 / 3.0)
+        return cls(label=label,
+                   Pref_r=(Cr / denom) if Cr is not None else None,
+                   Pref_a=(Ca / denom) if Ca is not None else None)

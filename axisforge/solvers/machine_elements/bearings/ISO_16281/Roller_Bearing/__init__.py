@@ -3,22 +3,22 @@ axisforge/solvers/machine_elements/bearings/ISO_16281/Roller_Bearing/__init__.py
 
 Public surface for the line-contact (radial cylindrical roller bearing)
 ISO/TS 16281 Sec 5.2 lamina-model solver package. Mirrors the split kept by
-the sibling Ball_Bearing package: solving lives in roller_bearing_solver.py,
+the sibling Ball_Bearing package: solving lives in single_row_solver.py,
 the LOCAL library -- both the result shapes a solve produces
 (RollerLoadDistributionResult, the per-row raw result; RollerBearingResult,
 the unified per-bearing container) and the registry that holds one
 RollerBearingResult per bearing label (RollerLoadDistributionLibrary) --
-lives together in roller_bearing_results.py, and everything that consumes
-an already-solved result lives in roller_bearing_postprocessing.py.
+lives together in results.py, and everything that consumes an
+already-solved result lives in postprocessing.py.
 
-UPDATED, this turn -- RollerBearingResult now exported
-----------------------------------------------------------
+RollerBearingResult now exported
+----------------------------------
 RollerBearingResult was missing from this file's exports -- added below,
 alongside RollerLoadDistributionResult. It is the container type
 ISO16281RollerSolver.solve() actually returns (wrapped via .single()) and
-every roller_bearing_postprocessing.py function actually takes; a caller
-importing only RollerLoadDistributionResult from this package had no way
-to type-hint or construct the container itself.
+every postprocessing.py function actually takes; a caller importing only
+RollerLoadDistributionResult from this package had no way to type-hint or
+construct the container itself.
 
 RollerBearingResult.rows is length 1 for CylindricalRollerFamily (radial
 NU/N-type, the only family in core/ today) -- a .multirow() classmethod
@@ -27,9 +27,9 @@ that shape yet: there is no ISO16281MultiRowRollerSolver / multi-row
 roller family exported here, unlike the ball side's
 ISO16281MultiRowBallSolver, because a thrust roller family (the case that
 would actually need it, mirroring MultiRowThrustBallFamily on the ball
-side) does not exist in core/ yet. See roller_bearing_results.py's module
-docstring for the full reasoning -- add ISO16281MultiRowRollerSolver's
-export here once that solver is written.
+side) does not exist in core/ yet. See results.py's module docstring for
+the full reasoning -- add ISO16281MultiRowRollerSolver's export here once
+that solver is written.
 
 RollerElementCapacity is NOT re-exported here -- capacity (Q_ci/Q_ce,
 per-lamina q_ci/q_ce, Cr/Ca) is owned by core/.../families/
@@ -44,25 +44,9 @@ function -- it lives as _reference_roller_profile() on each concrete
 subtype (CylindricalRollerFamily, and a future ThrustCylindricalRollerFamily/
 ThrustNeedleRollerFamily), cached onto bearing.P_xk at assembly.
 """
-from .roller_bearing_solver import (
-    ISO16281RollerSolver,
-    debug_radial_capacity,
-)
-from .roller_bearing_results import (
-    RollerLoadDistributionResult,
-    RollerBearingResult,
-    RollerLoadDistributionLibrary,
-)
-from .roller_bearing_postprocessing import (
-    Q_j,
-    phi_j_global,
-    contact_distribution,
-    lamina_distribution,
-    bearing_stiffness,
-    RollerBearingStiffness,
-    stress_riser_factor,
-    LaminaDynamicEquivalentLoad,
-)
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 __all__ = [
     "ISO16281RollerSolver",
@@ -79,3 +63,52 @@ __all__ = [
     "stress_riser_factor",
     "LaminaDynamicEquivalentLoad",
 ]
+
+_LAZY = {
+    "ISO16281RollerSolver": ".single_row_solver",
+    "debug_radial_capacity": ".single_row_solver",
+    "RollerLoadDistributionResult": ".results",
+    "RollerBearingResult": ".results",
+    "RollerLoadDistributionLibrary": ".results",
+    "Q_j": ".postprocessing",
+    "phi_j_global": ".postprocessing",
+    "contact_distribution": ".postprocessing",
+    "lamina_distribution": ".postprocessing",
+    "bearing_stiffness": ".postprocessing",
+    "RollerBearingStiffness": ".postprocessing",
+    "stress_riser_factor": ".postprocessing",
+    "LaminaDynamicEquivalentLoad": ".postprocessing",
+}
+
+
+def __getattr__(name: str):
+    if name in _LAZY:
+        import importlib
+        module = importlib.import_module(_LAZY[name], __name__)
+        value = getattr(module, name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted(list(globals().keys()) + list(_LAZY.keys()))
+
+
+if TYPE_CHECKING:  # pragma: no cover
+    from .single_row_solver import ISO16281RollerSolver, debug_radial_capacity
+    from .results import (
+        RollerLoadDistributionResult,
+        RollerBearingResult,
+        RollerLoadDistributionLibrary,
+    )
+    from .postprocessing import (
+        Q_j,
+        phi_j_global,
+        contact_distribution,
+        lamina_distribution,
+        bearing_stiffness,
+        RollerBearingStiffness,
+        stress_riser_factor,
+        LaminaDynamicEquivalentLoad,
+    )

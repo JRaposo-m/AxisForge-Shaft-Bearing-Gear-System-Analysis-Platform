@@ -39,8 +39,8 @@ from typing import Callable, TYPE_CHECKING
 
 import numpy as np
 
-from axisforge.core.machine_elements.Bearings.bearing import Bearing
-from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import ShaftSystem
+from axisforge.core.machine_elements.bearings.bearing import Bearing
+from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import SimpleFEMResultsLibrary
 from axisforge.solvers.machine_elements.bearings.ISO_16281.library import BearingResultsLibrary, warn_if_floating_loaded
 from axisforge.solvers.machine_elements.bearings.ISO_16281.dispatch import (
@@ -48,21 +48,21 @@ from axisforge.solvers.machine_elements.bearings.ISO_16281.dispatch import (
 )
 
 if TYPE_CHECKING:
-    from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import BallLoadDistributionResult
-    from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_results import RollerLoadDistributionResult
+    from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.results import BallLoadDistributionResult
+    from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.results import RollerLoadDistributionResult
     LoadDistributionResult = BallLoadDistributionResult | RollerLoadDistributionResult
 
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_solver import ISO16281BallSolver
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import BallBearingResult
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing import ball_bearing_postprocessing as _ball_pp
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.single_row_solver import ISO16281BallSolver
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.results import BallBearingResult
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing import postprocessing as _ball_pp
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing import (
-    ball_bearing_multirow_solver_shared_displacement as _ball_multirow_solver,  # noqa: F401 -- regista ISO16281BallSolver.MULTIROW_SOLVER (shared-displacement, ver docstring deste ficheiro)
+    multirow_solver as _ball_multirow_solver,  # noqa: F401 -- regista ISO16281BallSolver.MULTIROW_SOLVER (shared-displacement, ver docstring deste ficheiro)
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_solver import ISO16281RollerSolver
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_results import RollerBearingResult
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing import roller_bearing_postprocessing as _roller_pp
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.single_row_solver import ISO16281RollerSolver
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.results import RollerBearingResult
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing import postprocessing as _roller_pp
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing import (
-    roller_bearing_multirow_solver_shared_displacement as _roller_multirow_solver,  # noqa: F401 -- regista ISO16281RollerSolver.MULTIROW_SOLVER (shared-displacement; ver docstring deste ficheiro e a ressalva de validacao)
+    multirow_solver as _roller_multirow_solver,  # noqa: F401 -- regista ISO16281RollerSolver.MULTIROW_SOLVER (shared-displacement; ver docstring deste ficheiro e a ressalva de validacao)
 )
 from axisforge.config import SOLVER_TOLERANCE
 

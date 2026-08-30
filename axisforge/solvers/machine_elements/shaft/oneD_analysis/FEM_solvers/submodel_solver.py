@@ -22,12 +22,12 @@ from typing import Callable
 
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import ShaftResultsReader
-from axisforge.mesh.oneD.shaft.Elements.elem import Elem
-from axisforge.mesh.oneD.shaft.mesh_generation.mesh_1D import Mesh1D
+from axisforge.mesh.shaft.element_type.elem import Elem
+from axisforge.mesh.shaft.mesh_generation.mesh_1D import Mesh1D
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.build_stiffness_matrix import StiffnessMatrixBuilder
 from axisforge.config import SOLVER_TOLERANCE
 from axisforge.core.loads import LoadPlane
-from axisforge.mesh.oneD.shaft.mesh_generation.mesh_grade import Grader
+from axisforge.mesh.shaft.mesh_generation.mesh_grade import Grader
 
 
 # ===========================================================================

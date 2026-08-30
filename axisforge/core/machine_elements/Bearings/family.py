@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from axisforge.core.machine_elements.Bearings.catalog import BearingCatalog
+    from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
 
 
 class BearingFamily(ABC):

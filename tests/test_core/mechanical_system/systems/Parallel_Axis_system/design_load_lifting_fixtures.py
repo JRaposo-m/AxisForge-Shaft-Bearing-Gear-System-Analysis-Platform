@@ -42,7 +42,7 @@ import matplotlib.pyplot as plt
 
 # --- core ---
 from axisforge.core.loads import RadialLoad, TorqueLoad
-from axisforge.core.mechanical_system.Parallel_Axis_systems.schematic import (
+from axisforge.core.mechanical_system.parallel_axis.schematic import (
     draw_gear_system, draw_shaft_detail, INK,
 )
 
@@ -324,7 +324,7 @@ print("  OK -- no errors" if not errs else "\n".join(f"  - {e}" for e in errs))
 # ===========================================================================
 
 def recover_diagrams(solver: SimpleFEMSolver, shaft_system) -> dict:
-    from axisforge.mesh.oneD.shaft.Elements.Timoshenko_Selective_Integration.timoshenko import (
+    from axisforge.mesh.shaft.element_type.timoshenko_selective_integration.timoshenko import (
         TimoshenkoBeam,
     )
     beam = TimoshenkoBeam()

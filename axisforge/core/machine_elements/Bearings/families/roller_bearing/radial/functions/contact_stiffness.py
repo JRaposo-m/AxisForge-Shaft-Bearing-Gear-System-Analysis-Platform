@@ -1,5 +1,5 @@
 """
-core/machine_elements/Bearings/families/roller/radial/functions/contact_stiffness.py
+core/machine_elements/bearings/families/roller_bearing/radial/functions/contact_stiffness.py
 
 Line-contact ("roller") math -- ISO/TS 16281 Sec 5.2 eq.(34)-(37),
 lamina positions Sec 5.2.2, gamma Sec 5.3.1.2. Pure functions, no state.

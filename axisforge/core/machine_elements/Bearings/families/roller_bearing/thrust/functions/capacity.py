@@ -1,7 +1,7 @@
 """
 core/machine_elements/Bearings/families/roller/thrust/functions/capacity.py
 
-Cr, Ca -- ISO 281 dynamic/static capacity for thrust roller bearings, and
+Ca -- ISO 281 dynamic capacity for thrust roller bearings, and
 per-roller / per-lamina capacity derived from an already-known Ca.
 
 Same split as the radial side (../../radial/functions/capacity.py):
@@ -16,71 +16,17 @@ Same split as the radial side (../../radial/functions/capacity.py):
       .static()                -- ISO 76, thrust roller bearings. NOT
         provided yet -- stubbed, not fabricated.
 
-    IMPLEMENTED this turn, mirroring ../../ball/thrust/functions/capacity.py's
-    three-method split (dynamic_nonzero_alpha / dynamic_90deg / dynamic_multirow
-    instead of one i-parametrised method) for the exact same structural
-    reason spelled out there: Sec 6.6.1/6.6.2 (Formula (35)-(42)) never
-    contain a row-count i at all -- they rate ONE row. A bearing with two
-    or more rows gets each row's own Ca from Sec 6.6.1/6.6.2 first, then
-    the per-row Ca's are combined via Formula (46), a product-law-of-
-    probability combination (same shape as the ball side's Formula (29),
-    just with Zj*Lwej in place of Zj and exponents 9/2 / -2/9 in place of
-    10/3 / -3/10) -- not a single closed-form substitution of i.
-
     Formula (35)/(36) and (39)/(40) are the general (e, c, h) forms; this
     module implements only the already-substituted e=9/8, c=31/3, h=7/3
     results -- Formula (37)/(38) and (41)/(42) -- same as how the radial
     side only implements Formula (33)/(34), not the general form behind it.
 
-    f_c (Formula (38)/(42)) needs THREE factors here, not two:
-    reduction_factor (lambda -- ISO 281:2007 Table 2, same slot as the
-    radial roller side's reduction_factor), nu (the same "other Formula
-    (34)" factor carried over from the radial side -- Formula (38)/(42)
-    reuse it unchanged), and eta -- a NEW factor specific to thrust roller
-    bearings ("reduction ... on the basis of unequal distribution of load
-    among the rolling elements", per the Sec 6.6 text, "designated as eta").
-    None of the three have a confirmed ISO 281:2007 Table 2 value
-    transcribed into this codebase, so all three stay required,
-    caller-supplied arguments -- same reasoning as the radial side's
-    reduction_factor/nu, extended to eta.
-
-    CORRECTION, this turn: an earlier draft of this module's docstring
-    speculated a closed form for eta ("eta = 1 - 0.15*sin(alpha)"). That
-    was a guess, not sourced from a pasted formula, and Formula (36)/(38)/
-    (40)/(42) give no such closed form -- eta is just introduced as "this
-    reduction factor is designated as eta" (Sec 6.6 text) as a parallel to
-    lambda, with no formula of its own. The guess is retracted; eta is
-    treated as a plain caller-supplied factor, exactly like lambda and nu.
-
-    Formula (38) vs the radial side's Formula (34) -- worth flagging since
-    they look almost identical: Formula (34) carries an extra bare 0,377
-    constant (f_c = 0,483*B1 * 0,377 * lambda * nu * [...]) that Formula
-    (38) does NOT have (f_c = 0,483*B1 * lambda * nu * eta * [...], no
-    0,377). Transcribed exactly as given in each formula -- not a typo,
-    the two clauses genuinely differ here.
 
   - RollingElementCapacity: given an ALREADY-KNOWN Ca:
       .thrust_nonzero_alpha() -- ISO/TS 16281 Sec 5.3.1.3(ish) eq.(50)-(51)
       .thrust_90deg()         -- eq.(52)-(53)ish, alpha_0 = 90deg
       .per_lamina()           -- eq.(56)-(57), same as the radial side
-    UNCHANGED this turn. Ported from the solver-side draft's
-    RollerElementCapacity dataclass -- dataclass bookkeeping dropped, same
-    as everywhere else.
 
-    lambda_v is NOT stored/defaulted here -- same reasoning as the radial
-    side: it's subtype input (ISO 281:2007 Table 2, Table No. 10 gives
-    0.73 for "Thrust roller bearings" as a category, but that's still the
-    subtype's own value to declare and pass in, not baked into this module).
-    ThrustCylindricalRollerFamily and ThrustNeedleRollerFamily both declare
-    LAMBDA_V_THRUST = 0.73 independently.
-
-    NOTE (verified against the pasted source, not silently "fixed"):
-    thrust_nonzero_alpha()'s `base` term does NOT carry the leading 1.038
-    coefficient that the radial side's eq.(47)-(48) `base` does -- ported
-    exactly as given. Flagging this because it looks like it could be a
-    typo/omission in the original draft, but I'm not changing it without
-    you confirming against the actual ISO/TS 16281 clause. UNCHANGED this
-    turn -- not touched.
 
 References:
   ISO 281:2007 Sec 6.6.1, Formula (35)-(38) -- Ca, single row, alpha != 90deg
@@ -109,13 +55,9 @@ class BearingCapacity:
     # ------------------------------------------------------------------
     @classmethod
     def _fc_nonzero_alpha(cls, gamma: float, reduction_factor: float,
-                           nu: float, eta: float) -> float:
+                          eta: float) -> float:
         """
         f_c -- Formula (38), thrust roller bearings, alpha_0 != 90deg.
-
-        reduction_factor (lambda), nu, eta : three separate Formula (38)
-        inputs -- see module docstring for what each is and why none is
-        defaulted here.
         """
         if not (0.0 < gamma < 1.0):
             raise ValueError(f"gamma = Dwe*cos(alpha)/Dpw must be in (0, 1); got {gamma}.")
@@ -125,11 +67,11 @@ class BearingCapacity:
         bracket = ((1.0 - gamma) / (1.0 + gamma)) ** (143.0 / 108.0)
         correction = (1.0 + bracket ** (9.0 / 2.0)) ** (-2.0 / 9.0)
 
-        return cls._B1_0483_N * reduction_factor * nu * eta * gamma_term * correction
+        return cls._B1_0483_N * reduction_factor * eta * gamma_term * correction
 
     @classmethod
     def dynamic_nonzero_alpha(cls, Z: int, Dwe: float, Lwe: float, alpha_0: float,
-                               gamma: float, reduction_factor: float, nu: float,
+                               gamma: float, reduction_factor: float,
                                eta: float) -> float:
         """
         Ca [N] -- ISO 281:2007 Formula (37), f_c from Formula (38).
@@ -144,7 +86,7 @@ class BearingCapacity:
         if Z <= 0 or Dwe <= 0.0 or Lwe <= 0.0:
             raise ValueError(f"Z, Dwe and Lwe must all be positive; got Z={Z}, Dwe={Dwe}, Lwe={Lwe}.")
 
-        fc = cls._fc_nonzero_alpha(gamma, reduction_factor, nu, eta)
+        fc = cls._fc_nonzero_alpha(gamma, reduction_factor, eta)
         cos_term = (Lwe * np.cos(alpha_0)) ** (7.0 / 9.0)
         tan_term = np.tan(alpha_0)
 
@@ -154,7 +96,7 @@ class BearingCapacity:
     # Sec 6.6.2 -- single row, contact angle alpha_0 = 90deg
     # ------------------------------------------------------------------
     @classmethod
-    def _fc_90deg(cls, gamma: float, reduction_factor: float, nu: float, eta: float) -> float:
+    def _fc_90deg(cls, gamma: float, reduction_factor: float, eta: float) -> float:
         """
         f_c -- Formula (42), thrust roller bearings, alpha_0 = 90deg.
 
@@ -166,11 +108,11 @@ class BearingCapacity:
         if not (0.0 < gamma < 1.0):
             raise ValueError(f"gamma = Dwe/Dpw must be in (0, 1); got {gamma}.")
 
-        return cls._B1_041_N * reduction_factor * nu * eta * gamma ** (2.0 / 9.0)
+        return cls._B1_041_N * reduction_factor * eta * gamma ** (2.0 / 9.0)
 
     @classmethod
     def dynamic_90deg(cls, Z: int, Dwe: float, Lwe: float, gamma: float,
-                       reduction_factor: float, nu: float, eta: float) -> float:
+                       reduction_factor: float, eta: float) -> float:
         """
         Ca [N] -- ISO 281:2007 Formula (41), f_c from Formula (42).
 
@@ -182,7 +124,7 @@ class BearingCapacity:
         if Z <= 0 or Dwe <= 0.0 or Lwe <= 0.0:
             raise ValueError(f"Z, Dwe and Lwe must all be positive; got Z={Z}, Dwe={Dwe}, Lwe={Lwe}.")
 
-        fc = cls._fc_90deg(gamma, reduction_factor, nu, eta)
+        fc = cls._fc_90deg(gamma, reduction_factor, eta)
         return fc * Lwe ** (7.0 / 9.0) * Z ** (3.0 / 4.0) * Dwe ** (29.0 / 27.0)
 
     # ------------------------------------------------------------------

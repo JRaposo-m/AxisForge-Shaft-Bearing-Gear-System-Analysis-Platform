@@ -49,19 +49,23 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 
-from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_helical_gear import SpurHelicalGear
-from axisforge.core.mechanical_system.Parallel_Axis_systems.gear_meshing.spur_helical_gear_meshing import SpurHelicalGearMeshing
-from axisforge.core.machine_elements.Bearings.bearing import Bearing
-from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.core.machine_elements.Shaft.shaft import Shaft, ShaftSection, Shoulder
+from axisforge.core.machine_elements.gears.parallel_axis.gear_properties.spur_helical_gear import SpurHelicalGear
+from axisforge.core.machine_elements.gears.parallel_axis.gear_meshing.spurhelical_meshing import SpurHelicalGearMeshing
+from axisforge.core.machine_elements.bearings.bearing import Bearing
+from axisforge.core.machine_elements.bearings.bearing_types import BearingType
+from axisforge.core.machine_elements.shaft.shaft import Shaft, ShaftSection, Shoulder
 
 from axisforge.core.loads import RadialLoad, TorqueLoad
-from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import GearElement, ShaftSystem
-from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.SpurHelical_gear_system import SpurHelicalMeshLink, SpurHelicalGearSystem
+from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import (
+    GearElement, ShaftSystem,
+)
+from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
+    SpurHelicalMeshLink, SpurHelicalGearSystem,
+)
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
 
 # --- schematic (visual sanity check, no solver dependency) -----------------
-from axisforge.core.mechanical_system.Parallel_Axis_systems.schematic import (
+from axisforge.core.mechanical_system.parallel_axis.schematic import (
     draw_gear_system, draw_shaft_detail, INK,
 )
 
@@ -371,7 +375,7 @@ def recover_diagrams(solver: SimpleFEMSolver, shaft_system: ShaftSystem):
     `shaft_system` — reads its public attributes (x_nodes, elements,
     d_total_xz, d_total_xy, T_total, tau_total).
     """
-    from axisforge.mesh.oneD.shaft.Elements.Timoshenko_Selective_Integration.timoshenko import TimoshenkoBeam
+    from axisforge.mesh.shaft.element_type.timoshenko_selective_integration.timoshenko import TimoshenkoBeam
     beam = TimoshenkoBeam()
 
     n = len(solver.x_nodes)

@@ -42,11 +42,11 @@ import numpy as np
 from typing import Callable
 
 
-from axisforge.mesh.oneD.shaft.mesh_generation.mesh_1D import Mesh1D
-from axisforge.mesh.oneD.shaft.Elements.elem import Elem
+from axisforge.mesh.shaft.mesh_generation.mesh_1D import Mesh1D
+from axisforge.mesh.shaft.element_type.elem import Elem
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.build_stiffness_matrix import StiffnessMatrixBuilder
 from axisforge.core.loads import RadialLoad, AxialLoad, ExternalMoment, LoadPlane
-from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import ShaftSystem
+from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
 from axisforge.config import MESH_MIN_NODE_DIST_MM, SOLVER_TOLERANCE
 
 

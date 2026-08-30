@@ -1,5 +1,5 @@
 """
-core/machine_elements/Bearings/families/ball/radial/functions/contact_stiffness.py
+core/machine_elements/bearings/families/ball/radial/functions/contact_stiffness.py
 
 Point-contact ("ball") Hertz contact math -- ISO/TS 16281 Sec 5 eq.(2)-(11).
 Pure functions, no state, no catalog/family knowledge, no table-specific
@@ -11,13 +11,6 @@ from scipy.special import ellipk, ellipe
 from scipy.optimize import brentq
 
 LOAD_DEFLECTION_EXPONENT = 3.0 / 2.0
-
-# NOTE: reference raceway radii (ri, re from Dw) and the reduction factor
-# (lambda) are NOT here. They're ISO 281:2007 Table 1 inputs -- one row
-# per bearing type (radial contact groove, angular contact groove,
-# self-aligning, thrust, ...). That's subtype data, not generic math --
-# each subtype in ../subtypes/ declares its own table-row constants and
-# calls hertz_spring_constant() below with the ri/re it derived from them.
 
 
 def contact_angle_and_clearance(A: float, *, s: float | None = None,
@@ -99,7 +92,7 @@ class SelfAligningContactStiffness:
     """
     Special-case Hertz contact math for self-aligning ball bearings.
 
-    Why this exists: ISO 281:2007 Table 1 defines this subtype's outer
+    ISO 281:2007 Table 1 defines this subtype's outer
     raceway radius as re = 0.5*(1/gamma + 1)*Dw (see
     ../subtypes/self_aligning.py). Substituting that into
     curvature_diff_outer() above gives F_e(rho) == 0 identically, for any

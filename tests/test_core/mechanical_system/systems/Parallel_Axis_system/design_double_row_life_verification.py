@@ -47,19 +47,19 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_helical_gear import SpurHelicalGear
-from axisforge.core.mechanical_system.Parallel_Axis_systems.gear_meshing.spur_helical_gear_meshing import SpurHelicalGearMeshing
-from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.core.machine_elements.Bearings.bearing import Bearing
-from axisforge.core.machine_elements.Bearings.catalog import BearingCatalog
-from axisforge.core.machine_elements.Bearings.families.ball_bearing.radial.subtypes.deep_groove_ball import DeepGrooveBallFamily
-from axisforge.core.machine_elements.Bearings.families.roller_bearing.radial.subtypes.cylindrical_roller import CylindricalRollerFamily
-from axisforge.core.machine_elements.Shaft.shaft import Shaft, ShaftSection, Shoulder
+from axisforge.core.machine_elements.gears.parallel_axis.gear_properties.spur_helical_gear import SpurHelicalGear
+from axisforge.core.machine_elements.gears.parallel_axis.gear_meshing.spurhelical_meshing import SpurHelicalGearMeshing
+from axisforge.core.machine_elements.bearings.bearing_types import BearingType
+from axisforge.core.machine_elements.bearings.bearing import Bearing
+from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+from axisforge.core.machine_elements.bearings.families.ball_bearing.radial.subtypes.deep_groove import DeepGrooveBallFamily
+from axisforge.core.machine_elements.bearings.families.roller_bearing.radial.subtypes.cylindrical_roller import CylindricalRollerFamily
+from axisforge.core.machine_elements.shaft.shaft import Shaft, ShaftSection, Shoulder
 from axisforge.core.loads import RadialLoad, TorqueLoad, AxialLoad
-from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import (
+from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import (
     GearElement, ShaftSystem,
 )
-from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.SpurHelical_gear_system import (
+from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
     SpurHelicalMeshLink, SpurHelicalGearSystem,
 )
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
@@ -67,34 +67,34 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analys
     ShaftResultsReader,
     SimpleFEMResultsLibrary,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_solver import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.single_row_solver import (
     REQUIRED_ATTRS,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_solver import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.single_row_solver import (
     REQUIRED_ATTRS as ROLLER_REQUIRED_ATTRS,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
     BearingResultsLibrary,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_postprocessing import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.postprocessing import (
     basic_reference_rating_life,
     DynamicEquivalentReferenceLoad,
     _E_BALL,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_postprocessing import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.postprocessing import (
     LaminaDynamicEquivalentLoad,
     basic_reference_rating_life as roller_basic_reference_rating_life,
     DynamicEquivalentReferenceLoad as RollerDynamicEquivalentReferenceLoad,
     _E_ROLLER,
 )
-from axisforge.core.machine_elements.Bearings.families.roller_bearing.radial.functions.capacity import (
+from axisforge.core.machine_elements.bearings.families.roller_bearing.radial.functions.capacity import (
     RollingElementCapacity,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.rolling_bearing_solver import (
     RollingBearingSolver,
 )
-from axisforge.mesh.oneD.shaft.mesh_generation.mesh_1D import Mesh1D
-from axisforge.mesh.oneD.shaft.mesh_generation.mesh_grade import Grader
+from axisforge.mesh.shaft.mesh_generation.mesh_1D import Mesh1D
+from axisforge.mesh.shaft.mesh_generation.mesh_grade import Grader
 
 
 # ===========================================================================

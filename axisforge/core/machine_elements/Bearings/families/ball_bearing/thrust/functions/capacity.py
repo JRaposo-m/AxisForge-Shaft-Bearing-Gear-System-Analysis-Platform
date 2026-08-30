@@ -1,40 +1,40 @@
 """
-core/machine_elements/Bearings/families/ball/thrust/functions/capacity.py
+core/machine_elements/bearings/families/ball_bearing/thrust/functions/capacity.py
 
 Cr, Ca -- ISO 281 dynamic/static capacity for thrust ball bearings, and
 per-element capacity (Q_ci, Q_ce) derived from an already-known Ca.
 
-Same split as the radial side (../../radial/functions/capacity.py), with
-one structural difference worth flagging: on the radial side, i (number of
-rows) is folded into ONE formula as (i*cos(alpha))**0.7 -- see radial's
-_basic_dynamic_rating(). Thrust bearings do NOT work that way. ISO 281:2007
-Sec 6.3 (single row, Formulae (16)-(25)) never contains i at all; ISO
-281:2007 Sec 6.4 (two or more rows, Formula (26)-(29)) is a SEPARATE
+Same split as the radial side (../../radial/functions/capacity.py)
+
+ISO 281:2007 Sec 6.3 (single row, Formulae (16)-(25)) never contains i at all; 
+
+ISO 281:2007 Sec 6.4 (two or more rows, Formula (26)-(29)) is a SEPARATE
 combination law: each row's own Ca is computed independently from Sec 6.3,
 then the per-row Ca's are combined via a product-law-of-probability formula
-(Formula (29)) -- not by substituting i into a single closed-form formula.
+(Formula (29)).
+
 That's why BearingCapacity below has three dynamic() methods instead of one
 i-parametrised method: dynamic_nonzero_alpha() and dynamic_90deg() are
 Sec 6.3 (single row only, no i), and dynamic_multirow() is Sec 6.4 -- it
 combines already-known per-row Ca values, it does not compute them itself.
 
   - BearingCapacity: OVERALL bearing Ca (thrust duty rates on Ca, not Cr).
-      .dynamic_nonzero_alpha() -- ISO 281:2007 Formula (18)/(19), fc from
+      
+      .dynamic_nonzero_alpha() -- ISO 1281-1:2021 Formula (18)/(19), fc from
         Formula (20) -- Sec 6.3.1, single row, contact angle alpha != 90deg.
-      .dynamic_90deg()         -- ISO 281:2007 Formula (23)/(24), fc from
+
+      .dynamic_90deg()         -- ISO 1281-1:2021 Formula (23)/(24), fc from
         Formula (25) -- Sec 6.3.2, single row, contact angle alpha = 90deg.
-      .dynamic_multirow()      -- ISO 281:2007 Formula (29) -- Sec 6.4,
+      
+      .dynamic_multirow()      -- ISO 1281-1:2021 Formula (29) -- Sec 6.4,
         combines n already-known single-row Ca's (from the two methods
         above, one call per row) into the overall bearing Ca.
+      
       .static()                -- ISO 76:2006, thrust ball bearings.
-        NOT provided yet -- stubbed, not fabricated.
+        Not implemented yet.
 
-    The "0,089*A1" constant in Formula (20)/(25) is 98,0665 -- an initial
-    transcription read it as 98 066,5 (1000x too high), which pushed
-    fc/Ca three orders of magnitude above catalog/literature order of
-    magnitude; fixed via _A1_0089_N. The radial side's _fc() carries the
-    same "98_066.5" constant under a "NOT VALIDATED, ~1000x too high" flag
-    -- almost certainly the same error, worth fixing there too.
+    The "0,089*A1" constant in Formula (20)/(25) is 98,0665 fixed via _A1_0089_N. 
+
 
     dynamic_multirow() (Formula (29)) is self-consistent independently of
     that fix: for n identical rows it reduces to i**0.7 * Ca_single_row,
@@ -61,7 +61,7 @@ import numpy as np
 
 
 class BearingCapacity:
-    """Overall bearing Ca -- ISO 281:2007 Sec 6.3 (single row) and Sec 6.4 (multi-row)."""
+    """Overall bearing Ca -- ISO 1281-1:2021 Sec 6.3 (single row) and Sec 6.4 (multi-row)."""
 
     _A1_0089_N = 98.0665      # "0,089*A1", Formula (20)/(25) note -- Ca in N, Dw in mm
     _DW_THRESHOLD_MM = 25.4   # Formula (18)/(19) and (23)/(24) switch point
@@ -74,18 +74,6 @@ class BearingCapacity:
                            lam: float, eta: float) -> float:
         """
         fc -- Formula (20), thrust ball bearings, alpha_0 != 90deg.
-
-        lam (lambda) is the general reduction factor (as in 6.2, radial
-        ball bearings); eta is the thrust-specific reduction factor noted
-        in 6.3.1 as "designated as eta" -- both are distinct inputs here,
-        unlike the radial side's single reduction_factor.
-
-        0,089*A1 = 98,0665 (not 98 066,5 -- that earlier reading was off by
-        1000x and is what drove fc/Ca three orders of magnitude too high;
-        fixed via _A1_0089_N). The radial side's _fc() carries the same
-        "98_066.5" constant under the same "NOT VALIDATED, ~1000x too high"
-        flag -- almost certainly the identical transcription error, worth
-        fixing there too.
         """
         if not (0.0 < gamma < 1.0):
             raise ValueError(f"gamma = Dw*cos(alpha)/Dpw must be in (0, 1); got {gamma}.")
@@ -106,13 +94,8 @@ class BearingCapacity:
     def dynamic_nonzero_alpha(cls, Z: int, Dw: float, alpha_0: float, ri: float,
                                re: float, gamma: float, lam: float, eta: float) -> float:
         """
-        Ca [N] -- ISO 281:2007 Formula (18) (Dw <= 25,4 mm) / Formula (19)
+        Ca [N] -- ISO 1281-1:2021 Formula (18) (Dw <= 25,4 mm) / Formula (19)
         (Dw > 25,4 mm), fc from Formula (20). alpha_0 in RADIANS.
-
-        Single row only (Sec 6.3.1) -- no i parameter, ISO 281 does not use
-        one here. For a bearing with two or more rows, call this once per
-        row (each with its own Z/Dw/geometry) then combine the results with
-        dynamic_multirow() -- see Sec 6.4.
         """
         if Z <= 0 or Dw <= 0.0:
             raise ValueError(f"Z and Dw must both be positive; got Z={Z}, Dw={Dw}.")
@@ -133,15 +116,6 @@ class BearingCapacity:
                   lam: float, eta: float) -> float:
         """
         fc -- Formula (25), thrust ball bearings, alpha_0 = 90deg.
-
-        Structurally simpler than _fc_nonzero_alpha(): the (1-gamma)/(1+gamma)
-        factors drop out of both the outer gamma term (left as plain
-        gamma**0.3) and the geometry bracket (left as radii_ratio**0.41,
-        with no ((1-gamma)/(1+gamma))**1.72 multiplier) -- this is Formula
-        (25) as given, not an approximation of Formula (20).
-
-        Same 0,089*A1 = 98,0665 constant as _fc_nonzero_alpha() -- see that
-        docstring for the 1000x transcription error this was fixed from.
         """
         if not (0.0 < gamma < 1.0):
             raise ValueError(f"gamma = Dw/Dpw must be in (0, 1); got {gamma}.")
@@ -161,13 +135,8 @@ class BearingCapacity:
     def dynamic_90deg(cls, Z: int, Dw: float, ri: float, re: float, gamma: float,
                        lam: float, eta: float) -> float:
         """
-        Ca [N] -- ISO 281:2007 Formula (23) (Dw <= 25,4 mm) / Formula (24)
+        Ca [N] -- ISO 1281-1:2021 Formula (23) (Dw <= 25,4 mm) / Formula (24)
         (Dw > 25,4 mm), fc from Formula (25).
-
-        Single row only (Sec 6.3.2) -- no alpha_0 argument (fixed at 90deg
-        by definition, so no cos/tan(alpha) term exists in Formula (21),
-        unlike Formula (16) for the alpha != 90deg case) and no i
-        parameter, same reasoning as dynamic_nonzero_alpha().
         """
         if Z <= 0 or Dw <= 0.0:
             raise ValueError(f"Z and Dw must both be positive; got Z={Z}, Dw={Dw}.")
@@ -184,7 +153,7 @@ class BearingCapacity:
     @staticmethod
     def dynamic_multirow(Z_rows: Sequence[int], Ca_rows: Sequence[float]) -> float:
         """
-        Ca [N] -- ISO 281:2007 Formula (29) (practical form of (26)-(28)
+        Ca [N] -- ISO 1281-1:2021 Formula (29) (practical form of (26)-(28)
         after assuming load on a row is proportional to its ball count).
 
             Ca = (Z1+Z2+...+Zn) * [sum_j (Zj/Caj)**(10/3)]**(-3/10)
@@ -192,10 +161,7 @@ class BearingCapacity:
         Ca_rows[j] is the SINGLE-ROW Ca of row j -- obtained by calling
         dynamic_nonzero_alpha() or dynamic_90deg() once per row, with that
         row's own Z/Dw/geometry (Sec 6.3, "the appropriate single row
-        thrust ball bearing formula in 6.3"). This method does not resolve
-        Ca itself, same "given already-known inputs" pattern as
-        RollingElementCapacity below -- the caller loops over rows, this
-        just combines the results. Rows need not be identical.
+        thrust ball bearing formula in 6.3").
 
         Only valid for n >= 2 rows (i > 1); a single row is
         dynamic_nonzero_alpha()/dynamic_90deg() directly, not this method.
@@ -265,11 +231,6 @@ class RollingElementCapacity:
         """
         (Q_ci, Q_ce) [N] -- thrust ball bearing, alpha_0 = 90deg.
         ISO/TS 16281 Sec 4.3.1.4 eq.(23)-(24).
-
-        At alpha_0=90deg, gamma=0; the (1-gamma)/(1+gamma) term vanishes and
-        the geometry bracket reduces to the groove radii ratio alone --
-        computed directly here rather than through _geometry_bracket(gamma=0, ...),
-        matching the solver-side draft exactly.
         """
         if 2.0 * ri <= Dw:
             raise ValueError(f"2*ri ({2*ri:.4f}) <= Dw ({Dw:.4f}) -- inner groove radius too small.")

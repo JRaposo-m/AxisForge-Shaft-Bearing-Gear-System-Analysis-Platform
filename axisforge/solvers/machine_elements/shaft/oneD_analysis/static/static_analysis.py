@@ -19,7 +19,7 @@ from axisforge.core.loads import LoadPlane
 
 if TYPE_CHECKING:
     from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
-    from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import ShaftSystem
+    from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
 
 
 # ---------------------------------------------------------------------------

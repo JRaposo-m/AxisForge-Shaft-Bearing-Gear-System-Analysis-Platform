@@ -5,30 +5,14 @@ SelfAligningBallFamily -- BearingFamily implementation for self-aligning
 ball bearings, ISO/TS 16281 point contact, radial duty.
 
 Idiom matches AngularContactFamily: alpha_0_deg direct input, bounded to
-(0, 45] (radial duty, ISO 281 classification boundary) -- not DGBB's s
-idiom, and for a structural reason, not just consistency: re here is
-DEFINED via gamma (see below), and gamma only depends on Dw/Dpw/alpha_0,
-never on ri/re -- so alpha_0 must be known up front. With the s idiom,
-alpha_0 is derived FROM A (which needs re first) -- circular. With
-alpha_0_deg given directly, there's no cycle: alpha_0 (input) -> gamma ->
-re. One-directional, no iteration needed.
+(0, 45] (radial duty, ISO 281 classification boundary)
 
 Owns its own ISO 281:2007 Table 1 constants -- "Single and double row
 self-aligning ball bearings" row:
     ri = 0.53*Dw
-    re = 0.5*(1/gamma + 1)*Dw      -- NOT a fixed ratio of Dw, unlike every
-                                       other ball subtype so far
-    lambda = 1                     -- both i=1 and i=2 (row title says
-                                       "single and double row", same
-                                       lambda -- REDUCTION_FACTOR_BY_ROWS
-                                       pattern as AngularContactFamily, NOT
-                                       ThrustBallFamily's unrestricted i
-                                       (that row had no row-count wording
-                                       at all; this one explicitly says
-                                       "single and double row", so i is
-                                       capped at {1, 2} here, same
-                                       reasoning as ACB).
-    eta = "--"                     -- not applicable, radial duty.
+    re = 0.5*(1/gamma + 1)*Dw      -- NOT a fixed ratio of Dw
+    lambda = 1                     -- both i=1 and i=2 are the only values accepted for this subtype
+                                
 Confirmed directly against the ISO 281:2007 Table 1 image.
 
 Reference:
@@ -38,9 +22,9 @@ Reference:
 from __future__ import annotations
 import numpy as np
 
-from axisforge.core.machine_elements.Bearings.family import BearingFamily
-from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.core.machine_elements.Bearings.catalog import BearingCatalog
+from axisforge.core.machine_elements.bearings.family import BearingFamily
+from axisforge.core.machine_elements.bearings.bearing_types import BearingType
+from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
 from ..functions import contact_stiffness as bc
 from ..functions import capacity as bcap
 

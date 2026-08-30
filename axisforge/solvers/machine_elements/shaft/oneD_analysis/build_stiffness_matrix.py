@@ -3,10 +3,10 @@ axisforge/solvers/shaft/oneD_analysis/build_stiffness_matrix.py
 """
 import numpy as np
 
-from axisforge.mesh.oneD.shaft.Elements.elem import Elem
-from axisforge.mesh.oneD.shaft.Elements.Timoshenko_Selective_Integration.timoshenko import TimoshenkoBeam
-from axisforge.mesh.oneD.shaft.mesh_generation.mesh_1D import Mesh1D
-from axisforge.core.machine_elements.Bearings.bearing import Bearing
+from axisforge.mesh.shaft.element_type.elem import Elem
+from axisforge.mesh.shaft.element_type.timoshenko_selective_integration.timoshenko import TimoshenkoBeam
+from axisforge.mesh.shaft.mesh_generation.mesh_1D import Mesh1D
+from axisforge.core.machine_elements.bearings.bearing import Bearing
 
 class StiffnessMatrixBuilder:
 

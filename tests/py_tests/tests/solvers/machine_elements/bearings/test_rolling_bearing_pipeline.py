@@ -32,8 +32,8 @@ import math
 import numpy as np
 import pytest
 
-from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_solver import (
+from axisforge.core.machine_elements.bearings.bearing_types import BearingType
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.single_row_solver import (
     ISO16281BallSolver,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.rolling_bearing_solver import (

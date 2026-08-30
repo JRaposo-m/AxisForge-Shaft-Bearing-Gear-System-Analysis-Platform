@@ -1,5 +1,5 @@
 """
-core/machine_elements/Bearings/families/ball/radial/functions/capacity.py
+core/machine_elements/bearings/families/ball_bearing/radial/functions/capacity.py
 
 Cr, Ca -- ISO 281 dynamic/static capacity for radial ball bearings, and
 per-element capacity (Q_ci, Q_ce) derived from an already-known Cr.
@@ -7,32 +7,18 @@ per-element capacity (Q_ci, Q_ce) derived from an already-known Cr.
 Two distinct classes live here, from two different standards:
 
   - BearingCapacity: computes the OVERALL bearing Cr/Ca from geometry +
-    f_c/f_0 tables (ISO 281:2007 Sec 6.1, ISO 76 Sec 5). NOT ported --
-    nothing to port from (C, C0 were catalog inputs in the old code).
-    Stubbed, not fabricated -- f_c/f_0 table lookups not filled in
-    without your sign-off.
+    f_c formulas (ISO 1281-1:2021 Sec 6.2 eq. (15)).
+
+  - Calculations for the static load rating are not yet implemented -- see ISO 76:2006 Sec 5.  
 
   - RollingElementCapacity: given an ALREADY-KNOWN Cr (the catalog value,
     or whatever the caller supplies), computes the per-rolling-element
     capacity Q_ci (inner) / Q_ce (outer) -- ISO/TS 16281:2008 Sec 4.3.1.2
-    eq.(19)-(20). This one IS ported, from the actual solver code
-    (ball_bearing_solver.py's RollingElementCapacity). It moved here
-    because it's a pure function of bearing geometry + a supplied Cr --
-    no load case involved, same category as
-    contact_stiffness.hertz_spring_constant() -- deterministic once the
-    bearing is assembled and Cr is known. RollingElementCapacity in the
-    solver becomes a thin wrapper: it still owns the dataclass bookkeeping
-    (label, bearing_class, Cr/Ca storage) and the two thrust-duty variants
-    (thrust_nonzero_alpha, thrust_90deg -- not radial duty, no home here --
-    they move to families/ball/thrust/functions/capacity.py once that
-    family exists), but the radial-duty math itself is called from here.
-    .radial() kept as a classmethod (not a bare function) so a future
-    thrust variant can sit alongside it here too, mirroring the solver's
-    own dispatch shape.
+    eq.(19)-(20). 
 
 References:
-  ISO 281:2007 Sec 6.1          -- dynamic load rating, radial ball bearings
-  ISO 76:2006   Sec 5           -- static load rating, radial ball bearings
+  ISO 281:2007 Sec 6.1 and ISO 1281-1:2021 Sec 6.2         -- dynamic load rating, radial ball bearings
+  ISO 76:2006   Sec 5                                      -- static load rating, radial ball bearings
   ISO/TS 16281:2008 Sec 4.3.1.2 eq.(19)-(20) -- per-element capacity, radial
 """
 from __future__ import annotations

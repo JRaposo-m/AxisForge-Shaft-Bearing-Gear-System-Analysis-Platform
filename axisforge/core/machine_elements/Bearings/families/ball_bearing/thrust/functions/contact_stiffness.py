@@ -1,19 +1,9 @@
 """
-core/machine_elements/Bearings/families/ball/thrust/functions/contact_stiffness.py
+core/machine_elements/bearings/families/ball_bearing/thrust/functions/contact_stiffness.py
 
 Point-contact ("ball") Hertz contact math -- ISO/TS 16281 Sec 5 eq.(2)-(11).
 Pure functions, no state, no catalog/family knowledge, no table-specific
 constants (those are subtype data -- see ../subtypes/).
-
-Byte-identical to ../../radial/functions/contact_stiffness.py -- the Hertz
-math is duty-agnostic (gamma() already special-cases alpha_0=90deg, i.e.
-pure thrust, since it was first written). Duplicated rather than imported
-across the radial/thrust boundary to keep each duty folder self-contained
-(subtypes/ imports via `from ..functions import contact_stiffness`, same
-relative pattern in both places) -- same reasoning already applied to
-subtype-level table constants, extended here to keep the folder structure
-uniform. If the two ever need to diverge (they shouldn't, it's textbook
-Hertz theory), that's exactly why they're not shared.
 """
 from __future__ import annotations
 import numpy as np
@@ -25,7 +15,7 @@ LOAD_DEFLECTION_EXPONENT = 3.0 / 2.0
 
 def contact_angle_and_clearance(A: float, *, s: float | None = None,
                                  alpha_0_deg: float | None = None) -> tuple[float, float]:
-    """Exactly one of s / alpha_0_deg required. Returns (alpha_0 [rad], s [mm])."""
+    """Ex actly one of s / alpha_0_deg required. Returns (alpha_0 [rad], s [mm])."""
     if (s is None) == (alpha_0_deg is None):
         raise ValueError("Exactly one of 's' or 'alpha_0_deg' must be provided, not both or neither.")
     if s is not None:

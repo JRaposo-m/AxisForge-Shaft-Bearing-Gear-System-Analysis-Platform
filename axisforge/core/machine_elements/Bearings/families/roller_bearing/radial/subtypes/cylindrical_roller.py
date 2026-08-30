@@ -1,63 +1,24 @@
 """
-core/machine_elements/Bearings/families/roller/radial/subtypes/cylindrical_roller.py
+core/machine_elements/bearings/families/roller_bearing/radial/subtypes/cylindrical_roller.py
 
 CylindricalRollerFamily -- BearingFamily implementation for NU/N-type
 cylindrical roller bearings, ISO/TS 16281 line contact, radial duty.
 
 Owns: the arrangement guard (can't be "locating") and P_xk -- the
-reference roller profile, Sec 6.2 eq.(42)-(44). P_xk lives here, NOT in
-../functions/, because it's subtype-specific: a tapered/spherical roller
-family (Phase 2) will need a different profile formula.
+reference roller profile, Sec 6.2 eq.(42)-(44). P_xk lives here.
 
-UPDATED, this turn -- `i` as input, mirroring DeepGrooveBallFamily
+`i` as input, mirroring DeepGrooveBallFamily
 ---------------------------------------------------------------------
 assemble_geometry() now takes `i: int = 1`, stored on the bearing as
-`bearing.i`, exactly like DeepGrooveBallFamily's own `i` parameter. This is
-the SAME kind of row count as DGBB's -- a bearing catalogued and rated as
-one physical unit with more than one closely-set row of rolling elements,
-solved by ISO16281RollerSolver as ONE raceway (one delta_r, one set of Z
-elements), with row count only entering the ISO/TS 16281 eq.(47)-(48)
-Q_ci/Q_ce capacity formula as a multiplier -- NOT the
-MultiRowCylindricalRollerFamily / ISO16281MultiRowRollerSolver kind of
-multi-row (cylindrical_roller_multirow.py, roller_bearing_multirow_solver.py),
-where `rows` are genuinely independent raceways solved with a load-split
-compatibility condition. Two different "row count" concepts existing at two
-different structural levels -- see cylindrical_roller_multirow.py's module
-docstring for the same distinction spelled out from the other side.
+`bearing.i`, exactly like DeepGrooveBallFamily's own `i` parameter. 
 
-Unlike DeepGrooveBallFamily, there is no REDUCTION_FACTOR_BY_ROWS lookup
-table added here: DGBB's lambda-by-i table (ISO 281:2007 Table 1) is used
-only by DeepGrooveBallFamily.dynamic_capacity() (the Cr-rating Formula
-13-15), which CylindricalRollerFamily does not implement either (see the
-existing "dynamic_capacity()/static_capacity() ... NotImplementedError"
-note below, unchanged by this update) -- so there is currently no method on
-this family that would consume a roller-specific row-count-dependent lambda
-even if one were sourced. ISO 281:2007 Table 2 ("Radial roller bearings")
-may or may not define its own row-count-dependent reduction factor the same
-way Table 1 does for balls -- NOT confirmed here, no such table is
-transcribed into this file. `i` is validated only as `>= 1`, not restricted
-to a specific set like DGBB's `{1, 2}`, because that restriction would be
-inventing a constraint from a table this session does not have in front of
-it. Tighten the validation once Table 2's actual row-count support is
-confirmed.
-
-per_element_dynamic_capacity() previously took a standalone `i: int = 1`
-keyword, disconnected from the bearing's own geometry (nothing enforced
-that the capacity call's `i` matched how many rows the bearing was actually
-assembled with, because assemble_geometry() didn't store a row count at
-all). It now reads `i=bearing.i` internally instead, exactly mirroring
-DeepGrooveBallFamily.per_element_dynamic_capacity() (which has no `i`
-keyword at all, for the same reason). This is a breaking change to that
-method's signature -- any caller passing `i=` explicitly needs updating;
-see roller_bearing_solver.py's debug_radial_capacity(), updated alongside
-this file, for the one in-repo call site affected.
 """
 from __future__ import annotations
 import numpy as np
 
-from axisforge.core.machine_elements.Bearings.family import BearingFamily
-from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.core.machine_elements.Bearings.catalog import BearingCatalog
+from axisforge.core.machine_elements.bearings.family import BearingFamily
+from axisforge.core.machine_elements.bearings.bearing_types import BearingType
+from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
 from ..functions import contact_stiffness as rc
 from ..functions import capacity as rcap
 
@@ -81,12 +42,7 @@ class CylindricalRollerFamily(BearingFamily):
     BEARING_TYPE = BearingType.CYLINDRICAL_ROLLER
     DUTY = "radial"
 
-    # ISO 281:2007 Table 2, Table No. 7 -- "Radial roller bearings". Owned
-    # here, not in ../functions/capacity.py -- same reasoning as the ball
-    # side's RI_OVER_DW/REDUCTION_FACTOR (subtype input, not generic math),
-    # so a future tapered/spherical/needle roller subtype can declare its
-    # own value without touching this one. Not (yet) row-count-dependent --
-    # see module docstring.
+    # ISO 281:2007 Table 2, Table No. 7 -- "Radial roller bearings".
     LAMBDA_V_RADIAL = 0.83
 
     CAPABILITIES = frozenset({"line_contact"})
@@ -114,13 +70,7 @@ class CylindricalRollerFamily(BearingFamily):
                            i: int = 1) -> dict:
         """
         Dwe, Lwe, Dpw, Z, s, n_s, alpha_0_deg : as ever
-        i : number of rows -- 1 (single, default) or more. Enters ONLY the
-            ISO/TS 16281 eq.(47)-(48) Q_ci/Q_ce capacity formula as a
-            multiplier, via per_element_dynamic_capacity() reading
-            bearing.i -- see module docstring for why there is no
-            REDUCTION_FACTOR_BY_ROWS table here unlike DeepGrooveBallFamily,
-            and for the distinction from MultiRowCylindricalRollerFamily's
-            `rows`-based multi-row.
+        i : number of rows -- 1 (single, default) or more.
         """
         if catalog.arrangement not in ("floating", "non-locating"):
             raise ValueError(
@@ -169,11 +119,7 @@ class CylindricalRollerFamily(BearingFamily):
         return P
 
     # ------------------------------------------------------------------
-    # Capacity -- given an assembled Bearing (this family), pulls the
-    # right attributes and calls the shared functions/capacity.py math.
-    # dynamic_capacity() (BearingCapacity.dynamic(), overall Cr) is now
-    # implemented -- see below. static_capacity() (BearingCapacity.static(),
-    # Ca) is still NotImplementedError -- f_0 text not provided yet.
+    # Capacity
     # ------------------------------------------------------------------
  
     @staticmethod
@@ -182,17 +128,6 @@ class CylindricalRollerFamily(BearingFamily):
         Cr [N] -- overall bearing dynamic load rating, ISO 281:2007 Sec 6.2
         Formula (33)/(34), via functions/capacity.py's
         BearingCapacity.dynamic().
- 
-        reduction_factor, nu : Formula (34) inputs -- ISO 281:2007 Table 2's
-        row/subtype-dependent factor and the formula's other factor,
-        respectively. Neither has a confirmed table value transcribed into
-        this codebase yet, so both are required here rather than class
-        constants -- unlike LAMBDA_V_RADIAL above, which IS a confirmed
-        table value but for a different quantity (ISO/TS 16281's lambda_v,
-        consumed by per_element_dynamic_capacity() below, NOT this method).
-        Do not pass LAMBDA_V_RADIAL as reduction_factor or nu -- see
-        functions/capacity.py's module docstring "IMPORTANT" note for why
-        they are unrelated despite both stemming from a table numbered 2.
         """
         return rcap.BearingCapacity.dynamic(
             Z=bearing.Z, Dwe=bearing.Dwe, Lwe=bearing.Lwe, alpha_0=bearing.alpha_0,
@@ -207,11 +142,6 @@ class CylindricalRollerFamily(BearingFamily):
         (Q_ci, Q_ce) [N] -- whole-roller dynamic capacity, ISO/TS 16281
         Sec 5.3.1.2 eq.(47)-(48). Cr defaults to bearing.C (catalog value)
         if not overridden.
- 
-        CHANGED, this turn: `i` is no longer a keyword here -- reads
-        bearing.i (set at assemble_geometry() time) instead, mirroring
-        DeepGrooveBallFamily.per_element_dynamic_capacity(). See module
-        docstring for why.
         """
         return rcap.RollingElementCapacity.radial(
             Z=bearing.Z, alpha_0=bearing.alpha_0, gamma=bearing.gamma,

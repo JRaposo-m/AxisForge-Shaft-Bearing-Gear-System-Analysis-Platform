@@ -7,18 +7,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
-from axisforge.core.machine_elements.Gears.Parallel_Axis_gears.spur_helical_gear import SpurHelicalGear
-from axisforge.core.mechanical_system.Parallel_Axis_systems.gear_meshing.spur_helical_gear_meshing import SpurHelicalGearMeshing
-from axisforge.core.machine_elements.Bearings.bearing import Bearing
-from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.core.machine_elements.Shaft.shaft import Shaft, ShaftSection, Shoulder
+from axisforge.core.machine_elements.gears.parallel_axis.gear_properties.spur_helical_gear import SpurHelicalGear
+from axisforge.core.machine_elements.gears.parallel_axis.gear_meshing.spurhelical_meshing import SpurHelicalGearMeshing
+from axisforge.core.machine_elements.bearings.bearing import Bearing
+from axisforge.core.machine_elements.bearings.bearing_types import BearingType
+from axisforge.core.machine_elements.shaft.shaft import Shaft, ShaftSection, Shoulder
 from axisforge.core.loads import RadialLoad, TorqueLoad, DistributedRadialLoad
-from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import GearElement, ShaftSystem
-from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.SpurHelical_gear_system import SpurHelicalMeshLink, SpurHelicalGearSystem
+from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import (
+    GearElement, ShaftSystem,
+)
+from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
+    SpurHelicalMeshLink, SpurHelicalGearSystem,
+)
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import ShaftResultsReader
-from axisforge.mesh.oneD.shaft.mesh_generation.mesh_1D import Mesh1D
-from axisforge.mesh.oneD.shaft.mesh_generation.mesh_convergence_study import MeshConvergenceStudy
+from axisforge.mesh.shaft.mesh_generation.mesh_1D import Mesh1D
+from axisforge.solvers.mesh.mesh_convergence_study import MeshConvergenceStudy
 
 # ===========================================================================
 # PARAMETERS

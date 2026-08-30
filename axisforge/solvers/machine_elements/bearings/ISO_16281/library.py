@@ -76,26 +76,26 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy.optimize import root
 
-from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
+from axisforge.core.machine_elements.bearings.bearing_types import BearingType
 
 if TYPE_CHECKING:
-    from axisforge.core.machine_elements.Bearings.bearing import Bearing
-    from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import ShaftSystem
+    from axisforge.core.machine_elements.bearings.bearing import Bearing
+    from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
     from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import SimpleFEMResultsLibrary
 
-    from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import (
+    from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.results import (
         BallLoadDistributionResult,
         BallBearingResult,
     )
-    from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_postprocessing import (
+    from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.postprocessing import (
         BallBearingStiffness,
         DynamicEquivalentRollingElementLoad,
     )
-    from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_results import (
+    from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.results import (
         RollerLoadDistributionResult,
         RollerBearingResult,
     )
-    from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.roller_bearing_postprocessing import (
+    from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.postprocessing import (
         RollerBearingStiffness,
         LaminaDynamicEquivalentLoad,
     )

@@ -1,48 +1,8 @@
 """
 axisforge/solvers/machine_elements/bearings/ISO_16281/Ball_Bearing/ball_bearing_multirow_solver.py
 
-Multi-row thrust ball bearing load distribution -- ORCHESTRATION ONLY.
-Reuses ISO16281BallSolver.solve_contact() per row, once per outer
-iteration -- no ISO/TS 16281 kinematics duplicated here.
-
-Physical problem
------------------
-A multi-row thrust ball bearing (MultiRowThrustBallFamily, i >= 2 rows) is
-ONE rigid ring/washer. Each row has its own contact geometry (A, alpha_0,
-phi_j, Ri, cp, Dpw, Z -- bearing.rows[j]) but ALL rows share the SAME rigid
-ring displacement (delta_r, delta_a) -- the coupling a single
-ISO16281BallSolver call can't see on its own.
-
-Idealization: rows are treated as co-located (zero axial offset between
-contact planes) -- collapses the compatibility condition to "identical
-(delta_r, delta_a) at every row". psi is a single FEM-projected input,
-shared unchanged by every row (not split or iterated).
-
-Method -- outer fixed-point load split, inner exact solves
---------------------------------------------------------------
-Unknowns: i-1 independent radial fractions + i-1 independent axial
-fractions (row 0's own fraction makes each set sum to 1, so every
-candidate already satisfies Fr = sum(Fr_j) and Fa = sum(Fa_j) by
-construction). Each outer iteration: split (Fr_xz, Fr_xy, Fa) across rows
-by the current fractions (same phi_Fr direction for every row -- only
-magnitude splits), solve each row independently via solve_contact(),
-residual = every row's (delta_r, delta_a) minus row 0's.
-
-Fr ~= 0 singularity (this repo's centered-Fa thrust scenarios): when
-Fr_xz = Fr_xy = 0, the radial fractions have no effect on the residual at
-all -- those Jacobian columns are identically zero, and scipy's hybr can
-wander them nonsensically while still reporting a tiny residual norm and
-success=False, even though the physically meaningful part (axial split,
-inter-row delta_a agreement) is already correct. Fixed by dropping the
-radial unknowns from the outer problem below FR_NEGLIGIBLE_EPS and fixing
-f_r = 1/i per row instead of leaving singular columns for the optimizer.
-
-Verified locally with real SingleRowThrustBallFamily/MultiRowThrustBallFamily
-geometry (identical rows under pure Fa -> exact 50/50 split matching a
-direct single-row solve_contact() at Fa/2; heterogeneous Z=14/Z=8 rows ->
-unequal split favoring the stiffer row) -- not yet run against this
-session's contact_stiffness.py, which is a stub. Treat the solver
-mechanics as verified, absolute numbers as shape-of-the-answer only.
+this file is maintained simply to show the analysis on the combination_comparison where the 
+diference in the anaylysis/ approach so the problem can be seen and the diference in results
 """
 from __future__ import annotations
 
@@ -50,16 +10,16 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from axisforge.core.machine_elements.Bearings.bearing import Bearing
+from axisforge.core.machine_elements.bearings.bearing import Bearing
 from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
     check_bearing_ready,
     run_root,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_solver import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.single_row_solver import (
     ISO16281BallSolver,
     REQUIRED_ATTRS,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.results import (
     BallLoadDistributionResult,
     BallBearingResult,
 )

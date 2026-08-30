@@ -31,14 +31,14 @@ import math
 import numpy as np
 import pytest
 
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_solver import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.single_row_solver import (
     ISO16281BallSolver,
     REQUIRED_ATTRS,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing import (
-    ball_bearing_postprocessing as pp,
+    postprocessing as pp,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.ball_bearing_results import (
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.results import (
     BallBearingResult,
 )
 

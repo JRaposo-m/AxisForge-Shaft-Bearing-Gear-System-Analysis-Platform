@@ -20,10 +20,10 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.shaft_results import ShaftResults
+from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import ShaftResults
 
 if TYPE_CHECKING:
-    from axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.shaft_system import ShaftSystem
+    from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
 
 
 # ---------------------------------------------------------------------------

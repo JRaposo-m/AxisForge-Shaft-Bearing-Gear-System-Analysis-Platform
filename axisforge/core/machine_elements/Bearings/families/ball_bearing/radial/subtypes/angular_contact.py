@@ -1,5 +1,5 @@
 """
-core/machine_elements/Bearings/families/ball/radial/subtypes/angular_contact.py
+core/machine_elements/bearings/families/ball_bearing/radial/subtypes/angular_contact.py
 
 AngularContactFamily -- BearingFamily implementation for ACB, ISO/TS
 16281 point contact, radial duty.
@@ -12,12 +12,10 @@ Owns its own ISO 281:2007 Table 1 constants. Table data is subtype
 input, not generic math (see deep_groove_ball.py's module docstring for
 the reasoning).
 
-NEW vs. the pre-rewrite file: alpha_0_deg is now bounded to (0, 45] here.
-The original only checked alpha_0 > 0. The upper bound is new, added
-because this class now lives under families/ball/radial/ specifically --
-an ACB spec'd above 45deg is thrust duty (ISO 281 classification), which
-belongs in families/ball/thrust/ once that exists. Remove the check if
-you don't want that boundary enforced yet.
+alpha_0_deg is now bounded to (0, 45] here.
+
+An ACB spec'd above 45deg is thrust duty (ISO 281 classification), which
+belongs in families/ball/thrust/.
 
 Reference:
   ISO 281:2007 Table 1 -- raceway groove radius and reduction factor
@@ -25,9 +23,9 @@ Reference:
 from __future__ import annotations
 import numpy as np
 
-from axisforge.core.machine_elements.Bearings.family import BearingFamily
-from axisforge.core.machine_elements.Bearings.bearing_types import BearingType
-from axisforge.core.machine_elements.Bearings.catalog import BearingCatalog
+from axisforge.core.machine_elements.bearings.family import BearingFamily
+from axisforge.core.machine_elements.bearings.bearing_types import BearingType
+from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
 from ..functions import contact_stiffness as bc
 from ..functions import capacity as bcap
 
@@ -57,11 +55,7 @@ class AngularContactFamily(BearingFamily):
         }),
     }
 
-    # ISO 281:2007 Table 1 -- "single and double row angular contact
-    # groove ball bearings" is ONE table row: unlike DGBB's radial
-    # contact groove (which drops to lambda=0.90 for double row), ACB
-    # keeps lambda=0.95 regardless of row count. Subtype input, not
-    # generic math.
+    # ISO 281:2007 Table 1 -- radial contact groove ball bearings.
     RI_OVER_DW = 0.52
     RE_OVER_DW = 0.52
     REDUCTION_FACTOR_BY_ROWS = {1: 0.95, 2: 0.95}   # lambda, keyed by i (row count)
@@ -86,13 +80,9 @@ class AngularContactFamily(BearingFamily):
                            i: int = 1) -> dict:
         """
         alpha_0_deg : nominal (free) contact angle [deg], in (0, 45] for
-                      this radial-duty family -- the ONLY contact input
-                      accepted (no s -- DGBB's idiom).
+                      this radial-duty family.
         i           : number of rows -- 1 (single, default) or 2
-                      (double). Doesn't change lambda for this family
-                      (see REDUCTION_FACTOR_BY_ROWS comment), but still
-                      validated/carried through -- it will matter for
-                      the dynamic capacity formula later (Formulae 15/20).
+                      (double). Those are the only values accepted for this subtype.
         """
         if not (0.0 < alpha_0_deg <= 45.0):
             raise ValueError(
@@ -128,9 +118,7 @@ class AngularContactFamily(BearingFamily):
         )
 
     # ------------------------------------------------------------------
-    # Capacity -- same eq.(19)-(20) formula as DeepGrooveBallFamily
-    # (radial ball bearing, generic), called with THIS bearing's own
-    # attributes. See that class for why it isn't shared/inherited.
+    # Capacity
     # ------------------------------------------------------------------
 
     @staticmethod

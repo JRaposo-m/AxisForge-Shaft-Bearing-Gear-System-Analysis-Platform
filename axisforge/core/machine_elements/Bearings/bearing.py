@@ -11,8 +11,8 @@ Do not instantiate directly -- always go through Bearing.assemble().
 from __future__ import annotations
 from typing import Any
 
-from axisforge.core.machine_elements.Bearings.catalog import BearingCatalog
-from axisforge.core.machine_elements.Bearings.family import BearingFamily
+from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+from axisforge.core.machine_elements.bearings.family import BearingFamily
 
 
 class Bearing:

@@ -1,7 +1,7 @@
 """
-core/machine_elements/Bearings/families/roller/radial/functions/capacity.py
+core/machine_elements/bearings/families/roller_bearing/radial/functions/capacity.py
 
-Cr, Ca -- ISO 281 dynamic/static capacity for radial roller bearings, and
+Cr -- ISO 281 dynamic capacity for radial roller bearings, and
 per-roller / per-lamina capacity derived from an already-known Cr.
 
 Two classes, same split as the ball side
@@ -9,31 +9,21 @@ Two classes, same split as the ball side
 
   - BearingCapacity: OVERALL bearing Cr/Ca, ISO 281:2007 Sec 6.2 / ISO 76
     Sec 6.
-      .dynamic()  -- Cr, Formula (33)/(34). IMPLEMENTED this turn (see
-        "UPDATED, this turn" note below) -- mirrors the ball side's
+      .dynamic()  -- Cr, Formula (33)/(34).
         BearingCapacity.dynamic() shape: a private _fc() staticmethod
         (Formula (34)) feeding a classmethod that assembles Formula (33).
-      .static()   -- Ca, ISO 76 Sec 6. Still stubbed -- f_0 not provided
+
+      .static()   -- C, ISO 76 Sec 6. Still stubbed -- f_0 not provided
         yet, same caution as the ball side (no fabricated table values).
 
   - RollingElementCapacity: given an ALREADY-KNOWN Cr, computes:
       .radial()     -- whole-roller Q_ci/Q_ce, ISO/TS 16281 Sec 5.3.1.2
                         eq.(47)-(49)
-      .per_lamina() -- per-lamina q_ci/q_ce, ISO/TS 16281 Sec 5.3.2
-                        eq.(56)-(57). This is what a lamina's dynamic
-                        equivalent load is meant to be compared against --
-                        Q_ci/Q_ce are whole-roller figures and are not the
-                        right denominator for a per-lamina check.
-    Unchanged this turn. Ported from the solver-side draft's
-    RollerElementCapacity dataclass -- the dataclass bookkeeping (label,
-    Cr storage, ...) is dropped, same as the ball side, since it's no
-    longer needed downstream. Thrust variants (thrust_nonzero_alpha,
-    thrust_90deg, eq.(50)-(55), lambda_v=0.73) were in that same draft but
-    are NOT ported here -- not radial duty, they belong in
-    families/roller/thrust/functions/capacity.py once that family exists
-    (same reasoning as the ball side).
 
-UPDATED, this turn -- BearingCapacity.dynamic() implemented
+      .per_lamina() -- per-lamina q_ci/q_ce, ISO/TS 16281 Sec 5.3.2
+                        eq.(56)-(57). 
+
+BearingCapacity.dynamic() 
 ---------------------------------------------------------------------
 ISO 281:2007 Formula (33) gives Cr directly from geometry + f_c:
 
@@ -46,35 +36,10 @@ Formula (34) gives f_c:
           * {1 + [1,04 * ((1-gamma)/(1+gamma))^(143/108)]^(9/2)}^(-2/9)
 
 with 0,483*B1 = 551,133 73 (the constant that makes Cr come out in
-newtons -- per the note under Formula (34), same treatment as the ball
-side's _A1_0089_N).
+newtons -- per the note under Formula (34)). 
 
-Two symbols in Formula (34) are NOT resolved here, same reasoning as the
-ball side's reduction_factor / RI_OVER_DW living in subtypes/, not
-functions/:
-
-  - `reduction_factor` (lambda in the formula) -- the row/subtype-dependent
-    factor from ISO 281:2007 Table 2 ("Radial roller bearings"). The
-    standard's own note says Table 7's tabulated f_c values are exactly
-    this formula with Table 2's factor substituted in -- so it is squarely
-    subtype/table input, passed in by the caller, not hardcoded here.
-
-IMPORTANT -- do not confuse `reduction_factor` (Formula (34)'s lambda,
-ISO 281:2007 Table 2, feeds the OVERALL Cr rating) with
-CylindricalRollerFamily.LAMBDA_V_RADIAL (ISO/TS 16281:2008 Table 2's
-lambda_v, feeds RollingElementCapacity.radial()'s per-roller Q_ci/Q_ce
-below). Same Greek letter, two different standards, two different
-quantities -- they are never the same call site's input.
-
-lambda_v (RollingElementCapacity side) is still NOT stored/defaulted
-here, unchanged from before -- ISO 281:2007 Table 2 currently gives one
-value for all "Radial roller bearings", but that's still subtype input,
-not generic math -- same reasoning as the ball side's
-RI_OVER_DW/REDUCTION_FACTOR living in subtypes/, not functions/. Each
-roller subtype (cylindrical_roller.py today, tapered/spherical/needle
-later) declares its own LAMBDA_V_RADIAL and passes it in -- this module
-never assumes the value, so a future subtype with a different table row
-just calls .radial() the same way with its own number.
+Each roller subtype (cylindrical_roller.py today, tapered/spherical/needle
+later) declares its own LAMBDA_V_RADIAL and passes it in.
 
 References:
   ISO 281:2007 Sec 6.2 Formula (33)-(34) -- dynamic load rating, radial roller bearings
@@ -87,7 +52,7 @@ import numpy as np
 
 
 class BearingCapacity:
-    """Overall bearing Cr, Ca -- ISO 281:2007 Sec 6.2 / ISO 76:2006 Sec 6."""
+    """Overall bearing Cr, C -- ISO 281:2007 Sec 6.2 / ISO 76:2006 Sec 6."""
 
     # "0,483*B1", Formula (34) note -- value to use so Cr comes out in newtons.
     _B1_0483_N = 551.13373
@@ -99,12 +64,9 @@ class BearingCapacity:
 
         gamma : Dwe*cos(alpha)/Dpw, already resolved on the assembled bearing.
         reduction_factor : Formula (34)'s lambda -- ISO 281:2007 Table 2
-            ("Radial roller bearings") value, owned by the subtype (see
-            module docstring's "IMPORTANT" note -- NOT the same thing as
-            RollingElementCapacity's lambda_v below).
-        nu : Formula (34)'s other factor -- also subtype/table input, not
-            resolved here (no table transcribed into this file -- see
-            module docstring).
+            ("Radial roller bearings") value, owned by the subtype
+
+        nu : Formula (34)'s other factor -- also subtype/table input.
         """
         if not (0.0 < gamma < 1.0):
             raise ValueError(f"gamma = Dwe*cos(alpha)/Dpw must be in (0, 1); got {gamma}.")
@@ -122,10 +84,6 @@ class BearingCapacity:
                 i: int = 1) -> float:
         """
         Cr [N] -- ISO 281:2007 Formula (33), f_c from Formula (34).
-        alpha_0 in RADIANS. gamma/reduction_factor/nu already resolved on
-        the assembled bearing -- no Table 2 lookup here (see module
-        docstring).
-        NOT VALIDATED against a reference case yet -- see _fc() docstring.
         """
         if Z <= 0 or Dwe <= 0.0 or Lwe <= 0.0 or i <= 0:
             raise ValueError(
@@ -138,7 +96,7 @@ class BearingCapacity:
 
     @staticmethod
     def static(Z: int, Dwe: float, Lwe: float, alpha_0: float, i: int = 1) -> float:
-        """Ca [N] -- ISO 76 Sec 6. Needs f_0 -- not filled in."""
+        """C [N] -- ISO 76 Sec 6. Needs f_0 -- not filled in."""
         raise NotImplementedError("f_0 factor not defined yet -- see ISO 76 Sec 6")
 
 
@@ -156,9 +114,7 @@ class RollingElementCapacity:
         analysis wants to check against) -- this method does not resolve
         Cr itself (see BearingCapacity.dynamic() above).
 
-        lambda_v : no default here -- always the subtype's own value (see
-        module docstring). ISO 281:2007 Table 2 -- 0.83 for cylindrical
-        roller today (subtypes/cylindrical_roller.py's LAMBDA_V_RADIAL).
+        lambda_v : no default here -- always the subtype's own value.
         """
         base    = 1.038 * ((1.0 - gamma) / (1.0 + gamma)) ** (143.0 / 108.0)
         denom_a = np.cos(alpha_0) * (i ** (7.0 / 9.0))

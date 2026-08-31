@@ -22,7 +22,32 @@ Verification performed, per shaft, per bearing type:
 No plots, no solver comparison, no baseline/heterogeneous scenarios --
 see design_bearing_combination_comparison.py for those.
 
-UPDATED, this turn -- nonzero axial load + more laminae
+FIX, this turn -- crashed the first time it was actually run:
+------------------------------------------------------------------------
+    ValueError: ShaftSystem 'shaft1(motor)' validation failed:
+      - shaft1(motor): bearing 'brg1a' [6.000, 34.000] mm overlaps shoulder
+        at x=30.000 mm
+
+Same root cause and same fix as design_bearing_combination_comparison.py's
+own locating-side crash (see that script's changelog, newest entry): this
+script's build_systems() was duplicated BEFORE that fix existed, so it
+still hardcodes the single-row locating position (20.0/25.0/25.0) for the
+double-row DR6204 (b=28) locating builder. That b=28 bearing centered at
+position=20 within shaft1's 30mm seatA genuinely overlaps the seatA/body
+shoulder at x=30 by 4mm -- invisible to ShaftSystem.validate_or_raise()
+before Shaft.shoulders() (core) was fixed to report every transition
+instead of only the one that used to live on shoulder_right, and a real,
+correctly-caught error now that it is.
+
+Fixed by adding DR_LOCATING_POSITIONS (same values and derivation as
+design_bearing_combination_comparison.py's own constant -- midpoint of
+each shaft's locating seat, seatA) and using it in build_systems() instead
+of the hardcoded 20.0/25.0/25.0. The per-shaft AxialLoad positions (added
+in the update below) are moved to match, since they were explicitly
+described as sitting "at each shaft's own locating-bearing seat" -- now
+that seat position has moved, they move with it.
+
+UPDATED, earlier turn -- nonzero axial load + more laminae
 -----------------------------------------------------------------------
 Every shaft now also carries an explicit AXIAL_LOAD_N via AxialLoad(),
 so the ball locating bearing's Q_ce/Q_ee (axial-side eq.29 term) is driven
@@ -149,6 +174,17 @@ DR_ROLLER_CATALOG = dict(d=20.0, D=47.0, b=24.0, C=CR_NU204, C0=22_000.0,
 # comparison.py's DR_ROLLER_FLOATING_POSITIONS comment for the margin math.
 DR_ROLLER_FLOATING_POSITIONS = (105.0, 132.5, 132.5)
 
+# Recentered LOCATING position per shaft -- see design_bearing_combination_
+# comparison.py's DR_LOCATING_POSITIONS comment for the margin math (same
+# values: midpoint of each shaft's locating seat, seatA = [0, l_seat_a]).
+# Only became necessary once Shaft.shoulders() (core) was fixed to report
+# every transition instead of only the one that used to live on
+# shoulder_right -- see this module's docstring, "FIX, this turn".
+#   shaft1: seatA = [0, 30]  -> center 15.0, margin (30-28)/2 = 1.0mm each side
+#   shaft2: seatA = [0, 35]  -> center 17.5, margin 3.5mm
+#   shaft3: seatA = [0, 35]  -> center 17.5, margin 3.5mm
+DR_LOCATING_POSITIONS = (15.0, 17.5, 17.5)
+
 
 # ===========================================================================
 # BEARING BUILDERS
@@ -228,13 +264,15 @@ def make_stepped_shaft(name, total_length, d_seat, d_body,
     sh = Shaft(label=name)
     sh.add_section(ShaftSection(length=l_seat_a, diameter=d_seat,
                                 material_id=material_id, label=f"{name}-seatA"))
-    sh.add_section(ShaftSection(
-        length=l_body, diameter=d_body, material_id=material_id, label=f"{name}-body",
-        shoulder_left=Shoulder(fillet_radius=fillet_r, diameter_large=d_body, diameter_small=d_seat),
-        shoulder_right=Shoulder(fillet_radius=fillet_r, diameter_large=d_body, diameter_small=d_seat),
-    ))
+    sh.add_section(ShaftSection(length=l_body, diameter=d_body,
+                                material_id=material_id, label=f"{name}-body"))
     sh.add_section(ShaftSection(length=l_seat_b, diameter=d_seat,
                                 material_id=material_id, label=f"{name}-seatB"))
+
+    shoulder = Shoulder(fillet_radius=fillet_r, diameter_large=d_body, diameter_small=d_seat)
+    sh.set_transition(0, shoulder)   # seatA / body
+    sh.set_transition(1, shoulder)   # body / seatB
+
     return sh
 
 
@@ -242,7 +280,8 @@ def build_systems() -> dict[str, ShaftSystem]:
     """Double-homo scenario only -- locating=DR6204 (row0 geom), floating=DR_NU204 (row0 geom)."""
     locating_builder = partial(DR6204,   row_geom=DR_ROW_GEOM_HOMO[0])
     floating_builder = partial(DR_NU204, row_geom=DR_ROLLER_ROW_GEOM_HOMO[0])
-    pos1, pos2, pos3 = DR_ROLLER_FLOATING_POSITIONS
+    pos1, pos2, pos3    = DR_ROLLER_FLOATING_POSITIONS
+    pos1a, pos2a, pos3a = DR_LOCATING_POSITIONS
 
     gear_kw = dict(**GEAR_KW_BASE, b=B_STUDY)
 
@@ -266,9 +305,9 @@ def build_systems() -> dict[str, ShaftSystem]:
     sys2.shaft_origin_x = sys1.shaft_origin_x + (z1.position - z2.position)
     sys3.shaft_origin_x = sys2.shaft_origin_x + (z3.position - z4.position)
 
-    sys1.add_bearing(locating_builder(20.0,  "brg1a")); sys1.add_bearing(floating_builder(pos1, "brg1b"))
-    sys2.add_bearing(locating_builder(25.0,  "brg2a")); sys2.add_bearing(floating_builder(pos2, "brg2b"))
-    sys3.add_bearing(locating_builder(25.0,  "brg3a")); sys3.add_bearing(floating_builder(pos3, "brg3b"))
+    sys1.add_bearing(locating_builder(pos1a, "brg1a")); sys1.add_bearing(floating_builder(pos1, "brg1b"))
+    sys2.add_bearing(locating_builder(pos2a, "brg2a")); sys2.add_bearing(floating_builder(pos2, "brg2b"))
+    sys3.add_bearing(locating_builder(pos3a, "brg3a")); sys3.add_bearing(floating_builder(pos3, "brg3b"))
 
     ge_z1 = GearElement(z1, role="driver", rotation_dir=1, label="z1")
     ge_z2 = GearElement(z2, role="driven",                 label="z2")
@@ -297,11 +336,11 @@ def build_systems() -> dict[str, ShaftSystem]:
     sys3.add_load(TorqueLoad(95.0,  T3,      source="user", label="pulley-load-resistance"))
 
     # Axial load per shaft -- see AXIAL_LOAD_N's own comment. Positioned at
-    # each shaft's own locating-bearing seat (20.0/25.0/25.0) -- illustrative
+    # each shaft's own (now recentered) locating-bearing seat -- illustrative
     # only, not modeling a real gear-thrust origin.
-    sys1.add_load(AxialLoad(20.0, AXIAL_LOAD_N, label="axial-shaft1"))
-    sys2.add_load(AxialLoad(25.0, AXIAL_LOAD_N, label="axial-shaft2"))
-    sys3.add_load(AxialLoad(25.0, AXIAL_LOAD_N, label="axial-shaft3"))
+    sys1.add_load(AxialLoad(pos1a, AXIAL_LOAD_N, label="axial-shaft1"))
+    sys2.add_load(AxialLoad(pos2a, AXIAL_LOAD_N, label="axial-shaft2"))
+    sys3.add_load(AxialLoad(pos3a, AXIAL_LOAD_N, label="axial-shaft3"))
 
     return {sh.name: sh for sh in (sys1, sys2, sys3)}
 

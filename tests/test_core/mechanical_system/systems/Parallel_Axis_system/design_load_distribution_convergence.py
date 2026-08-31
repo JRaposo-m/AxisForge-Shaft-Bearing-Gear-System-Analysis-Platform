@@ -218,22 +218,20 @@ def print_bearing_result(lbl, b_obj, node, res, wrapped, cap, derel,
 # ===========================================================================
 
 def make_stepped_shaft(name, total_length, d_seat, d_body,
-                       l_seat_a, l_seat_b, fillet_r,
-                       material_id="AISI_1045"):
+                       l_seat_a, l_seat_b, fillet_r, material_id="AISI_1045"):
     l_body = total_length - l_seat_a - l_seat_b
     sh = Shaft(label=name)
     sh.add_section(ShaftSection(length=l_seat_a, diameter=d_seat,
                                 material_id=material_id, label=f"{name}-seatA"))
-    sh.add_section(ShaftSection(
-        length=l_body, diameter=d_body, material_id=material_id,
-        label=f"{name}-body",
-        shoulder_left=Shoulder(fillet_radius=fillet_r,
-                               diameter_large=d_body, diameter_small=d_seat),
-        shoulder_right=Shoulder(fillet_radius=fillet_r,
-                                diameter_large=d_body, diameter_small=d_seat),
-    ))
+    sh.add_section(ShaftSection(length=l_body, diameter=d_body,
+                                material_id=material_id, label=f"{name}-body"))
     sh.add_section(ShaftSection(length=l_seat_b, diameter=d_seat,
                                 material_id=material_id, label=f"{name}-seatB"))
+
+    shoulder = Shoulder(fillet_radius=fillet_r, diameter_large=d_body, diameter_small=d_seat)
+    sh.set_transition(0, shoulder)   # seatA / body
+    sh.set_transition(1, shoulder)   # body / seatB
+
     return sh
 
 

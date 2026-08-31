@@ -42,7 +42,8 @@ import numpy as np
 from axisforge.core.machine_elements.bearings.bearing import Bearing
 from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import SimpleFEMResultsLibrary
-from axisforge.solvers.machine_elements.bearings.ISO_16281.library import BearingResultsLibrary, warn_if_floating_loaded
+from axisforge.solvers.machine_elements.bearings.ISO_16281.library import BearingResultsLibrary
+from axisforge.solvers.machine_elements.bearings.ISO_16281.validation import warn_if_floating_loaded
 from axisforge.solvers.machine_elements.bearings.ISO_16281.dispatch import (
     resolve_solver_cls, resolve_solver_cls_for_attrs, SolverDispatchError,
 )

@@ -134,11 +134,9 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analys
     SimpleFEMResultsLibrary,
     BearingNodeData,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
-    check_bearing_ready,
-    warn_if_floating_loaded,
-    run_root,
-)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.numerics import run_root
+from axisforge.solvers.machine_elements.bearings.ISO_16281.validation import check_bearing_ready, warn_if_floating_loaded
+
 from axisforge.solvers.machine_elements.bearings.ISO_16281.dispatch import register_contact_solver
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.results import (
     BallLoadDistributionResult,

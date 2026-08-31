@@ -11,69 +11,6 @@ roller's logarithmic profile (crowning) so a purely cylindrical roller's
 theoretical edge-stress singularity does not appear in the model. See
 ISO/TS 16281:2008 Sec 5.2, eq.(34)-(46).
 
-FIX, this turn -- REQUIRED_ATTRS was missing "P_xk"
---------------------------------------------------------------
-elements() (below) reads bearing.P_xk unconditionally (eq.(41)'s profile
-correction term) -- it always has, this was not introduced by the
-elements() promotion. REQUIRED_ATTRS never listed "P_xk", so
-check_bearing_ready() never actually verified a bearing/row-view carried
-it. This stayed invisible as long as every object handed to elements() was
-a real Bearing assembled via CylindricalRollerFamily.assemble_geometry()
-(which always computes and stores P_xk regardless of what REQUIRED_ATTRS
-says to check) -- the gap between "what REQUIRED_ATTRS checks" and "what
-elements() actually needs" simply never got exercised.
-
-It surfaced the first time a genuinely minimal, REQUIRED_ATTRS-shaped
-object reached elements(): roller_bearing_multirow_solver_shared_
-displacement.py's solve_bearing() builds each row's SimpleNamespace view
-by copying exactly REQUIRED_ATTRS off the caller-supplied row dict
-(mirrored by design_bearing_combination_comparison.py's own
-_row_attrs_roller(), which reads this exact tuple) -- with "P_xk" missing
-from the tuple, that view never got a P_xk attribute at all, and the first
-real multi-row roller solve crashed with AttributeError('P_xk') deep
-inside elements(), called from residual() during scipy.optimize.root's
-first evaluation. Fixed by adding "P_xk" to REQUIRED_ATTRS -- it is
-required in exactly the same sense every other entry in this tuple is
-(elements() cannot run without it), it had simply been missing since this
-tuple was first written, well before the multi-row work started.
-
-UPDATED, this turn -- elements() promoted private -> public
---------------------------------------------------------------
-Mirrors the SAME change made to ISO16281BallSolver
-(ball_bearing_solver.py) for the SAME reason: _elements() used to be
-private (internal to how one solve_contact() root-find converges), and
-that stopped being strictly true once
-roller_bearing_multirow_solver_shared_displacement.py started calling it
-directly (bypassing solve_contact()'s own root-find on purpose, exactly
-like the ball side's shared-displacement solver does) once per row per
-residual evaluation. Renamed to elements() (no leading underscore) AND
-made a @staticmethod (it never touched `self` in the first place, so this
-just makes that explicit and lets it be called as
-ISO16281RollerSolver.elements(...) without an instance -- mirrors
-ISO16281BallSolver.elements(), which was already static); the two internal
-call sites in solve_contact() (self.elements(...)) still work unchanged --
-Python resolves a staticmethod through an instance just fine.
-
-IMPORTANT CAVEAT, stated once here rather than silently implied: unlike
-the ball side, this promotion is NOT backed by the same empirical
-evidence. On the ball side, a real family (MultiRowThrustBallFamily)
-produces genuine multi-row bearings, and a real comparison script
-(design_bearing_combination_comparison.py) showed the fraction-based
-multi-row solver failing to converge in a real case -- concrete grounds
-to adopt the alternative. On the roller side, NO family in core/ today
-produces a genuinely multi-row (rows list, length >= 2) CYLINDRICAL_ROLLER
-bearing: CylindricalRollerFamily's own multi-row case (i >= 2) is the same
-single-raceway REDUCTION_FACTOR_BY_ROWS multiplier DGBB uses, never a rows
-list, and MultiRowCylindricalRollerFamily (which WOULD have produced one)
-was tried and retired -- see roller_bearing_results.py's module docstring.
-So this promotion, and the new solver that needed it
-(roller_bearing_multirow_solver_shared_displacement.py -- see that file's
-own docstring), are done for STRUCTURAL parity/consistency with the ball
-side, at the user's explicit request, NOT because any real roller bearing
-in this codebase has been solved by it and found trustworthy. Nothing here
-has been exercised against a real multi-row roller bearing, because none
-exists yet to exercise it against.
-
 Scope of this file: only things that RUN the iterative solve (the
 scipy.optimize.root problem and everything it needs on every iteration)
 live here -- ISO16281RollerSolver. The RESULT SHAPES the solve hands back,
@@ -158,11 +95,8 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system im
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import (
     SimpleFEMResultsLibrary,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
-    check_bearing_ready,
-    warn_if_floating_loaded,
-    run_root,
-)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.numerics import run_root
+from axisforge.solvers.machine_elements.bearings.ISO_16281.validation import check_bearing_ready, warn_if_floating_loaded
 from axisforge.solvers.machine_elements.bearings.ISO_16281.dispatch import register_contact_solver
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.results import (
     RollerLoadDistributionResult,
@@ -189,7 +123,7 @@ _MIN_LAMINAE = 30                # Sec 5.2.2 -- "the number of laminae shall be 
 # ---------------------------------------------------------------------------
 
 REQUIRED_ATTRS = ("Z", "Dwe", "Lwe", "Dpw", "phi_j", "s", "n_s", "x_k", "cL", "cs", "alpha_0",
-                  "P_xk")  # FIX, this turn -- see module docstring
+                  "P_xk")
 
 
 @register_contact_solver
@@ -225,12 +159,7 @@ class ISO16281RollerSolver:
 
     CAPABILITY = "line_contact"
     REQUIRED_ATTRS = REQUIRED_ATTRS
-    # Set at import time -- see this module's docstring, "UPDATED this
-    # turn". Currently registered by
-    # roller_bearing_multirow_solver_shared_displacement.py (was
-    # roller_bearing_multirow_solver.py) -- see that module's own docstring
-    # for the important caveat that this switch is NOT backed by the same
-    # empirical evidence the ball-side switch was.
+
     MULTIROW_SOLVER: type | None = None
 
     def __init__(self, tol: float = SOLVER_TOLERANCE, psi_input: bool = False):

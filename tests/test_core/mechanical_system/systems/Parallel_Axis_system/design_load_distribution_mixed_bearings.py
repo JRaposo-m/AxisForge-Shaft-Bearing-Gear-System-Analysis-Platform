@@ -40,11 +40,47 @@ Both are gone now:
     Q_ci, Q_ce) itself to get the per-lamina q_ci/q_ce line -- ball has no
     per-lamina analogue, so its capacity_extra() still returns None.
 
+UPDATED for the solve() -> postprocessing row/container seam
+------------------------------------------------------------------------
+RollingBearingSolver.solve() returns dict[label -> list[row result]] (the
+row list, per BearingResultsLibrary's Option A storage contract), while
+EVERY public postprocessing entry point takes the per-bearing CONTAINER:
+
+    contact_distribution(bearing, result: BallBearingResult) -> list[ndarray]
+    bearing_stiffness   (bearing, result: BallBearingResult)  # reads .rows[0]
+    Q_j / phi_j_global  (bearing, result: BallBearingResult) -> list[ndarray]
+    <derel>.from_bearing_result(bearing, result: BallBearingResult) -> list[derel]
+
+Only <derel>.from_distribution() takes a single row -- it is the low-level
+primitive, and its first argument is a per-row bearing VIEW, not the
+bearing. So this script wraps solve()'s row list back into the container
+before post-processing, exactly as RollingBearingSolver.postprocess_and_record()
+does internally (`wrapped = adapter.result_cls(rows=row_results)`):
+
+    res  = kit.result_cls(rows)   # BallBearingResult / RollerBearingResult
+    row0 = res.rows[0]
+
+`res` carries delta_r / delta_a / psi as properties reading rows[0], so
+those read straight off the container; ok / residual / n_iter / phi_Fr have
+no such property and are read off `row0`, which is correct -- they are
+per-row solve diagnostics, not bearing-level quantities. Every `[0]` here
+is the deliberate explicit index the Option A contract asks for: both
+bearings in this script are single-row, so rows[0] is the only row there
+is.
+
+Caveat inherited from solve()'s return shape: re-wrapping rebuilds the
+container with f_r / f_a / outer_n_iter / outer_residual / outer_ok set to
+None, because the row list solve() returns has already dropped them. That
+is a no-op for the single-row bearings here (those fields are None anyway),
+but for a future multi-row bearing the outer load-split diagnostics would
+have to come from results.get(label).extra["multirow_result"] instead --
+which only exists if solve() is called with results=<BearingResultsLibrary>.
+
 Not touched by this update: RollingBearingSolver.solve()/_SOLVER_MAP
 dispatch, the per-type postprocessing modules (contact_distribution,
 bearing_stiffness, DynamicEquivalentRollingElementLoad,
-LaminaDynamicEquivalentLoad) -- none of that changed in the capacity
-cleanup, only capacity itself moved.
+LaminaDynamicEquivalentLoad) -- none of that changed, the calls here just
+now hand them the shape they were always declared to take.
 
 Pipeline per shaft:
   1. build ShaftSystem -- locating 6204 + floating NU204 per shaft, each
@@ -80,13 +116,16 @@ stub. What WAS verified there: bearing.family.per_element_dynamic_capacity()
 and bearing.family.per_lamina_dynamic_capacity() against real
 Bearing.assemble()-built DeepGrooveBallFamily/CylindricalRollerFamily
 instances (matches the numbers rolling_bearing_solver.postprocess_and_record()
-now produces). NOT re-verified here: ShaftSystem.add_bearing()/the FEM
-reaction pipeline accepting the new Bearing class in place of the old
-DeepGrooveBallBearing/CylindricalRollerBearing -- flat attribute access is
-preserved by design (bearing.Z, bearing.position, bearing.bearing_type,
-bearing.arrangement, ...), so this should just work, but run this once and
-sanity-check the printed output (Q_max fractions, n_loaded/Z, delta_r/delta_a
-signs) before trusting it for a real design.
+now produces), and the row/container signatures the seam section above
+describes, read directly off Ball_Bearing/results.py, Roller_Bearing/results.py
+and both postprocessing.py modules. NOT re-verified here:
+ShaftSystem.add_bearing()/the FEM reaction pipeline accepting the new
+Bearing class in place of the old DeepGrooveBallBearing/
+CylindricalRollerBearing -- flat attribute access is preserved by design
+(bearing.Z, bearing.position, bearing.bearing_type, bearing.arrangement,
+...), so this should just work, but run this once and sanity-check the
+printed output (Q_max fractions, n_loaded/Z, delta_r/delta_a signs) before
+trusting it for a real design.
 """
 
 from __future__ import annotations
@@ -117,10 +156,16 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analys
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.single_row_solver import (
     ISO16281BallSolver,
 )
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.results import (
+    BallBearingResult,
+)
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.postprocessing import (
     contact_distribution as ball_contact_distribution,
     bearing_stiffness as ball_bearing_stiffness,
     DynamicEquivalentRollingElementLoad as BallDynamicEquivalentRollingElementLoad,
+)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.results import (
+    RollerBearingResult,
 )
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.postprocessing import (
     contact_distribution as roller_contact_distribution,
@@ -202,6 +247,11 @@ CR_NU204 = 28_500.0   # dynamic radial load rating [N] (SKF NU 204 ECP, Explorer
 # so every BearingKit entry calls the SAME expression regardless of type;
 # only capacity_extra() (roller's per-lamina q_ci/q_ce line) still needs a
 # per-type callback, because the ball side has no per-lamina concept at all.
+#
+# result_cls is NEW here -- it mirrors _PostprocAdapter.result_cls inside
+# rolling_bearing_solver.py and exists for the same reason: solve() hands
+# back the row LIST, the postprocessing functions take the per-bearing
+# CONTAINER (see the seam section in this module's docstring).
 # ===========================================================================
 
 def _ball_stiffness(b_obj, res, node):
@@ -217,7 +267,8 @@ def _roller_stiffness(b_obj, res, node):
 def _ball_derel_summary(b_obj, derel):
     """
     Ball's DynamicEquivalentRollingElementLoad.Q_ei/Q_ee are already single
-    per-bearing scalars -- nothing to reduce.
+    per-bearing scalars -- nothing to reduce. `derel` is ONE row's result
+    (the caller already indexed from_bearing_result()'s list).
     """
     return ("Q_ei", float(derel.Q_ei), "Q_ee", float(derel.Q_ee))
 
@@ -226,7 +277,7 @@ def _roller_derel_summary(b_obj, derel):
     """
     Roller's LaminaDynamicEquivalentLoad.q_kei/q_kee are (n_s,) arrays -- one
     value PER LAMINA (ISO/TS 16281 eq.61-64), not one per bearing (see the
-    module docstring in roller_bearing_postprocessing.py for why this
+    module docstring in Roller_Bearing/postprocessing.py for why this
     replaced the old per-roller DynamicEquivalentRollingElementLoad). For a
     single-line console/plot summary this script reports the WORST lamina
     (max q_kei / max q_kee) -- the one that would govern a life check against
@@ -234,6 +285,9 @@ def _roller_derel_summary(b_obj, derel):
     lamina, eq.56-57) -- while the full (n_s,) arrays remain available on
     `derel` itself for anyone who wants the per-lamina detail (e.g. via
     lamina_distribution()-style plots).
+
+    `derel` is ONE row's result, as on the ball side -- the per-lamina axis
+    it reduces over is the lamina axis within that row, not a row axis.
     """
     n_s = b_obj.n_s
     return (f"max q_kei (n_s={n_s})", float(derel.q_kei.max()),
@@ -260,9 +314,12 @@ def _ball_capacity_extra(b_obj, Q_ci: float, Q_ce: float) -> str | None:
 @dataclass(frozen=True)
 class BearingKit:
     """Per-BearingType post-processing bundle -- see module note above."""
-    contact_distribution : Callable
-    stiffness             : Callable   # (b_obj, res, node) -> BearingStiffness
-    derel_cls              : type       # .from_distribution(bearing, res, ...) -> derel dataclass
+    contact_distribution : Callable   # (b_obj, container) -> list[ndarray(Z,2)], one per row
+    stiffness             : Callable   # (b_obj, container, node) -> BearingStiffness
+    result_cls             : type       # BallBearingResult / RollerBearingResult -- wraps the
+                                        # row list solve() returns into the container every
+                                        # postprocessing entry point takes
+    derel_cls              : type       # .from_bearing_result(b_obj, container, ...) -> list[derel]
     derel_summary          : Callable   # (b_obj, derel) -> (lbl_i, val_i, lbl_e, val_e), single-number view
     capacity_extra          : Callable   # (b_obj, Q_ci, Q_ce) -> str | None, extra capacity line (roller-only: lamina q_ci/q_ce)
     Cr                     : float      # forwarded as Cr= to bearing.family.per_element_dynamic_capacity()
@@ -273,6 +330,7 @@ BEARING_KITS: dict[BearingType, BearingKit] = {
     BearingType.DEEP_GROOVE_BALL: BearingKit(
         contact_distribution = ball_contact_distribution,
         stiffness             = _ball_stiffness,
+        result_cls             = BallBearingResult,
         derel_cls              = BallDynamicEquivalentRollingElementLoad,
         derel_summary          = _ball_derel_summary,
         capacity_extra          = _ball_capacity_extra,
@@ -282,6 +340,7 @@ BEARING_KITS: dict[BearingType, BearingKit] = {
     BearingType.CYLINDRICAL_ROLLER: BearingKit(
         contact_distribution = roller_contact_distribution,
         stiffness             = _roller_stiffness,
+        result_cls             = RollerBearingResult,
         derel_cls              = LaminaDynamicEquivalentLoad,
         derel_summary          = _roller_derel_summary,
         capacity_extra          = _roller_capacity_extra,
@@ -311,8 +370,20 @@ def _fmt_k(k: float) -> str:
 
 def print_bearing_result(lbl, b_obj, node, res, kit: BearingKit,
                          Q_ci, Q_ce, derel, stiff, Fa_min, res_min):
+    """
+    `res` is the per-bearing CONTAINER (BallBearingResult /
+    RollerBearingResult), not a row and not the row list -- see this
+    module's docstring. `derel` is ONE derel object, already indexed out of
+    from_bearing_result()'s list by the caller.
+    """
+    # Per-row solve diagnostics (ok/residual/n_iter/phi_Fr) have no
+    # container-level property -- correctly so, they describe one row's
+    # solve, not the bearing. delta_r/delta_a DO, and read straight off res.
+    row = res.rows[0]
 
-    dist     = kit.contact_distribution(b_obj, res)
+    # contact_distribution returns one (Z,2) array PER ROW -- [0] is the
+    # only row for both bearing types in this script.
+    dist     = kit.contact_distribution(b_obj, res)[0]
     phi_arr  = dist[:, 0]
     Q_arr    = dist[:, 1]
     n_loaded = int((Q_arr > 0).sum())
@@ -320,7 +391,7 @@ def print_bearing_result(lbl, b_obj, node, res, kit: BearingKit,
 
     psi_xz   = node.psi_xz
     psi_xy   = node.psi_xy
-    psi_proj = psi_xz * np.cos(res.phi_Fr) + psi_xy * np.sin(res.phi_Fr)
+    psi_proj = psi_xz * np.cos(row.phi_Fr) + psi_xy * np.sin(row.phi_Fr)
 
     kind = "point contact (ball)" if kit.supports_axial else "line contact (roller)"
 
@@ -336,11 +407,11 @@ def print_bearing_result(lbl, b_obj, node, res, kit: BearingKit,
 
     # ── solver status ─────────────────────────────────────────────────
     print(f"  |")
-    print(f"  |  SOLVER  [{_ok(res.ok)}]")
-    print(f"  |    residual = {res.residual:.2e} N    nfev = {res.n_iter}")
+    print(f"  |  SOLVER  [{_ok(row.ok)}]")
+    print(f"  |    residual = {row.residual:.2e} N    nfev = {row.n_iter}")
     print(f"  |    dr = {res.delta_r:.4e} mm    "
           f"da = {res.delta_a:.4e} mm    "
-          f"phi(Fr) = {np.degrees(res.phi_Fr):>7.2f} deg")
+          f"phi(Fr) = {np.degrees(row.phi_Fr):>7.2f} deg")
 
     # ── misalignment ──────────────────────────────────────────────────
     print(f"  |")
@@ -403,22 +474,22 @@ def print_bearing_result(lbl, b_obj, node, res, kit: BearingKit,
 def make_stepped_shaft(name, total_length, d_seat, d_body,
                        l_seat_a, l_seat_b, fillet_r,
                        material_id="AISI_1045"):
+
     l_body = total_length - l_seat_a - l_seat_b
     sh = Shaft(label=name)
     sh.add_section(ShaftSection(length=l_seat_a, diameter=d_seat,
                                 material_id=material_id, label=f"{name}-seatA"))
-    sh.add_section(ShaftSection(
-        length=l_body, diameter=d_body, material_id=material_id,
-        label=f"{name}-body",
-        shoulder_left=Shoulder(fillet_radius=fillet_r,
-                               diameter_large=d_body, diameter_small=d_seat),
-        shoulder_right=Shoulder(fillet_radius=fillet_r,
-                                diameter_large=d_body, diameter_small=d_seat),
-    ))
+    sh.add_section(ShaftSection(length=l_body, diameter=d_body,
+                                material_id=material_id, label=f"{name}-body"))
     sh.add_section(ShaftSection(length=l_seat_b, diameter=d_seat,
                                 material_id=material_id, label=f"{name}-seatB"))
-    return sh
 
+    shoulder = Shoulder(fillet_radius=fillet_r,
+                        diameter_large=d_body, diameter_small=d_seat)
+    sh.set_transition(0, shoulder)   # seatA / body
+    sh.set_transition(1, shoulder)   # body / seatB
+
+    return sh
 
 def BB6204(position, label) -> Bearing:
     """
@@ -569,7 +640,7 @@ print(f"  +{'─'*(W-4)}+")
 
 shaft_systems = build_systems(B_STUDY)
 library       = SimpleFEMResultsLibrary()
-load_results  : dict[str, dict] = {}
+load_results  : dict[str, dict] = {}   # name -> {label: list[row result]}, as solve() returns
 
 for name, shaft_sys in shaft_systems.items():
 
@@ -592,6 +663,10 @@ for name, shaft_sys in shaft_systems.items():
     #    rolling_bearing_solver._SOLVER_MAP now, so brgXa/brgXb dispatch to
     #    ISO16281BallSolver/ISO16281RollerSolver respectively and merge back
     #    in the order `bearings` was built (brgXa before brgXb).
+    #
+    #    solve() returns {label: list[row result]} -- the ROW LIST, not the
+    #    per-bearing container the postprocessing functions take. The wrap
+    #    happens per bearing below.
     print(f"\n  [2/3]  ISO/TS 16281 bearing solve (mixed types) ...")
     solver    = RollingBearingSolver(tol=SOLVER_TOL)
     load_dist = solver.solve(shaft_sys, bearings, library)
@@ -609,19 +684,28 @@ for name, shaft_sys in shaft_systems.items():
     # free function -- one instance, reused for every ball bearing on this shaft.
     ball_solver = ISO16281BallSolver(tol=SOLVER_TOL)
 
-    for lbl, res in load_dist.items():
+    for lbl, rows in load_dist.items():
         node  = node_by_label[lbl]
         b_obj = bearings[lbl]
         kit   = BEARING_KITS[b_obj.bearing_type]
 
+        # Row list -> per-bearing container: the shape contact_distribution(),
+        # bearing_stiffness() and from_bearing_result() all declare. Same
+        # re-wrap RollingBearingSolver.postprocess_and_record() performs
+        # internally. See this module's docstring for the caveat on
+        # f_r/f_a/outer_* when this ever runs on a multi-row bearing.
+        res  = kit.result_cls(rows)
+        row0 = res.rows[0]   # explicit [0]: the only row, for both types here
+
         stiff = kit.stiffness(b_obj, res, node)
 
         if kit.supports_axial:
-            psi_proj = node.psi_xz * np.cos(res.phi_Fr) + node.psi_xy * np.sin(res.phi_Fr)
+            psi_proj = node.psi_xz * np.cos(row0.phi_Fr) + node.psi_xy * np.sin(row0.phi_Fr)
             Fa_min, res_min = ball_solver.minimum_axial_load(
                 b_obj,
                 Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy,
                 psi=psi_proj,
+                # delta_r/delta_a ARE container properties (they read rows[0])
                 delta_r_init=res.delta_r, delta_a_init=res.delta_a,
             )
         else:
@@ -631,8 +715,12 @@ for name, shaft_sys in shaft_systems.items():
         # ball and roller now, no more capacity_cls/RollingElementCapacity/
         # RollerElementCapacity. Returns a plain (Q_ci, Q_ce) tuple.
         Q_ci, Q_ce = b_obj.family.per_element_dynamic_capacity(b_obj, Cr=kit.Cr)
-        derel = kit.derel_cls.from_distribution(
-            b_obj, res, inner_rotating=True, outer_rotating=False)
+
+        # from_bearing_result() is the row-aware entry point and ALWAYS
+        # returns a list (one derel per row); from_distribution() is the
+        # single-row primitive and takes a per-row bearing VIEW, not b_obj.
+        derel = kit.derel_cls.from_bearing_result(
+            b_obj, res, inner_rotating=True, outer_rotating=False)[0]
 
         print_bearing_result(
             lbl=lbl, b_obj=b_obj, node=node, res=res, kit=kit,
@@ -690,6 +778,7 @@ for name, shaft_sys in shaft_systems.items():
 # ===========================================================================
 
 def plot_bearing_polar(name: str, shaft_sys: ShaftSystem, load_dist: dict):
+    """`load_dist` is solve()'s output: {label: list[row result]}."""
     bearings_list = shaft_sys.bearings
     n   = len(bearings_list)
     fig, axes = plt.subplots(1, n, figsize=(5 * n, 5),
@@ -700,9 +789,10 @@ def plot_bearing_polar(name: str, shaft_sys: ShaftSystem, load_dist: dict):
                  fontsize=11, fontweight="bold")
 
     for ax, b in zip(axes, bearings_list):
-        res  = load_dist[b.label]
+        # kit first: result_cls is needed to build the container from the rows.
         kit  = BEARING_KITS[b.bearing_type]
-        dist = kit.contact_distribution(b, res)
+        res  = kit.result_cls(load_dist[b.label])
+        dist = kit.contact_distribution(b, res)[0]   # one (Z,2) array per row
         phi, Q = dist[:, 0], dist[:, 1]
 
         phi_c = np.append(phi, phi[0])
@@ -713,14 +803,14 @@ def plot_bearing_polar(name: str, shaft_sys: ShaftSystem, load_dist: dict):
         ax.fill(phi_c, Q_c, color=color, alpha=0.12)
 
         Q_ci, Q_ce = b.family.per_element_dynamic_capacity(b, Cr=kit.Cr)
-        derel = kit.derel_cls.from_distribution(b, res)
+        derel = kit.derel_cls.from_bearing_result(b, res)[0]
         kind  = "ball" if kit.supports_axial else "roller"
         lbl_i, val_i, _, _ = kit.derel_summary(b, derel)
 
         ax.set_title(
             f"{b.label} ({kind})\n"
             f"Q_max = {Q.max():.0f} N   n_loaded = {int((Q>0).sum())}/{b.Z}\n"
-            f"phi(Fr) = {np.degrees(res.phi_Fr):.1f} deg\n"
+            f"phi(Fr) = {np.degrees(res.rows[0].phi_Fr):.1f} deg\n"
             f"Q_ci = {Q_ci:.0f} N   {lbl_i} = {val_i:.0f} N",
             fontsize=7,
         )

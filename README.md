@@ -8,257 +8,223 @@ AxisForge is a deterministic, solver-centric engineering platform for the analys
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Stack](#stack)
-- [Repository Layout](#repository-layout)
-- [Package Surface — the `__init__.py` roll-up system](#package-surface--the-__init__py-roll-up-system)
-- [Analysis Pipeline](#analysis-pipeline)
+- [What it does](#what-it-does)
+- [Stack and units](#stack-and-units)
+- [Repository layout](#repository-layout)
+- [Importing](#importing)
+- [Analysis pipeline](#analysis-pipeline)
 - [Documentation](#documentation)
-- [Design Principles](#design-principles)
+- [Design principles](#design-principles)
 - [Roadmap](#roadmap)
 - [References](#references)
 
 ---
 
-## Overview
+## What it does
 
-The platform targets the complete analysis pipeline of a multi-shaft parallel-axis transmission:
+| Capability | Standard / method | Where |
+|---|---|---|
+| Multi-shaft power flow and mesh load injection | ISO 21771 force resolution over a single-source DAG | `core/mechanical_system/` |
+| 1D FEM shaft deflection and internal forces, two planes | Timoshenko beam, selective integration | `mesh/`, `solvers/.../shaft/` |
+| Mesh convergence assessment | Richardson extrapolation + Grid Convergence Index | `solvers/mesh/` |
+| Stress concentration at shoulders and keyways | Peterson / Shigley / Neuber | `solvers/.../static/shaft_post_processor.py` |
+| Internal rolling element load distribution | ISO/TS 16281 §4 (point contact), §5 (line contact) | `solvers/.../bearings/ISO_16281/` |
+| Per-element and per-lamina capacity, equivalent load, L10r | ISO 281, ISO 1281-1, ISO/TS 16281 | `core/.../bearings/families/`, `solvers/.../ISO_16281/` |
+| Basic rating life and static safety | ISO 281 | `solvers/.../bearings/life.py` |
+| Spur, helical and internal gear geometry and mesh forces | ISO 21771, ISO 53, KHK, MAAG | `core/.../gears/`, `solvers/.../gears/` |
+| Planetary train kinematics and ideal torque split | Willis equation, Arnaudov & Karaivanov | `core/.../gears/parallel_axis/planetary_gear/` |
+| Dynamic factor K_v data layer | ISO 6336-1 Method B and Method C | `database/gears/` |
+| Keyway geometry lookup | DIN 6885, ISO 3912 | `database/shaft/keyway/` |
+| Assembly visualisation | matplotlib line schematic | `core/mechanical_system/.../schematic.py` |
+| Interactive script runner and exporters | PySide6 | `ui/` |
 
-- Static load distribution across multi-shaft gear trains
-- 1D FEM shaft deflection and internal force recovery (two-plane)
-- Stress-concentration post-processing (shoulders, keyways) on the recovered stresses
-- Internal rolling element load distribution in ball and cylindrical roller bearings (ISO/TS 16281 point and line contact), single-row and multi-row
-- Bearing rating life inputs (per-element / per-lamina capacities, equivalent loads, basic reference rating life L10r)
-- Spur / helical / internal gear geometry and mesh force integration
-- ISO 6336 dynamic factor (Method B / Method C) data layer
-- Planetary (epicyclic) train kinematics and ideal torque distribution
-- Fatigue analysis, lubrication and failure susceptibility assessment *(future phases)*
-
----
-
-## Stack
-
-- **Python 3.11+**
-- NumPy · SciPy · matplotlib
-- PySide6 *(GUI — `ui/`, running)*
-- SQLite *(data persistence — future)*
-- pytest
-
-Units are SI-consistent internally: **mm** for lengths, **N** for forces, **N·mm** for moments (torque propagates in **N·m** through the gear system and is converted at the boundary), **MPa** for stresses, **degrees** for input/output angles (**radians** internally).
+Fatigue, lubrication and failure susceptibility are future phases — see [Roadmap](#roadmap).
 
 ---
 
-## Repository Layout
+## Stack and units
 
-Reorganised: package names are now lowercase and snake_case throughout, one concern per directory, and every directory carries an `__init__.py` that declares its public surface (see the next section).
+**Python 3.11+** · NumPy · SciPy · matplotlib · PySide6 · pytest. SQLite is planned for the data layer.
+
+Units are consistent internally:
+
+| Quantity | Unit |
+|---|---|
+| Length, position, deflection | mm |
+| Force | N |
+| Bending moment | N·mm |
+| Torque through the gear system | N·m (converted at the shaft boundary) |
+| Stress | MPa |
+| Angles | degrees at the interface, radians internally |
+| Speed | rpm at the interface, rad/s internally |
+
+Console output in scripts and fixtures is **ASCII only** (Windows PowerShell, cp1252).
+
+---
+
+## Repository layout
 
 ```
 axisforge/
-├── config.py                                   # tolerances, solver defaults, global constants
-├── core/
-│   ├── loads.py                                # LoadPlane, Load, RadialLoad, AxialLoad, TorqueLoad,
-│   │                                           #   ExternalMoment, DistributedRadialLoad, LoadingProfile
-│   ├── materials.py                            # Material, GearMaterial + embedded libraries
+├── config.py                                   Tolerances, solver defaults, global constants
+├── core/                                       Domain model — geometry and data, no solving
+│   ├── loads.py
+│   ├── materials.py
 │   ├── machine_elements/
-│   │   ├── shaft/
-│   │   │   └── shaft.py                        # KeywayType, Keyway, Shoulder, ShaftSection, Shaft
-│   │   ├── bearings/
-│   │   │   ├── bearing.py                      # Bearing — the orchestrator (assemble(), immutable)
-│   │   │   ├── bearing_types.py                # BearingType enum (label only)
-│   │   │   ├── catalog.py                      # BearingCatalog (frozen dataclass)
-│   │   │   ├── family.py                       # BearingFamily (ABC) — pluggable family contract
-│   │   │   └── families/
-│   │   │       ├── ball_bearing/{radial,thrust}/{functions,subtypes}/
-│   │   │       └── roller_bearing/{radial,thrust}/{functions,subtypes}/
-│   │   └── gears/
-│   │       └── parallel_axis/
-│   │           ├── gear_properties/            # SpurHelicalGear, InternalGear
-│   │           ├── gear_meshing/               # SpurHelicalGearMeshing, InternalGearMeshing
-│   │           └── planetary_gear/             # PlanetaryGearTrainMeshing, PlanetaryKinematics,
-│   │                                           #   PlanetaryTorques, PlanetaryMember, MeshTag
-│   └── mechanical_system/
-│       └── parallel_axis/
-│           ├── spur_helical/
-│           │   ├── shaft_system.py             # GearElement, ShaftSystem
-│           │   └── gear_system.py              # SpurHelicalMeshLink, SpurHelicalGearSystem
-│           └── schematic.py                    # draw_gear_system, draw_shaft_detail, ...
-├── database/                                   # catalogue / standard tabular data (no solving)
-│   ├── shaft/keyway/Parallel/parallel_keyway.py        # DIN 6885 lookup
-│   ├── shaft/keyway/Woodruff_key/iso3912.py            # ISO 3912 lookup
-│   └── gears/SpurHelicalGears/LoadCapacity_data/       # DynamicFactor (Kv method B),
-│                                                       #   DynamicFactorC (Kv method C), lookup_KA
-├── mesh/
-│   └── shaft/
-│       ├── mesh_generation/                    # Mesh1D, Grader
-│       └── element_type/                       # Elem, TimoshenkoBeam
+│   │   ├── shaft/                              Shaft, ShaftSection, Shoulder, Keyway
+│   │   ├── bearings/                           Bearing, BearingCatalog, BearingFamily
+│   │   │   └── families/                       ball_bearing/ · roller_bearing/
+│   │   └── gears/parallel_axis/                gear_properties/ · gear_meshing/ · planetary_gear/
+│   └── mechanical_system/parallel_axis/
+│       ├── spur_helical/                       ShaftSystem, GearElement,
+│       │                                       SpurHelicalMeshLink, SpurHelicalGearSystem
+│       └── schematic.py
+├── database/                                   Standard tabular data — no solving
+│   ├── shaft/keyway/                           DIN 6885, ISO 3912
+│   └── gears/SpurHelicalGears/LoadCapacity_data/   ISO 6336-1 K_A, K_v
+├── mesh/shaft/                                 1D mesh generation and beam elements
+│   ├── mesh_generation/                        Mesh1D, Grader
+│   └── element_type/                           Elem, TimoshenkoBeam
 ├── solvers/
 │   ├── machine_elements/
-│   │   ├── shaft/
-│   │   │   ├── oneD_analysis/
-│   │   │   │   ├── build_stiffness_matrix.py   # StiffnessMatrixBuilder
-│   │   │   │   ├── FEM_solvers/                # SimpleFEMSolver, SubmodelSolver
-│   │   │   │   └── static/                     # static_analysis.py, shaft_post_processor.py
-│   │   │   └── utils.py                        # Marin factors, Kt/Kf helpers
-│   │   ├── bearings/
-│   │   │   ├── ISO_16281/                      # dispatch.py, library.py,
-│   │   │   │                                   #   rolling_bearing_solver.py,
-│   │   │   │                                   #   Ball_Bearing/, Roller_Bearing/
-│   │   │   └── life.py                         # BearingLifeSolver (ISO 281 L10)
-│   │   └── gears/                              # geometry.py (GearSolver), utils.py,
-│   │                                           #   SpurHelicalGears/LoadCapacity_solver/
-│   ├── mesh/
-│   │   └── mesh_convergence_study.py           # RichardsonGCI, MeshConvergenceStudy
-│   └── lubrification/                          # placeholder, Phase 4+
-├── models/                                     # GearGeometryResult, GearForceResult, ...
-├── ui/                                         # PySide6 app: main_window, script_editor,
-│                                               #   runner, project_explorer, workspace_panel,
-│                                               #   output_console, project_wizard, exporters/
-├── fixtures/                                   # modular analysis templates + capabilities/
-└── tests/                                      # unit / regression / validation tests
+│   │   ├── shaft/oneD_analysis/                FEM, results library, post-processing
+│   │   ├── bearings/ISO_16281/                 Ball_Bearing/ · Roller_Bearing/
+│   │   ├── bearings/life.py
+│   │   └── gears/                              GearSolver, geometry helpers
+│   ├── mesh/                                   MeshConvergenceStudy, RichardsonGCI
+│   └── lubrification/                          Reserved
+├── models/                                     Result containers
+├── ui/                                         PySide6 application
+├── fixtures/                                   Reusable analysis-script building blocks
+└── tests/                                      Unit / regression / validation tests
 ```
 
+---
 
-## Package Surface — the `__init__.py` roll-up system
+## Importing
 
-Every package now carries an `__init__.py` that declares **what that directory offers**, and nothing else. The pattern is uniform:
+Every package publishes its public surface in its own `__init__.py`. Import from the package, not from the file inside it:
 
 ```python
-__all__ = ["DeepGrooveBallFamily", "AngularContactFamily", "SelfAligningBallFamily"]
-
-_LAZY = {
-    "DeepGrooveBallFamily": ".subtypes",
-    "AngularContactFamily": ".subtypes",
-    "SelfAligningBallFamily": ".subtypes",
-}
-
-def __getattr__(name):          # PEP 562 — resolved on first access, then cached
-    ...
-def __dir__():
-    return sorted(list(globals().keys()) + list(_LAZY.keys()))
-
-if TYPE_CHECKING:               # static analysers / IDEs see the real symbols
-    from .subtypes import DeepGrooveBallFamily, AngularContactFamily, SelfAligningBallFamily
+from axisforge.core.machine_elements.shaft            import Shaft, ShaftSection, Shoulder
+from axisforge.core.machine_elements.bearings         import Bearing, BearingCatalog
+from axisforge.core.machine_elements.bearings.families import DeepGrooveBallFamily
+from axisforge.core.machine_elements.gears.parallel_axis import (
+    SpurHelicalGear, SpurHelicalGearMeshing,
+)
+from axisforge.core.mechanical_system.parallel_axis.spur_helical import (
+    ShaftSystem, GearElement, SpurHelicalMeshLink, SpurHelicalGearSystem,
+)
+from axisforge.mesh.shaft.mesh_generation            import Mesh1D, Grader
+from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers import SimpleFEMSolver
+from axisforge.solvers.machine_elements.shaft.oneD_analysis.static      import (
+    ShaftResultsReader, SimpleFEMResultsLibrary,
+)
+from axisforge.solvers.machine_elements.bearings.ISO_16281 import (
+    RollingBearingSolver, BearingResultsLibrary,
+)
+from axisforge.solvers.mesh import MeshConvergenceStudy
 ```
 
-Three properties follow, and they are the whole point:
+Three properties of this surface are worth knowing:
 
-1. **Lazy.** Importing `axisforge.core.machine_elements.bearings.families` costs nothing — no NumPy-heavy subtype module is executed until a name is actually touched. A script that only uses a DGBB never imports the roller side.
-2. **Cascading.** A roll-up never points at a leaf `.py`; it always forwards to the next `__init__.py` down (`families/` → `ball_bearing/` → `radial/` → `subtypes/` → `deep_groove.py`). Renaming a leaf module touches exactly one `__init__.py`.
-3. **Introspectable.** `__all__` and `_LAZY` are plain data. `dir(package)` lists everything the package offers *without importing it*. This is what `fixtures/capabilities/` reads to build its selection menu — see below.
+- **Imports are lazy.** A package's `__init__.py` executes nothing heavy until a name is actually used, so importing a package you only partly need costs nothing.
+- **Roll-ups cascade.** A parent package forwards to its child package, never to a leaf module, so a module rename never propagates past one file.
+- **The surface is introspectable.** `dir(package)` and `package.__all__` list what a package offers without importing it. This is what lets `fixtures/capabilities/` build an import set from a declaration — see [`fixtures/README.md`](axisforge/fixtures/README.md#capabilities).
 
-### Direction of dependency
+Two surfaces are deliberately narrow:
 
-```
-fixtures/capabilities/   →  reads __all__ / _LAZY of the package roll-ups
-        ↓                     (never the reverse: no __init__.py imports capabilities)
-package __init__.py      →  forwards to the child __init__.py
-        ↓
-leaf module (.py)        →  the actual class
-```
+- `bearings` exports only `Bearing`, `BearingCatalog`, `BearingFamily`, `BearingType`. The concrete families live in `bearings.families` so that adding a family changes nothing in `core/`.
+- `ISO_16281` exports only the orchestration layer. `Ball_Bearing` and `Roller_Bearing` are imported explicitly, because point and line contact have different result types and mixing them in one namespace hides which model a name belongs to.
 
-`families/__init__.py` states it explicitly: *"É a partir daqui que `bearing.py` é capaz de listar/selecionar famílias, e mais tarde de onde um `capabilities.py` para bearings vai ler — nunca ao contrário."*
+---
 
-### Deliberate exclusions
-
-- `bearings/__init__.py` exports only `Bearing`, `BearingCatalog`, `BearingFamily`, `BearingType`. The concrete families are **not** re-exported there — otherwise every new family would force an edit of that file, which is exactly what the "adding a family changes nothing in `core/`" principle forbids. Import them from `bearings.families`.
-- `families/**/functions/` is **not** rolled up into its parent. Those are the Hertz/capacity primitives, internal to the subtypes; the public surface at that level is the family classes.
-- `ISO_16281/__init__.py` exports only the orchestration layer (`RollingBearingSolver`, `BearingResultsLibrary`, `resolve_solver_cls*`, `SolverDispatchError`). `Ball_Bearing/` and `Roller_Bearing/` are **not** flattened into it — point and line contact have different result types, and mixing them in one namespace would hide which contact model a name belongs to.
-- `register_contact_solver` is not re-exported: it is the decorator `single_row_solver.py` applies to itself at import time; nothing outside the package registers a contact solver.
-
-
-## Analysis Pipeline
+## Analysis pipeline
 
 The canonical solve sequence for one shaft:
 
 ```python
-# 1. Assemble the multi-shaft gear system and resolve power flow
+# 1 — Assemble the multi-shaft gear system and resolve power flow
 gearbox = SpurHelicalGearSystem(shafts, links, label="drivetrain")
 gearbox.resolve(P_W, rpm_in, rotation_dir_source=1)
 
-# 2. Mesh the shaft (mandatory nodes + optional grading at gears)
+# 2 — Mesh and solve the shaft
 fem = SimpleFEMSolver()
 fem.solve(shaft_system, extra_mandatory=gear_grade_nodes)
 
-# 3. Post-process FEM into a results library
+# 3 — Post-process the FEM into the results library
+library = SimpleFEMResultsLibrary()
 ShaftResultsReader(fem, shaft_system).read(library)
 
-# 4. Solve internal bearing load distribution (ISO/TS 16281).
-#    Dispatch is by CAPABILITY + required attributes (ISO_16281/dispatch.py),
-#    not by BearingType, so a shaft's bearing set may freely mix contact
-#    types (a locating DGBB plus a floating cylindrical roller bearing) and
-#    row counts (a multi-row thrust ball bearing alongside single-row ones).
-solver   = RollingBearingSolver()
-load_dist = solver.solve(shaft_system, bearings, library)   # {label: [row results]}
+# 4 — Internal bearing load distribution (ISO/TS 16281)
+solver    = RollingBearingSolver()
+load_dist = solver.solve(shaft_system, bearings, library)
 
-# 5. Capacity, equivalent load and stiffness in one pass, recorded per label
+# 5 — Capacity, equivalent load and stiffness, recorded per bearing label
 results = solver.postprocess_and_record(
     shaft_system, bearings, library,
     catalog={"brg1a": {"capacity": {"Cr": 29_600.0},
                        "dynamic_equivalent_load": {"inner_rotating": True}}},
     load_distribution=load_dist,
 )
-bundle = results.get("brg1a")     # .load_distribution / .capacity /
-                                  # .dynamic_equivalent_load / .stiffness / .extra
+bundle = results.get("brg1a")
 
-# 6. Stress concentration post-processing on the shaft
+# 6 — Stress concentration on the shaft
 ppr = ShaftPostProcessor(shaft_system, library.get(shaft_system.name)).process()
 ```
 
-Capacity is **never** computed inside `solvers/`. Every `BearingFamily` owns its own ISO 281 / ISO/TS 16281 formulas and is called uniformly:
+Two contracts govern this sequence:
 
-```python
-Q_ci, Q_ce = bearing.family.per_element_dynamic_capacity(bearing, Cr=...)   # or Ca=... for thrust
-q_ci, q_ce = bearing.family.per_lamina_dynamic_capacity(bearing, Q_ci, Q_ce) # roller only
-```
+- **One solver instance per shaft.** `SimpleFEMSolver.solve()` publishes its results as public attributes; a second call overwrites them.
+- **Capacity belongs to the bearing, not to the solver.** Every family owns its own ISO formulas and is called through the bearing: `bearing.family.per_element_dynamic_capacity(bearing, Cr=...)`, and for roller families `bearing.family.per_lamina_dynamic_capacity(bearing, Q_ci, Q_ce)`.
 
-See [`solvers/README.md`](axisforge/solvers/README.md) for the full solver-by-solver reference and [`core/README.md`](axisforge/core/README.md) for the objects built in steps 1–2.
+A shaft may carry a mixed bearing set — different contact types and different row counts — in the same call. `RollingBearingSolver` resolves each bearing to a solver from the capabilities its family declares.
 
 ---
 
 ## Documentation
 
-Each top-level package has its own README with the full module-by-module reference (classes, methods, usage snippets). This root document stays the entry point — pitch, architecture, pipeline, principles, roadmap; the detail lives next to the code it describes so it stays in sync as each package evolves independently.
+Each top-level package has its own README with the module-by-module reference. This document is the entry point; the detail lives next to the code it describes.
 
 | Package | Covers |
 |---|---|
-| [`axisforge/core/README.md`](axisforge/core/README.md) | Shaft · Bearings (families) · Gears · Systems · Gear/Planetary meshing · Loads · Materials |
-| [`axisforge/solvers/README.md`](axisforge/solvers/README.md) | Shaft FEM · post-processing · Bearings (ISO/TS 16281 + life) · Gears · Mesh convergence |
-| [`axisforge/mesh/README.md`](axisforge/mesh/README.md) | 1D shaft mesh generation, grading, beam elements |
-| [`axisforge/models/README.md`](axisforge/models/README.md) | Result containers (gear geometry/force, stress) |
-| [`axisforge/ui/README.md`](axisforge/ui/README.md) | PySide6 application: script editor, section runner, exporters |
-| [`axisforge/fixtures/README.md`](axisforge/fixtures/README.md) | Modular analysis-script templates · `capabilities/` selector |
-
-`axisforge/database/` has no README of its own yet — it holds only tabular lookups (DIN 6885 / ISO 3912 keyways, ISO 6336-1 K_A and K_v data) and is documented from `core/README.md`, which is where its only consumer (`Keyway.from_standard()`) lives.
+| [`axisforge/core/README.md`](axisforge/core/README.md) | Shaft · Bearings and families · Gears · Systems · Meshing · Loads · Materials · Database |
+| [`axisforge/solvers/README.md`](axisforge/solvers/README.md) | Shaft FEM · Post-processing · Bearings (ISO/TS 16281, ISO 281 life) · Gears · Mesh convergence |
+| [`axisforge/mesh/README.md`](axisforge/mesh/README.md) | Node generation, grading, beam elements |
+| [`axisforge/models/README.md`](axisforge/models/README.md) | Result containers |
+| [`axisforge/ui/README.md`](axisforge/ui/README.md) | PySide6 application and exporters |
+| [`axisforge/fixtures/README.md`](axisforge/fixtures/README.md) | Analysis-script building blocks · capability selection |
 
 ---
 
-## Design Principles
+## Design principles
 
-- **Low coupling, high cohesion** — solvers depend only on explicit result containers, never on each other's internals.
-- **Declared surface, lazy import** — a package's `__init__.py` states what it offers and imports nothing until asked. This is what makes capability selection possible without a registry.
-- **No hidden state** — every intermediate quantity is a public attribute; solvers expose their full working for inspection.
-- **GUI-independent solvers** — the analysis core runs headless; the UI is a thin consumer.
-- **Deterministic and explainable** — no black-box methods. Failure assessment (future) uses measurable physical drivers and traceable indices, not machine learning or probabilistic life prediction.
-- **Composition over inheritance** — the planetary train composes two pair-meshing objects rather than subclassing them; bearing geometry is a component of the family, not an identity.
-- **Capacity belongs to the element, not to the solver** — `bearing.family.per_element_dynamic_capacity()` is the single source; a solver never carries its own copy of an ISO formula.
-- **Fail fast on geometry** — validation happens at construction; invalid geometry is never silently accepted.
-- **One file per concern** — each subtype, function group, solver and result shape lives in its own module; imports are explicit and traceable.
-- **Flag, don't silently fix** — a suspected discrepancy against a standard is documented in place (see the `1.038` coefficient note in `core/README.md`), never quietly corrected.
+- **Low coupling, high cohesion.** Solvers depend only on explicit result containers, never on each other's internals.
+- **Declared surface, lazy import.** A package states what it offers and imports nothing until asked.
+- **No hidden state.** Every intermediate quantity is a public attribute; a solver exposes its full working for inspection.
+- **GUI-independent solvers.** The analysis core runs headless; the UI is a thin consumer.
+- **Deterministic and explainable.** No black-box methods, no probabilistic life prediction, no machine learning.
+- **Composition over inheritance.** A planetary train composes two pair-meshing objects; a bearing composes a family rather than subclassing one.
+- **Capacity belongs to the element.** A solver never carries its own copy of a standard's formula.
+- **Fail fast on geometry.** Validation happens at construction; invalid geometry is never silently accepted.
+- **One file per concern.** Each subtype, function group, solver and result shape lives in its own module.
+- **Flag, do not silently fix.** A suspected discrepancy against a standard is documented in place, never quietly corrected.
+- **`validate()` returns, `validate_or_raise()` raises.** Every domain object follows this pair.
 
 ---
 
 ## Roadmap
 
 | Phase | Focus | Status |
-|-------|-------|--------|
-| 1 | Shaft FEM · ISO/TS 16281 load distribution · gear force integration | **Done / maintained** |
-| 2 | Bearing families (ball radial/thrust, roller radial/thrust, single + multi-row) · capability dispatch · L10r | **Active** — thrust roller load-distribution solver still missing |
-| 2b | ISO 6336 gear strength — K_v Method B/C data layer in place, `LoadCapacity_solver/` empty | In progress |
-| 3 | `fixtures/capabilities/` selector · fixture migration to `Bearing.assemble()` | Next |
-| 4 | Fatigue analysis — Goodman / Morrow / Miner | Planned |
-| 5 | Lubrication assessment — EHD film, grease (`solvers/lubrification/`) | Planned |
-| 6 | Failure susceptibility scoring · SQLite data layer | Planned |
-| 7 | PySide6 GUI hardening (`ui/` running, not frozen) | Ongoing |
+|---|---|---|
+| 1 | Shaft FEM · mesh convergence · gear force integration | Complete |
+| 2 | Bearing families, capability dispatch, ISO/TS 16281 load distribution and L10r | Complete for radial ball and radial roller; thrust roller load distribution outstanding |
+| 3 | ISO 6336 gear load capacity — data layer in place, solver outstanding | In progress |
+| 4 | Capability selection and fixture library completion | In progress |
+| 5 | Fatigue — Goodman / Morrow / Miner | Planned |
+| 6 | Lubrication — EHD film thickness, grease | Planned |
+| 7 | Failure susceptibility scoring · SQLite data layer | Planned |
+| 8 | GUI consolidation | Ongoing |
 
 ---
 
@@ -266,18 +232,16 @@ Each top-level package has its own README with the full module-by-module referen
 
 - ISO/TS 16281:2008 — *Rolling bearings: Methods for calculating the modified reference rating life for universally loaded bearings*
 - ISO 281:2007 — *Rolling bearings: Dynamic load ratings and rating life*
-- ISO 1281-1:2021 — *Rolling bearings: Explanatory notes on ISO 281* (thrust ball capacity, Sec 6.3/6.4)
+- ISO 1281-1:2021 — *Rolling bearings: Explanatory notes on ISO 281*
 - ISO 76:2006 — *Rolling bearings: Static load ratings*
 - ISO 21771:2007 — *Gears: Cylindrical involute gears and gear pairs*
 - ISO 53:2013 — *Cylindrical gears for general engineering: standard basic rack tooth profile*
-- ISO 6336-1/-2/-3 — *Calculation of load capacity of spur and helical gears*
-- ISO 6336-5 — *Strength and quality of materials*
-- DIN 6885 — *Parallel keys and keyways*
-- ISO 3912 — *Woodruff keys and keyways*
+- ISO 6336-1/-2/-3/-5 — *Calculation of load capacity of spur and helical gears*
+- DIN 6885 — *Parallel keys and keyways* · ISO 3912 — *Woodruff keys and keyways*
 - Harris & Kotzalas, *Rolling Bearing Analysis*, 5th ed., Wiley
 - Palmgren, *Grundlagen der Wälzlagertechnik*, 3rd ed., Franckh
 - Shigley, *Mechanical Engineering Design*, 10th ed.
 - Peterson, *Stress Concentration Factors*
-- MAAG Gear Book, 2nd ed.
+- MAAG Gear Book, 2nd ed. · KHK Gear Technical Reference
 - Henriot, *Traité théorique et pratique des engrenages*
 - Arnaudov & Karaivanov, *Planetary Gear Trains*

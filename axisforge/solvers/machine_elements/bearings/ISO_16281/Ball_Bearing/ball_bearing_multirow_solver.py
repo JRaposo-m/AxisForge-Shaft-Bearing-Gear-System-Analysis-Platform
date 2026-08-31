@@ -11,10 +11,9 @@ from types import SimpleNamespace
 import numpy as np
 
 from axisforge.core.machine_elements.bearings.bearing import Bearing
-from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
-    check_bearing_ready,
-    run_root,
-)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.numerics import run_root
+from axisforge.solvers.machine_elements.bearings.ISO_16281.validation import check_bearing_ready, warn_if_floating_loaded
+
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.single_row_solver import (
     ISO16281BallSolver,
     REQUIRED_ATTRS,

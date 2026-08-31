@@ -23,6 +23,34 @@ COMPARISON section for whichever scenario's LOCATING bearing is double-row
 ball (see "Known gaps" below for why that section stays ball-only).
 
 Changelog (most recent first):
+  - FIX, this turn -- both double-row scenarios crashed on shaft1 the first
+    time they were actually run, AFTER the earlier floating-side fix below:
+      ValueError: ShaftSystem 'shaft1(motor)' validation failed:
+        - shaft1(motor): bearing 'brg1a' [6.000, 34.000] mm overlaps
+          shoulder at x=30.000 mm
+    Root cause: this is the LOCATING-side twin of the floating-side crash
+    already fixed below, surfaced only now because of an upstream core fix
+    (Shaft.shoulders(), in axisforge/core/machine_elements/shaft/shaft.py --
+    not in this file) that started reporting EVERY transition instead of
+    only the one that used to live on shoulder_right. Before that fix,
+    ShaftSystem.validate_or_raise() never saw the seatA/body shoulder at
+    x=30 at all, so a b=28 double-row locating bearing (DR_CATALOG) centered
+    at the single-row default position=20 within shaft1's 30mm seatA
+    silently passed validation despite genuinely overlapping the shoulder
+    by 4mm ([6,34] vs. x=30). The "arrangement='locating' bearings are
+    evidently not subject to the same strict shoulder-overlap check" note
+    in the FIX entry below was describing behaviour observed against that
+    buggy shoulders() -- no longer true now that it's fixed.
+
+    Fixed the same way the floating side already was: new
+    DR_LOCATING_POSITIONS constant (midpoint of each shaft's locating seat,
+    seatA), threaded through build_systems() as a new locating_positions
+    parameter (default None -> the original single-row positions 20.0/
+    25.0/25.0, so BASELINE_SCENARIO is unaffected) and a 5th element on
+    each SCENARIOS entry. See DR_LOCATING_POSITIONS' own comment for the
+    margin arithmetic per shaft -- mirrors DR_ROLLER_FLOATING_POSITIONS'
+    reasoning exactly.
+
   - roller L10r/Pref_r WIRED IN -- new _bearing_life_roller(): q_kci/q_kce
     via RollingElementCapacity.per_lamina() (uniform per lamina, eq.56-57,
     core/.../families/roller/radial/functions/capacity.py), q_kei/q_kee via
@@ -121,6 +149,13 @@ Changelog (most recent first):
     unaffected) and SCENARIOS entries grew a 4th element for it. See the
     DR_ROLLER_CATALOG/DR_ROLLER_FLOATING_POSITIONS constants' own comments
     for the margin arithmetic per shaft.
+
+    NOTE (superseded): the "locating bearings are evidently not subject to
+    the same strict check" observation above turned out to be an artifact
+    of a since-fixed core bug (Shaft.shoulders() only reporting
+    shoulder_right) -- see the FIX entry at the top of this changelog. It
+    is left here, unedited, as the historical record of what was actually
+    observed at the time.
 
   - NEW SCENARIO, this turn -- DOUBLE_BALL_DOUBLE_ROLLER_SCENARIO: BOTH
     slots are now double-row simultaneously -- locating is the existing
@@ -528,21 +563,19 @@ DR_ROLLER_ROW_GEOM_HETERO = [
 # bearing is recentered on each shaft's own floating seat instead of
 # reusing the single-row bearing's position. (shaft1's locating side has
 # the analogous geometry -- b=28 double-row ball at the single-row's
-# position=20 within a 30mm seatA -- and did NOT crash; ISO/TS 16281-side
-# arrangement="locating" bearings evidently are not subject to the same
-# strict shoulder-overlap check as arrangement="floating" ones here, which
-# makes physical sense: a locating bearing is meant to seat against a
-# shoulder for axial retention, a floating bearing is not. Only the
-# floating side needed this fix.)
+# position=20 within a 30mm seatA -- and did NOT crash at the time; see the
+# newest changelog entry at the top of this docstring for why that turned
+# out to be an artifact of a since-fixed core bug, not a real difference
+# between locating and floating arrangements.)
 DR_ROLLER_CATALOG = dict(d=20.0, D=47.0, b=24.0, C=CR_NU204, C0=22_000.0,
                          designation="DR-NU204-illustrative")
 
 # Recentered floating position per shaft, used ONLY for the double-row-
 # roller scenario (single-row scenarios keep the original 100.0/125.0/125.0
-# via build_systems()'s own default -- unaffected by this fix). Computed as
-# the midpoint of each shaft's floating seat (seatB, between the body/seatB
-# shoulder and the shaft's free end) -- see make_stepped_shaft()/
-# build_systems() for the underlying shaft geometry:
+# via build_systems()'s own default -- unaffected). Computed as the midpoint
+# of each shaft's floating seat (seatB, between the body/seatB shoulder and
+# the shaft's free end) -- see make_stepped_shaft()/build_systems() for the
+# underlying shaft geometry:
 #   shaft1: seatB = [90, 120]  (l_seat_b=30) -> center 105.0, margin
 #           (30-24)/2 = 3.0mm each side at b=24 -- matches the ~3mm
 #           clearance convention the single-row default already uses.
@@ -550,6 +583,23 @@ DR_ROLLER_CATALOG = dict(d=20.0, D=47.0, b=24.0, C=CR_NU204, C0=22_000.0,
 #   shaft3: seatB = [115, 150] (l_seat_b=35, same shaft params as shaft2)
 #           -> center 132.5, margin 5.5mm.
 DR_ROLLER_FLOATING_POSITIONS = (105.0, 132.5, 132.5)
+
+# Recentered locating position per shaft, used ONLY for the double-row-ball
+# scenarios (single-row scenarios keep the original 20.0/25.0/25.0 via
+# build_systems()'s own default -- unaffected). Computed as the midpoint of
+# each shaft's locating seat (seatA, [0, l_seat_a]) -- mirrors
+# DR_ROLLER_FLOATING_POSITIONS' own reasoning on the floating side. This
+# only became necessary once Shaft.shoulders() (core) was fixed to report
+# every transition instead of only the one that used to live on
+# shoulder_right -- before that fix, the seatA/body shoulder was invisible
+# to ShaftSystem.validate_or_raise(), so a b=28 double-row locating bearing
+# centered at position=20 within a 30/35mm seatA never tripped the overlap
+# check even though it genuinely doesn't fit there. Now it does, correctly
+# -- see this module's changelog, newest entry.
+#   shaft1: seatA = [0, 30]  -> center 15.0, margin (30-28)/2 = 1.0mm each side
+#   shaft2: seatA = [0, 35]  -> center 17.5, margin 3.5mm
+#   shaft3: seatA = [0, 35]  -> center 17.5, margin 3.5mm
+DR_LOCATING_POSITIONS = (15.0, 17.5, 17.5)
 
 
 # ===========================================================================
@@ -687,10 +737,11 @@ def DR_NU204(position, label, row_geom: dict) -> Bearing:
 
 
 # ===========================================================================
-# SCENARIOS -- (name, locating_builder, floating_builder, floating_positions).
-# Exactly 3 scenarios -- see this module's changelog ("RESTRUCTURED, this
-# turn") for why the earlier 4 (which included two double-ball-only variants
-# with a single-row floating side) collapsed to these 3:
+# SCENARIOS -- (name, locating_builder, floating_builder, floating_positions,
+# locating_positions). Exactly 3 scenarios -- see this module's changelog
+# ("RESTRUCTURED, this turn") for why the earlier 4 (which included two
+# double-ball-only variants with a single-row floating side) collapsed to
+# these 3:
 #   1. BASELINE_SCENARIO      -- single-row both sides.
 #   2. DOUBLE_HOMO_SCENARIO   -- double-row both sides, IDENTICAL rows.
 #   3. DOUBLE_HETERO_SCENARIO -- double-row both sides, HETEROGENEOUS rows
@@ -722,21 +773,23 @@ MULTIROW_SLOTS_BY_SCENARIO: dict[str, dict[str, tuple[list[Bearing], list[dict],
     },
 }
 
-# floating_positions is None for BASELINE_SCENARIO (keeps build_systems()'s
-# own single-row default, 100.0/125.0/125.0); both double scenarios reuse
-# the SAME DR_ROLLER_FLOATING_POSITIONS -- the recentering only depends on
-# the mounting envelope (DR_ROLLER_CATALOG's b/d/D), not on whether the
-# individual rows are homogeneous or heterogeneous.
+# floating_positions/locating_positions are both None for BASELINE_SCENARIO
+# (keeps build_systems()'s own single-row defaults, 100.0/125.0/125.0 and
+# 20.0/25.0/25.0); all three double scenarios reuse the SAME
+# DR_ROLLER_FLOATING_POSITIONS / DR_LOCATING_POSITIONS -- the recentering
+# only depends on the mounting envelope (DR_ROLLER_CATALOG's / DR_CATALOG's
+# b/d/D), not on whether the individual rows are homogeneous or
+# heterogeneous.
 SCENARIOS = [
-    (BASELINE_SCENARIO, BB6204, CRNU204, None),
+    (BASELINE_SCENARIO, BB6204, CRNU204, None, None),
     (DOUBLE_HOMO_SCENARIO,
      partial(DR6204,   row_geom=DR_ROW_GEOM_HOMO[0]),
      partial(DR_NU204, row_geom=DR_ROLLER_ROW_GEOM_HOMO[0]),
-     DR_ROLLER_FLOATING_POSITIONS),
+     DR_ROLLER_FLOATING_POSITIONS, DR_LOCATING_POSITIONS),
     (DOUBLE_HETERO_SCENARIO,
      partial(DR6204,   row_geom=DR_ROW_GEOM_HETERO[0]),
      partial(DR_NU204, row_geom=DR_ROLLER_ROW_GEOM_HETERO[0]),
-     DR_ROLLER_FLOATING_POSITIONS),
+     DR_ROLLER_FLOATING_POSITIONS, DR_LOCATING_POSITIONS),
 ]
 
 
@@ -750,18 +803,20 @@ def make_stepped_shaft(name, total_length, d_seat, d_body,
     sh = Shaft(label=name)
     sh.add_section(ShaftSection(length=l_seat_a, diameter=d_seat,
                                 material_id=material_id, label=f"{name}-seatA"))
-    sh.add_section(ShaftSection(
-        length=l_body, diameter=d_body, material_id=material_id, label=f"{name}-body",
-        shoulder_left=Shoulder(fillet_radius=fillet_r, diameter_large=d_body, diameter_small=d_seat),
-        shoulder_right=Shoulder(fillet_radius=fillet_r, diameter_large=d_body, diameter_small=d_seat),
-    ))
+    sh.add_section(ShaftSection(length=l_body, diameter=d_body,
+                                material_id=material_id, label=f"{name}-body"))
     sh.add_section(ShaftSection(length=l_seat_b, diameter=d_seat,
                                 material_id=material_id, label=f"{name}-seatB"))
+
+    shoulder = Shoulder(fillet_radius=fillet_r, diameter_large=d_body, diameter_small=d_seat)
+    sh.set_transition(0, shoulder)   # seatA / body
+    sh.set_transition(1, shoulder)   # body / seatB
+
     return sh
 
-
 def build_systems(b: float, locating_builder, floating_builder=CRNU204,
-                  floating_positions: tuple[float, float, float] | None = None) -> dict[str, ShaftSystem]:
+                  floating_positions: tuple[float, float, float] | None = None,
+                  locating_positions: tuple[float, float, float] | None = None) -> dict[str, ShaftSystem]:
     """
     floating_positions -- (pos_shaft1, pos_shaft2, pos_shaft3) for the
     FLOATING bearing, defaulting to the original (100.0, 125.0, 125.0) --
@@ -770,9 +825,20 @@ def build_systems(b: float, locating_builder, floating_builder=CRNU204,
     see DR_ROLLER_FLOATING_POSITIONS and the FIX changelog entry explaining
     why (a shoulder-overlap crash on shaft1 the first time this was run
     with an unchanged position).
+
+    locating_positions -- same idea, LOCATING side: (pos_shaft1, pos_shaft2,
+    pos_shaft3), defaulting to the original (20.0, 25.0, 25.0) -- tuned for
+    the single-row 6204's own width. A wider locating_builder (e.g. the
+    double-row DR6204) needs its own, recentered positions -- see
+    DR_LOCATING_POSITIONS. Only needed once Shaft.shoulders() (core) was
+    fixed to report every transition instead of only the one that used to
+    live on shoulder_right -- before that fix, ShaftSystem.validate_or_raise()
+    never saw the seatA/body shoulder at all, so this crash was silently
+    missed. See this module's changelog, newest entry.
     """
     gear_kw = dict(**GEAR_KW_BASE, b=b)
-    pos1, pos2, pos3 = floating_positions if floating_positions is not None else (100.0, 125.0, 125.0)
+    pos1, pos2, pos3    = floating_positions  if floating_positions  is not None else (100.0, 125.0, 125.0)
+    pos1a, pos2a, pos3a = locating_positions if locating_positions is not None else (20.0, 25.0, 25.0)
 
     z1 = SpurHelicalGear(z=20, position=55.0, label="z1", **gear_kw)
     z2 = SpurHelicalGear(z=60, position=95.0, label="z2", **gear_kw)
@@ -794,9 +860,9 @@ def build_systems(b: float, locating_builder, floating_builder=CRNU204,
     sys2.shaft_origin_x = sys1.shaft_origin_x + (z1.position - z2.position)
     sys3.shaft_origin_x = sys2.shaft_origin_x + (z3.position - z4.position)
 
-    sys1.add_bearing(locating_builder(20.0,  "brg1a")); sys1.add_bearing(floating_builder(pos1, "brg1b"))
-    sys2.add_bearing(locating_builder(25.0,  "brg2a")); sys2.add_bearing(floating_builder(pos2, "brg2b"))
-    sys3.add_bearing(locating_builder(25.0,  "brg3a")); sys3.add_bearing(floating_builder(pos3, "brg3b"))
+    sys1.add_bearing(locating_builder(pos1a, "brg1a")); sys1.add_bearing(floating_builder(pos1, "brg1b"))
+    sys2.add_bearing(locating_builder(pos2a, "brg2a")); sys2.add_bearing(floating_builder(pos2, "brg2b"))
+    sys3.add_bearing(locating_builder(pos3a, "brg3a")); sys3.add_bearing(floating_builder(pos3, "brg3b"))
 
     ge_z1 = GearElement(z1, role="driver", rotation_dir=1, label="z1")
     ge_z2 = GearElement(z2, role="driven",                 label="z2")
@@ -1196,7 +1262,7 @@ def print_solver_comparison(solver_comparison: dict[tuple[str, str], dict]) -> N
 def plot_polar_comparison(rows: dict[tuple[str, str], dict[str, dict]]) -> None:
     shaft_names = sorted({shaft_name for shaft_name, _ in rows})
     slots       = ["locating (a)", "floating (b)"]
-    scenario_names = [s for s, _, _, _ in SCENARIOS]
+    scenario_names = [s for s, _, _, _, _ in SCENARIOS]
 
     for shaft_name in shaft_names:
         fig, axes = plt.subplots(len(slots), len(scenario_names),
@@ -1241,7 +1307,7 @@ def plot_polar_comparison(rows: dict[tuple[str, str], dict[str, dict]]) -> None:
 
 def plot_qmax_comparison(rows: dict[tuple[str, str], dict[str, dict]]) -> None:
     shaft_names = sorted({shaft_name for shaft_name, slot in rows if slot == "locating (a)"})
-    scenario_names = [s for s, _, _, _ in SCENARIOS]
+    scenario_names = [s for s, _, _, _, _ in SCENARIOS]
     short_names = [s.split("(")[0].strip() for s in scenario_names]
 
     fig, axes = plt.subplots(1, len(shaft_names), figsize=(5 * len(shaft_names), 4.5))
@@ -1295,10 +1361,11 @@ if __name__ == "__main__":
     fraction_solver = ISO16281MultiRowBallSolver(tol=SOLVER_TOL)
     shared_solver    = ISO16281MultiRowBallSolverSharedDisplacement(tol=SOLVER_TOL)
 
-    for scenario_name, locating_builder, floating_builder, floating_positions in SCENARIOS:
+    for scenario_name, locating_builder, floating_builder, floating_positions, locating_positions in SCENARIOS:
         print(f"\n=== scenario: {scenario_name} ===")
 
-        shaft_systems = build_systems(B_STUDY, locating_builder, floating_builder, floating_positions)
+        shaft_systems = build_systems(B_STUDY, locating_builder, floating_builder,
+                                      floating_positions, locating_positions)
 
         for name, shaft_sys in shaft_systems.items():
             bearings    = {b.label: b for b in shaft_sys.bearings}
@@ -1446,7 +1513,7 @@ if __name__ == "__main__":
 
     shaft_slot_keys = sorted(rows.keys())
 
-    for scenario_name, _, _, _ in SCENARIOS:
+    for scenario_name, _, _, _, _ in SCENARIOS:
         print(f"\n{'='*W}")
         print(f"  SCENARIO: {scenario_name}")
         print(f"{'='*W}")

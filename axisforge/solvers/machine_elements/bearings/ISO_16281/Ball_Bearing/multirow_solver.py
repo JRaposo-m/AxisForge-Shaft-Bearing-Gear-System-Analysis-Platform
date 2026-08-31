@@ -1,47 +1,9 @@
 """
-axisforge/solvers/machine_elements/bearings/ISO_16281/Ball_Bearing/ball_bearing_multirow_solver_shared_displacement.py
+axisforge/solvers/machine_elements/bearings/ISO_16281/Ball_Bearing/multirow_solver.py
 
-Alternative multi-row thrust ball bearing solver -- SAME public contract
-as ball_bearing_multirow_solver.py's ISO16281MultiRowBallSolver
-(solve_bearing(bearing, Fr_xz, Fr_xy, Fa, psi, label) -> BallBearingResult),
-different internal formulation.
-
-UPDATED, this turn -- ADOPTED as ISO16281BallSolver.MULTIROW_SOLVER
--------------------------------------------------------------------
-This was written for side-by-side comparison, explicitly NOT to replace
-the existing (fraction-based) solver -- that stance has now changed, based
-on evidence rather than just the theoretical trade-off discussion below.
-Running both solvers side by side on a real gearbox model
-(design_bearing_combination_comparison.py's "SOLVER COMPARISON" section)
-showed ISO16281MultiRowBallSolver (fraction-based) fails to converge
-(outer_ok=False, residual stuck ~6e-3, hits its iteration cap) for a
-double-row bearing with Fa~=0 (a purely radially-loaded shaft, the common
-case) AND heterogeneous rows (different cp per row) -- most likely the
-axial-side counterpart of the Fr~=0 degeneracy that solver's own
-FR_NEGLIGIBLE_EPS already handles (when Fa_total~=0, ANY per-row axial
-load-split fraction f_a_row satisfies f_a_row*Fa_total=0, so that Jacobian
-column goes singular), unhandled on the axial side. This solver does not
-share that failure mode by construction -- see "Formulation" below, it
-never divides by a possibly-zero total -- and converged cleanly
-(outer_ok=True, residual ~1e-6..1e-7) on every case tested, including the
-ones where the fraction-based solver failed.
-
-Consequence: this class is now registered as
-ISO16281BallSolver.MULTIROW_SOLVER at the bottom of this file (was: not
-registered at all). rolling_bearing_solver.py's own import was switched to
-import THIS module (was: ball_bearing_multirow_solver.py) so that
-registration actually happens at orchestrator start-up -- see that file's
-own docstring. ball_bearing_multirow_solver.py is NOT deleted; it stays in
-the codebase for reference/comparison, it is simply no longer the default
-dispatch reaches.
-
-Also, as a direct consequence of adoption: the "Encapsulation note" below
-is now RESOLVED, not just flagged -- ISO16281BallSolver._elements() was
-promoted to a public elements() (no leading underscore) in
-ball_bearing_solver.py specifically because of this file, and every call
-site here was updated to match (ISO16281BallSolver.elements(...), not
-._elements(...)). See that module's own "UPDATED this turn" docstring
-note.
+This class is now registered as ISO16281BallSolver.MULTIROW_SOLVER at the 
+bottom of this file so that registration actually happens at orchestrator 
+start-up -- see that file's own docstring.
 
 Physical problem
 -----------------
@@ -52,13 +14,8 @@ displacement is found.
 
 Formulation -- one flat root-find, no nested solve
 ----------------------------------------------------
-The existing solver parametrises by PER-ROW LOAD-SPLIT FRACTIONS
-(2(i-1) unknowns, growing with row count) and calls
-ISO16281BallSolver.solve_contact() -- itself a 2-equation root-find --
-once per row, per outer iteration; convergence is checked by requiring
-every row's independently-solved (delta_r, delta_a) to agree with row 0's.
 
-This file instead parametrises directly by the SHARED (delta_r, delta_a)
+This file parametrises directly by the SHARED (delta_r, delta_a)
 -- always exactly 2 unknowns, regardless of row count -- and reuses
 ISO16281BallSolver.elements() (the static, non-optimizing kinematics
 primitive: given a displacement, returns delta_j/alpha_j/Q_j-ingredients
@@ -142,10 +99,9 @@ from types import SimpleNamespace
 import numpy as np
 
 from axisforge.core.machine_elements.bearings.bearing import Bearing
-from axisforge.solvers.machine_elements.bearings.ISO_16281.library import (
-    check_bearing_ready,
-    run_root,
-)
+from axisforge.solvers.machine_elements.bearings.ISO_16281.numerics import run_root
+from axisforge.solvers.machine_elements.bearings.ISO_16281.validation import check_bearing_ready, warn_if_floating_loaded
+
 from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.single_row_solver import (
     ISO16281BallSolver,
     REQUIRED_ATTRS,

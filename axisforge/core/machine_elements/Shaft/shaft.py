@@ -10,6 +10,21 @@ Units: mm (lengths), mm^4 (area moments), degrees (angles).
 References:
   Shigley §7-1 (shaft geometry conventions)
   Peterson §1 (stress raisers at geometric discontinuities)
+
+Shoulder ownership (CHANGED)
+-----------------------------
+A Shoulder used to live on a ShaftSection (shoulder_left / shoulder_right),
+which forced an asymmetric convention for which side of a boundary "owned"
+it (validate() required diameter_large to match whichever section held the
+reference, diameter_small the other) -- confusing to build against, and
+Shaft.shoulders() only ever looked at shoulder_right, silently missing any
+shoulder attached as a shoulder_left.
+
+A Shoulder now belongs to the Shaft, keyed by the boundary it describes:
+Shaft.transitions: dict[int, Shoulder], where index i is the boundary
+between sections[i] and sections[i+1]. There is no "left" or "right" to
+get backwards -- a transition either has a Shoulder or it doesn't.
+ShaftSection no longer carries shoulder_left / shoulder_right at all.
 """
 
 from __future__ import annotations
@@ -108,6 +123,10 @@ class Shoulder:
     r_over_d and D_over_d feed Peterson interpolation for Kt.
     Constraints: fillet_radius > 0, diameter_large > diameter_small,
     fillet_radius <= (D - d) / 2.
+
+    Ownership: attached to the Shaft via Shaft.set_transition(index, ...),
+    keyed by boundary index -- NOT stored on a ShaftSection. See the
+    module docstring for why.
     """
     fillet_radius: float
     diameter_large: float
@@ -150,14 +169,14 @@ class Shoulder:
 
 @dataclass
 class ShaftSection:
-    """Uniform cylindrical segment. Shoulders are end transitions, not part of length."""
+    """Uniform cylindrical segment. No shoulder fields -- shoulders belong
+    to the Shaft (Shaft.transitions), keyed by boundary index, not to a
+    section. See the module docstring."""
     length: float
     diameter: float
     inner_diameter: float = 0.0
     material_id: str = "S355"
     surface_finish_ra: float = 0.8
-    shoulder_left: Optional[Shoulder] = None
-    shoulder_right: Optional[Shoulder] = None
     keyways: list[Keyway] = field(default_factory=list)
     label: str = ""
 
@@ -226,10 +245,6 @@ class ShaftSection:
             errors.append(
                 f"inner_diameter ({self.inner_diameter}) must be < diameter ({self.diameter})"
             )
-        if self.shoulder_left is not None:
-            errors.extend(f"shoulder_left: {e}" for e in self.shoulder_left.validate())
-        if self.shoulder_right is not None:
-            errors.extend(f"shoulder_right: {e}" for e in self.shoulder_right.validate())
         for kw in self.keyways:
             errors.extend(f"keyway '{kw.label}': {e}" for e in kw.validate())
             if kw.depth >= self.diameter / 2.0:
@@ -245,14 +260,34 @@ class Shaft:
     """
     Ordered sequence of ShaftSection. z=0 is the left face of sections[0].
     section_at(z): interior boundaries belong to the right section.
+
+    transitions: dict[int, Shoulder] -- index i is the boundary between
+    sections[i] and sections[i+1]. Set via set_transition(), never by
+    writing to a section directly.
     """
     label: str
     sections: list[ShaftSection] = field(default_factory=list)
+    transitions: dict[int, Shoulder] = field(default_factory=dict)
 
     def add_section(self, section: ShaftSection) -> None:
         if not isinstance(section, ShaftSection):
             raise TypeError(f"Expected ShaftSection, got {type(section)}")
         self.sections.append(section)
+
+    def set_transition(self, index: int, shoulder: Shoulder) -> None:
+        """Attach a Shoulder to the boundary between sections[index] and
+        sections[index + 1]. Call after all sections involved have been
+        added -- index is checked against the CURRENT section count."""
+        if not isinstance(shoulder, Shoulder):
+            raise TypeError(f"Expected Shoulder, got {type(shoulder)}")
+        n_boundaries = max(len(self.sections) - 1, 0)
+        if index < 0 or index >= n_boundaries:
+            raise IndexError(
+                f"transition index {index} out of range "
+                f"(shaft has {len(self.sections)} sections, "
+                f"{n_boundaries} boundaries)"
+            )
+        self.transitions[index] = shoulder
 
     @property
     def total_length(self) -> float:
@@ -314,14 +349,13 @@ class Shaft:
         return section.polar_section_modulus
 
     def shoulders(self) -> list[tuple[float, Shoulder]]:
-        """List of (z_position, Shoulder), reporting only shoulder_right of each section."""
-        result: list[tuple[float, Shoulder]] = []
-        cumulative = 0.0
-        for section in self.sections:
-            cumulative += section.length
-            if section.shoulder_right is not None:
-                result.append((cumulative, section.shoulder_right))
-        return result
+        """List of (z_position, Shoulder), one per transition that has
+        one, in ascending boundary-index order. z is the boundary's own
+        axial position (= axial_end(i) = axial_start(i+1))."""
+        return [
+            (self.axial_end(i), self.transitions[i])
+            for i in sorted(self.transitions)
+        ]
 
     def validate(self) -> list[str]:
         errors: list[str] = []
@@ -333,41 +367,28 @@ class Shaft:
         for i, s in enumerate(self.sections):
             errors.extend(f"Section {i} ({s.label!r}): {e}" for e in s.validate())
 
-        for i in range(len(self.sections) - 1):
-            left = self.sections[i]
-            right = self.sections[i + 1]
+        n_boundaries = len(self.sections) - 1
+        for i, shoulder in self.transitions.items():
+            if i < 0 or i >= n_boundaries:
+                errors.append(
+                    f"transitions[{i}]: no such boundary "
+                    f"(shaft has {n_boundaries} boundaries)"
+                )
+                continue
 
-            if left.shoulder_right is not None:
-                d_small = left.shoulder_right.diameter_small
-                d_large = left.shoulder_right.diameter_large
-                if abs(d_small - right.diameter) > TOL_GEOMETRY_mm:
-                    errors.append(
-                        f"Shoulder mismatch at boundary {i}/{i+1}: "
-                        f"section[{i}].shoulder_right.diameter_small={d_small:.4f} mm "
-                        f"≠ section[{i+1}].diameter={right.diameter:.4f} mm"
-                    )
-                if abs(d_large - left.diameter) > TOL_GEOMETRY_mm:
-                    errors.append(
-                        f"Shoulder mismatch at boundary {i}/{i+1}: "
-                        f"section[{i}].shoulder_right.diameter_large={d_large:.4f} mm "
-                        f"≠ section[{i}].diameter={left.diameter:.4f} mm"
-                    )
+            errors.extend(f"transitions[{i}]: {e}" for e in shoulder.validate())
 
-            if right.shoulder_left is not None:
-                d_small = right.shoulder_left.diameter_small
-                d_large = right.shoulder_left.diameter_large
-                if abs(d_small - left.diameter) > TOL_GEOMETRY_mm:
-                    errors.append(
-                        f"Shoulder mismatch at boundary {i}/{i+1}: "
-                        f"section[{i+1}].shoulder_left.diameter_small={d_small:.4f} mm "
-                        f"≠ section[{i}].diameter={left.diameter:.4f} mm"
-                    )
-                if abs(d_large - right.diameter) > TOL_GEOMETRY_mm:
-                    errors.append(
-                        f"Shoulder mismatch at boundary {i}/{i+1}: "
-                        f"section[{i+1}].shoulder_left.diameter_large={d_large:.4f} mm "
-                        f"≠ section[{i+1}].diameter={right.diameter:.4f} mm"
-                    )
+            left, right = self.sections[i], self.sections[i + 1]
+            shoulder_diams = {shoulder.diameter_large, shoulder.diameter_small}
+            section_diams = {left.diameter, right.diameter}
+            if shoulder_diams != section_diams:
+                errors.append(
+                    f"Shoulder mismatch at boundary {i}/{i+1}: "
+                    f"transitions[{i}] diameters "
+                    f"({shoulder.diameter_small:.4f}, {shoulder.diameter_large:.4f}) mm "
+                    f"do not match section diameters "
+                    f"({left.diameter:.4f}, {right.diameter:.4f}) mm"
+                )
 
         return errors
 

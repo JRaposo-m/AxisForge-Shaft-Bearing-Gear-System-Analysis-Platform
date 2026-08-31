@@ -7,13 +7,7 @@ Geometry based on:
   - Gear Solutions: "Internal ring gears – design and considerations"
 
 Sign convention:
-  The internal gear allows z to carry a sign: z > 0 for a conventional
-  internal (ring) gear definition, but z may be passed as negative to flip
-  the diametral relations for certain mesh/assembly conventions used
-  upstream. ALL diametral directions are inverted relative to an external
-  gear via the z/|z| factor:
-    - addendum shrinks the bore   → da = d - 2·mn·(haP - x)   (z>0 case)
-    - dedendum enlarges the bore  → df = d + 2·mn·(hfP + x)   (z>0 case)
+  The internal gear allows z to carry a sign: z < 0
 """
 
 from __future__ import annotations

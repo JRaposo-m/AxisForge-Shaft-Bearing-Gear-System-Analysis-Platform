@@ -1,9 +1,6 @@
 """
 axisforge/solvers/machine_elements/bearings/ISO_16281/library.py
 
-Generic solve utilities and the per-bearing results registry shared by the
-per-bearing-type ISO/TS 16281 solvers (Ball_Bearing/, Roller_Bearing/).
-
 BearingResultsLibrary mirrors SimpleFEMResultsLibrary's pattern
 (ShaftResultsReader.read(library) -> library.get(name) -> result) but for
 ISO/TS 16281 bearing results.
@@ -17,9 +14,6 @@ same as BallLoadDistributionResult / RollerLoadDistributionResult. Ball_Bearing
 and Roller_Bearing stay independent by duck typing, not by satisfying a
 declared shape or shared base class. This file is only the final cross-type
 aggregation step.
-
-The utilities (check_bearing_ready, warn_if_floating_loaded, run_root)
-contain no contact physics -- that lives in each type's own module.
 
 The registry is deliberately type-aware: it's the single place every
 computed result for a bearing gets gathered under one label, so a future
@@ -62,10 +56,8 @@ The concrete per-type classes are only imported under TYPE_CHECKING -- real
 objects reach the registry because callers hand them to set_*() methods,
 not because the registry goes and imports anything itself.
 
-Blocks
-------
-1. Generic, contact-agnostic utilities
-2. Per-bearing results registry (BearingResultBundle, BearingResultsLibrary)
+
+Per-bearing results registry (BearingResultBundle, BearingResultsLibrary)
 """
 from __future__ import annotations
 
@@ -107,52 +99,7 @@ if TYPE_CHECKING:
 
 
 # ===========================================================================
-# Block 1 -- Generic, contact-agnostic utilities
-# ===========================================================================
-
-def check_bearing_ready(bearing, label: str, required_attrs: tuple[str, ...]) -> None:
-    """Raise if the bearing hasn't had its type-specific setup called yet."""
-    missing = [a for a in required_attrs if getattr(bearing, a, None) is None]
-    if missing:
-        raise RuntimeError(
-            f"Bearing '{label}': missing {missing} -- call the type-specific "
-            f"geometry/contact setup before solving."
-        )
-
-
-FA_FLOATING_EPS = 1e-6   # [N] Fa below this on a floating bearing is treated as zero
-
-
-def warn_if_floating_loaded(bearing, label: str, Fa: float,
-                            eps: float = FA_FLOATING_EPS) -> None:
-    """Warn if a bearing marked arrangement='floating' has Fa != 0."""
-    if getattr(bearing, "arrangement", None) == "floating" and abs(Fa) > eps:
-        warnings.warn(
-            f"Bearing '{label}' is floating but Fa = {Fa:.3f} N != 0 -- "
-            f"check the shaft's axial load path."
-        )
-
-
-def run_root(fun, x0: list, tol: float) -> tuple:
-    """
-    scipy.optimize.root, hybr with lm fallback.
-    Returns (x: np.ndarray, nfev: int, residual_norm: float, success: bool).
-    """
-    sol = root(fun, x0, method="hybr", tol=tol)
-    if not sol.success:
-        sol_lm = root(fun, x0, method="lm", tol=tol)
-        if (np.linalg.norm(np.atleast_1d(sol_lm.fun)) <
-                np.linalg.norm(np.atleast_1d(sol.fun))):
-            sol = sol_lm
-
-    return (np.atleast_1d(sol.x),
-            int(getattr(sol, "nfev", 0)),
-            float(np.linalg.norm(np.atleast_1d(sol.fun))),
-            bool(sol.success))
-
-
-# ===========================================================================
-# Block 2 -- Per-bearing results registry
+# Per-bearing results registry
 # ===========================================================================
 
 @dataclass

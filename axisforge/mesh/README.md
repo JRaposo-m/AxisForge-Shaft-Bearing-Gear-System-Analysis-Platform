@@ -1,84 +1,91 @@
 # axisforge/mesh — Module Reference
 
-1D FEM node generation, grading, and beam elements for the shaft solver in [`solvers/README.md`](../solvers/README.md#solvers--shaft-fem).
+1D node generation, grading and beam elements for the shaft solver in [`solvers/README.md`](../solvers/README.md#shaft-fem).
 
 ← back to [project root](../../README.md)
 
 ---
 
-## Package layout
+## Import surface
 
-The `oneD/` level is gone — the package is `mesh/shaft/`, split into node generation and element formulation. The **mesh convergence study has moved out** to [`solvers/mesh/mesh_convergence_study.py`](../solvers/README.md#solvers--mesh-convergence): it drives solves, so it belongs with the solvers; `mesh/` now contains only the geometry-side primitives it refines.
-
-```
-mesh/
-└── shaft/
-    ├── mesh_generation/
-    │   ├── __init__.py         ← Mesh1D, Grader
-    │   ├── mesh_1D.py
-    │   └── mesh_grade.py
-    └── element_type/
-        ├── __init__.py         ← TimoshenkoBeam
-        ├── elem.py             ← Elem
-        └── timoshenko_selective_integration/
-            ├── __init__.py     ← TimoshenkoBeam
-            └── timoshenko.py
-```
-
-| Was | Is now |
+| Import from | Names |
 |---|---|
-| `mesh/oneD/shaft/mesh_generation/` | `mesh/shaft/mesh_generation/` |
-| `mesh/oneD/shaft/Elements/elem.py` | `mesh/shaft/element_type/elem.py` |
-| `mesh/oneD/shaft/Elements/Timoshenko_Selective_Integration/` | `mesh/shaft/element_type/timoshenko_selective_integration/` |
-| `mesh/oneD/shaft/mesh_generation/mesh_convergence_study.py` | `solvers/mesh/mesh_convergence_study.py` |
+| `axisforge.mesh.shaft.mesh_generation` | `Mesh1D`, `Grader` |
+| `axisforge.mesh.shaft.element_type` | `TimoshenkoBeam` |
+| `axisforge.mesh.shaft.element_type.elem` | `Elem` |
 
-> `element_type/__init__.py` exports only `TimoshenkoBeam`. `Elem` is **not** rolled up there — it is imported directly from `.elem` by `SimpleFEMSolver`, `SubmodelSolver` and the convergence study. Add it to the roll-up if you want `element_type` to be the single import point for both.
+```
+mesh/shaft/
+├── mesh_generation/
+│   ├── mesh_1D.py       Mesh1D
+│   └── mesh_grade.py    Grader
+└── element_type/
+    ├── elem.py          Elem
+    └── timoshenko_selective_integration/
+        └── timoshenko.py    TimoshenkoBeam
+```
 
----
-
-## mesh/shaft/mesh_generation
-
-**`mesh_1D.py` — `Mesh1D`**
-
-Generates the 1D FEM node grid for one `ShaftSystem`. The mesh is built from **mandatory positions only** (no adaptive refinement): every section boundary, bearing extent, gear extent and load position must land on a node.
-
-- `Mesh1D(shaft_system, extra_mandatory=None)` — `extra_mandatory` is the hook the convergence study and gear-face refinement use to lock extra nodes in.
-- `build()` / `x_nodes` *(property)* / `n_nodes` — sorted, deduped node grid; positions closer than `MESH_MIN_NODE_DIST_MM` are merged.
-- `add_grader(grader, grade)` — inject a `Grader` + grade level as mandatory nodes. Call **after** the base mesh exists, since the `Grader` must have been constructed against the current `x_nodes`. Invalidates the cache.
-- `clear_graders()` — remove all injected graders.
-- `show_nodes(print_output=True)` — numbered node table for inspection.
-
-**`mesh_grade.py` — `Grader`**
-
-Produces standardised mesh grades for a subdomain `[x_lo, x_hi]` by successive elementwise bisection of the base mesh.
-
-- `Grader(x_lo, x_hi, x_nodes)`.
-- `get_grade("grade_N")` — sorted node positions at refinement level N. `grade_0` is the set of base nodes already inside the subdomain; each further grade bisects every interval once, so `grade_N` has `2^N` intervals per base interval.
-- Internals: `_parse_grade` (rejects anything not matching `grade_<int>`), `_base_nodes`, `_bisect_once`.
-
-Consumed by the convergence study and by gear-face refinement (`SimpleFEMSolver(extra_mandatory=Grader(lo, hi, base_nodes).get_grade("grade_3"))`).
+The mesh convergence study lives with the solvers, in `solvers/mesh/`, because it drives repeated solves. This package holds only the geometry-side primitives it refines.
 
 ---
 
-## mesh/shaft/element_type
+## Node generation
 
-**`elem.py` — `Elem`**
+### `Mesh1D`
 
-Single 1D beam element between two mesh nodes: `length`, `E`, `I`, `A`, `v` (Poisson), `idx_node_1`, `idx_node_2`.
+Generates the 1D node grid for one shaft system. The grid is built from mandatory positions only — there is no adaptive refinement here. Every section boundary, bearing extent, gear extent and load position lands on a node; positions closer together than the minimum node distance are merged.
 
-- `Elem.from_mesh(mesh, node_tol=MESH_MIN_NODE_DIST_MM)` *(classmethod)* — builds the full element list from a `Mesh1D`, reading `mesh.shaft_system` and `mesh.x_nodes` directly and resolving section properties and materials (`get_material`). `Mesh1D` itself carries no knowledge of `Elem`; the dependency runs one way only.
-- `Elem.from_x_nodes(x_nodes, shaft_system)` *(classmethod)* — builds elements from an explicit node list (used by the submodel solver, where the node set is not a `Mesh1D`).
-- `Elem.find_node_index(x_nodes, x, tol=MESH_MIN_NODE_DIST_MM)` *(staticmethod)* — locate a node within tolerance; raises `ValueError` if none matches.
-- `validate()` / `validate_or_raise()` — positive length, plausible modulus units.
+| Member | Purpose |
+|---|---|
+| `build` | Computes, or returns the cached, node positions. |
+| `x_nodes`, `n_nodes` | The node grid and its size. |
+| `add_grader` | Injects a grader's refinement level as additional mandatory nodes. Call it after the base mesh exists, since a grader is constructed against the current node list. Invalidates the cache. |
+| `clear_graders` | Removes every injected grader. |
+| `show_nodes` | Numbered node table for inspection. |
 
-**`timoshenko_selective_integration/timoshenko.py` — `TimoshenkoBeam`**
+Extra mandatory nodes can also be passed at construction — this is how the convergence study locks a converged node set into a production run, and how gear-face refinement is applied.
 
-Timoshenko beam element with selective integration (shear factor 5/6).
+### `Grader`
 
-- `stiffness_element(elem)` — 6×6 element stiffness (axial + shear + bending).
-- `shape_functions(zeta, elem)`, `deformation_matrix(zeta, elem)`, `elasticity_matrix(elem)` — interpolation and constitutive matrices in natural coordinates.
-- `global_to_natural_radial(x1, x2, elem)` → the mapping `ζ ↦ x(ζ)` over `ζ ∈ [−1, 1]`; `vetor_global_to_natural(f, x_map)` composes any `f(x)` with it; `jacobian(elem)`.
-- `gauss_quadrature(n)` — Gauss–Legendre points and weights (`numpy.polynomial.legendre` for n > 3).
-- `gauss_order(q, x_lo, x_hi, elem, theta_fn=None)` — **adaptive** quadrature order: estimates the polynomial degree of the shape functions (`shape_function_degree`), of the load intensity `q(x)` (`_q_degree`) and of `cos(theta(x))` (`_theta_degree`) by sampling and polynomial fitting, then returns the order that integrates their product exactly.
+Produces standardised refinement levels for a subdomain by successive elementwise bisection of the base mesh.
 
-This is what lets `SimpleFEMSolver._assemble_distributed_load_vector` integrate an arbitrary `DistributedRadialLoad` — uniform or callable intensity, constant or callable direction — without the caller choosing a quadrature rule.
+| Member | Purpose |
+|---|---|
+| `get_grade` | Sorted node positions at a requested level. Level zero is the set of base nodes already inside the subdomain; each further level bisects every interval once, so level N has 2^N intervals per base interval. |
+
+Grades are named `grade_0`, `grade_1`, … and anything not matching that pattern is rejected.
+
+---
+
+## Elements
+
+### `Elem`
+
+One 1D beam element between two mesh nodes, carrying its length, Young's modulus, second moment of area, cross-sectional area, Poisson ratio and the two node indices.
+
+| Member | Purpose |
+|---|---|
+| `from_mesh` | Builds the full element list from a `Mesh1D`, resolving section properties and materials. |
+| `from_x_nodes` | Builds elements from an explicit node list, for the submodel solver. |
+| `find_node_index` | Locates a node within tolerance; raises if none matches. |
+| `validate`, `validate_or_raise` | Element sanity — positive length, plausible modulus units. |
+
+The dependency runs one way: `Elem` reads a `Mesh1D`, and `Mesh1D` knows nothing about elements.
+
+### `TimoshenkoBeam`
+
+Timoshenko beam element with selective integration.
+
+| Member | Purpose |
+|---|---|
+| `stiffness_element` | The element stiffness matrix — axial, shear and bending. |
+| `shape_functions` | Element interpolation functions in natural coordinates. |
+| `deformation_matrix`, `elasticity_matrix` | Strain–displacement and constitutive matrices. |
+| `global_to_natural_radial` | The mapping from natural to global axial coordinate over an element. |
+| `vetor_global_to_natural` | Rewrites any function of the global coordinate in natural coordinates. |
+| `jacobian` | Element Jacobian. |
+| `gauss_quadrature` | Gauss–Legendre points and weights for an arbitrary order. |
+| `shape_function_degree` | Estimated polynomial degree of a shape function. |
+| `gauss_order` | The quadrature order that integrates the product of shape function, load intensity and direction exactly, estimated by sampling and polynomial fitting. |
+
+Adaptive quadrature order is what lets the FEM solver integrate an arbitrary distributed load — uniform or callable intensity, constant or callable direction — without the caller choosing a rule.

@@ -90,48 +90,21 @@ stage2 = SpurHelicalGearMeshing(z3, z4, label="stage2 (z3->z4)")
 # 2. STEPPED SHAFTS with real shoulders  (assumption A1)
 # ===========================================================================
 
-def make_stepped_shaft(name: str, total_length: float,
-                        d_seat: float, d_body: float,
-                        l_seat_a: float, l_seat_b: float,
-                        fillet_r: float, material_id: str = "AISI_1045") -> Shaft:
-    """
-    3-section shaft: [seat A] - shoulder up - [body] - shoulder down - [seat B]
-
-    d_seat  : bearing-seat diameter [mm]  (both ends, symmetric)
-    d_body  : body diameter [mm], under gears/pulley
-    l_seat_a, l_seat_b : length of the two seat sections [mm]
-    fillet_r : fillet radius at both shoulders [mm]
-    """
+def make_stepped_shaft(name, total_length, d_seat, d_body,
+                       l_seat_a, l_seat_b, fillet_r, material_id="AISI_1045"):
     l_body = total_length - l_seat_a - l_seat_b
-    assert l_body > 0, f"{name}: body length must be > 0, got {l_body}"
-
-    # NOTE on Shoulder direction (Shaft.validate() convention):
-    #   shoulder_right on section i must have diameter_large == section[i].diameter
-    #   and diameter_small == section[i+1].diameter -> only valid for a
-    #   STEP-DOWN (left larger than right).
-    #   shoulder_left on section i must have diameter_large == section[i].diameter
-    #   and diameter_small == section[i-1].diameter -> valid for a STEP-UP
-    #   (right larger than left).
-    # Body is the larger-diameter section here, so both transitions
-    # (seatA->body = step UP, body->seatB = step DOWN) are represented as
-    # shoulder_left / shoulder_right ON THE BODY SECTION, not on the seats.
     sh = Shaft(label=name)
-    sh.add_section(ShaftSection(
-        length=l_seat_a, diameter=d_seat, material_id=material_id,
-        label=f"{name}-seatA",
-    ))
-    sh.add_section(ShaftSection(
-        length=l_body, diameter=d_body, material_id=material_id,
-        label=f"{name}-body",
-        shoulder_left=Shoulder(fillet_radius=fillet_r,
-                                diameter_large=d_body, diameter_small=d_seat),
-        shoulder_right=Shoulder(fillet_radius=fillet_r,
-                                 diameter_large=d_body, diameter_small=d_seat),
-    ))
-    sh.add_section(ShaftSection(
-        length=l_seat_b, diameter=d_seat, material_id=material_id,
-        label=f"{name}-seatB",
-    ))
+    sh.add_section(ShaftSection(length=l_seat_a, diameter=d_seat,
+                                material_id=material_id, label=f"{name}-seatA"))
+    sh.add_section(ShaftSection(length=l_body, diameter=d_body,
+                                material_id=material_id, label=f"{name}-body"))
+    sh.add_section(ShaftSection(length=l_seat_b, diameter=d_seat,
+                                material_id=material_id, label=f"{name}-seatB"))
+
+    shoulder = Shoulder(fillet_radius=fillet_r, diameter_large=d_body, diameter_small=d_seat)
+    sh.set_transition(0, shoulder)   # seatA / body
+    sh.set_transition(1, shoulder)   # body / seatB
+
     return sh
 
 

@@ -18,6 +18,7 @@ __all__ = [
     "MultiRowThrustBallFamily", "SingleRowThrustBallFamily",
     "CylindricalRollerFamily",
     "ThrustCylindricalRollerFamily", "ThrustNeedleRollerFamily",
+    "MultiRowThrustCylindricalRollerFamily",
 ]
 
 _LAZY = {
@@ -29,6 +30,7 @@ _LAZY = {
     "CylindricalRollerFamily": ".roller_bearing",
     "ThrustCylindricalRollerFamily": ".roller_bearing",
     "ThrustNeedleRollerFamily": ".roller_bearing",
+    "MultiRowThrustCylindricalRollerFamily": ".roller_bearing",
 }
 
 def __getattr__(name: str):
@@ -45,4 +47,4 @@ def __dir__():
 
 if TYPE_CHECKING:  # pragma: no cover
     from .ball_bearing import DeepGrooveBallFamily, AngularContactFamily, SelfAligningBallFamily, MultiRowThrustBallFamily, SingleRowThrustBallFamily
-    from .roller_bearing import CylindricalRollerFamily, ThrustCylindricalRollerFamily, ThrustNeedleRollerFamily
+    from .roller_bearing import CylindricalRollerFamily, ThrustCylindricalRollerFamily, ThrustNeedleRollerFamily, MultiRowThrustCylindricalRollerFamily

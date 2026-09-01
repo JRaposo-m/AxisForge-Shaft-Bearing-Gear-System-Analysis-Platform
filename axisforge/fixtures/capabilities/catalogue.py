@@ -37,6 +37,103 @@ CAPABILITIES: dict[str, dict[str, str]] = {
             "re-typed by the caller."
         ),
     },
+    "bearings": {
+        "bearings.deep_groove_ball": (
+            "DGBB (make_deep_groove_ball_bearing) -- point contact, radial "
+            "duty. Clearance-specified (s), not contact-angle-specified. "
+            "i in {1, 2} rows."
+        ),
+        "bearings.angular_contact": (
+            "ACB (make_angular_contact_bearing) -- point contact, radial "
+            "duty. Contact-angle-specified (alpha_0_deg), bounded to "
+            "(0, 45] -- above 45deg is thrust duty. i in {1, 2} rows."
+        ),
+        "bearings.self_aligning": (
+            "Self-aligning ball bearing (make_self_aligning_ball_bearing) "
+            "-- point contact, radial duty. Contact-angle-specified "
+            "(alpha_0_deg), bounded to (0, 45]. Outer raceway radius re is "
+            "derived from gamma(alpha_0), not a fixed ratio of Dw like the "
+            "other two ball-radial families."
+        ),
+        "bearings.thrust_ball_single_row": (
+            "Single-row thrust ball bearing (make_thrust_ball_bearing) -- "
+            "point contact, thrust duty. Contact-angle-specified "
+            "(alpha_0_deg), bounded to (45, 90] -- 90 is pure thrust. "
+            "Always exactly one row; see bearings.thrust_ball_multirow "
+            "for i >= 2."
+        ),
+        "bearings.thrust_ball_multirow": (
+            "Multi-row (i >= 2) thrust ball bearing "
+            "(make_thrust_ball_multirow_bearing) -- ONE catalog part / "
+            "ONE Bearing built from a row_specs list, each row in "
+            "SingleRowThrustBallFamily's own shape. Not i independent "
+            "Bearings."
+        ),
+        "bearings.cylindrical_roller": (
+            "NU/N-type cylindrical roller bearing "
+            "(make_cylindrical_roller_bearing) -- line contact, radial "
+            "duty. arrangement must be 'floating' or 'non-locating' (no "
+            "flange to react axial load) -- the factory defaults to "
+            "'floating' rather than BearingCatalog's own 'locating' "
+            "default."
+        ),
+        "bearings.thrust_cylindrical_roller": (
+            "Single-row cylindrical roller thrust bearing "
+            "(make_thrust_cylindrical_roller_bearing) -- line contact, "
+            "thrust duty. alpha_0_deg is a required kwarg (no class-level "
+            "default)."
+        ),
+        "bearings.thrust_cylindrical_roller_multirow": (
+            "Multi-row (i >= 2) cylindrical roller thrust bearing "
+            "(make_thrust_cylindrical_roller_multirow_bearing) -- ONE "
+            "catalog part / ONE Bearing built from a row_specs list, same "
+            "shape convention as bearings.thrust_ball_multirow."
+        ),
+        "bearings.thrust_needle_roller": (
+            "Needle roller thrust bearing (make_thrust_needle_roller_bearing) "
+            "-- line contact, thrust duty. alpha_0 fixed at 90deg inside "
+            "the family (flat-race); no alpha_0_deg parameter exists."
+        ),
+    },
+    "bearing_families": {
+        "bearing_families.deep_groove_ball": (
+            "Bare DeepGrooveBallFamily class, for a script that wants to "
+            "call Bearing.assemble() itself instead of going through "
+            "bearings.deep_groove_ball's factory."
+        ),
+        "bearing_families.angular_contact": (
+            "Bare AngularContactFamily class -- see "
+            "bearing_families.deep_groove_ball for why this domain exists."
+        ),
+        "bearing_families.self_aligning": (
+            "Bare SelfAligningBallFamily class -- see "
+            "bearing_families.deep_groove_ball for why this domain exists."
+        ),
+        "bearing_families.thrust_ball_single_row": (
+            "Bare SingleRowThrustBallFamily class -- see "
+            "bearing_families.deep_groove_ball for why this domain exists."
+        ),
+        "bearing_families.thrust_ball_multirow": (
+            "Bare MultiRowThrustBallFamily class -- see "
+            "bearing_families.deep_groove_ball for why this domain exists."
+        ),
+        "bearing_families.cylindrical_roller": (
+            "Bare CylindricalRollerFamily class -- see "
+            "bearing_families.deep_groove_ball for why this domain exists."
+        ),
+        "bearing_families.thrust_cylindrical_roller": (
+            "Bare ThrustCylindricalRollerFamily class -- see "
+            "bearing_families.deep_groove_ball for why this domain exists."
+        ),
+        "bearing_families.thrust_cylindrical_roller_multirow": (
+            "Bare MultiRowThrustCylindricalRollerFamily class -- see "
+            "bearing_families.deep_groove_ball for why this domain exists."
+        ),
+        "bearing_families.thrust_needle_roller": (
+            "Bare ThrustNeedleRollerFamily class -- see "
+            "bearing_families.deep_groove_ball for why this domain exists."
+        ),
+    },
     "gears": {
         "gears.spur": (
             "External spur gear (make_spur_gear) -- SpurHelicalGear with "
@@ -51,9 +148,47 @@ CAPABILITIES: dict[str, dict[str, str]] = {
         "gears.internal": (
             "Internal (ring) gear (make_internal_gear) -- InternalGear, a "
             "different core class from external spur/helical. z is "
-            "required to be > 0 here (the standard convention); the "
-            "negative-z escape hatch InternalGear itself documents is not "
-            "exposed by this factory. Construction only, no meshing."
+            "required to be NEGATIVE here (e.g. z=-60 for 60 teeth) -- "
+            "the core's da/df formulas use z/abs(z) as a sign switch, and "
+            "only z<0 makes the addendum genuinely shrink the bore "
+            "(da<d), as a real internal gear's tip circle must. "
+            "Construction only, no meshing."
+        ),
+        "gears.spur_helical_meshing": (
+            "Fixed-axis pair of two external gears (make_spur_helical_meshing) "
+            "-- SpurHelicalGearMeshing: working centre distance, working "
+            "pressure angle, contact ratios (epsilon_alpha/beta/gamma), "
+            "interference/undercut checks via .validate(). Takes two "
+            "already-built SpurHelicalGear objects (gears.spur/gears.helical), "
+            "does not build them. Does not call .forces() -- that needs a "
+            "real driving torque, a MeshLoads-stage concern."
+        ),
+        "gears.internal_meshing": (
+            "Fixed-axis external-pinion + internal-ring pair "
+            "(make_internal_meshing) -- InternalGearMeshing: same working-"
+            "geometry/contact-ratio outputs as gears.spur_helical_meshing, "
+            "plus interference checks delegated to InternalGear.validate_mesh(). "
+            "Takes an already-built SpurHelicalGear (pinion, gears.spur/"
+            "helical) and InternalGear (ring, gears.internal; z<0 is "
+            "re-checked here as a guard). Does not call .forces()."
+        ),
+    },
+    "systems": {
+        "systems.parallel_axis_linear": (
+            "Linear N-stage parallel-axis chain, no fan-out/no convergent "
+            "merge (build_linear_system) -- N+1 ShaftSpec + N StageSpec "
+            "assembled into one SpurHelicalGearSystem (N+1 ShaftSystem, N "
+            "SpurHelicalMeshLink). Takes already-built Shaft/Bearing/"
+            "SpurHelicalGear/Load objects, does not construct them -- "
+            "requires shafts.*, gears.* and bearings.* capabilities in "
+            "the same request (see _PREREQUISITES). Spur/helical stages "
+            "only (internal-gear stages deferred). UNLIKE every other "
+            "capability in this catalogue, this one also RESOLVES the "
+            "system: P [W] is a required kwarg, rpm is read from "
+            "shaft_specs[0].speed_rpm, and the returned "
+            "SpurHelicalGearSystem already carries its gear-mesh loads "
+            "and shaft positions -- a deliberate exception, see "
+            "linear_chain_fixture.py's own module docstring."
         ),
     },
 }

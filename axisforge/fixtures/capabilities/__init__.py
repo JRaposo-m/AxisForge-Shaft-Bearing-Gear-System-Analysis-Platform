@@ -19,7 +19,15 @@ it stays separate from this one.
 This currently covers Construction-domain capabilities only (shafts;
 bearings/gears/systems land here the same way, one at a time, as each
 is written). Nothing resolved here is solved -- MeshLoads/Resolution/
-ElementAnalysis stay out of scope for this file.
+ElementAnalysis stay out of scope for this file -- WITH ONE DELIBERATE
+EXCEPTION: "systems.parallel_axis_linear" also calls
+SpurHelicalGearSystem.resolve() before returning, on explicit user
+decision (a system's whole purpose is to be resolved and positioned,
+so shipping it unresolved was judged an incomplete deliverable). See
+that branch's own comment in `_require()` below, and
+fixtures/construction/systems/parallel_axis/spur_helical/
+linear_chain_fixture.py's module docstring, for the full reasoning.
+Every other capability in this file still stops at Construction.
 
 Usage
 -----
@@ -38,10 +46,10 @@ Adding a domain
 2. Register its capability strings (with one-line descriptions) in
    catalogue.py, under CAPABILITIES["<domain>"].
 3. If a capability only makes sense alongside another domain already
-   requested -- e.g. a future "systems.parallel_axis_fixed" needs
-   already-built shaft/gear/bearing objects to assemble a ShaftSystem
-   from -- add an entry to `_PREREQUISITES`. See its own comment below
-   for the worked example.
+   requested -- e.g. "systems.parallel_axis_linear" needs already-built
+   shaft/gear/bearing objects to assemble a ShaftSystem from -- add an
+   entry to `_PREREQUISITES`. See its own comment below for the worked
+   example (no longer hypothetical -- that entry is live).
 """
 
 from __future__ import annotations
@@ -99,15 +107,19 @@ class ConstructionCapabilities:
     # for" check -- the equivalent of the old stage-gating, but keyed
     # per capability instead of per stage.
     _PREREQUISITES: ClassVar[dict[str, tuple[str, ...]]] = {
-        # "systems.parallel_axis_fixed": ("shafts", "gears.parallel_axis", "bearings"),
+        "systems.parallel_axis_linear": ("shafts", "gears", "bearings"),
         #
-        # Read as: requesting "systems.parallel_axis_fixed" (in the
+        # Read as: requesting "systems.parallel_axis_linear" (in the
         # `system` field) is only valid if `shaft`, `gears` and
         # `bearings` also carry at least one capability starting with
-        # "shafts.", "gears.parallel_axis." and "bearings."
-        # respectively -- build_systems() receives already-built
-        # Shaft/GearPair/Bearing objects, it does not construct them
-        # itself.
+        # "shafts.", "gears." and "bearings." respectively --
+        # build_linear_system() receives already-built
+        # Shaft/GearElement/Bearing objects (wrapped in ShaftSpec/
+        # StageSpec), it does not construct them itself. Note this
+        # uses the bare domain prefixes ("gears", not the earlier
+        # placeholder "gears.parallel_axis", which never matches a
+        # real capability string -- gears.* capabilities are
+        # "gears.spur"/"gears.helical"/etc., not "gears.parallel_axis.*").
         #
         # Nothing else needs an entry here yet: shaft/bearings/gears
         # are independent of each other at Construction level -- only
@@ -209,7 +221,264 @@ class ConstructionCapabilities:
             }
 
         # ---- bearings ----------------------------------------------------
-        # not written yet.
+        # 9 families total (core/machine_elements/bearings/families/):
+        #   ball_bearing/radial:  DeepGrooveBallFamily, AngularContactFamily,
+        #                         SelfAligningBallFamily
+        #   ball_bearing/thrust:  SingleRowThrustBallFamily, MultiRowThrustBallFamily
+        #   roller_bearing/radial: CylindricalRollerFamily
+        #   roller_bearing/thrust: ThrustCylindricalRollerFamily,
+        #                          MultiRowThrustCylindricalRollerFamily,
+        #                          ThrustNeedleRollerFamily
+        #
+        # Capability suffix = the family's own `.name` property verbatim
+        # (e.g. DeepGrooveBallFamily().name == "deep_groove_ball" ->
+        # "bearings.deep_groove_ball") -- read off the real core source,
+        # not chosen independently, so there is one name to keep in sync,
+        # not two.
+        #
+        # Two domains, same suffix, different prefix -- both point at the
+        # SAME family class (safe: resolve()'s collision guard only fires
+        # on two DIFFERENT objects under one name, not two capabilities
+        # agreeing on the same object):
+        #   "bearings.<name>"          -> Bearing + BearingCatalog +
+        #                                  make_<...>_bearing() factory
+        #                                  (fully assembled Bearing)
+        #   "bearing_families.<name>"  -> Bearing + BearingCatalog +
+        #                                  the bare <...>Family class, for
+        #                                  a script that wants to call
+        #                                  Bearing.assemble() itself with
+        #                                  full control (e.g. a custom
+        #                                  geometry dict shape) instead of
+        #                                  going through the factory.
+        #
+        # Every family already has a distinct class name AND a distinct
+        # factory function name (make_deep_groove_ball_bearing vs.
+        # make_angular_contact_bearing, ...), so even requesting every
+        # bearings.* capability in one ConstructionCapabilities call can't
+        # collide -- unlike shafts.generic/shafts.stepped sharing the
+        # generic "factory" key, which is why gears (above) and bearings
+        # (here) both use type-specific keys from the start.
+        if capability == "bearings.deep_groove_ball":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.fixtures.construction.bearings.ball_radial_fixture import (
+                make_deep_groove_ball_bearing,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "make_deep_groove_ball_bearing": make_deep_groove_ball_bearing,
+            }
+
+        if capability == "bearing_families.deep_groove_ball":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.core.machine_elements.bearings.families.ball_bearing.radial.subtypes.deep_groove import (
+                DeepGrooveBallFamily,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "DeepGrooveBallFamily": DeepGrooveBallFamily,
+            }
+
+        if capability == "bearings.angular_contact":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.fixtures.construction.bearings.ball_radial_fixture import (
+                make_angular_contact_bearing,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "make_angular_contact_bearing": make_angular_contact_bearing,
+            }
+
+        if capability == "bearing_families.angular_contact":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.core.machine_elements.bearings.families.ball_bearing.radial.subtypes.angular_contact import (
+                AngularContactFamily,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "AngularContactFamily": AngularContactFamily,
+            }
+
+        if capability == "bearings.self_aligning":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.fixtures.construction.bearings.ball_radial_fixture import (
+                make_self_aligning_ball_bearing,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "make_self_aligning_ball_bearing": make_self_aligning_ball_bearing,
+            }
+
+        if capability == "bearing_families.self_aligning":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.core.machine_elements.bearings.families.ball_bearing.radial.subtypes.self_aligning import (
+                SelfAligningBallFamily,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "SelfAligningBallFamily": SelfAligningBallFamily,
+            }
+
+        if capability == "bearings.thrust_ball_single_row":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.fixtures.construction.bearings.ball_thrust_fixture import (
+                make_thrust_ball_bearing,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "make_thrust_ball_bearing": make_thrust_ball_bearing,
+            }
+
+        if capability == "bearing_families.thrust_ball_single_row":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.core.machine_elements.bearings.families.ball_bearing.thrust.subtypes.thrust_single import (
+                SingleRowThrustBallFamily,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "SingleRowThrustBallFamily": SingleRowThrustBallFamily,
+            }
+
+        if capability == "bearings.thrust_ball_multirow":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.fixtures.construction.bearings.ball_thrust_fixture import (
+                make_thrust_ball_multirow_bearing,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "make_thrust_ball_multirow_bearing": make_thrust_ball_multirow_bearing,
+            }
+
+        if capability == "bearing_families.thrust_ball_multirow":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.core.machine_elements.bearings.families.ball_bearing.thrust.subtypes.thrust_multirow import (
+                MultiRowThrustBallFamily,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "MultiRowThrustBallFamily": MultiRowThrustBallFamily,
+            }
+
+        if capability == "bearings.cylindrical_roller":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.fixtures.construction.bearings.roller_radial_fixture import (
+                make_cylindrical_roller_bearing,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "make_cylindrical_roller_bearing": make_cylindrical_roller_bearing,
+            }
+
+        if capability == "bearing_families.cylindrical_roller":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.core.machine_elements.bearings.families.roller_bearing.radial.subtypes.cylindrical_roller import (
+                CylindricalRollerFamily,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "CylindricalRollerFamily": CylindricalRollerFamily,
+            }
+
+        if capability == "bearings.thrust_cylindrical_roller":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.fixtures.construction.bearings.roller_thrust_fixture import (
+                make_thrust_cylindrical_roller_bearing,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "make_thrust_cylindrical_roller_bearing": make_thrust_cylindrical_roller_bearing,
+            }
+
+        if capability == "bearing_families.thrust_cylindrical_roller":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.core.machine_elements.bearings.families.roller_bearing.thrust.subtypes.cylindrical_single import (
+                ThrustCylindricalRollerFamily,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "ThrustCylindricalRollerFamily": ThrustCylindricalRollerFamily,
+            }
+
+        if capability == "bearings.thrust_cylindrical_roller_multirow":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.fixtures.construction.bearings.roller_thrust_fixture import (
+                make_thrust_cylindrical_roller_multirow_bearing,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "make_thrust_cylindrical_roller_multirow_bearing": make_thrust_cylindrical_roller_multirow_bearing,
+            }
+
+        if capability == "bearing_families.thrust_cylindrical_roller_multirow":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            # Straight from the leaf module -- NOT via subtypes/__init__.py's
+            # lazy re-export, whose _LAZY dict has a copy/paste bug for this
+            # exact name (maps to .cylindrical_single instead of
+            # .cylindrical_multirow). See roller_thrust_fixture.py's own
+            # module docstring for the full note. Not touched -- core is
+            # out of scope for Construction fixtures.
+            from axisforge.core.machine_elements.bearings.families.roller_bearing.thrust.subtypes.cylindrical_multirow import (
+                MultiRowThrustCylindricalRollerFamily,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "MultiRowThrustCylindricalRollerFamily": MultiRowThrustCylindricalRollerFamily,
+            }
+
+        if capability == "bearings.thrust_needle_roller":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.fixtures.construction.bearings.roller_thrust_fixture import (
+                make_thrust_needle_roller_bearing,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "make_thrust_needle_roller_bearing": make_thrust_needle_roller_bearing,
+            }
+
+        if capability == "bearing_families.thrust_needle_roller":
+            from axisforge.core.machine_elements.bearings.bearing import Bearing
+            from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+            from axisforge.core.machine_elements.bearings.families.roller_bearing.thrust.subtypes.needle_single import (
+                ThrustNeedleRollerFamily,
+            )
+            return {
+                "Bearing": Bearing,
+                "BearingCatalog": BearingCatalog,
+                "ThrustNeedleRollerFamily": ThrustNeedleRollerFamily,
+            }
 
         # ---- gears ----------------------------------------------------
         # NOTE: gears uses TYPE-SPECIFIC keys (make_spur_gear/make_helical_
@@ -223,6 +492,12 @@ class ConstructionCapabilities:
         # resolve()'s own collision guard. Discovered by testing
         # gears=("gears.spur","gears.helical","gears.internal") together
         # before delivering this.
+        # PATH UPDATE: external_gear_fixture.py / internal_gear_fixture.py
+        # moved from fixtures/construction/gears/ to
+        # fixtures/construction/gears/parallel_axis/fixed/ (confirmed via
+        # device_list_dir against the real repo) -- the three branches
+        # below import from the new nested path. The old flat path no
+        # longer exists in the real repo.
         if capability == "gears.spur":
             from axisforge.core.machine_elements.gears.parallel_axis.gear_properties.spur_helical_gear import (
                 SpurHelicalGear,
@@ -259,9 +534,79 @@ class ConstructionCapabilities:
                 "make_internal_gear": make_internal_gear,
             }
 
+        # ---- gears: meshing (fixed-axis pairs) ------------------------
+        # Same domain prefix as gear generation above ("gears.*") -- your
+        # call, to avoid a 6th ConstructionCapabilities field for a
+        # distinction that only matters in the capability STRING, not the
+        # schema. Building a SpurHelicalGearMeshing/InternalGearMeshing is
+        # still Construction (working geometry, contact ratios,
+        # validate()) -- calling .forces() with a real torque is
+        # MeshLoads, not exposed by either factory below.
+        if capability == "gears.spur_helical_meshing":
+            from axisforge.core.machine_elements.gears.parallel_axis.gear_meshing.spurhelical_meshing import (
+                SpurHelicalGearMeshing,
+            )
+            from axisforge.fixtures.construction.gears.parallel_axis.fixed.spur_helical_meshing_fixture import (
+                make_spur_helical_meshing,
+            )
+            return {
+                "SpurHelicalGearMeshing": SpurHelicalGearMeshing,
+                "make_spur_helical_meshing": make_spur_helical_meshing,
+            }
+
+        if capability == "gears.internal_meshing":
+            from axisforge.core.machine_elements.gears.parallel_axis.gear_meshing.internal_meshing import (
+                InternalGearMeshing,
+            )
+            from axisforge.fixtures.construction.gears.parallel_axis.fixed.internal_meshing_fixture import (
+                make_internal_meshing,
+            )
+            return {
+                "InternalGearMeshing": InternalGearMeshing,
+                "make_internal_meshing": make_internal_meshing,
+            }
+
         # ---- systems ----------------------------------------------------
-        # not written yet -- this is the domain that will populate
-        # _PREREQUISITES above once it exists.
+        # First cut: linear chains only (no fan-out, no convergent merge --
+        # see linear_chain_fixture.py's own module docstring). Composes
+        # already-built Shaft/Bearing/SpurHelicalGear objects via
+        # ShaftSpec/StageSpec -- does not construct any of them itself,
+        # per the _PREREQUISITES note above. Type-specific keys, same
+        # discipline as gears/bearings above (a generic "factory" key
+        # would collide against shafts.* if a script ever requested both
+        # in one ConstructionCapabilities call).
+        #
+        # UNLIKE every other branch in this method, build_linear_system()
+        # (exported below) also RESOLVES the system before returning it
+        # -- P [W] is a required kwarg on that function, rpm comes from
+        # shaft_specs[0].speed_rpm, and the SpurHelicalGearSystem handed
+        # back already carries its gear-mesh loads and shaft positions.
+        # Deliberate exception to this module's own Construction-only
+        # scope, on explicit user decision -- see this module's own
+        # docstring (top of file) and linear_chain_fixture.py's module
+        # docstring for the full reasoning. Nothing to change HERE for
+        # that (this branch only re-exports names, it doesn't call
+        # anything), but a reader stopping at this comment should not
+        # assume "Construction only" holds for this one capability.
+        if capability == "systems.parallel_axis_linear":
+            from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import (
+                GearElement, ShaftSystem,
+            )
+            from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
+                SpurHelicalMeshLink, SpurHelicalGearSystem,
+            )
+            from axisforge.fixtures.construction.systems.parallel_axis.spur_helical.linear_chain_fixture import (
+                ShaftSpec, StageSpec, build_linear_system,
+            )
+            return {
+                "GearElement": GearElement,
+                "ShaftSystem": ShaftSystem,
+                "SpurHelicalMeshLink": SpurHelicalMeshLink,
+                "SpurHelicalGearSystem": SpurHelicalGearSystem,
+                "ShaftSpec": ShaftSpec,
+                "StageSpec": StageSpec,
+                "build_linear_system": build_linear_system,
+            }
 
         raise CapabilityError(f"unknown capability: {capability!r}")
 

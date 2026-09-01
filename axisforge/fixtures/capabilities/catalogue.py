@@ -191,6 +191,31 @@ CAPABILITIES: dict[str, dict[str, str]] = {
             "linear_chain_fixture.py's own module docstring."
         ),
     },
+    "shaft_fem": {
+        "shaft_fem.timoshenko_rigid": (
+            "1D Timoshenko beam FEM solve for every shaft in a "
+            "SpurHelicalGearSystem (SimpleFEMSolver + ShaftResultsReader "
+            "via fixtures/solvers/fem_simple.py's solve_system()) -- "
+            "every bearing a rigid support (v=0 always; u=0 "
+            "additionally for 'locating' bearings). SimpleFEMSolver's "
+            "own constraint_bearing parameter is not yet wired to any "
+            "alternative, so this name describes the only physics "
+            "actually applied today, not a chosen switch -- a future "
+            "beam theory or bearing-constraint model gets its own "
+            "capability string, never a hidden parameter here. "
+            "solve_system() takes the already-built system directly, "
+            "plus the ConstructionCapabilities that built it (checked "
+            "via has_capability('systems.parallel_axis_linear') -- "
+            "Resolution's own prerequisite) -- no _PREREQUISITES on "
+            "ResolutionCapabilities itself though, see its own "
+            "docstring in fixtures/capabilities/__init__.py. UNLIKE "
+            "every capability in shafts/bearings/"
+            "gears/systems except systems.parallel_axis_linear, "
+            "resolving this one hands back a function that performs "
+            "the real FEM solve when called -- Resolution's whole "
+            "purpose is to solve."
+        ),
+    },
 }
 
 

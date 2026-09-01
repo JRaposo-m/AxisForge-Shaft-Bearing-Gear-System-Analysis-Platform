@@ -435,13 +435,43 @@ class SpurHelicalGearSystem:
     # ------------------------------------------------------------------
 
     def resolve(self, P: float, rpm: float, rotation_dir_source: int,
-                source_position: tuple[float, float] = (0.0, 0.0)) -> None:
+                source_position: tuple[float, float] = (0.0, 0.0),
+                source_torque_x: float = 0.0) -> None:
         """
         Propagate power P [W] at speed rpm from the unique source shaft through
         the DAG, injecting the resulting mesh loads onto every ShaftSystem.
 
         Torque propagates in N·m; positions in mm; loads land via
         ShaftSystem.set_gear_loads (idempotent, so re-resolve is safe).
+
+        source_position vs source_torque_x — two different things that
+        happen to both be about "where the source shaft starts":
+          - source_position : tuple[float, float]  (y, z) mm — the source
+            shaft's GLOBAL cross-sectional layout offset (source_shaft.
+            shaft_position). Purely a drawing/positioning concern; every
+            other shaft's position is chased from this one via the mesh
+            centre distances. Unrelated to torque.
+          - source_torque_x : float  mm — the AXIAL position, along the
+            source shaft's OWN x-axis (0 = left end, same convention as
+            gear.position / bearing position), where the external power
+            input (motor/coupling) physically enters the shaft. Defaults
+            to 0.0 (the very start of the shaft).
+
+        Without source_torque_x, the source shaft never received a load
+        representing the external power input itself — only the reaction
+        of its first gear mesh (a TorqueLoad at that gear's own position).
+        That made the torsion diagram T(x) backwards for the source shaft:
+        T=0 up to the first gear, then jumping to T_source afterwards,
+        instead of carrying T_source from x=0 up to the gear (where it is
+        fully consumed) and 0 beyond it. This resolve() call now injects
+        that missing input load at source_torque_x, using T=-T_source —
+        the same sign convention _forces_to_loads() already uses for a
+        "driven"/entry side (T=-F["T_out"]), so it correctly cancels the
+        existing +T_source load already placed at the first gear (side=
+        "driver"). Tagged source="gear_mesh" like every other mesh-derived
+        load (not "user") so ShaftSystem.set_gear_loads()'s existing
+        idempotent clearing already covers it on every re-resolve — no
+        ShaftSystem/set_gear_loads() change needed for this.
         """
         topo_errors = self._topology_errors()
         if topo_errors:
@@ -471,6 +501,16 @@ class SpurHelicalGearSystem:
         T_out_of: dict[int, float] = {id(source_shaft): T_source}
         rot_of: dict[int, int] = {id(source_shaft): rotation_dir_source}
         loads_by_shaft: dict[int, list] = defaultdict(list)
+
+        # external power input on the source shaft itself -- see resolve()'s
+        # own docstring for why this is T=-T_source (matches the "driven"/
+        # entry sign convention in _forces_to_loads) and why source_torque_x
+        # is a distinct concept from source_position.
+        loads_by_shaft[id(source_shaft)].append(
+            TorqueLoad(source_torque_x, -T_source,
+                       label=f"{source_shaft.name}:T_in",
+                       source="gear_mesh")
+        )
 
         for link in link_order:
             a_id, b_id = id(link.shaft_a), id(link.shaft_b)

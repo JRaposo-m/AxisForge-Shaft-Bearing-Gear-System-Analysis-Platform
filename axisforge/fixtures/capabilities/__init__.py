@@ -1,33 +1,40 @@
 """
 fixtures/capabilities/__init__.py
 
-The Construction stage, as one class: `ConstructionCapabilities` owns
-both what a design script can ask for (5 typed fields, one per domain,
-holding capability strings) and how each of those capability strings
-resolves to exact classes/factories (`_require()`, a method, not a
-free function elsewhere in the module) -- "quero construir X" and "o
-que X significa em imports" live together on purpose, since both are
-Construction's own concern and nothing outside Construction needs to
-call `_require()` directly.
+Two classes, one per pipeline stage, in ONE file on purpose:
+`ConstructionCapabilities` and `ResolutionCapabilities`. They share the
+same shape (typed fields holding capability strings; `_require()`
+resolving each to concrete classes/functions; `resolve()` merging with
+collision detection) and, since ResolutionCapabilities' own
+solve_system() needs to check a ConstructionCapabilities instance's
+requested capabilities (via `has_capability()`, defined on
+ConstructionCapabilities below), the two are tightly coupled across the
+Construction/Resolution boundary -- keeping them in the same file means
+that coupling is one scroll away, not a cross-module import to trace.
+Previously ResolutionCapabilities lived in its own resolution.py; moved
+here for that reason. Future stages (MeshLoads, ElementAnalysis) land
+the same way, as their own class in this file, when written.
 
 The full listing of capability strings, with descriptions, lives apart
 in catalogue.py -- pure metadata, no axisforge imports, safe to
-introspect without pulling in any core/solvers code. That is the only
-other file in this package; see catalogue.py's own docstring for why
-it stays separate from this one.
+introspect without pulling in any core/solvers code; catalogue.py is
+shared across both classes below (its CAPABILITIES dict is not
+Construction-only), not duplicated per stage.
 
-This currently covers Construction-domain capabilities only (shafts;
-bearings/gears/systems land here the same way, one at a time, as each
-is written). Nothing resolved here is solved -- MeshLoads/Resolution/
-ElementAnalysis stay out of scope for this file -- WITH ONE DELIBERATE
-EXCEPTION: "systems.parallel_axis_linear" also calls
+`ConstructionCapabilities` covers Construction-domain capabilities only
+(shafts; bearings/gears/systems land here the same way, one at a time,
+as each is written). Nothing resolved by IT is solved -- MeshLoads/
+Resolution/ElementAnalysis stay out of its `_require()` -- WITH ONE
+DELIBERATE EXCEPTION: "systems.parallel_axis_linear" also calls
 SpurHelicalGearSystem.resolve() before returning, on explicit user
 decision (a system's whole purpose is to be resolved and positioned,
 so shipping it unresolved was judged an incomplete deliverable). See
-that branch's own comment in `_require()` below, and
-fixtures/construction/systems/parallel_axis/spur_helical/
+that branch's own comment in ConstructionCapabilities._require() below,
+and fixtures/construction/systems/parallel_axis/spur_helical/
 linear_chain_fixture.py's module docstring, for the full reasoning.
-Every other capability in this file still stops at Construction.
+Every other Construction capability still stops at Construction. The
+actual FEM solve lives in `ResolutionCapabilities` below (via its own
+exported solve_system() -- see that class's own docstring).
 
 Usage
 -----
@@ -39,17 +46,27 @@ Usage
     ShaftFixture          = objs["ShaftFixture"]
     make_stepped_3section = objs["factory"]
 
-Adding a domain
-----------------
-1. Add a branch to `_require()` below, grouped under that domain's own
-   "# ---- <domain> ----" section.
+    resolution = ResolutionCapabilities(
+        shaft_fem=("shaft_fem.timoshenko_rigid",),
+    )
+    objs = resolution.resolve()
+    solve_system = objs["solve_system"]
+    library = solve_system(system, construction)  # construction: the
+                                                    # ConstructionCapabilities
+                                                    # that built `system`
+
+Adding a domain (either class)
+--------------------------------
+1. Add a branch to that class's own `_require()`, grouped under that
+   domain's own "# ---- <domain> ----" section.
 2. Register its capability strings (with one-line descriptions) in
    catalogue.py, under CAPABILITIES["<domain>"].
-3. If a capability only makes sense alongside another domain already
-   requested -- e.g. "systems.parallel_axis_linear" needs already-built
-   shaft/gear/bearing objects to assemble a ShaftSystem from -- add an
-   entry to `_PREREQUISITES`. See its own comment below for the worked
-   example (no longer hypothetical -- that entry is live).
+3. Construction only: if a capability only makes sense alongside
+   another domain already requested -- e.g. "systems.parallel_axis_linear"
+   needs already-built shaft/gear/bearing objects to assemble a
+   ShaftSystem from -- add an entry to ConstructionCapabilities'
+   `_PREREQUISITES`. See its own comment below for the worked example
+   (no longer hypothetical -- that entry is live).
 """
 
 from __future__ import annotations
@@ -57,7 +74,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import ClassVar
 
-__all__ = ["CapabilityError", "ConstructionCapabilities"]
+__all__ = ["CapabilityError", "ConstructionCapabilities", "ResolutionCapabilities"]
 
 
 class CapabilityError(Exception):
@@ -67,6 +84,10 @@ class CapabilityError(Exception):
     collision between two capabilities resolving the same name to two
     different objects."""
 
+
+# ===========================================================================
+# ConstructionCapabilities
+# ===========================================================================
 
 @dataclass(frozen=True)
 class ConstructionCapabilities:
@@ -138,6 +159,28 @@ class ConstructionCapabilities:
         for values in self._fields().values():
             out.update(values)
         return out
+
+    def has_capability(self, capability: str) -> bool:
+        """True if `capability` was requested somewhere in this
+        request (any field). Purely declarative -- reads this
+        instance's own fields, nothing else; does not check whether
+        `resolve()` was actually called, or whether it succeeded.
+
+        This is how a later stage checks a Construction prerequisite
+        without holding a runtime reference to whatever object
+        Construction eventually built. The motivating case:
+        fixtures/solvers/fem_simple.py's solve_system() takes the
+        ConstructionCapabilities that built its `system` argument
+        alongside `system` itself, and calls
+        construction.has_capability("systems.parallel_axis_linear") to
+        confirm the system it was handed came from the one Construction
+        capability that also resolves (see that capability's own note
+        in `_require()` below) -- i.e. Resolution's prerequisite is
+        "Construction was asked to produce an already-resolved system",
+        checked here declaratively rather than by inspecting the
+        SpurHelicalGearSystem object's own (private) resolved state.
+        """
+        return capability in self._all()
 
     # ------------------------------------------------------------------
     # Validation
@@ -641,3 +684,186 @@ class ConstructionCapabilities:
         used = {name: values for name, values in self._fields().items() if values}
         body = "; ".join(f"{name}={', '.join(v)}" for name, v in used.items())
         return f"construction: {body or '(none)'}"
+
+
+# ===========================================================================
+# ResolutionCapabilities
+# ===========================================================================
+
+@dataclass(frozen=True)
+class ResolutionCapabilities:
+    """Stage: Resolution. `shaft_fem` is the tuple of capability
+    strings to pull for the shaft-FEM-solve domain -- e.g.
+    `ResolutionCapabilities(shaft_fem=("shaft_fem.timoshenko_rigid",))`.
+    An empty tuple means the domain is not used.
+
+    No _PREREQUISITES on THIS class (nothing here depends on another
+    shaft_fem.* capability being requested in the same call) and no
+    stored reference to ConstructionCapabilities -- see this class's
+    own top docstring for where the actual cross-stage prerequisite
+    check lives instead (solve_system()'s own `construction` parameter,
+    checked via ConstructionCapabilities.has_capability() above).
+
+    Exposes the shaft-FEM solve pipeline (SimpleFEMSolver ->
+    ShaftResultsReader -> SimpleFEMResultsLibrary) plus
+    fixtures/solvers/fem_simple.py's own solve_system() convenience --
+    the Resolution-stage counterpart to ConstructionCapabilities above
+    (same shared shape: typed fields holding capability strings,
+    `_require()` resolving each to concrete classes/functions,
+    `resolve()` merging with collision detection).
+
+    solve_system() takes the ConstructionCapabilities that built its
+    `system` argument as a second required parameter, specifically to
+    check Resolution's own prerequisite: construction must have
+    requested "systems.parallel_axis_linear" (the only Construction
+    capability that resolves the system -- gear-mesh loads + shaft
+    positions -- before returning it), via
+    ConstructionCapabilities.has_capability(). That check is
+    declarative (reads construction's own requested capability strings)
+    rather than inspecting `system`'s runtime state -- no core change
+    needed, SpurHelicalGearSystem is untouched. See
+    has_capability()'s own docstring above and fem_simple.py's own
+    module docstring for the full reasoning.
+
+    Naming note: this class's own resolve() is unrelated to
+    SpurHelicalGearSystem.resolve() (propagates torque/positions) and
+    to solve_system() (runs the actual FEM) -- same word, three
+    different meanings across the codebase, each documented at its own
+    definition. resolve() HERE means only "capability strings in,
+    concrete classes/functions out" -- exactly what
+    ConstructionCapabilities.resolve() means, nothing more.
+
+    Capability string names the exact solver configuration, not a
+    generic placeholder: "shaft_fem.timoshenko_rigid" -- SimpleFEMSolver's
+    only real configuration today (Timoshenko beam theory; every
+    bearing a rigid support). See fixtures/solvers/fem_simple.py's own
+    module docstring for why "rigid" is accurate even though
+    SimpleFEMSolver's own constraint_bearing parameter isn't actually
+    wired to an alternative yet. A future beam theory or
+    bearing-constraint model gets its OWN capability string (e.g.
+    "shaft_fem.euler_rigid"), the same growth pattern bearings.*
+    already uses in ConstructionCapabilities -- never a hidden
+    parameter folded inside this one string.
+
+    UNLIKE every Construction capability except systems.parallel_axis_linear,
+    this class's own capability ALSO performs real work when its
+    exported solve_system() is called -- not at resolve() time
+    (resolve() only hands back the function, it never calls it), but
+    the function itself runs the FEM solve rather than only assembling
+    objects. Deliberate, on the same reasoning already accepted for
+    systems.parallel_axis_linear, applied even more directly here:
+    "Resolution" IS "solve" -- a Resolution capability that only
+    returned inert classes without also offering something that solves
+    would not actually resolve anything.
+
+    Adding a configuration
+    -----------------------
+    1. Add a branch to `_require()` below.
+    2. Register the capability string (with a one-line description) in
+       catalogue.py, under CAPABILITIES["shaft_fem"].
+    """
+
+    shaft_fem: tuple[str, ...] = ()
+
+    # field name -> the capability-string domain prefix it accepts.
+    _FIELD_DOMAINS: ClassVar[dict[str, str]] = {
+        "shaft_fem": "shaft_fem",
+    }
+
+    # ------------------------------------------------------------------
+    # Field access
+    # ------------------------------------------------------------------
+
+    def _fields(self) -> dict[str, tuple[str, ...]]:
+        return {name: getattr(self, name) for name in self._FIELD_DOMAINS}
+
+    def _all(self) -> set[str]:
+        out: set[str] = set()
+        for values in self._fields().values():
+            out.update(values)
+        return out
+
+    # ------------------------------------------------------------------
+    # Validation
+    # ------------------------------------------------------------------
+
+    def validate(self) -> list[str]:
+        errors: list[str] = []
+        for field_name, values in self._fields().items():
+            prefix = self._FIELD_DOMAINS[field_name]
+            for capability in values:
+                if not capability.startswith(prefix + "."):
+                    errors.append(
+                        f"resolution.{field_name}: '{capability}' is not "
+                        f"a '{prefix}.*' capability"
+                    )
+        return errors
+
+    def validate_chain(self) -> list[str]:
+        # Resolution takes an already-built system directly at call
+        # time (see this class's own top docstring) -- nothing
+        # upstream to chain to.
+        return self.validate()
+
+    def validate_or_raise(self) -> None:
+        errors = self.validate_chain()
+        if errors:
+            raise CapabilityError("; ".join(errors))
+
+    # ------------------------------------------------------------------
+    # Resolution -- one capability string in, exact classes/factory out.
+    # ------------------------------------------------------------------
+
+    def _require(self, capability: str) -> dict:
+        """Resolve one capability string. Does not check any
+        prerequisite -- there is none for this stage (see this class's
+        own top docstring)."""
+
+        # ---- shaft_fem --------------------------------------------------
+        if capability == "shaft_fem.timoshenko_rigid":
+            from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import (
+                SimpleFEMSolver,
+            )
+            from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import (
+                ShaftResultsReader,
+                SimpleFEMResultsLibrary,
+            )
+            from axisforge.fixtures.solvers.fem_analysis.fem_simple import solve_system
+            return {
+                "SimpleFEMSolver": SimpleFEMSolver,
+                "ShaftResultsReader": ShaftResultsReader,
+                "SimpleFEMResultsLibrary": SimpleFEMResultsLibrary,
+                "solve_system": solve_system,
+            }
+
+        raise CapabilityError(f"unknown capability: {capability!r}")
+
+    def resolve(self) -> dict[str, object]:
+        """
+        Validate the whole request, then `_require()` every capability
+        across all fields and merge the results. Same collision rule
+        as ConstructionCapabilities.resolve() -- two capabilities
+        resolving the same name to the SAME object is fine; two
+        DIFFERENT objects under the same name raises.
+        """
+        self.validate_or_raise()
+        out: dict[str, object] = {}
+        for capability in self._all():
+            for name, value in self._require(capability).items():
+                if name in out and out[name] is not value:
+                    raise CapabilityError(
+                        f"name collision on '{name}' resolving "
+                        f"{capability!r}: already resolved to a "
+                        f"different object"
+                    )
+                out[name] = value
+        return out
+
+    # ------------------------------------------------------------------
+    # Introspection
+    # ------------------------------------------------------------------
+
+    def summary(self) -> str:
+        used = {name: values for name, values in self._fields().items() if values}
+        body = "; ".join(f"{name}={', '.join(v)}" for name, v in used.items())
+        return f"resolution: {body or '(none)'}"

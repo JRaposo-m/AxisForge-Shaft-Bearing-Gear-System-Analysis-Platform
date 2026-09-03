@@ -75,19 +75,19 @@ if TYPE_CHECKING:
     from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
     from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import SimpleFEMResultsLibrary
 
-    from axisforge.solvers.machine_elements.bearings.load_distribution.ISO_16281.Ball_Bearing.results import (
+    from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.ball_bearing.results import (
         BallLoadDistributionResult,
         BallBearingResult,
     )
-    from axisforge.solvers.machine_elements.bearings.load_distribution.ISO_16281.Ball_Bearing.postprocessing import (
+    from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.ball_bearing.postprocessing import (
         BallBearingStiffness,
         DynamicEquivalentRollingElementLoad,
     )
-    from axisforge.solvers.machine_elements.bearings.load_distribution.ISO_16281.Roller_Bearing.results import (
+    from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.roller_bearing.results import (
         RollerLoadDistributionResult,
         RollerBearingResult,
     )
-    from axisforge.solvers.machine_elements.bearings.load_distribution.ISO_16281.Roller_Bearing.postprocessing import (
+    from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.roller_bearing.postprocessing import (
         RollerBearingStiffness,
         LaminaDynamicEquivalentLoad,
     )

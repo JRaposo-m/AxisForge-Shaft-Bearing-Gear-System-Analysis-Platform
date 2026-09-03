@@ -1,9 +1,9 @@
 """
-axisforge/solvers/machine_elements/shaft/oneD_analysis/FEM_solvers/submodel_solver.py
+axisforge/solvers/machine_elements/shaft/fem_solvers/sub_models/lagrange_multipliers.py
 
 Submodel solver for Richardson GCI convergence study.
 
-Wraps SimpleFEMSolver and restricts metric evaluation to a
+Wraps RigidBearingFEMSolver and restricts metric evaluation to a
 subdomain [x_lo, x_hi] — typically the extent of a distributed
 radial load. The full shaft_system is solved; only the extraction
 of metric values is localised to the subdomain.
@@ -20,11 +20,11 @@ import numpy as np
 from typing import Callable
 
 
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import ShaftResultsReader
+from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import RigidBearingFEMSolver
+from axisforge.solvers.machine_elements.shaft.static.results_reader import ShaftResultsReader
 from axisforge.mesh.shaft.element_type.elem import Elem
 from axisforge.mesh.shaft.mesh_generation.mesh_1D import Mesh1D
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.build_stiffness_matrix import StiffnessMatrixBuilder
+from axisforge.solvers.machine_elements.shaft.fem_solvers.build_stiffness_matrix import StiffnessMatrixBuilder
 from axisforge.config import SOLVER_TOLERANCE
 from axisforge.core.loads import LoadPlane
 from axisforge.mesh.shaft.mesh_generation.mesh_grade import Grader
@@ -81,7 +81,7 @@ class SubmodelSolver:
 
     Parameters
     ----------
-    theory  : FEM theory string forwarded to SimpleFEMSolver
+    theory  : FEM theory string forwarded to RigidBearingFEMSolver
     metric  : quantity to extract — "sigma_b" | "M_max" | "l2_M"
     """
     def __init__(self,
@@ -92,7 +92,7 @@ class SubmodelSolver:
         self._x_hi = x_hi
 
     def solve(self,
-              global_solver: SimpleFEMSolver,
+              global_solver: RigidBearingFEMSolver,
               shaft_system,
               grade: str) -> SubmodelResult:
 
@@ -101,7 +101,7 @@ class SubmodelSolver:
         # 1. verifica que o global_solver já foi corrido
         if global_solver.d_total_xz is None:
             raise RuntimeError(
-                "SubmodelSolver.solve() requires a solved SimpleFEMSolver. "
+                "SubmodelSolver.solve() requires a solved RigidBearingFEMSolver. "
                 "Call global_solver.solve(shaft_system) first."
             )
 
@@ -243,7 +243,7 @@ class SubmodelSolver:
 
     def _build_submodel_load_cases(self, shaft_system) -> list[dict]:
         """
-        Same as SimpleFEMSolver._build_load_cases but filtered to
+        Same as RigidBearingFEMSolver._build_load_cases but filtered to
         loads within [x_lo, x_hi]. Distributed loads are clamped
         to the subdomain bounds.
         """

@@ -29,5 +29,5 @@ def __dir__():
     return sorted(list(globals().keys()) + list(_LAZY.keys()))
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .static_analysis import BearingNodeData, ShaftResults, SimpleFEMResultsLibrary, ShaftResultsReader
+    from .results_reader import BearingNodeData, ShaftResults, SimpleFEMResultsLibrary, ShaftResultsReader
 

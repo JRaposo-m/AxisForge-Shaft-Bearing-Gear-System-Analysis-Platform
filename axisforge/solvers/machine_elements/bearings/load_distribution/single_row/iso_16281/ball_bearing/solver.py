@@ -134,11 +134,11 @@ from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analys
     SimpleFEMResultsLibrary,
     BearingNodeData,
 )
-from axisforge.solvers.machine_elements.bearings.load_distribution.ISO_16281.numerics import run_root
-from axisforge.solvers.machine_elements.bearings.load_distribution.ISO_16281.validation import check_bearing_ready, warn_if_floating_loaded
+from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.numerics import run_root
+from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.validation import check_bearing_ready, warn_if_floating_loaded
 
-from axisforge.solvers.machine_elements.bearings.load_distribution.ISO_16281.dispatch import register_contact_solver
-from axisforge.solvers.machine_elements.bearings.load_distribution.ISO_16281.Ball_Bearing.results import (
+from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.dispatch import register_contact_solver
+from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.ball_bearing.results import (
     BallLoadDistributionResult,
     BallBearingResult,
     BallLoadDistributionLibrary,

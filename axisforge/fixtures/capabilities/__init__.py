@@ -828,7 +828,7 @@ class ResolutionCapabilities:
                 ShaftResultsReader,
                 SimpleFEMResultsLibrary,
             )
-            from axisforge.fixtures.solvers.fem_analysis.fem_simple import solve_system
+            from axisforge.fixtures.resolution.solvers.fem_analysis.fem_simple import solve_system
             return {
                 "SimpleFEMSolver": SimpleFEMSolver,
                 "ShaftResultsReader": ShaftResultsReader,

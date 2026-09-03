@@ -135,7 +135,7 @@ from typing import Any
 import numpy as np
 
 from axisforge.core.machine_elements.bearings.bearing import Bearing
-from axisforge.solvers.machine_elements.bearings.load_distribution.ISO_16281.Roller_Bearing.results import (
+from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.roller_bearing.results import (
     RollerLoadDistributionResult,
     RollerBearingResult,
 )

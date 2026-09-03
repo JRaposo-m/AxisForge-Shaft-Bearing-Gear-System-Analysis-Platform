@@ -1,5 +1,5 @@
 """
-axisforge/solvers/machine_elements/shaft/oneD_analysis/simple_fem_solver.py
+axisforge/solvers/machine_elements/shaft/fem_solvers/rigid_bearing.py
 
 Reuses the FEM pipeline from the legacy shaft_analysis.StaticsSolver, wired
 to the current-generation components:
@@ -32,7 +32,7 @@ hard project requirement). Call solve() once, then read the attributes:
 
 Each attribute is None until solve() has run at least once for the
 current instance. Re-calling solve() (e.g. after a re-resolve() upstream)
-overwrites all of them in place — a fresh SimpleFEMSolver is cheap to
+overwrites all of them in place — a fresh RigidBearingFEMSolver is cheap to
 build if isolation between runs is needed.
 """
 
@@ -44,13 +44,13 @@ from typing import Callable
 
 from axisforge.mesh.shaft.mesh_generation.mesh_1D import Mesh1D
 from axisforge.mesh.shaft.element_type.elem import Elem
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.build_stiffness_matrix import StiffnessMatrixBuilder
+from axisforge.solvers.machine_elements.shaft.fem_solvers.build_stiffness_matrix import StiffnessMatrixBuilder
 from axisforge.core.loads import RadialLoad, AxialLoad, ExternalMoment, LoadPlane
 from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
 from axisforge.config import MESH_MIN_NODE_DIST_MM, SOLVER_TOLERANCE
 
 
-class SimpleFEMSolver:
+class RigidBearingFEMSolver:
     """
     Orchestrates: Mesh1D -> Elem.from_mesh -> StiffnessMatrixBuilder ->
     boundary conditions -> per-load-case solve -> superposition ->
@@ -58,14 +58,13 @@ class SimpleFEMSolver:
 
     Usage
     -----
-        solver = SimpleFEMSolver()
+        solver = RigidBearingFEMSolver()
         solver.solve(shaft_system)
         solver.tau_total       # -> np.ndarray, MPa
         solver.d_total_xz      # -> np.ndarray, global displacement (XZ)
     """
 
     def __init__(self, theory: str = "timoshenko", 
-                 constraint_bearing: str = "rigid",
                  distribute_gear_labels: set[str] | None = None):
         
         """
@@ -372,9 +371,31 @@ class SimpleFEMSolver:
     def validate_torsion_equilibrium(
         self, shaft_system: ShaftSystem, tol: float = 1e-6
     ) -> list[str]:
+        """
+        Check that the net applied torque (sum of every TorqueLoad.magnitude)
+        is ~0 -- for a shaft in equilibrium, transmitted torque in must equal
+        torque out, so T(x) -> 0 past the last torque source (see the sign
+        convention note in _solve_torsion). A non-zero net usually means a
+        missing or mis-signed load -- e.g. the driven-side reaction torque
+        was never added, or GearSystem._forces_to_loads produced the wrong
+        sign for one of the sources.
 
+        Returns
+        -------
+        list[str]
+            Empty if the shaft is in torsional equilibrium; otherwise one
+            message describing the imbalance.
+        """
         errors: list[str] = []
         net = sum(ld.magnitude for ld in shaft_system.torque_loads)
+
+        if abs(net) > tol:
+            errors.append(
+                f"Torsional equilibrium violated: net torque = {net:.6f} N*m "
+                f"(tol = {tol:.1e}). Check that every TorqueLoad source "
+                f"(driver and driven) was added with the correct sign."
+            )
+
         return errors
 
     # ------------------------------------------------------------------
@@ -481,7 +502,7 @@ class SimpleFEMSolver:
                     "u":            float(self.d_total_xz[3 * i]),
                     "v_xz":         float(self.d_total_xz[3 * i + 1]),
                     "theta_xz":     float(self.d_total_xz[3 * i + 2]),
-                    "f_u":          float(self.f_xy_total[3 * i]),
+                    "f_u":          float(self.f_xz_total[3 * i]),
                     "f_v_xz":       float(self.f_xz_total[3 * i + 1]),
                     "f_theta_xz":   float(self.f_xz_total[3 * i + 2]),
                     "v_xy":         float(self.d_total_xy[3 * i + 1]),

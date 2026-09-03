@@ -324,7 +324,7 @@ print("  OK -- no errors" if not errs else "\n".join(f"  - {e}" for e in errs))
 # ===========================================================================
 
 def recover_diagrams(solver: SimpleFEMSolver, shaft_system) -> dict:
-    from axisforge.mesh.shaft.element_type.timoshenko_selective_integration.timoshenko import (
+    from axisforge.mesh.shaft.element_type.timoshenko import (
         TimoshenkoBeam,
     )
     beam = TimoshenkoBeam()

@@ -2,8 +2,8 @@
 fixtures/solvers/fem_simple.py
 
 Resolution stage: solves every ShaftSystem in a SpurHelicalGearSystem's
-system.shafts via SimpleFEMSolver + ShaftResultsReader, publishing
-every result into one SimpleFEMResultsLibrary.
+system.shafts via RigidBearingFEMSolver + ShaftResultsReader, publishing
+every result into one RigidBearingFEMResultsLibrary.
 
 Guarded on construction -- solve_system() takes the ConstructionCapabilities
 that built `system` as a second required argument, and raises ValueError
@@ -26,12 +26,12 @@ same reasoning already accepted there, and confirmed again for this
 module in ResolutionCapabilities' own docstring, fixtures/capabilities/__init__.py
 ("Resolution" IS "solve").
 
-Only ONE solver configuration exists today -- SimpleFEMSolver(theory=
+Only ONE solver configuration exists today -- RigidBearingFEMSolver(theory=
 "timoshenko", constraint_bearing="rigid"). Note: constraint_bearing is
-accepted by SimpleFEMSolver.__init__ but not actually wired to any
+accepted by RigidBearingFEMSolver.__init__ but not actually wired to any
 alternative behaviour yet -- every bearing is always a rigid support
 (v=0 always; u=0 additionally for "locating" bearings -- see
-_boundary_dofs() in simple_fem_solver.py, which never reads
+_boundary_dofs() in rigid_bearing.py, which never reads
 constraint_bearing at all). "rigid" names the physics this solver
 actually applies today, not a switch between two real options --
 solve_system()'s own default kwargs match this exactly, and
@@ -39,22 +39,24 @@ resolution.py's "shaft_fem.timoshenko_rigid" capability string is built
 on the same reasoning.
 
 Dependency (solvers only, read-only access -- no core modification):
-  axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver
-      SimpleFEMSolver
+  axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.rigid_bearing
+      RigidBearingFEMSolver
   axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis
-      ShaftResultsReader, SimpleFEMResultsLibrary
+      ShaftResultsReader, RigidBearingFEMResultsLibrary
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import (
-    SimpleFEMSolver,
+from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import (
+    RigidBearingFEMSolver,
 )
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import (
+from axisforge.solvers.machine_elements.shaft.static.results_reader import (
     ShaftResultsReader,
-    SimpleFEMResultsLibrary,
+)
+from axisforge.fixtures.studies.shafts.results_library import (
+    RigidBearingFEMResultsLibrary,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -67,15 +69,15 @@ if TYPE_CHECKING:  # pragma: no cover
 def solve_system(
     system: "SpurHelicalGearSystem",
     construction: "ConstructionCapabilities",
-    library: SimpleFEMResultsLibrary | None = None,
+    library: RigidBearingFEMResultsLibrary | None = None,
     *,
     theory: str = "timoshenko",
     constraint_bearing: str = "rigid",
     distribute_gear_labels: set[str] | None = None,
     extra_mandatory: dict[str, list[float]] | None = None,
-) -> SimpleFEMResultsLibrary:
+) -> RigidBearingFEMResultsLibrary:
     """
-    Solve every ShaftSystem in system.shafts (one fresh SimpleFEMSolver
+    Solve every ShaftSystem in system.shafts (one fresh RigidBearingFEMSolver
     per shaft -- solve() overwrites, so re-using one instance across
     shafts would silently clobber the previous shaft's results; see
     this project's own "one solver instance per shaft" rule), reading
@@ -96,12 +98,12 @@ def solve_system(
         never actually resolved. See this module's own top docstring
         for why this check lives here, on the Construction request,
         rather than on `system` itself.
-    library : SimpleFEMResultsLibrary | None
+    library : RigidBearingFEMResultsLibrary | None
         Reused if given -- re-solving a shaft name already present
-        overwrites it (SimpleFEMResultsLibrary.store()'s own
+        overwrites it (RigidBearingFEMResultsLibrary.store()'s own
         behaviour: "fresh solve replaces stale"). A new, empty library
         is created if omitted.
-    theory, constraint_bearing, distribute_gear_labels : SimpleFEMSolver
+    theory, constraint_bearing, distribute_gear_labels : RigidBearingFEMSolver
         constructor kwargs, applied UNIFORMLY to every shaft's solver
         (same values for all shafts in `system`). Defaults match the
         only configuration that actually exists today -- see this
@@ -114,12 +116,12 @@ def solve_system(
         contact-zone refinement via Grader(lo, hi,
         base_nodes).get_grade(grade) -- built by the caller, this
         function only forwards the resulting list). Shafts whose name
-        is not a key get extra_mandatory=None (SimpleFEMSolver's own
+        is not a key get extra_mandatory=None (RigidBearingFEMSolver's own
         default -- no extra refinement).
 
     Returns
     -------
-    SimpleFEMResultsLibrary
+    RigidBearingFEMResultsLibrary
         The same `library` passed in (or a new one), now holding one
         ShaftResults per shaft in system.shafts, keyed by shaft name.
     """
@@ -133,11 +135,11 @@ def solve_system(
             "would run the FEM with zero gear-mesh loads."
         )
 
-    library = library if library is not None else SimpleFEMResultsLibrary()
+    library = library if library is not None else RigidBearingFEMResultsLibrary()
     extra_mandatory = extra_mandatory or {}
 
     for ss in system.shafts:
-        solver = SimpleFEMSolver(
+        solver = RigidBearingFEMSolver(
             theory=theory,
             constraint_bearing=constraint_bearing,
             distribute_gear_labels=distribute_gear_labels,

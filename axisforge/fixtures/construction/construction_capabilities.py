@@ -1,22 +1,25 @@
 """axisforge/fixtures/construction/construction_capabilities.py
 
 Stage 1: Construction. Declares capability strings per domain, resolves
-each to concrete classes/factories. catalogue.py holds the full listing
-with descriptions (pure metadata, no axisforge imports).
+each to concrete classes/factories. catalogue.py holds the full listing,
+organised by chapter, with each capability's description AND its
+`requires` (if any) on the same leaf -- validate() no longer keeps its
+own prerequisite table, it calls catalogue.verify() per requested
+capability, passing {"construction": self} as context.
 
 Adding a domain
 ----------------
 1. Add a branch to `_require()`, grouped under its own "# ---- <domain> ----".
-2. Register the capability string in catalogue.py, under CAPABILITIES["<domain>"].
-3. If it only makes sense alongside another domain already requested
-   (e.g. "systems.parallel_axis_linear" needs already-built shaft/gear/
-   bearing objects), add an entry to `_PREREQUISITES`.
+2. Register the capability's leaf (description + requires, if any) in
+   catalogue.py's CATALOGUE, under ["construction"][<domain>].
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import ClassVar
+
+from axisforge.fixtures.capabilities import catalogue
 
 __all__ = ["CapabilityError", "ConstructionCapabilities"]
 
@@ -47,14 +50,6 @@ class ConstructionCapabilities:
         "system": "systems",
     }
 
-    # capability -> domain prefixes it needs present elsewhere in the
-    # same request. Only systems.parallel_axis_linear needs this today:
-    # build_linear_system() receives already-built Shaft/GearElement/
-    # Bearing objects, it does not construct them itself.
-    _PREREQUISITES: ClassVar[dict[str, tuple[str, ...]]] = {
-        "systems.parallel_axis_linear": ("shafts", "gears", "bearings"),
-    }
-
     # ------------------------------------------------------------------
     # Field access
     # ------------------------------------------------------------------
@@ -71,11 +66,9 @@ class ConstructionCapabilities:
     def has_capability(self, capability: str) -> bool:
         """True if `capability` was requested somewhere in this request.
         Declarative only -- reads this instance's own fields, does not
-        check whether resolve() ran. Lets a later stage confirm a
-        Construction prerequisite without holding a runtime reference
-        to what Construction built (e.g. a study's solve_system() checks
-        has_capability("systems.parallel_axis_linear") on the
-        ConstructionCapabilities that built its `system` argument)."""
+        check whether resolve() ran. Lets a later stage (StudyCapabilities,
+        via catalogue.verify()) confirm a Construction prerequisite
+        without holding a runtime reference to what Construction built."""
         return capability in self._all()
 
     # ------------------------------------------------------------------
@@ -94,14 +87,9 @@ class ConstructionCapabilities:
                         f"a '{prefix}.*' capability"
                     )
 
-        requested = self._all()
-        for capability in requested:
-            for prefix in self._PREREQUISITES.get(capability, ()):
-                if not any(c.startswith(prefix + ".") for c in requested):
-                    errors.append(
-                        f"{capability}: requires a '{prefix}.*' capability "
-                        f"in the same request (none requested)"
-                    )
+        context = {"construction": self}
+        for capability in self._all():
+            errors.extend(catalogue.verify(capability, context))
 
         return errors
 
@@ -119,8 +107,8 @@ class ConstructionCapabilities:
     # ------------------------------------------------------------------
 
     def _require(self, capability: str) -> dict:
-        """Resolve one capability string. Does not check _PREREQUISITES
-        -- that's a whole-request concern, handled in validate()."""
+        """Resolve one capability string. Does not check requires --
+        that's a whole-request concern, handled in validate()."""
 
         # ---- shafts --------------------------------------------------
         if capability == "shafts.generic":
@@ -455,7 +443,8 @@ class ConstructionCapabilities:
         # ---- systems --------------------------------------------------
         # Linear chains only. Composes already-built Shaft/Bearing/
         # SpurHelicalGear objects via ShaftSpec/StageSpec -- does not
-        # construct them itself, per _PREREQUISITES above.
+        # construct them itself, per catalogue.py's own requires for this
+        # capability.
         #
         # Deliberate exception to this class's Construction-only scope:
         # build_linear_system() also RESOLVES the system (torque/positions)

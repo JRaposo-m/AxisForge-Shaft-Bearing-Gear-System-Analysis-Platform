@@ -2,7 +2,7 @@
 
 Reusable building blocks for assembling `design_xxx.py` analysis scripts — functional runs, pipeline verification and textbook validation. These are **not** pytest tests; unit and validation tests live in `tests/`.
 
-Each layer depends only on the layers below it, and none of them is imported by `axisforge` itself.
+The package is organised around the two stages a design script actually has: **Construction**, which builds objects and solves nothing, and **Studies**, which solves and records. Each depends only on the stage below it, and nothing in `axisforge` imports from `fixtures`.
 
 ← back to [project root](../../README.md)
 
@@ -10,34 +10,80 @@ Each layer depends only on the layers below it, and none of them is imported by 
 
 ## Table of Contents
 
+- [Scope](#scope)
 - [Status](#status)
+- [Position in the architecture](#position-in-the-architecture)
 - [Structure](#structure)
 - [Capabilities](#capabilities)
-- [Gear fixtures](#gear-fixtures)
-- [Shaft fixtures](#shaft-fixtures)
-- [Bearing fixtures](#bearing-fixtures)
-- [System fixtures](#system-fixtures)
-- [Design contracts](#design-contracts)
+- [Construction fixtures](#construction-fixtures)
+- [Studies](#studies)
+- [Result libraries](#result-libraries)
+- [Report writers](#report-writers)
 - [Script structure](#script-structure)
-- [Usage rules](#usage-rules)
+- [Design contracts](#design-contracts)
+- [Extending this package](#extending-this-package)
+
+---
+
+## Scope
+
+| In scope | Out of scope |
+|---|---|
+| Declaring what a script needs and resolving it to imports | Anything `axisforge` itself imports |
+| Convenience wrappers that build domain objects from scalar parameters | The domain objects themselves (`core/`) |
+| Driving a solver across a whole gearbox and recording the results | The numerical procedure (`solvers/`) |
+| Registries keyed by shaft or bearing label | The shape of what they hold (`results/`) |
+| Fixed-width text reports | Plotting, GUI, export formats |
 
 ---
 
 ## Status
 
-| Layer | Module | Status |
-|---|---|---|
-| `gears/` | `spur_helical.py` | Implemented |
-| `shafts/` | `shaft_fixture.py` | Implemented |
-| `bearings/` | `dgbb_generic.py` | Implemented, pending migration to the current bearing assembly API |
-| `bearings/` | `crb_generic.py`, `angular_contact.py` | Reserved |
-| `systems/` | `linear_gear_chain.py` | Implemented |
-| `capabilities/` | `__init__.py` | Implemented |
-| `solvers/` | `fem_simple.py`, `iso16281_coupled.py`, `static_analysis.py` | Planned |
-| `outputs/` | `bearings.py`, `gears.py`, `shaft.py` | Implemented |
-| `plots/` | deflection, polar, convergence | Planned |
-| `convergence/` | `mesh_gci_study.py` | Planned |
-| `integration/` | full pipelines | Planned |
+| Stage | Module | Contents | Status |
+|---|---|---|---|
+| — | `capabilities/catalogue.py` | Capability metadata; no `axisforge` imports | Implemented |
+| Construction | `construction/construction_capabilities.py` | `ConstructionCapabilities`, `CapabilityError` | Implemented |
+| Construction | `construction/shafts/shaft_fixture.py` | `SectionSpec`, `ShaftFixture`, factories | Implemented |
+| Construction | `construction/bearings/ball_radial_fixture.py` | Deep groove, angular contact, self-aligning | Implemented |
+| Construction | `construction/bearings/ball_thrust_fixture.py` | Single-row and multi-row thrust ball | Implemented |
+| Construction | `construction/bearings/roller_radial_fixture.py` | Cylindrical roller | Implemented |
+| Construction | `construction/bearings/roller_thrust_fixture.py` | Cylindrical single/multi-row, needle | Implemented |
+| Construction | `construction/gears/parallel_axis/fixed/` | External, internal, and both meshing fixtures | Implemented |
+| Construction | `construction/systems/parallel_axis/spur_helical/linear_chain_fixture.py` | `ShaftSpec`, `StageSpec`, linear chain factory | Implemented |
+| Construction | `construction/*/outputs/*_report.py`, `construction/outputs/text_report.py` | `write_construction_report` and its blocks | Implemented |
+| Studies | `studies/study_capabilities.py` | `StudyCapabilities` | Implemented |
+| Studies | `studies/shafts/fem_simple.py` | `solve_system` | Implemented |
+| Studies | `studies/shafts/results_library.py` | `RigidBearingFEMResultsLibrary` | Implemented |
+| Studies | `studies/bearings/.../results_library.py` | `BearingResultBundle`, `BearingResultsLibrary` | Implemented |
+| Studies | `studies/bearings/.../single_row/rolling_bearing_study.py` | `RollingBearingSolver` | Implemented |
+| Studies | `studies/text_report.py` | `write_resolution_report` and its blocks | Implemented |
+| — | plots, mesh convergence runs, full integration pipelines | — | Planned |
+
+---
+
+## Position in the architecture
+
+```
+   core/   mesh/   results/   solvers/          axisforge
+                  ▲
+                  │  reads only — never the reverse
+                  │
+        ┌─────────┴─────────┐
+        │    fixtures/      │
+        │                   │
+        │  construction/  ──┼──▶  objects, unsolved
+        │        │          │
+        │        ▼          │
+        │    studies/     ──┼──▶  results, recorded
+        └───────────────────┘
+```
+
+Two rules hold this in place:
+
+- **`fixtures` reads `axisforge`; `axisforge` never reads `fixtures`.** Capability resolution works by introspecting what each package publishes in its `__init__.py`. It reads only.
+- **Studies depend on Construction, never the reverse.** `StudyCapabilities` carries the `ConstructionCapabilities` that built the system it is about to solve, because a study needs to know which capabilities were requested at build time.
+
+This layer is where the run-level registries live. `RigidBearingFEMResultsLibrary` and `BearingResultsLibrary` are here, not in `solvers/`: a solver computes one thing, and collecting many results under labels is orchestration. `RollingBearingSolver` is here for the same reason — despite its name it is an orchestrator, dispatching a shaft's whole bearing set to the appropriate solvers and merging what comes back.
 
 ---
 
@@ -45,277 +91,161 @@ Each layer depends only on the layers below it, and none of them is imported by 
 
 ```
 fixtures/
-├── capabilities/       Declares what a script needs; resolves it to imports
-├── gears/              GearFixture, GearPairFixture
-├── shafts/             SectionSpec, ShaftFixture
-├── bearings/           BearingFixture, DGBBFixture
-├── systems/            StageSpec, GearSystemResult, build_systems
-├── solvers/            FEM, ISO/TS 16281 and static-analysis wrappers
-├── outputs/            Console reporters
-├── plots/              matplotlib figures
-├── convergence/        Mesh convergence runs
-└── integration/        Full pipelines, ready to copy into a design script
+├── capabilities/
+│   └── catalogue.py                    Capability metadata — pure, no axisforge imports
+│
+├── construction/                       Stage 1 — build objects, solve nothing
+│   ├── construction_capabilities.py    ConstructionCapabilities, CapabilityError
+│   ├── shafts/
+│   │   ├── shaft_fixture.py            SectionSpec, ShaftFixture
+│   │   └── outputs/shaft_report.py
+│   ├── bearings/
+│   │   ├── ball_radial_fixture.py      deep groove · angular contact · self-aligning
+│   │   ├── ball_thrust_fixture.py      thrust single · thrust multi-row
+│   │   ├── roller_radial_fixture.py    cylindrical roller
+│   │   ├── roller_thrust_fixture.py    cylindrical single/multi-row · needle
+│   │   └── outputs/bearing_report.py
+│   ├── gears/parallel_axis/fixed/
+│   │   ├── external_gear_fixture.py    internal_gear_fixture.py
+│   │   ├── spur_helical_meshing_fixture.py   internal_meshing_fixture.py
+│   │   └── outputs/gear_report.py
+│   ├── systems/parallel_axis/spur_helical/
+│   │   ├── linear_chain_fixture.py     ShaftSpec, StageSpec, build_linear_system
+│   │   └── outputs/system_report.py
+│   └── outputs/text_report.py          write_construction_report — composes the four above
+│
+└── studies/                            Stage 2 — solve and record
+    ├── study_capabilities.py           StudyCapabilities
+    ├── shafts/
+    │   ├── fem_simple.py               solve_system
+    │   └── results_library.py          RigidBearingFEMResultsLibrary
+    ├── bearings/load_distribution/no_lubrication/
+    │   ├── results_library.py          BearingResultBundle, BearingResultsLibrary
+    │   └── single_row/rolling_bearing_study.py    RollingBearingSolver
+    └── text_report.py                  write_resolution_report — the solved-state report
 ```
 
-The dependency chain runs bottom-up:
+The tree mirrors the domain twice — once under `construction/`, once under `studies/` — rather than being organised by domain with a stage subfolder inside each. The stage is the stronger separation: everything under `construction/` can run without a solver present, and that property is worth being able to see from the path alone.
 
-```
-integration/
-    ↑
-outputs/  plots/
-    ↑
-solvers/
-    ↑
-systems/
-    ↑
-gears/  shafts/  bearings/
-    ↑
-capabilities/
-    ↑
-axisforge core, mesh and solver packages
-```
+`no_lubrication/` in the bearing study path is not a placeholder. It states the modelling assumption the study makes, so a later lubricated study is a sibling directory rather than a flag on this one.
 
 ---
 
 ## Capabilities
 
-`capabilities/` lets a script declare **what it needs to do** and receive exactly the objects that job requires — instead of forty hand-written import lines whose dotted paths must be kept in step with the package tree.
+The capability layer lets a script declare **what it needs to do** and receive exactly the objects that job requires — instead of forty hand-written import lines whose dotted paths must be kept in step with the package tree.
 
-It works by reading what each package already publishes in its `__init__.py`: the list of names it offers, and where each one lives. It reads only; nothing in `axisforge` imports from `fixtures`.
+It works by reading what each package already publishes in its `__init__.py`: the list of names it offers, and where each one lives. It reads only.
 
-The whole declaration lives in one module, `capabilities/__init__.py`, because the thing that matters here is not a menu per domain but a single dependency chain that runs through all of them. Console reporters are the one part kept apart, in `outputs/` — see [below](#interface).
-
-### The chain
-
-A design script's needs form four stages, each meaningless without the one before it:
+### The two stages
 
 ```
-Construction  →  MeshLoads  →  Resolution  →  ElementAnalysis
+Construction  →  Studies
 ```
 
 | Stage | Class | Does | Needs |
 |---|---|---|---|
-| 1 | `ConstructionCapabilities` | Instantiates the objects — shaft, bearings, bearing families, gears, the shaft/gear system container. Nothing is solved. `use_fixtures` (default on) layers the `fixtures/{shafts,bearings,gears,systems}/` wrapper on top, per domain requested — see [Fixture wrappers](#fixture-wrappers). | Nothing |
-| 2 | `MeshLoadsCapabilities` | `power_flow` resolves the gearbox's torque/speed (`SpurHelicalGearSystem.resolve()`); `gear_forces` computes the mesh force at a gear from that resolved torque (`GearSolver.compute_forces()`), producing the load the shaft FEM needs as input. | `construction.system`; `gear_forces` also needs `construction.gears` and `power_flow` |
-| 3 | `ResolutionCapabilities` | `shaft_fem` solves the shaft (`SimpleFEMSolver`, read back through `ShaftResultsReader`/`SimpleFEMResultsLibrary`); `bearing_loads` solves the bearings' internal load distribution from those results (`RollingBearingSolver`). | `shaft_fem` needs `construction.shaft`; `bearing_loads` needs `shaft_fem` and `construction.bearings` |
-| 4 | `ElementAnalysisCapabilities` | Per-element analyses read off a resolved system: `point_contact`, `line_contact`, `multirow_capacity` for bearings; `shaft_static_report` for the shaft; `gear_load_capacity` for gears (reserved). | `point_contact`/`line_contact` need `bearing_loads`; `multirow_capacity` needs one of them; `shaft_static_report` needs `shaft_fem` |
+| 1 | `ConstructionCapabilities` | Instantiates the objects — shaft, bearings, bearing families, gears, meshing, the shaft and gear system containers. Nothing is solved. | Nothing |
+| 2 | `StudyCapabilities` | Resolves the study entry points: `shaft_fem` (the rigid-bearing FEM solve, read back into a `RigidBearingFEMResultsLibrary`) and `bearing_iso16281` (internal load distribution from those results). | The `ConstructionCapabilities` that built the system |
 
-Each class's `validate_chain()` walks back through every earlier stage, so a script that asks for `bearing_loads` without `shaft_fem`, or `gear_forces` without `power_flow`, fails at `validate_or_raise()` — before a single name is imported, and with the specific missing prerequisite named in the error.
+`StudyCapabilities` holds the `ConstructionCapabilities` as a field, so a study cannot be declared without the construction it is a study *of*. Its `has_capability()` walks both, which is how a study checks that the system it is about to solve was built with the capabilities that solve requires.
 
-`gear_load_capacity` is registered for the ISO 6336 solver reserved in [`solvers/README.md`](../solvers/README.md#gear-solver): enabling it raises `not implemented yet`, rather than failing on an import that does not exist.
-
-### Fixture wrappers
-
-`ConstructionCapabilities.use_fixtures` (default `True`) decides, for the whole stage at once, whether resolving a domain also pulls in that domain's convenience wrapper. The table below is a schema for that wiring, not a finished one: the four wrapper modules it points at are themselves still due to be developed, one at a time, alongside each capability stage — the names will be kept in step with them as that happens, without the shape of `ConstructionCapabilities` needing to change.
-
-| Domain | Core names (always) | Wrapper added when `use_fixtures=True` | From |
-|---|---|---|---|
-| `shaft` | `Shaft`, `ShaftSection`, `Shoulder` | `SectionSpec`, `ShaftFixture`, `make_shaft`, `make_stepped_3section` | `fixtures.shafts.shaft_fixture` |
-| `bearings` | `Bearing`, `BearingCatalog` | `BearingFixture`, `DGBBFixture`, `make_dgbb` | `fixtures.bearings.dgbb_generic` |
-| `gears` | `SpurHelicalGear`, `SpurHelicalGearMeshing` | `GearFixture`, `GearPairFixture`, `make_spur_helical` | `fixtures.gears.spur_helical` |
-| `system` | `ShaftSystem`, `GearElement`, ... | `StageSpec`, `GearSystemResult`, `build_systems` | `fixtures.systems.linear_gear_chain` |
-
-The wrapper is additive, never a replacement — the core names stay resolved either way, since a wrapper does not cover everything (`SectionSpec` still takes the core `Shoulder` directly, for instance). Setting `use_fixtures=False` gives the bare core classes only, for a script that builds every object by hand instead of through a fixture. It is only pulled in for a domain actually requested — an empty `gears` tuple means no `GearFixture` either, `use_fixtures` or not. `bearing_families` has no wrapper of its own and is unaffected by the flag.
-
-This is the one place `capabilities/` reaches sideways into another fixtures package rather than down into `axisforge` — see the note on [Structure](#structure): `gears/`, `shafts/`, `bearings/` and `systems/` are drawn below `capabilities/` there because they are the simpler, more foundational layer, not because dependencies only run that way. `bearings` has no `use_fixtures=True` path through the current bearing assembly API yet — `fixtures/bearings/dgbb_generic.py` still predates `Bearing.assemble()` with a family, see [Bearing fixtures](#bearing-fixtures).
-
-### Outputs
-
-Two stages carry an `outputs` field: `MeshLoadsCapabilities` (for `gear_forces`) and `ElementAnalysisCapabilities` (for each of its four analyses). Setting `outputs["point_contact"] = True` pulls in that analysis' console reporter from `fixtures/outputs/`; leaving it `False` — or absent — runs the analysis without importing anything that prints. The dependency runs one way: an output cannot be requested for an analysis that is not itself enabled, but an analysis can be enabled with its output left off.
-
-| Analysis / mesh load | Reporter | Module |
-|---|---|---|
-| `gear_forces` | `print_gear_forces_report` | `fixtures.outputs.gears` |
-| `point_contact` | `print_point_contact_report` | `fixtures.outputs.bearings` |
-| `line_contact` | `print_line_contact_report` | `fixtures.outputs.bearings` |
-| `multirow_capacity` | `print_multirow_capacity_report` | `fixtures.outputs.bearings` |
-| `shaft_static_report` | `print_static_report` | `fixtures.outputs.shaft` |
-
-Every reporter is a pure consumer of already-computed results — it prints, it does not solve — and ASCII only, per the console-output convention.
-
-### Interface
-
-| Name | Purpose |
+| `ConstructionCapabilities` member | Purpose |
 |---|---|
-| `catalogue` | Everything selectable, per domain, without resolving anything. |
-| `where` | The domain and module a given name comes from — for diagnostics. |
-| `print_menu` | An ASCII table of the whole catalogue, plus the chained-analysis vocabulary. |
-| `ConstructionCapabilities`, `MeshLoadsCapabilities`, `ResolutionCapabilities`, `ElementAnalysisCapabilities` | The four chained stages. Each takes the previous stage as a field, so a stage cannot be built without its prerequisite already declared. |
-| `Capabilities` | The full declaration for a script: an `ElementAnalysisCapabilities` (which carries the whole chain beneath it), plus a flat name tuple per domain with no stage of its own — `loads`, `materials`, `mesh`, `elements`, `schematic`, `convergence`. |
-| `Capabilities.validate` / `validate_or_raise` | Checks every requested name and the whole capability chain. |
-| `Capabilities.resolve` | Imports exactly what was selected and returns it by name, raising on a collision across domains rather than shadowing. |
-| `Capabilities.summary` | What was selected and what it pulled in, per stage. |
+| `validate` / `validate_or_raise` | Checks every requested capability string. Raises `CapabilityError`, naming the offending capability. |
+| `validate_chain` | Walks the prerequisite chain, so a missing prerequisite is named before a single import happens. |
+| `has_capability` | Whether a given capability was requested. |
+| `resolve` | Imports exactly what was selected and returns it by name, raising on a collision across domains rather than shadowing. |
+| `summary` | What was selected and what it pulled in. |
+
+`StudyCapabilities` follows the same shape.
+
+### One deliberate exception
+
+`ConstructionCapabilities` resolves Construction-domain capabilities only — nothing it resolves is solved — **with one exception**: `"systems.parallel_axis_linear"` also calls `SpurHelicalGearSystem.resolve()` before returning. A system's whole purpose is to be resolved and positioned, so shipping it unresolved was judged an incomplete deliverable. Every other Construction capability stops at Construction. The FEM solve lives in `StudyCapabilities`.
+
+This is documented here rather than hidden because it is the one place the stage boundary is crossed on purpose.
+
+### `capabilities/catalogue.py`
+
+Pure metadata: the full listing of capability strings with their descriptions, shared by both stage classes and importing nothing from `axisforge`. It is safe to introspect without pulling in any `core` or `solvers` code.
+
+| Function | Purpose |
+|---|---|
+| `list_capabilities()` | Every selectable capability string. |
+| `describe(capability)` | What one capability provides. |
+| `chapter_of(capability)` | Which stage and domain it belongs to. |
+| `requirements_of(capability)` | Its prerequisites, as capability strings. |
+| `verify(capability, context)` | Whether a capability's prerequisites are satisfied in a given context. |
+| `print_catalogue()` | An ASCII table of the whole catalogue. |
 
 ### Usage
 
 ```python
-from axisforge.fixtures.capabilities import (
-    Capabilities, ConstructionCapabilities, MeshLoadsCapabilities,
-    ResolutionCapabilities, ElementAnalysisCapabilities,
-)
+from axisforge.fixtures.construction.construction_capabilities import ConstructionCapabilities
+from axisforge.fixtures.studies.study_capabilities            import StudyCapabilities
 
 construction = ConstructionCapabilities(
-    shaft            = ("Shaft", "ShaftSection", "Shoulder"),
-    bearings         = ("Bearing", "BearingCatalog"),
-    bearing_families = ("DeepGrooveBallFamily",),
-    gears            = ("SpurHelicalGear", "SpurHelicalGearMeshing"),
-    system           = ("ShaftSystem", "GearElement",
-                        "SpurHelicalMeshLink", "SpurHelicalGearSystem"),
+    shaft  = ("shafts.stepped_3section",),
+    system = ("systems.parallel_axis_linear",),
 )
-mesh_loads = MeshLoadsCapabilities(
-    construction=construction, power_flow=True, gear_forces=True,
-    outputs={"gear_forces": True},
-)
-resolution = ResolutionCapabilities(mesh_loads=mesh_loads, shaft_fem=True, bearing_loads=True)
-analysis   = ElementAnalysisCapabilities(
-    resolution=resolution,
-    point_contact=True,
-    shaft_static_report=True,
-    outputs={"point_contact": True, "shaft_static_report": False},   # solve the shaft report, do not print it
-)
+construction.validate_or_raise()
+objs                  = construction.resolve()
+ShaftFixture          = objs["ShaftFixture"]
+make_stepped_3section = objs["factory"]
 
-CAPS = Capabilities(element_analysis=analysis, loads=("TorqueLoad", "RadialLoad"))
-CAPS.validate_or_raise()
-globals().update(CAPS.resolve())
+study = StudyCapabilities(
+    construction     = construction,
+    shaft_fem        = ("shaft_fem.timoshenko_rigid",),
+    bearing_iso16281 = ("bearing_loads.single_row",),
+)
+study.validate_or_raise()
+solve_system = study.resolve()["solve_system"]
+library      = solve_system(system, construction)
 ```
 
-Nothing else is imported: no roller postprocessing, no planetary geometry, no GUI, and — because its output stayed off — no shaft report printer either, even though the shaft is fully solved.
+Nothing else is imported: no roller post-processing, no planetary geometry, no report writer.
 
-**Not** a plugin registry, not a dependency-injection container, and not a stability layer: it returns classes and functions, and a name that disappears from a package's surface fails loudly.
-
----
-
-## Gear fixtures
-
-`gears/spur_helical.py`. Two classes at different stages of completeness: a single gear before pairing, and a meshed pair with the working geometry resolved.
-
-### `GearFixture`
-
-Immutable wrapper for one gear, storing the construction parameters so derived copies can be produced without mutating the original: teeth count, module, face width, position, label, pressure and helix angles, profile shift, material, roughness and the basic rack parameters.
-
-| Member | Purpose |
-|---|---|
-| `with_x` | A copy at a different profile shift. |
-| `with_position` | A copy at a different axial position. |
-| `validate`, `validate_or_raise` | Delegates to the core gear. |
-| `summary` | |
-
-`make_spur_helical` is the factory; it builds the core gear and wraps it.
-
-Tip and root relief and the finer roughness parameters are not exposed — a caller needing them instantiates the core gear directly.
-
-### `GearPairFixture`
-
-Wraps the meshing object that holds the real working geometry.
-
-| Member | Purpose |
-|---|---|
-| `from_fixtures` | Builds a pair from two gear fixtures, optionally with an imposed centre distance, profile-shift equalisation or addendum reduction. |
-| `al`, `u` | Working centre distance and ratio. |
-| `epsilon_alpha`, `epsilon_beta`, `epsilon_gamma` | Contact ratios. |
-| `x1`, `x2` | The working profile shift coefficients, after correction. |
-| `validate`, `validate_or_raise`, `summary` | |
-| `iso6336_contact_stress`, `iso6336_bending_stress`, `lubrication_assessment` | Declared seams for later phases; not implemented. |
+**Not** a plugin registry, not a dependency-injection container, and not a stability layer. It returns classes and functions, and a name that disappears from a package's surface fails loudly.
 
 ---
 
-## Shaft fixtures
+## Construction fixtures
 
-`shafts/shaft_fixture.py`. Any stepped geometry, described as an ordered list of section specifications.
+Every fixture is a frozen dataclass that keeps the parameters that produced it, so a modified copy can be rebuilt without parsing the core object back apart. Modification always produces a new object through a `with_*` method.
 
-### `SectionSpec`
+### Shafts
 
-Declarative descriptor for one section: length, diameter, material, surface roughness, label, and optional shoulders. It uses the core `Shoulder` directly — there is no intermediate spec layer.
+`construction/shafts/shaft_fixture.py`.
 
-### `ShaftFixture`
+**`SectionSpec`** — declarative descriptor for one section: length, diameter, material, surface roughness, label, and optional shoulders. It uses the core `Shoulder` directly; there is no intermediate spec layer.
 
-Immutable wrapper for a shaft, keeping the section specs that produced it so modified copies can be rebuilt without parsing the core object.
+**`ShaftFixture`** — immutable wrapper for a shaft, keeping the section specs.
 
 | Member | Purpose |
 |---|---|
 | `total_length`, `n_sections` | Aggregate properties. |
 | `with_sections` | A copy from a different section list, keeping the name. |
 | `with_name` | A copy under a different name. |
-| `with_params` | A copy with individual parameters overridden — only for fixtures produced by the three-section factory. |
-| `validate`, `validate_or_raise`, `summary` | |
+| `validate`, `validate_or_raise` | Delegates to the core `Shaft`. |
+| `summary` | Axial position and diameter per section, followed by a separate block listing every transition carrying a `Shoulder` (fillet radius, diameter range, r/d, D/d). Deliberately stops there: engineering properties and validation status belong to the reports that consume a `ShaftFixture`, not to its own summary. |
 
-| Factory | Purpose |
+Shoulders are read from `shaft.transitions`, not from individual sections — `SectionSpec` carries no shoulder fields.
+
+Surface roughness applies uniformly across sections; for section-specific treatment, build the spec list by hand. Keyways are not part of the spec — attach them to the core section after building.
+
+### Bearings
+
+`construction/bearings/`, one module per contact type and duty. All four call `Bearing.assemble()` with a family, so a bearing arrives already validated against the analyses it was requested for.
+
+| Module | Families covered |
 |---|---|
-| `make_shaft` | Generic, N sections, full control over each. |
-| `make_stepped_3section` | The canonical seat–body–seat case from scalar parameters; the body length is always derived, and the same shoulder is applied to both body faces. |
+| `ball_radial_fixture.py` | `DeepGrooveBallFamily`, `AngularContactFamily`, `SelfAligningBallFamily` |
+| `ball_thrust_fixture.py` | `SingleRowThrustBallFamily`, `MultiRowThrustBallFamily` |
+| `roller_radial_fixture.py` | `CylindricalRollerFamily` |
+| `roller_thrust_fixture.py` | `ThrustCylindricalRollerFamily`, `MultiRowThrustCylindricalRollerFamily`, `ThrustNeedleRollerFamily` |
 
-A named reference instance is provided for the canonical stepped shaft.
-
-Surface roughness applies uniformly across sections; for section-specific treatment, build the spec list by hand. Keyways are not part of the spec — attach them to the core section after building, or extend the spec.
-
----
-
-## Bearing fixtures
-
-`bearings/dgbb_generic.py`. A catalogue-level base class and a deep-groove ball subclass that adds internal geometry.
-
-| Class | Purpose |
-|---|---|
-| `BearingFixture` | Immutable base: the bearing plus its catalogue and mounting parameters. The copy methods raise, to force subclass implementation. |
-| `DGBBFixture` | Adds the internal geometry parameters and the copy methods, plus a method that returns a solver-ready bearing. |
-| `make_dgbb` | The factory. |
-
-This module predates the current bearing assembly API and does not go through `Bearing.assemble()` with a family. Build bearings directly, as shown under [Design contracts](#design-contracts), until it is aligned.
-
----
-
-## System fixtures
-
-`systems/linear_gear_chain.py`. Assembly only: it receives fully built shaft, gear-pair and bearing objects, creates the shaft containers, places gears and bearings, builds the mesh links and resolves the power flow.
-
-### `StageSpec`
-
-The minimum a stage needs beyond its gear pair: the driver and driven axial positions, the line-of-centres angle, and a label.
-
-### `build_systems`
-
-Takes the shaft fixtures, the gear pairs, the bearings grouped per shaft, the stage specifications, the input power and speed, and optionally the rotation direction, a label and per-shaft speeds. Returns a `GearSystemResult`.
-
-Bearings are passed as already-assembled bearing objects, one list per shaft. Shaft axial origins are computed from the stage positions. External loads are applied by the caller on the returned shaft systems; resolving is idempotent, so it is safe to re-run after adding them.
-
-### `GearSystemResult`
-
-| Attribute | Contents |
-|---|---|
-| `gearbox` | The fully resolved gear system. |
-| `shaft_systems` | The shaft containers, ordered from source to last driven. |
-| `pairs` | One gear pair fixture per stage. |
-| `gear_fixtures` | Driver and driven gear fixtures per stage, with the resolved profile shifts. |
-| `gear_elements` | Driver and driven gear elements per stage — the same objects used in the links. |
-| `links` | One mesh link per stage. |
-| `label` | Gearbox label. |
-
-| Member | Purpose |
-|---|---|
-| `summary` | Delegates to the resolved gearbox. |
-| `print_gear_summary` | Per-stage gear table, ASCII. |
-| `driver_fixture`, `driven_fixture` | The gear fixtures for a stage. |
-| `driver_element`, `driven_element` | The gear elements for a stage. |
-
-**Scope.** Linear chains only: n stages give n+1 shafts and n links. A fan-out needs a pre-solver to compute the torque split before the links are built, and is out of scope here. Non-linear topologies are modelled as several independent gear systems; planetary arrangements use the planetary meshing class directly.
-
----
-
-## Design contracts
-
-**Immutability.** Every fixture object is a frozen dataclass; modification produces a new object through a `with_*` method.
-
-```python
-gear2  = gear.with_x(0.15)
-shaft2 = shaft.with_params(d_body=55.0)
-brg2   = brg.with_position(35.0).with_arrangement("floating")
-```
-
-The core bearing is immutable for a stronger reason: it refuses every write once assembled. A fixture cannot patch an assembled bearing — it builds a new one.
-
-**Profile shift.** The value declared on a gear fixture is provisional. The working coefficients are resolved by the meshing object when the pair is built, and read back from the pair or from the result.
-
-**Bearing readiness.** A bearing is ready when it has been assembled with the analyses the downstream solver needs. Assembly raises immediately if the family does not support a requested analysis or if a required geometry field is missing, so the failure surfaces at the fixture rather than hundreds of lines into the solve.
+Assembly raises immediately if the family does not support a requested analysis or if a required geometry field is missing, so the failure surfaces at the fixture rather than hundreds of lines into the solve.
 
 ```python
 brg = Bearing.assemble(
@@ -327,40 +257,213 @@ brg = Bearing.assemble(
 )
 ```
 
-**Exposure.** Fixtures organise and expose the program's capabilities; they do not hide them. Every intermediate object produced during assembly is reachable from the result without reconstruction, and downstream solvers consume those objects directly.
+The core bearing is immutable for a stronger reason than the other fixtures: it refuses every write once assembled. A fixture cannot patch an assembled bearing — it builds a new one.
+
+### Gears
+
+`construction/gears/parallel_axis/fixed/`, four modules: a single external gear, a single internal gear, an external (spur/helical) pair, and an internal pair.
+
+The profile shift declared on a gear fixture is **provisional**. The working coefficients are resolved by the meshing object when the pair is built, and read back from the pair.
+
+Tip and root relief and the finer roughness parameters are not exposed — a caller needing them instantiates the core gear directly.
+
+### Systems
+
+`construction/systems/parallel_axis/spur_helical/linear_chain_fixture.py`. Assembly only: it receives **already-built** domain objects — `Shaft`, `Bearing`, `SpurHelicalGear`, `Load` — creates the shaft containers, places gears and bearings, builds the mesh links and resolves the power flow. It constructs none of them itself.
+
+| Type | Purpose |
+|---|---|
+| `ShaftSpec` | One shaft in the chain: the built shaft, its bearings, and that shaft's `ShaftSystem` keyword arguments. |
+| `StageSpec` | One stage: the gear pair, the driver and driven axial positions, the line-of-centres angle, and a label. |
+
+**Scope.** Linear chains only: *n* stages give *n*+1 shafts and *n* links. Every `StageSpec.torque_split` stays `None` — fan-out is simultaneous-driver machinery that a linear chain never exercises, and computing a torque split belongs to a dedicated pre-solver. Internal-gear stages are likewise deferred. Non-linear topologies are modelled as several independent systems; planetary arrangements use the planetary meshing class directly.
+
+---
+
+## Studies
+
+### Shaft FEM
+
+`studies/shafts/fem_simple.py`.
+
+```python
+solve_system(system, construction, library=None, *,
+             theory, constraint_bearing, distribute_gear_labels,
+             extra_mandatory) -> RigidBearingFEMResultsLibrary
+```
+
+Solves every `ShaftSystem` in `system.shafts`, **one fresh `RigidBearingFEMSolver` per shaft** — a solver's published attributes describe the last thing it solved, so reusing one across shafts would silently discard results. Each solve is read back through `ShaftResultsReader` and stored in the library under the shaft's name.
+
+Passing an existing `library` adds to it rather than replacing it, so a study can be built up shaft by shaft.
+
+### Bearing internal load distribution
+
+`studies/bearings/load_distribution/no_lubrication/single_row/rolling_bearing_study.py`.
+
+**`RollingBearingSolver`** — the single entry point for a shaft's full bearing set, which may mix contact types and row counts.
+
+| Member | Purpose |
+|---|---|
+| `solve` | Groups single-row bearings by resolved solver and dispatches each group; sends multi-row bearings individually to the multi-row solver registered on their row solver. Returns per-label results, in the order the caller supplied the bearings. |
+| `postprocess_and_record` | The full pipeline — solve (or reuse an existing load distribution), then capacity, dynamic equivalent load and secant stiffness — recorded into a `BearingResultsLibrary`. |
+
+`postprocess_and_record` takes a `catalog` mapping each bearing label to the arguments for its capacity and equivalent-load steps. Either sub-entry may be omitted to skip that step; stiffness is always computed. Capacity is obtained by calling the family through the bearing, so this orchestrator holds no ISO formulas of its own.
+
+---
+
+## Result libraries
+
+Registries live here rather than in `solvers/`. Each holds results computed elsewhere and computes nothing itself. Each result type has exactly one slot per key; setters overwrite rather than accumulate history.
+
+### `RigidBearingFEMResultsLibrary`
+
+`studies/shafts/results_library.py`. Registry of `ShaftResults` keyed by `ShaftSystem.name`.
+
+This library stores **only** the results of the initial rigid-bearing FEM solve. It is the canonical source of shaft internal forces, deflections, bearing reactions and section stresses, and every downstream consumer reads from it.
+
+```
+RigidBearingFEMSolver
+      │
+ShaftResultsReader.read()      → ShaftResults
+      │
+RigidBearingFEMResultsLibrary  ← stored here
+      │
+      ├── ISO16281BallSolver / ISO16281RollerSolver
+      ├── ShaftPostProcessor
+      └── (fatigue, static failure — planned)
+```
+
+Constraints: the key is non-empty; re-storing under the same name overwrites, so a fresh solve replaces a stale one; no solver logic, no interface imports, no database calls.
+
+### `BearingResultsLibrary`
+
+`studies/bearings/load_distribution/no_lubrication/results_library.py`. Registry of `BearingResultBundle`, keyed by bearing label — the cross-type registry that lubrication, fatigue and life solvers will read from.
+
+**`BearingResultBundle`** — every computed ISO/TS 16281 result for one bearing:
+
+| Field | Contents |
+|---|---|
+| `label` | Bearing label. |
+| `bearing_type` | Informational only; nothing dispatches on it. |
+| `load_distribution` | Length 1 (single-row) or *i* (multi-row, index-aligned with `bearing.rows`). |
+| `stiffness` | Always single, even for a multi-row bearing — the shared ring displacement. |
+| `capacity` | `(Q_ci, Q_ce)`, always single, never row-indexed. |
+| `dynamic_equivalent_load` | Same indexing as `load_distribution`. |
+| `extra` | An open slot for analyses this package does not define. |
+
+| Member | Purpose |
+|---|---|
+| `add_load_distribution_results` | Records a whole per-solver set at once, rather than label by label. |
+| `load_distribution_results` | Retrieves that set back for one solver class. |
+| `set_load_distribution` | Sets one label directly. |
+| `set_capacity`, `set_dynamic_equivalent_load`, `set_stiffness`, `set_bearing_type`, `set_extra` | Per-label setters; each overwrites. |
+| `get`, `labels` | Retrieval and enumeration; `get` raises for an unrecorded label. |
+
+---
+
+## Report writers
+
+Fixed-width ASCII text reports, written to a file with an explicit UTF-8 encoding. Every writer is a pure consumer of already-computed objects: it reads and formats, it never solves and never mutates what it was given.
+
+| Writer | Reports on |
+|---|---|
+| `construction/outputs/text_report.write_construction_report(system, path, title)` | The built, unsolved system — composes the shaft, bearing, gear and system report blocks |
+| `studies/text_report.write_resolution_report(library, system, path, title)` | The solved state — one section per shaft |
+
+Per-domain blocks live beside the fixtures they describe: `construction/shafts/outputs/shaft_report.py`, `construction/bearings/outputs/bearing_report.py`, `construction/gears/parallel_axis/fixed/outputs/gear_report.py`, `construction/systems/.../outputs/system_report.py`.
+
+### The resolution report's block structure
+
+`studies/text_report.py` exposes each block separately, so a caller can compose a partial report:
+
+| Function | Contents |
+|---|---|
+| `summary_block` | Governing values and their locations: `M_max`, `v_max`, `sigma_b_max`, `tau_max`. |
+| `bending_shear_table` | `x`, `M_xz`, `M_xy`, `M` [N·mm]; `V_xz`, `V_xy`, `V` [N]. |
+| `deflection_torsion_table` | `x`, `v_xz`, `v_xy`, `v` [mm]; `T` [N·m]. |
+| `section_stress_table` | `x`, `d` [mm]; `W`, `Wt` [mm³]; `sigma_b`, `tau` [MPa]. |
+| `bearing_reactions_table` | From the reaction-vector-derived arrays, labelled by index-aligned lookup into `bearing_nodes`. |
+| `bearing_node_kinematics_table` | Position, `u`, `v_xz`, `v_xy`, `theta_xz`, `theta_xy`, `psi_xz`, `psi_xy`. |
+| `bearing_node_loads_table` | Position, `Fr_xz`, `Fr_xy`, `Fr`, `Fa`, `M_xz`, `M_xy` — from the **total** force vector. |
+| `shaft_result_block` | Every block above, in order, for one shaft. |
+
+Three formatting decisions are deliberate and should be preserved by any new writer:
+
+- **Per-node arrays are split into three tables, not one wide one.** Sixteen columns do not read in a fixed-width viewer.
+- **Units follow the result container exactly, including the discontinuity.** `M_xz`/`M_xy`/`M` are N·mm and `T` is N·m; the column headers say so rather than normalising one to the other, so a reader cross-checking against the container's own docstring sees the same units in both places.
+- **Bearing reactions and bearing node loads are two tables, not one.** They are computed from different arrays — the reaction vector and the total nodal force vector — and merging them would imply they are the same measurement read twice.
 
 ---
 
 ## Script structure
 
 ```python
-# 1 — Declare capabilities
-CAPS = Capabilities(...)
-globals().update(CAPS.resolve())
+# 1 — Declare and resolve capabilities
+construction = ConstructionCapabilities(...)
+construction.validate_or_raise()
+globals().update(construction.resolve())
+
+study = StudyCapabilities(construction=construction, shaft_fem=(...), bearing_iso16281=(...))
+study.validate_or_raise()
+globals().update(study.resolve())
 
 # 2 — Parameters
-stage_specs    = [StageSpec(...), ...]
-shaft_fixtures = [make_stepped_3section(...), ...]
-pairs          = [GearPairFixture.from_fixtures(...), ...]
-bearings       = [[Bearing.assemble(...), Bearing.assemble(...)], ...]
+shaft_specs = [ShaftSpec(...), ...]
+stage_specs = [StageSpec(...), ...]
+bearings    = [[Bearing.assemble(...), Bearing.assemble(...)], ...]
 
-# 3 — Build and resolve
-result = build_systems(shaft_fixtures, pairs, bearings, stage_specs, P_W, rpm_in)
+# 3 — Build and resolve the system
+system = build_linear_system(shaft_specs, stage_specs, P_W, rpm_in)
 
 # 4 — External loads
-result.shaft_systems[0].add_load(TorqueLoad(...))     # motor coupling
-result.shaft_systems[-1].add_load(RadialLoad(...))    # driven machine
+system.shafts[0].add_load(TorqueLoad(...))      # motor coupling
+system.shafts[-1].add_load(RadialLoad(...))     # driven machine
+write_construction_report(system, "construction.txt", "Drivetrain")
 
-# 5 — FEM, bearings, output
+# 5 — Solve and record
+library   = solve_system(system, construction)
+bearing_results = RollingBearingSolver().postprocess_and_record(
+    system, bearings, library, catalog={...})
+
+# 6 — Report
+write_resolution_report(library, system, "resolution.txt", "Drivetrain")
 ```
+
+Adding a load after building is safe: `set_gear_loads()` replaces only loads tagged `"gear_mesh"` and leaves user loads untouched, so re-resolving is idempotent.
 
 ---
 
-## Usage rules
+## Design contracts
 
-- Each fixture is self-contained and independently importable.
-- `integration/` files are the only entry points that combine the full pipeline. Copy one and adjust its parameter block to produce a new design script.
-- Do not modify a fixture for a specific case — duplicate and rename it.
-- Named reference instances are never mutated; use a `with_*` method for a modified copy.
-- Console output is ASCII only.
-- `capabilities/` reads what packages declare and is never imported by one.
+**Immutability.** Every fixture object is a frozen dataclass; modification produces a new object through a `with_*` method.
+
+```python
+shaft2 = shaft.with_sections([...])
+gear2  = gear.with_x(0.15)
+```
+
+**Named reference instances are never mutated.** Use a `with_*` method for a modified copy.
+
+**Do not modify a fixture for a specific case.** Duplicate and rename it.
+
+**Fixtures expose, they do not hide.** Every intermediate object produced during assembly is reachable from the result without reconstruction, and downstream solvers consume those objects directly.
+
+**Construction solves nothing.** The single exception — `systems.parallel_axis_linear` calling `resolve()` — is documented above and is not a precedent.
+
+**A writer never solves.** Report modules read objects handed to them; they never build one.
+
+**Console and report output is ASCII only.**
+
+**`capabilities/` reads what packages declare and is never imported by one.**
+
+---
+
+## Extending this package
+
+**Adding a construction fixture.** Place it under `construction/<domain>/`, take already-built domain objects rather than raw geometry keyword arguments where the object is not this fixture's own to build, make it a frozen dataclass with `with_*` copies, and register its capability string in `capabilities/catalogue.py`.
+
+**Adding a study.** Place it under `studies/<domain>/` in a directory that names its modelling assumption, as `no_lubrication/` does. Take the `ConstructionCapabilities` alongside the system so the study can check the system was built for the solve it is about to run. Return a library, not a bare result.
+
+**Adding a report block.** Put it beside the fixture or study whose output it formats. Own your own rule constants and your own `write()` call rather than reaching for a shared IO helper — the existing writers deliberately do not share one, so a change to one report's layout cannot disturb another's.
+
+**Adding a stage.** A third stage — mesh loads, element analysis — lands as its own capabilities class in its own directory, taking the previous stage as a field, exactly as `StudyCapabilities` takes `ConstructionCapabilities`.

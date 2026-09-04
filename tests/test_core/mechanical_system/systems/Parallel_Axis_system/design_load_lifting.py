@@ -348,7 +348,7 @@ def recover_diagrams(solver: SimpleFEMSolver, shaft_system: ShaftSystem):
     `shaft_system` — reads its public attributes (x_nodes, elements,
     d_total_xz, d_total_xy, T_total, tau_total).
     """
-    from axisforge.mesh.shaft.element_type.timoshenko_selective_integration.timoshenko import TimoshenkoBeam
+    from axisforge.mesh.shaft.element_type.timoshenko import TimoshenkoBeam
     beam = TimoshenkoBeam()
 
     n = len(solver.x_nodes)

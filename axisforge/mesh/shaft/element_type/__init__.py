@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 __all__ = ["TimoshenkoBeam"]
 
 _LAZY = {
-    "TimoshenkoBeam": ".timoshenko_selective_integration",
+    "TimoshenkoBeam": ".timoshenko",
 }
 
 def __getattr__(name: str):
@@ -25,5 +25,5 @@ def __dir__():
     return sorted(list(globals().keys()) + list(_LAZY.keys()))
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .timoshenko_selective_integration import TimoshenkoBeam
+    from .timoshenko import TimoshenkoBeam
 

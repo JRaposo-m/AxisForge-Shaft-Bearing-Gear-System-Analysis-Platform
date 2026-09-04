@@ -48,7 +48,7 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system im
 from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
     SpurHelicalMeshLink, SpurHelicalGearSystem,
 )
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
+from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import RigidBearingFEMSolver
 
 
 # ===========================================================================
@@ -208,8 +208,8 @@ def dump_shaft_loads(shaft: ShaftSystem) -> None:
 # FEM POST-PROCESS  (unchanged)
 # ===========================================================================
 
-def recover_diagrams(solver: SimpleFEMSolver, shaft_system: ShaftSystem):
-    from axisforge.mesh.shaft.element_type.timoshenko_selective_integration.timoshenko import TimoshenkoBeam
+def recover_diagrams(solver: RigidBearingFEMSolver, shaft_system: ShaftSystem):
+    from axisforge.mesh.shaft.element_type.timoshenko import TimoshenkoBeam
     beam = TimoshenkoBeam()
 
     n = len(solver.x_nodes)
@@ -427,7 +427,7 @@ def main():
 
     diagrams = {}
     for sh in (sys1, sys2a, sys2b):
-        solver = SimpleFEMSolver(theory="timoshenko")
+        solver = RigidBearingFEMSolver(theory="timoshenko")
         solver.solve(sh)
         d = recover_diagrams(solver, sh)
         diagrams[sh.name] = d

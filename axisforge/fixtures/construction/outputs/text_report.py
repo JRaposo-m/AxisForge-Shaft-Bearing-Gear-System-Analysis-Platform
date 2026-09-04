@@ -46,16 +46,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from axisforge.fixtures.outputs.construction.shafts.shaft_report import (
+from axisforge.fixtures.construction.shafts.outputs.shaft_report import (
     shaft_geometry_block,
 )
-from axisforge.fixtures.outputs.construction.bearings.bearing_report import (
+from axisforge.fixtures.construction.bearings.outputs.bearing_report import (
     bearing_block,
 )
-from axisforge.fixtures.outputs.construction.gears.gear_report import (
+from axisforge.fixtures.construction.gears.parallel_axis.fixed.outputs.gear_report import (
     gear_block,
 )
-from axisforge.fixtures.outputs.construction.systems.system_report import (
+from axisforge.fixtures.construction.systems.parallel_axis.spur_helical.outputs.system_report import (
     topology_block,
     shaft_system_block,
     loads_block,

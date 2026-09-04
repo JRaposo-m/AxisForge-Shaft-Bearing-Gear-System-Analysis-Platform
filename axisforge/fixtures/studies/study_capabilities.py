@@ -26,7 +26,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import ClassVar
 
-from axisforge.fixtures.capabilities import CapabilityError, ConstructionCapabilities
+from axisforge.fixtures.construction.construction_capabilities import (
+    CapabilityError, ConstructionCapabilities,
+)
 from axisforge.fixtures.capabilities import catalogue
 
 __all__ = ["StudyCapabilities"]

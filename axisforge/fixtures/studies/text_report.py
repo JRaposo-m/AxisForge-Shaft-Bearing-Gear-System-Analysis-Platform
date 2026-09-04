@@ -1,8 +1,8 @@
 """
-fixtures/outputs/resolution/text_report.py
+fixtures/studies/text_report.py
 
 THE principal writer for the whole Resolution domain -- mirrors
-fixtures/outputs/construction/text_report.py's own role, one level up:
+fixtures/construction/outputs/text_report.py's own role, one level up:
 Resolution has only one domain today (shaft_fem), so content-block
 building and file-writing live together in this one module instead of
 being split across per-domain subpackages the way Construction's four
@@ -10,9 +10,9 @@ domains are -- nothing to gain from that split yet with only one thing
 to report. If a second Resolution domain is ever added, split then,
 the same way Construction did.
 
-Reads axisforge.solvers.machine_elements.shaft.oneD_analysis.static.
-static_analysis.ShaftResults (via SimpleFEMResultsLibrary) -- its own
-docstring documents FOUR sections:
+Reads axisforge.results.fem_results.shaft_results.ShaftResults (via
+RigidBearingFEMResultsLibrary) -- its own docstring documents FOUR
+sections:
   1. MESH                      -- x_nodes, elements
   2. FEM SOLUTION (raw)        -- K, d_total_xz/xy, f_xz/xy_ext/total/
                                    reaction, free/constrained_dofs,
@@ -67,8 +67,9 @@ they are the same measurement read twice:
     stored alongside these in ShaftResults itself -- labelled here by
     reading bearing_nodes[i].label at the same index (both arrays are
     built from the same `for b in self._sys.bearings` loop, in the
-    same reader instance, so index-aligned; see static_analysis.py's
-    own ShaftResultsReader.read()).
+    same reader instance, so index-aligned; see
+    solvers/machine_elements/shaft/static/results_reader.py's own
+    ShaftResultsReader.read()).
   BEARING NODE DATA (two tables, one row per bearing) -- the full
     BearingNodeData per bearing_nodes entry, split the same way
     section 3's per-node arrays are split above (one 13-column row per
@@ -85,17 +86,21 @@ they are the same measurement read twice:
 
 Writes with encoding="utf-8" explicitly, same reason as every other
 report writer in this package. No shared _io.py-style helper module --
-same explicit preference already applied to fixtures/outputs/
-construction/*: this writer owns its own RULE constant and its own
-write() call.
+same explicit preference already applied to fixtures/construction/*/
+outputs/*: this writer owns its own RULE constant and its own write()
+call.
 
-Dependency (fixtures/solvers only, read-only access -- no core
+Dependency (results/ and fixtures/ only, read-only access -- no core
 modification):
-  axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis
-      SimpleFEMResultsLibrary, ShaftResults, BearingNodeData (not
-      imported here -- this module only ever READS objects handed to
-      it, it never builds them; see fixtures/solvers/fem_simple.py's
-      own solve_system() for that)
+  axisforge.results.fem_results.shaft_results
+      ShaftResults, BearingNodeData -- the result SHAPES. BearingNodeData
+      is not imported here at all: it is only ever reached through
+      result.bearing_nodes, never named.
+  axisforge.fixtures.studies.shafts.results_library
+      RigidBearingFEMResultsLibrary -- the registry this report walks.
+  This module only ever READS objects handed to it, it never builds
+  them; see fixtures/studies/shafts/fem_simple.py's own solve_system()
+  for that. Both imports are TYPE_CHECKING-only for that reason.
 """
 
 from __future__ import annotations
@@ -110,8 +115,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
         SpurHelicalGearSystem,
     )
-    from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import (
-        SimpleFEMResultsLibrary, ShaftResults, BearingNodeData,
+    from axisforge.results.fem_results.shaft_results import ShaftResults
+    from axisforge.fixtures.studies.shafts.results_library import (
+        RigidBearingFEMResultsLibrary,
     )
 
 
@@ -301,7 +307,7 @@ def shaft_result_block(result: "ShaftResults") -> str:
 
 
 def write_resolution_report(
-    library: "SimpleFEMResultsLibrary",
+    library: "RigidBearingFEMResultsLibrary",
     system: "SpurHelicalGearSystem",
     path: "str | Path",
     title: str = "",
@@ -316,7 +322,7 @@ def write_resolution_report(
 
     Parameters
     ----------
-    library : SimpleFEMResultsLibrary
+    library : RigidBearingFEMResultsLibrary
         Already solved (e.g. via solve_system()). Purely reads
         `library` -- does not solve or validate it.
     system : SpurHelicalGearSystem

@@ -1,7 +1,7 @@
 """
-fixtures/solvers/fem_simple.py
+fixtures/studies/shafts/fem_simple.py
 
-Resolution stage: solves every ShaftSystem in a SpurHelicalGearSystem's
+Studies stage: solves every ShaftSystem in a SpurHelicalGearSystem's
 system.shafts via RigidBearingFEMSolver + ShaftResultsReader, publishing
 every result into one RigidBearingFEMResultsLibrary.
 
@@ -17,32 +17,41 @@ strings, nothing about what actually happened when resolve() ran. No
 core change needed for this: SpurHelicalGearSystem itself is untouched,
 and this module still never reaches into its private _resolved record.
 
-Fills in the "Planned" fixtures/solvers/fem_simple.py entry from
-fixtures/README.md's own Status table -- step 5 of "Typical Analysis
-Script Structure" ("Solve FEM"). Mirrors linear_chain_fixture.py's own
-build_linear_system(): a fixture-level convenience that performs the
-real work (here, the FEM solve itself), not just object assembly --
-same reasoning already accepted there, and confirmed again for this
-module in ResolutionCapabilities' own docstring, fixtures/capabilities/__init__.py
-("Resolution" IS "solve").
+Step 5 of fixtures/README.md's own "Script structure" ("Solve FEM").
+Mirrors linear_chain_fixture.py's own build_linear_system(): a
+fixture-level convenience that performs the real work (here, the FEM
+solve itself), not just object assembly -- same reasoning already
+accepted there, and confirmed again for this module in
+StudyCapabilities' own docstring, fixtures/studies/study_capabilities.py
+("Studies" IS "solve").
 
-Only ONE solver configuration exists today -- RigidBearingFEMSolver(theory=
-"timoshenko", constraint_bearing="rigid"). Note: constraint_bearing is
-accepted by RigidBearingFEMSolver.__init__ but not actually wired to any
-alternative behaviour yet -- every bearing is always a rigid support
-(v=0 always; u=0 additionally for "locating" bearings -- see
-_boundary_dofs() in rigid_bearing.py, which never reads
-constraint_bearing at all). "rigid" names the physics this solver
-actually applies today, not a switch between two real options --
-solve_system()'s own default kwargs match this exactly, and
-resolution.py's "shaft_fem.timoshenko_rigid" capability string is built
-on the same reasoning.
+Only ONE solver configuration exists today -- RigidBearingFEMSolver(
+theory="timoshenko"). There is NO constraint_bearing switch, and this
+module must not reintroduce one: rigid supports are this solver's
+identity, not one of two options it selects between (v=0 always; u=0
+additionally for "locating" bearings -- see _boundary_dofs() in
+rigid_bearing.py). An earlier version of this module passed
+constraint_bearing="rigid" through to the constructor; the parameter
+was never wired to any alternative behaviour, _boundary_dofs() never
+read it, and it has since been removed from both sides. A
+compliant-bearing solve would be a sibling solver module, not a mode of
+this one. study_capabilities.py's "shaft_fem.timoshenko_rigid"
+capability string names the same physics -- "rigid" there describes
+what this solver does, it does not select it.
 
-Dependency (solvers only, read-only access -- no core modification):
-  axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.rigid_bearing
+ShaftResultsReader.read() returns a ShaftResults and stores nothing --
+the reader deliberately does not know libraries exist (see its own
+docstring in results_reader.py). Publishing into the library is THIS
+module's job, one library.store() per shaft, which is why the loop
+below is two statements rather than a single read(library) call.
+
+Dependency (solvers + fixtures, read-only access -- no core modification):
+  axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing
       RigidBearingFEMSolver
-  axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis
-      ShaftResultsReader, RigidBearingFEMResultsLibrary
+  axisforge.solvers.machine_elements.shaft.static.results_reader
+      ShaftResultsReader
+  axisforge.fixtures.studies.shafts.results_library
+      RigidBearingFEMResultsLibrary
 """
 
 from __future__ import annotations
@@ -63,7 +72,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
         SpurHelicalGearSystem,
     )
-    from axisforge.fixtures.capabilities import ConstructionCapabilities
+    from axisforge.fixtures.construction.construction_capabilities import (
+        ConstructionCapabilities,
+    )
 
 
 def solve_system(
@@ -72,7 +83,6 @@ def solve_system(
     library: RigidBearingFEMResultsLibrary | None = None,
     *,
     theory: str = "timoshenko",
-    constraint_bearing: str = "rigid",
     distribute_gear_labels: set[str] | None = None,
     extra_mandatory: dict[str, list[float]] | None = None,
 ) -> RigidBearingFEMResultsLibrary:
@@ -81,7 +91,8 @@ def solve_system(
     per shaft -- solve() overwrites, so re-using one instance across
     shafts would silently clobber the previous shaft's results; see
     this project's own "one solver instance per shaft" rule), reading
-    each solved shaft into `library` via ShaftResultsReader.
+    each solved shaft with ShaftResultsReader and storing the result
+    in `library`.
 
     Parameters
     ----------
@@ -103,12 +114,12 @@ def solve_system(
         overwrites it (RigidBearingFEMResultsLibrary.store()'s own
         behaviour: "fresh solve replaces stale"). A new, empty library
         is created if omitted.
-    theory, constraint_bearing, distribute_gear_labels : RigidBearingFEMSolver
-        constructor kwargs, applied UNIFORMLY to every shaft's solver
-        (same values for all shafts in `system`). Defaults match the
-        only configuration that actually exists today -- see this
-        module's own top docstring for why "rigid" is accurate despite
-        constraint_bearing not being wired to an alternative yet.
+    theory, distribute_gear_labels : RigidBearingFEMSolver constructor
+        kwargs, applied UNIFORMLY to every shaft's solver (same values
+        for all shafts in `system`). Defaults match the only
+        configuration that exists today. There is no constraint_bearing
+        kwarg -- see this module's own top docstring for why, and why
+        it should not come back.
     extra_mandatory : dict[str, list[float]] | None
         Optional per-shaft extra mesh-refinement node positions, keyed
         by ShaftSystem.name, forwarded to that shaft's own
@@ -141,10 +152,10 @@ def solve_system(
     for ss in system.shafts:
         solver = RigidBearingFEMSolver(
             theory=theory,
-            constraint_bearing=constraint_bearing,
             distribute_gear_labels=distribute_gear_labels,
         )
         solver.solve(ss, extra_mandatory=extra_mandatory.get(ss.name))
-        ShaftResultsReader(solver, ss).read(library)
+        result = ShaftResultsReader(solver, ss).read()
+        library.store(result)
 
     return library

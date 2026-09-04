@@ -1,6 +1,6 @@
 # axisforge/core — Module Reference
 
-Domain model: shaft geometry, bearings, gears, gear and planetary meshing, the multi-shaft system graph, applied loads and materials. These objects carry geometry and data. The solvers that consume them are in [`solvers/README.md`](../solvers/README.md).
+Domain model: shaft geometry, bearings and their families, gears, gear and planetary meshing, the multi-shaft system graph, applied loads and materials. These objects carry geometry and data. The solvers that consume them are in [`solvers/README.md`](../solvers/README.md).
 
 ← back to [project root](../../README.md)
 
@@ -8,7 +8,11 @@ Domain model: shaft geometry, bearings, gears, gear and planetary meshing, the m
 
 ## Table of Contents
 
+- [Scope](#scope)
+- [Status](#status)
+- [Position in the architecture](#position-in-the-architecture)
 - [Import surface](#import-surface)
+- [Conventions](#conventions)
 - [Shaft](#shaft)
 - [Bearings](#bearings)
 - [Gears](#gears)
@@ -17,6 +21,59 @@ Domain model: shaft geometry, bearings, gears, gear and planetary meshing, the m
 - [Loads](#loads)
 - [Materials](#materials)
 - [Database](#database)
+- [Design contracts](#design-contracts)
+- [Extending this package](#extending-this-package)
+- [Standards referenced](#standards-referenced)
+
+---
+
+## Scope
+
+| In scope | Out of scope |
+|---|---|
+| Geometry, catalogue data, and everything derivable from them alone | Anything requiring a load case or a solve |
+| A standard's *capacity* formulae, owned by the element they describe | A standard's *analysis* procedure |
+| Validation at construction | Validation of a result |
+| Topology of a multi-shaft system and the power flow through it | The FEM that solves any shaft in it |
+
+A domain object is a complete, self-consistent description of a physical thing. It knows its own geometry, it can check itself, and it owns the standard formulae that depend only on that geometry. It never learns about load cases, X/Y factors, or life.
+
+---
+
+## Status
+
+| Group | Module | Contents | Status |
+|---|---|---|---|
+| `machine_elements/shaft/` | `shaft.py` | `Shaft`, `ShaftSection`, `Shoulder`, `Keyway`, `KeywayType` | Implemented |
+| `machine_elements/bearings/` | `bearing.py`, `catalog.py`, `family.py`, `bearing_types.py` | Orchestration primitives | Implemented |
+| `machine_elements/bearings/families/` | ball and roller, radial and thrust | Nine concrete families | Implemented; static capacity `Ca0` outstanding for all |
+| `machine_elements/gears/parallel_axis/gear_properties/` | `spur_helical_gear.py`, `internal_gear.py` | Single-gear geometry | Implemented |
+| `machine_elements/gears/parallel_axis/gear_meshing/` | `spurhelical_meshing.py`, `internal_meshing.py` | Pair meshing | Implemented |
+| `machine_elements/gears/parallel_axis/planetary_gear/` | `planetary_gear_meshing.py` | Single-stage epicyclic train | Implemented |
+| `mechanical_system/parallel_axis/spur_helical/` | `shaft_system.py`, `gear_system.py` | `ShaftSystem`, `GearElement`, `SpurHelicalMeshLink`, `SpurHelicalGearSystem` | Implemented |
+| `mechanical_system/parallel_axis/` | `schematic.py` | matplotlib line schematic | Implemented |
+| — | `loads.py` | Six load types plus `LoadingProfile` | Implemented |
+| — | `materials.py` | `Material`, `GearMaterial`, embedded libraries | Implemented |
+| `database/` | keyways, `K_A`, `K_v` | Standard tabular data | Implemented; the two `K_v` modules have broken imports — see [Database](#database) |
+
+---
+
+## Position in the architecture
+
+```
+   config
+      │
+      ├──────────────┐
+      ▼              ▼
+  database  ────▶  core                  this package
+                     │
+                     ├────────▶ mesh
+                     └────────▶ solvers
+```
+
+`core/` depends on `config`, `database/`, NumPy and the standard library. It imports no solver, no mesh primitive, no result container and no interface layer. This is what makes every domain object usable standalone — in a script, in a test, or in a report — without dragging in a numerical stack.
+
+> **Open item.** The direction `database → core` shown above is the intended one, and holds for the keyway tables. It does **not** hold for `Kv_methodB` and `Kv_methodC`, which import from `core/`. See [Database](#database).
 
 ---
 
@@ -37,14 +94,32 @@ The concrete bearing families are not re-exported by `bearings` on purpose: a ne
 
 ---
 
+## Conventions
+
+| Symbol | Meaning |
+|---|---|
+| `x` | Axial coordinate along a shaft system, increasing left → right |
+| `z` | Absolute axial coordinate within a single `Shaft` — `z = 0` is the left face of the first section |
+| `XZ` | Horizontal plane — tangential gear force `Wt` |
+| `XY` | Vertical plane — radial gear force `Wr`, opposed to gravity |
+| `theta` | Angular position, measured `+Y → +Z`, right-hand about `+X` |
+
+Units, as stored: length in **mm**, force in **N**, moment in **N·mm**, torque in **N·m**, stress in **MPa**, angles in **degrees** at the constructor interface and **radians** internally, speed in **rpm** at the interface and **rad/s** internally.
+
+Shaft geometry uses the (r, θ, z) convention. θ appears only for localised features such as keyways, since the shaft body itself is a solid of revolution.
+
+A radial load contributes to **both** planes through its `theta`. Consumers must not pre-filter by plane.
+
+---
+
 ## Shaft
 
-`machine_elements/shaft/shaft.py` — geometric primitives in the (r, θ, z) convention. `z` is the absolute axial coordinate; θ is used only for localized features, since the shaft body itself is a solid of revolution.
+`machine_elements/shaft/shaft.py`.
 
 | Class | Purpose |
 |---|---|
 | `KeywayType` | Enum of keyway standards (parallel, Woodruff). |
-| `Keyway` | Localized stress raiser at an absolute `(z_position, theta)`. |
+| `Keyway` | Localised stress raiser at an absolute `(z_position, theta)`. |
 | `Shoulder` | Fillet transition between two adjacent sections. |
 | `ShaftSection` | One uniform cylindrical segment with its cross-section properties. |
 | `Shaft` | Ordered sequence of sections forming a complete shaft. |
@@ -70,7 +145,7 @@ Carries `fillet_radius`, `diameter_large`, `diameter_small`.
 
 ### `ShaftSection`
 
-Carries `length`, `diameter`, `inner_diameter`, `material_id`, `surface_finish_ra`, optional `shoulder_left` / `shoulder_right`, a list of `keyways`, and a `label`.
+Carries `length`, `diameter`, `inner_diameter`, `material_id`, `surface_finish_ra`, a list of `keyways`, and a `label`.
 
 | Member | Purpose |
 |---|---|
@@ -80,7 +155,7 @@ Carries `length`, `diameter`, `inner_diameter`, `material_id`, `surface_finish_r
 | `polar_moment` | J = π/32·(d⁴ − dᵢ⁴) = 2I. |
 | `section_modulus` | W = I/(d/2), for σ_b = M/W. |
 | `polar_section_modulus` | Wt = J/(d/2), for τ = T/Wt. |
-| `validate` | Section errors, delegating to shoulders and keyways. |
+| `validate` | Section errors, delegating to keyways. |
 
 ### `Shaft`
 
@@ -93,8 +168,11 @@ Carries `length`, `diameter`, `inner_diameter`, `material_id`, `surface_finish_r
 | `axial_start`, `axial_end` | Absolute face positions of a section by index. |
 | `section_at` | The section containing a given z, and its index. |
 | `diameter_at`, `I_at`, `J_at`, `W_at`, `Wt_at` | Section properties at any axial position. |
+| `transitions` | Steps between sections, each optionally carrying a `Shoulder`. |
 | `shoulders` | All steps as `(z_position, Shoulder)` pairs. |
 | `validate`, `validate_or_raise` | Full consistency check, including adjacent shoulder–diameter matching. |
+
+Shoulders are stored on the **shaft's transitions**, not on individual sections. A fillet is a property of the step between two sections, and duplicating it on both would allow the two copies to disagree.
 
 ---
 
@@ -129,7 +207,7 @@ Within a family directory, `functions/` holds the shared contact and capacity ma
 | `validate` | Defence-in-depth re-check of the catalogue conditions and required geometry. |
 | `summary` | Human-readable dump of every assembled attribute. |
 
-Catalogue attributes mirrored onto the instance: `d`, `D`, `b`, `C`, `C0`, `designation`, `label`, `position`, `arrangement`, and the mean diameter `dm`. Writing to an assembled bearing raises `AttributeError`.
+Catalogue attributes mirrored onto the instance: `d`, `D`, `b`, `C`, `C0`, `designation`, `label`, `position`, `arrangement`, and the mean diameter `dm`. **Writing to an assembled bearing raises `AttributeError`.**
 
 **`BearingCatalog`** — frozen dataclass of generic, family-agnostic catalogue data: `d`, `D`, `b`, `C`, `C0`, `designation`, `label`, `position`, `arrangement` (`"locating"` / `"floating"` / `"non-locating"`).
 
@@ -148,9 +226,9 @@ Catalogue attributes mirrored onto the instance: `d`, `D`, `b`, `C`, `C0`, `desi
 | `name` | Short identifier, e.g. `"deep_groove_ball"`. |
 | `assemble_geometry` | Pure function from raw geometry inputs to the flat attribute dict the bearing mirrors. |
 
-`CAPABILITIES` and `REQUIRED_FOR` are load-bearing beyond assembly: the ISO/TS 16281 dispatcher resolves which solver a bearing gets from exactly these declarations, and the fixture capability selector reads them to build its analysis menu.
+`CAPABILITIES` and `REQUIRED_FOR` are load-bearing beyond assembly: the ISO/TS 16281 dispatcher resolves which solver a bearing gets from exactly these declarations, and the fixture capability selector reads them to build its analysis menu. **Adding a family therefore requires no edit anywhere else.**
 
-**`BearingType`** — enum label only: `DEEP_GROOVE_BALL`, `ANGULAR_CONTACT`, `SELF_ALIGNING_BALL`, `THRUST_BALL`, `CYLINDRICAL_ROLLER`, `TAPERED_ROLLER`, `SPHERICAL_ROLLER`, `THRUST_CYLINDRICAL_ROLLER`, `THRUST_NEEDLE_ROLLER`. Nothing dispatches on it; it exists so reports and the GUI can group bearings without importing every family class. Extend it for a genuinely new family — a new life exponent or ISO 281 `p` — not for every subtype variant.
+**`BearingType`** — enum label only: `DEEP_GROOVE_BALL`, `ANGULAR_CONTACT`, `SELF_ALIGNING_BALL`, `THRUST_BALL`, `CYLINDRICAL_ROLLER`, `TAPERED_ROLLER`, `SPHERICAL_ROLLER`, `THRUST_CYLINDRICAL_ROLLER`, `THRUST_NEEDLE_ROLLER`. Nothing dispatches on it; it exists so reports can group bearings without importing every family class. Extend it for a genuinely new family — a new life exponent or ISO 281 `p` — not for every subtype variant.
 
 ### Assembling a bearing
 
@@ -183,7 +261,7 @@ bearing = Bearing.assemble(
 | `MultiRowThrustCylindricalRollerFamily` | thrust, line | a list of per-row specifications | per-row Ca combined by the multi-row formula |
 | `ThrustNeedleRollerFamily` | thrust, line | flat race, contact angle fixed at 90° | λ_v = 0.73 |
 
-Every family exposes the same three capacity entry points, called through the bearing:
+Every family exposes the same capacity entry points, called through the bearing:
 
 | Method | Returns |
 |---|---|
@@ -191,7 +269,7 @@ Every family exposes the same three capacity entry points, called through the be
 | `per_lamina_dynamic_capacity` | `(q_ci, q_ce)` — per lamina, roller families only. |
 | `dynamic_capacity` | The overall bearing Cr or Ca from geometry alone. |
 
-A multi-row family assembles `rows` (a list of per-row attribute dicts) and `i` instead of flat top-level geometry, because the per-row fields only mean something per row. Callers reach a row through `bearing.rows[j]`.
+**Radial versus thrust multi-row.** These are different things and are handled differently. A *radial* family's `i` (two rows of a deep-groove ball or cylindrical roller bearing) is a plain capacity-rating multiplier on one raceway per ISO 281:2007 Table 1 — solved as a single ring displacement, no rows list, no load split. A *thrust* multi-row family assembles `rows` (a list of per-row attribute dicts) and `i` instead of flat top-level geometry, because the per-row fields only mean something per row and the rows genuinely share a compatibility solve. Callers reach a row through `bearing.rows[j]`. A separate `MultiRowCylindricalRollerFamily` was tried for the radial case and retired; do not reintroduce it.
 
 ### Shared mathematics
 
@@ -206,7 +284,7 @@ The reference roller profile lives on each roller subtype rather than in `functi
 
 **Open items.** Static capacity (`Ca0`) is not implemented for any family — the source tables are not in place. The thrust-roller per-element formula omits a leading coefficient that its radial counterpart carries; this is ported as received and marked in the source, pending confirmation against the standard.
 
-**Solver coverage.** Point-contact families are served by the ISO/TS 16281 ball solver, `CylindricalRollerFamily` by the roller solver, and multi-row bearings by the multi-row solver registered on their row solver. The self-aligning ball and thrust roller families have capacity support but no internal load-distribution solver. Tapered and spherical roller bearings need a coordinate transform neither solver implements.
+**Solver coverage.** Point-contact families are served by the ISO/TS 16281 ball solver, `CylindricalRollerFamily` by the roller solver, and multi-row thrust bearings by the multi-row solver registered on their row solver. The self-aligning ball family has capacity support but no internal load-distribution solver. Tapered and spherical roller bearings need a coordinate transform neither solver implements.
 
 ---
 
@@ -307,6 +385,8 @@ Autonomous single-shaft container of bearings, gears and loads. It has no knowle
 | `validate`, `validate_or_raise` | Geometry, per-element validation, gear/bearing overlap, and shoulder clearance. |
 | `summary` | |
 
+`bearing_extent` is what makes seat misalignment meaningful: a bearing of finite width and a knife-edge support give different shaft slopes at the same position, and the FEM results reader reads this extent to compute `psi`.
+
 ### `SpurHelicalMeshLink`
 
 One directed mesh, driver shaft to driven shaft, carrying a meshing model and the global line-of-centres angle. Optional `torque_split` selects fan-out mode; `distribute_loads` turns the mesh forces into loads distributed over the face width; `meshing_load_factor` is the multiplier the ISO 6336 application and dynamic factors feed into Ft.
@@ -333,7 +413,7 @@ Enforced topology:
 - every meshed gear pair axially aligned within tolerance;
 - for a fan-out (one driver gear meshing several driven gears simultaneously), one `GearElement` object reused across the links, each carrying a `torque_split`, summing to 1.
 
-Fan-out is grouped by the *identity* of the driver `GearElement`, not by geometric equality, which is what makes the shared-object pattern work. The torque split itself is an input: computing it belongs to a dedicated pre-solver, not to this class. Non-linear topologies are modelled as several independent systems; planetary arrangements use `PlanetaryGearTrainMeshing` instead.
+Fan-out is grouped by the **identity** of the driver `GearElement`, not by geometric equality, which is what makes the shared-object pattern work. The torque split itself is an input: computing it belongs to a dedicated pre-solver, not to this class. Non-linear topologies are modelled as several independent systems; planetary arrangements use `PlanetaryGearTrainMeshing` instead.
 
 ---
 
@@ -370,7 +450,7 @@ Choose the plotting axis that actually separates your shafts: a mesh at 270° of
 
 `RadialLoad` and `ExternalMoment` expose their plane components and a `component(plane)` accessor. `DistributedRadialLoad` adds the resultant component, the centroid, the component intensity as a function of x, the bending-moment contribution (closed form when uniform, quadrature otherwise), and conversion to an equivalent point load when the direction is constant.
 
-The `source` field is what makes re-resolving safe: `ShaftSystem.set_gear_loads()` replaces every load tagged `"gear_mesh"` and leaves user loads untouched.
+The `source` field is what makes re-resolving safe: `ShaftSystem.set_gear_loads()` replaces every load tagged `"gear_mesh"` and leaves user loads untouched. A design script can therefore add its own loads, re-resolve the power flow, and keep them.
 
 ---
 
@@ -394,13 +474,13 @@ The `source` field is what makes re-resolving safe: `ShaftSystem.set_gear_loads(
 | `get_material`, `available_materials` | Embedded shaft library: `S355`, `CrMo42`, `AISI_1045`, `AISI_4340`. |
 | `get_gear_material`, `available_gear_materials` | Embedded gear library: `GEAR_STEEL`, `GEAR_ADI`, `GEAR_POM`, `GEAR_PA66`. |
 
-Marin correction from the specimen endurance limit to a component value is applied by the shaft solver utilities, not here.
+Marin correction from the specimen endurance limit to a component value is applied by the shaft solver utilities, not here. The distinction is the layer rule: a specimen property belongs to the material, a component property depends on the component's surface, size and loading and therefore belongs to the solver.
 
 ---
 
 ## Database
 
-`axisforge/database/` is not part of `core/`, but its only consumers are. It holds standard tabular data — no solving, no geometry classes.
+`axisforge/database/` is not part of `core/`, but its intended consumers are. It holds standard tabular data — no solving, no geometry classes.
 
 | Module | Provides |
 |---|---|
@@ -410,4 +490,52 @@ Marin correction from the specimen endurance limit to a component value is appli
 | `gears/.../LoadCapacity_data/Kv_methodB.py` | `DynamicFactor` — ISO 6336-1 Method B: velocity coefficients and mesh stiffness factor, single tooth stiffness, the resonance ratio, and K_v across the subcritical, main-resonance, intermediate and supercritical regimes, with an `applicability()` check of the method's validity conditions. |
 | `gears/.../LoadCapacity_data/Kv_methodC.py` | `DynamicFactorC` — ISO 6336-1 Method C: tolerance-class coefficients, the speed term, and K_v, with its own `applicability()`. |
 
-These feed the gear load-capacity solver; the solver module itself is reserved and not yet written.
+These feed the gear load-capacity solver, whose module is reserved and not yet written.
+
+> **Open item — broken imports.** `Kv_methodB` and `Kv_methodC` both import from
+> `axisforge.core.mechanical_system.Parallel_Axis_systems.gear_meshing.spur_helical_gear_meshing` and
+> `axisforge.core.mechanical_system.Parallel_Axis_systems.systems.spur_helicoidal_system.SpurHelical_gear_system`.
+> Neither path exists: the package is `core/mechanical_system/parallel_axis/spur_helical/`. Both modules therefore cannot import today, and must be repaired before the gear load-capacity solver can consume them.
+>
+> Repairing them also raises a layering question. `Kv_methodB` additionally imports `core.materials`, so `database` depends on `core` while `core.machine_elements.shaft` depends on `database` — a cycle across the two packages. The `K_v` calculation needs geometry and speed, which suggests it belongs in the gear solver with the database supplying only the tables it reads. Worth deciding before the solver is written rather than after.
+
+---
+
+## Design contracts
+
+- **Geometry and data only.** No load case, no solve, no result.
+- **Validation at construction.** `validate()` returns a list of error strings; `validate_or_raise()` raises. Every domain object implements the pair. Invalid geometry is never silently accepted.
+- **Capacity belongs to the element.** A standard's capacity formula lives with the thing it describes, and every family exposes the same entry points so a solver never carries its own copy.
+- **Immutable once assembled.** A `Bearing` refuses every write after `assemble()`. Other domain objects are treated as write-once by convention.
+- **Composition over inheritance.** A bearing composes a family; a planetary train composes two pair-meshing objects. There is no subclass hierarchy of bearings or of gears.
+- **Declared capability, not hard-coded dispatch.** A family declares `CAPABILITIES` and `REQUIRED_FOR`; the solver dispatcher and the fixture capability selector both read those declarations. Adding a family edits no table anywhere else.
+- **Duplicate nothing.** A shoulder lives on a transition, not on both adjacent sections. A `GearElement` delegates its position rather than storing a copy.
+- **Flag, do not silently fix.** The thrust-roller coefficient discrepancy is marked in the source and named in this document rather than quietly corrected.
+
+---
+
+## Extending this package
+
+**Adding a bearing family.** One new file under `families/<contact>/<duty>/subtypes/`. Declare `CAPABILITIES`, `REQUIRED_FOR`, `BEARING_TYPE`, `DUTY` and `name`; implement `assemble_geometry()` as a pure function returning a flat attribute dict, plus the capacity entry points. Put shared mathematics in that duty's `functions/`, and anything genuinely specific to the subtype — a profile formula, a raceway ratio — on the subtype itself. Extend `BearingType` only if this is a genuinely new family in the ISO 281 sense. Nothing else in `core/` changes, and no solver or dispatch table changes.
+
+**Adding a gear type.** Geometry in `gear_properties/`, pair behaviour in `gear_meshing/`. A train that composes pairs goes in its own subpackage, as `planetary_gear/` does, and owns only train-specific logic.
+
+**Adding a load type.** Subclass `Load`, expose plane components through `component(plane)` if it is directional, and tag its `source` so `set_gear_loads()` knows whether to replace it.
+
+**Adding standard tabular data.** It goes in `database/`, as data only, with no import from `core/`.
+
+---
+
+## Standards referenced
+
+| Standard | Applies to |
+|---|---|
+| ISO 281 | Bearing dynamic load ratings, multi-row reduction factors, life exponent `p` |
+| ISO 76 | Bearing static load ratings — not yet implemented for any family |
+| ISO/TS 16281 | Per-element and per-lamina capacity entry points |
+| ISO 21771 | Cylindrical involute gear geometry and nomenclature |
+| ISO 53 | Standard basic rack tooth profile |
+| ISO 6336-1 | Application factor `K_A`, dynamic factor `K_v` (Methods B and C) |
+| ISO 6336-5 | Gear material strength values |
+| DIN 6885 | Parallel keys and keyways |
+| ISO 3912 | Woodruff keys and keyways |

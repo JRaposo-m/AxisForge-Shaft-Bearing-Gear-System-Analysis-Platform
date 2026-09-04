@@ -1,6 +1,6 @@
 # axisforge/solvers — Module Reference
 
-Solvers consume the domain objects in [`core/README.md`](../core/README.md) and the mesh objects in [`mesh/README.md`](../mesh/README.md), and publish results as explicit, GUI-independent containers. No solver imports another solver's internals — only the shared result containers.
+Solvers consume the domain objects in [`core/README.md`](../core/README.md) and the mesh objects in [`mesh/README.md`](../mesh/README.md), and publish their output into the containers defined in [`results/README.md`](../results/README.md). No solver imports another solver's internals — only the shared result containers.
 
 ← back to [project root](../../README.md)
 
@@ -8,14 +8,121 @@ Solvers consume the domain objects in [`core/README.md`](../core/README.md) and 
 
 ## Table of Contents
 
+- [Scope](#scope)
+- [Status](#status)
+- [Position in the architecture](#position-in-the-architecture)
+- [Structure](#structure)
 - [Import surface](#import-surface)
+- [Conventions](#conventions)
 - [Shaft FEM](#shaft-fem)
 - [Shaft results and post-processing](#shaft-results-and-post-processing)
-- [Bearings — ISO/TS 16281](#bearings--isots-16281)
-- [Bearings — rating life](#bearings--rating-life)
+- [Bearings — ISO/TS 16281, single row](#bearings--isots-16281-single-row)
+- [Bearings — ISO/TS 16281, multi-row thrust](#bearings--isots-16281-multi-row-thrust)
 - [Gears](#gears)
 - [Mesh convergence](#mesh-convergence)
-- [Lubrication](#lubrication)
+- [Design contracts](#design-contracts)
+- [Extending this package](#extending-this-package)
+- [Standards referenced](#standards-referenced)
+
+---
+
+## Scope
+
+| In scope | Out of scope |
+|---|---|
+| Numerical procedures: assembly, root solves, quadrature, extrapolation | The geometry and catalogue data they operate on (`core/`) |
+| Recovery of engineering quantities from a raw solution | The shape those quantities are stored in (`results/`) |
+| Dispatch of a bearing to the solver its family supports | Collecting many results into a run-level library (`fixtures/`) |
+| Post-processing that requires a standard's formula | The standard's capacity formulae themselves (owned by the bearing family) |
+
+A solver is a computation. It does not know how many shafts a study has, it does not keep a registry, and it does not print.
+
+---
+
+## Status
+
+| Group | Module | Contents | Status |
+|---|---|---|---|
+| `shaft/fem_solvers/` | `build_stiffness_matrix.py` | `StiffnessMatrixBuilder` | Implemented |
+| `shaft/fem_solvers/` | `rigid_bearing.py` | `RigidBearingFEMSolver` | Implemented |
+| `shaft/fem_solvers/sub_models/` | `lagrange_multipliers.py` | `SubmodelResult` and the submodel solve | Implemented |
+| `shaft/static/` | `results_reader.py` | `ShaftResultsReader` | Implemented |
+| `shaft/static/` | `postprocessing.py` | `ShaftPostProcessor`, `PostProcessedResults`, `StressConcentration` | Implemented |
+| `shaft/static/` | `static_failure.py` | static failure criteria | Reserved — module exists, defines nothing |
+| `shaft/` | `utils.py` | Marin factors, Peterson Kt, Neuber q, Kf | Implemented |
+| `bearings/.../single_row/iso_16281/` | `dispatch.py`, `numerics.py`, `validation.py` | Solver resolution, root-solve wrapper, guards | Implemented |
+| `bearings/.../single_row/iso_16281/ball_bearing/` | `solver.py`, `postprocessing.py` | `ISO16281BallSolver` and its post-processing | Implemented |
+| `bearings/.../single_row/iso_16281/roller_bearing/` | `solver.py`, `postprocessing.py` | `ISO16281RollerSolver` and its post-processing | Implemented |
+| `bearings/.../multi_row/thrust_bearings/iso_16281/ball_bearings/` | `multirow_solver.py`, `postprocessing.py`, `results.py` | `ISO16281MultiRowBallSolverSharedDisplacement` | Implemented |
+| `bearings/.../multi_row/thrust_bearings/iso_16281/roller_bearings/` | `multirow_solver.py`, `postprocessing.py`, `results.py` | `ISO16281MultiRowRollerSolverSharedDisplacement` | Implemented, not exercised — no multi-row roller family exists in `core/` |
+| `gears/` | `geometry.py`, `utils.py` | `GearSolver` and stateless helpers | Implemented |
+| `gears/SpurHelicalGears/LoadCapacity_solver/` | `load_capacity.py` | ISO 6336 load capacity | Reserved — module exists, defines nothing |
+| `mesh/` | `mesh_convergence_study.py` | `MeshConvergenceStudy`, `RichardsonGCI`, `MeshRefinementResult`, `ConvergenceRecord` | Implemented |
+
+---
+
+## Position in the architecture
+
+```
+   config      core/      mesh/          domain and constants
+      └───────────┼──────────┘
+                  ▼
+              solvers/                   this package
+                  │  writes
+                  ▼
+              results/                   containers
+                  │  reads
+                  ▼
+             fixtures/                   studies, libraries, reports
+```
+
+Two boundaries are strict and worth stating plainly:
+
+- **Downward.** A solver may read `core/`, `mesh/`, `config` and `results/`. It never imports `fixtures/`.
+- **Sideways.** A solver never imports another solver. The ball and roller stacks each own a full vertical slice — solve, post-process — and meet only at the dispatcher and at the result containers they share.
+
+Run-level registries are not here. `RigidBearingFEMResultsLibrary`, `BearingResultsLibrary` and `RollingBearingSolver` all live in `fixtures/studies/`: collecting results across a whole gearbox is orchestration, and orchestration is a study concern.
+
+> **Open item.** The multi-row branch keeps its own `results.py` in each of `ball_bearings/` and `roller_bearings/`, redefining `BallBearingResult`, `RollerBearingResult` and their per-row types under the same names as the copies in `results/`, with a different predicate (`is_multirow` here, `is_single` there). These belong in `results/bearings/load_distribution/multi_row/`. Until they move, a consumer that can receive a result from either branch cannot rely on either predicate. Separately, `roller_bearings/multirow_solver.py` imports `ball_bearings/results` rather than its own — either a wrong import or undeclared reuse.
+
+---
+
+## Structure
+
+```
+solvers/
+├── machine_elements/
+│   ├── shaft/
+│   │   ├── fem_solvers/
+│   │   │   ├── build_stiffness_matrix.py     Global stiffness assembly
+│   │   │   ├── rigid_bearing.py              The full shaft solve
+│   │   │   └── sub_models/
+│   │   │       └── lagrange_multipliers.py   Subdomain solve with prescribed cut nodes
+│   │   ├── static/
+│   │   │   ├── results_reader.py             Raw solution → ShaftResults
+│   │   │   ├── postprocessing.py             Stress concentration
+│   │   │   └── static_failure.py             Reserved
+│   │   └── utils.py                          Marin, Peterson, Neuber helpers
+│   ├── bearings/load_distribution/
+│   │   ├── single_row/iso_16281/
+│   │   │   ├── dispatch.py                   Capability-based solver resolution
+│   │   │   ├── numerics.py                   Root-solve wrapper
+│   │   │   ├── validation.py                 Readiness and arrangement guards
+│   │   │   ├── ball_bearing/{solver,postprocessing}.py
+│   │   │   └── roller_bearing/{solver,postprocessing}.py
+│   │   └── multi_row/thrust_bearings/iso_16281/
+│   │       ├── numerics.py  validation.py
+│   │       ├── ball_bearings/{multirow_solver,postprocessing,results}.py
+│   │       └── roller_bearings/{multirow_solver,postprocessing,results}.py
+│   └── gears/
+│       ├── geometry.py                       GearSolver
+│       ├── utils.py                          Involute helpers, rack constants
+│       └── SpurHelicalGears/LoadCapacity_solver/load_capacity.py    Reserved
+└── mesh/
+    └── mesh_convergence_study.py
+```
+
+The bearing tree is split by **row count first**, then by standard, then by contact type. That ordering is deliberate: single-row and multi-row are different solve *problems* — one ring displacement versus a load split across co-located rows — whereas ball and roller are different *contact laws* within each. Splitting the other way round would put two unrelated formulations in the same package.
 
 ---
 
@@ -23,19 +130,38 @@ Solvers consume the domain objects in [`core/README.md`](../core/README.md) and 
 
 | Import from | Names |
 |---|---|
-| `...shaft.oneD_analysis.build_stiffness_matrix` | `StiffnessMatrixBuilder` |
-| `...shaft.oneD_analysis.FEM_solvers` | `SimpleFEMSolver`, `SubmodelSolver`, `SubmodelResult` |
-| `...shaft.oneD_analysis.static` | `ShaftResults`, `ShaftResultsReader`, `SimpleFEMResultsLibrary`, `BearingNodeData` |
-| `...shaft.oneD_analysis.static.shaft_post_processor` | `ShaftPostProcessor`, `PostProcessedResults`, `StressConcentration` |
+| `...shaft.fem_solvers.build_stiffness_matrix` | `StiffnessMatrixBuilder` |
+| `...shaft.fem_solvers.rigid_bearing` | `RigidBearingFEMSolver` |
+| `...shaft.fem_solvers.sub_models.lagrange_multipliers` | `SubmodelResult` |
+| `...shaft.static.results_reader` | `ShaftResultsReader` |
+| `...shaft.static.postprocessing` | `ShaftPostProcessor`, `PostProcessedResults`, `StressConcentration` |
 | `...shaft.utils` | Marin factors, Peterson Kt, Neuber notch sensitivity, Kf |
-| `...bearings.ISO_16281` | `RollingBearingSolver`, `BearingResultsLibrary`, `warn_if_floating_loaded`, `resolve_solver_cls`, `resolve_solver_cls_for_attrs`, `SolverDispatchError` |
-| `...bearings.ISO_16281.Ball_Bearing` | `ISO16281BallSolver`, `ISO16281MultiRowBallSolverSharedDisplacement`, `BallBearingResult`, `BallLoadDistributionResult`, `BallLoadDistributionLibrary`, `BallBearingStiffness`, `DynamicEquivalentRollingElementLoad`, `Q_j`, `phi_j_global`, `contact_distribution`, `bearing_stiffness`, `debug_radial_capacity` |
-| `...bearings.ISO_16281.Roller_Bearing` | `ISO16281RollerSolver`, `RollerBearingResult`, `RollerLoadDistributionResult`, `RollerLoadDistributionLibrary`, `RollerBearingStiffness`, `LaminaDynamicEquivalentLoad`, `Q_j`, `phi_j_global`, `contact_distribution`, `lamina_distribution`, `bearing_stiffness`, `stress_riser_factor`, `debug_radial_capacity` |
-| `...bearings.life` | `BearingLifeSolver` |
+| `...bearings.load_distribution.single_row.iso_16281.dispatch` | `resolve_solver_cls`, `resolve_solver_cls_for_attrs`, `register_contact_solver`, `SolverDispatchError` |
+| `...single_row.iso_16281.ball_bearing.solver` | `ISO16281BallSolver` |
+| `...single_row.iso_16281.ball_bearing.postprocessing` | `BallBearingStiffness`, `DynamicEquivalentRollingElementLoad`, `BasicReferenceRatingLife`, `DynamicEquivalentReferenceLoad`, `Q_j`, `phi_j_global`, `contact_distribution`, `bearing_stiffness`, `combine_row_L10r`, `basic_reference_rating_life`, `debug_radial_capacity` |
+| `...single_row.iso_16281.roller_bearing.solver` | `ISO16281RollerSolver` |
+| `...single_row.iso_16281.roller_bearing.postprocessing` | `RollerBearingStiffness`, `LaminaDynamicEquivalentLoad`, `BasicReferenceRatingLife`, `DynamicEquivalentReferenceLoad`, `Q_j`, `phi_j_global`, `contact_distribution`, `lamina_distribution`, `bearing_stiffness`, `stress_riser_factor`, `debug_radial_capacity` |
+| `...multi_row.thrust_bearings.iso_16281.ball_bearings.multirow_solver` | `ISO16281MultiRowBallSolverSharedDisplacement` |
+| `...multi_row.thrust_bearings.iso_16281.roller_bearings.multirow_solver` | `ISO16281MultiRowRollerSolverSharedDisplacement` |
 | `...gears.geometry` | `GearSolver` |
 | `axisforge.solvers.mesh` | `MeshConvergenceStudy`, `RichardsonGCI`, `MeshRefinementResult`, `ConvergenceRecord` |
 
-`ISO_16281` exports only the orchestration layer. `Ball_Bearing` and `Roller_Bearing` are imported explicitly: point and line contact produce different result types, and flattening them into one namespace would hide which contact model a name belongs to.
+Ball and roller packages are imported explicitly and never flattened into one namespace: point and line contact produce different result types, and flattening would hide which contact model a name belongs to. Note that `Q_j`, `phi_j_global`, `contact_distribution`, `bearing_stiffness` and `BasicReferenceRatingLife` are each defined **four times**, once per branch and contact type, with the exponents and contact law appropriate to that branch. They are not interchangeable; import from the module matching the bearing in hand.
+
+---
+
+## Conventions
+
+| Symbol | Meaning |
+|---|---|
+| `x` | Axial coordinate, increasing left → right |
+| `XZ` | Horizontal plane — tangential gear force `Wt` |
+| `XY` | Vertical plane — radial gear force `Wr`, opposed to gravity |
+| Torsion | Accumulates left → right; positive counter-clockwise viewed from `+x` |
+
+Units, as stored: length and displacement in **mm**, force in **N**, bending moment in **N·mm**, torque in **N·m**, stress in **MPa**, stiffness in **N/mm**, angles in **rad**. The torque/bending-moment unit discontinuity is real and documented rather than normalised — see [`results/README.md`](../results/README.md#units).
+
+Degrees of freedom are three per node: axial displacement, transverse displacement, rotation. Each bending plane is solved independently against the same stiffness matrix and superposed afterwards.
 
 ---
 
@@ -43,11 +169,17 @@ Solvers consume the domain objects in [`core/README.md`](../core/README.md) and 
 
 ### `StiffnessMatrixBuilder`
 
-Assembles the global stiffness matrix from element contributions, with three degrees of freedom per node (axial displacement, transverse displacement, rotation). The beam theory is selected by name from an extensible registry; Timoshenko with selective integration is wired today.
+Assembles the global stiffness matrix from element contributions. The beam theory is selected by name from an extensible registry; Timoshenko with selective integration is wired today, and `euler_bernoulli` is the reserved second entry.
 
-### `SimpleFEMSolver`
+| Member | Purpose |
+|---|---|
+| `build_stiffness_matrix(mesh, elements)` | The assembled global matrix. |
 
-Orchestrates the full shaft solve: node grid, element list, global stiffness, boundary conditions, two independent planar solves sharing the same stiffness matrix, superposition, and the torsion diagram on the same nodes. Every intermediate quantity is stored as a public attribute.
+### `RigidBearingFEMSolver`
+
+Orchestrates the full shaft solve: node grid, element list, global stiffness, boundary conditions, two independent planar solves sharing the same stiffness matrix, superposition, and the torsion diagram on the same nodes. Bearings are treated as rigid supports — hence the name; a compliant-bearing solver would be a sibling module, not a mode of this one.
+
+Every intermediate quantity is stored as a public attribute.
 
 | Member | Purpose |
 |---|---|
@@ -61,6 +193,8 @@ Orchestrates the full shaft solve: node grid, element list, global stiffness, bo
 | `free_dofs`, `constrained_dofs` | Boundary condition partition. |
 | `d_total_xz`, `d_total_xy` | Superposed displacement vectors per plane. |
 | `f_xz_ext`, `f_xy_ext` | External force vectors per plane. |
+| `f_xz_reaction`, `f_xy_reaction` | Reaction vectors — non-zero only at constrained DOFs. |
+| `f_xz_total`, `f_xy_total` | Total nodal force vectors. |
 | `d_contributions` | Per-load-case displacement contributions. |
 | `T_total`, `tau_total` | Torsion diagram and shear stress on the same nodes. |
 | `torsion_contributions` | Per-source torsion contributions, per node. |
@@ -69,51 +203,38 @@ Construction options: the beam theory, the bearing constraint model, and the set
 
 Distributed loads are integrated by Gauss quadrature whose order is chosen adaptively from the estimated polynomial degree of the shape functions, the load intensity and the direction function — the caller never picks a quadrature rule.
 
-One solver instance per shaft: a second `solve()` overwrites the published attributes.
+**One solver instance per shaft.** A second `solve()` overwrites every published attribute. `fixtures/studies/shafts/fem_simple.solve_system()` creates a fresh solver per shaft for this reason.
 
-### `SubmodelSolver` and `SubmodelResult`
+### The submodel solve
 
-Wraps `SimpleFEMSolver` and restricts the solution to a subdomain, injecting the global solution at the cut nodes through Lagrange multipliers. Distributed loads are clamped to the subdomain bounds. Used by the mesh convergence study.
+`sub_models/lagrange_multipliers.py` restricts the solution to a subdomain, injecting the global solution at the cut nodes through Lagrange multipliers. Distributed loads are clamped to the subdomain bounds. It is what the mesh convergence study refines against.
 
-| Member | Purpose |
-|---|---|
-| `solve` | Refines the subdomain to a requested grade, rebuilds the local stiffness and load vectors, and solves with the cut-node constraints. |
-
-`SubmodelResult` carries the subdomain bounds, the grade, the local node list, the displacement vectors per plane, and the cut-node reaction multipliers.
+`SubmodelResult` carries the subdomain bounds `x_lo`/`x_hi`, the grade, the local node list, the displacement vectors per plane, and the cut-node reaction multipliers.
 
 ---
 
 ## Shaft results and post-processing
 
-### Result containers
+### `ShaftResultsReader`
 
-| Class | Purpose |
+Post-processes a solved `RigidBearingFEMSolver` into a `ShaftResults`. It recovers internal forces, deflections, section properties, bearing reactions and per-bearing node data in one pass.
+
+| Member | Purpose |
 |---|---|
-| `ShaftResults` | The complete output for one shaft: mesh, raw FEM solution, torsion, post-processed engineering quantities, and per-bearing node data. |
-| `BearingNodeData` | The complete FEM nodal state at one bearing position. |
-| `SimpleFEMResultsLibrary` | Registry of `ShaftResults` keyed by shaft name — the canonical source every downstream solver reads from. |
-| `ShaftResultsReader` | Post-processes a solved `SimpleFEMSolver` into a `ShaftResults` and stores it in the library. |
-| `StaticFailure` | Reserved for static failure criteria; not implemented. |
+| `read()` | Returns a populated `ShaftResults`. |
 
-`ShaftResults` is organised in four groups:
+The reader **does not know libraries exist**. It returns the container; storing it under a shaft name is the study layer's job. This is a change from the earlier design, where the reader wrote directly into a registry.
 
-| Group | Contents |
-|---|---|
-| Mesh | Node positions and the element list. |
-| Raw FEM solution | Global stiffness, DOF partition, displacement and force vectors per plane, reaction vectors. |
-| Torsion | Torque and shear-stress diagrams, per-source contributions. |
-| Engineering quantities | Axial coordinate, bending moments per plane and resultant, shear forces per plane and resultant, deflections per plane and resultant, torque, diameter and section moduli along the shaft. |
+Two quantities produced here are easy to conflate and are kept deliberately separate, computed from different arrays:
 
-`BearingNodeData` carries the label and position, the nodal displacements and rotations, the radial reactions per plane and their resultant, the axial reaction, the moment reactions, and the seat misalignment — the gradient of transverse displacement across the seat width, falling back to the nodal rotation for a zero-width seat. This misalignment is the input the ISO/TS 16281 solvers use as their prescribed tilt.
+| Quantity | Source | Meaning |
+|---|---|---|
+| Bearing **reactions** (`R_xz`, `R_xy`, `R`, `R_axial`) | the reaction vector | Constraint forces, non-zero only at constrained DOFs |
+| Bearing node **loads** (`Fr_xz`, `Fr_xy`, `Fr`, `Fa`) | the total nodal force vector | Total force at that node |
 
-| `SimpleFEMResultsLibrary` member | Purpose |
-|---|---|
-| `store` | Add or overwrite the results for one shaft. |
-| `get`, `get_or_none` | Retrieve by shaft name. |
-| `remove`, `clear` | Drop one or all entries. |
-| `names`, `iter`, `all_results` | Enumerate in insertion order. |
+At a bearing node with no other load applied at exactly that position they are numerically close, but they are not the same computed quantity and are not guaranteed identical. Report them separately; do not present one as a check on the other.
 
-`ShaftResultsReader.read()` recovers internal forces, deflections, section properties, bearing reactions and node data in one pass, and stores the result under the shaft system's name.
+**Seat misalignment.** `_psi` computes the shaft centreline slope across the bearing seat width — the gradient of transverse displacement between the seat bounds, falling back to the nodal rotation for a zero-width seat. No second FEM pass is needed. This is the prescribed tilt the ISO/TS 16281 solvers consume, and it is what makes the shaft and bearing analyses one coupled calculation rather than two independent ones.
 
 ### Stress concentration
 
@@ -121,11 +242,13 @@ Wraps `SimpleFEMSolver` and restricts the solution to a subdomain, injecting the
 
 | Class | Purpose |
 |---|---|
-| `StressConcentration` | One feature: position, kind (shoulder, keyway, groove, press fit), theoretical and fatigue factors in bending and torsion, notch sensitivity, and the geometry that produced them. |
+| `StressConcentration` | One feature: position `x`, kind (`shoulder`, `keyway`, `groove`, `press_fit`), `Kt_bending`/`Kt_torsion`, `Kf_bending`/`Kf_torsion`, `q_bending`/`q_torsion`, the geometry `r`, `D`, `d` that produced them, and a free-text `note`. |
 | `PostProcessedResults` | The original `ShaftResults` by composition, plus the fatigue factor arrays, the corrected bending and shear stress arrays, the feature list, and the located maxima. |
 | `ShaftPostProcessor` | `process()` walks the shaft's features and returns a `PostProcessedResults`. |
 
 Shoulder factors come from the Peterson curve fits in Shigley's tables; notch sensitivity interpolates the Neuber constant against ultimate strength, referenced to the shear yield for torsion; the ultimate strength at each position is read from the material database, with a conservative fallback.
+
+The stresses in `ShaftResults` are **nominal**. Notch effects live only in `PostProcessedResults`. A governing location that coincides with a shoulder or keyway is the signal to run the post-processor before drawing a conclusion.
 
 ### `shaft/utils.py`
 
@@ -140,20 +263,7 @@ The load-type factor is per load mode; for combined bending and torsion the call
 
 ---
 
-## Bearings — ISO/TS 16281
-
-### How the package is organised
-
-```
-ISO_16281/
-├── dispatch.py                 Solver resolution by capability and required attributes
-├── library.py                  Generic solve utilities, cross-type results registry
-├── rolling_bearing_solver.py   RollingBearingSolver — the entry point
-├── Ball_Bearing/               Point contact: solver, results, postprocessing
-└── Roller_Bearing/             Line contact:  solver, results, postprocessing
-```
-
-Each contact type owns a full vertical slice — solve, result shape and postprocessing — and never depends on the other at runtime. The two are wired together at exactly three points: the shared results registry, the dispatcher, and the orchestrator.
+## Bearings — ISO/TS 16281, single row
 
 ### Dispatch
 
@@ -163,54 +273,19 @@ A bearing is matched to a solver by the capabilities its family declares and the
 |---|---|
 | `resolve_solver_cls` | The single-row solver whose contract an assembled bearing satisfies. Ambiguity resolves to the most specific match. |
 | `resolve_solver_cls_for_attrs` | The same match from a bare attribute set — how the rows of a multi-row bearing, which are plain dicts, are resolved. |
-| `register_contact_solver` | The registration decorator, applied internally by the two single-row solvers. |
+| `register_contact_solver` | The registration decorator, applied by the two single-row solvers. |
 | `SolverDispatchError` | Raised, naming the offending bearing label, when nothing matches. |
 
 Adding a bearing family therefore requires no edit to any dispatch table.
 
-### `RollingBearingSolver`
+### Shared utilities
 
-The single entry point for a shaft's full bearing set, which may mix contact types and row counts.
-
-| Member | Purpose |
+| Module | Contents |
 |---|---|
-| `solve` | Groups single-row bearings by resolved solver and dispatches each group; sends multi-row bearings individually to the multi-row solver registered on their row solver. Returns per-label lists of row results, in the order the caller supplied the bearings. |
-| `postprocess_and_record` | The full pipeline — solve (or reuse an existing load distribution), then capacity, dynamic equivalent load and secant stiffness — recorded into a `BearingResultsLibrary`. |
+| `numerics.py` | Root solve wrapper: a primary algorithm with a fallback, returning the solution, evaluation count, residual norm and success flag. |
+| `validation.py` | Readiness guards — raises, naming the missing attribute, if a bearing has not been fully assembled for the requested solve; warns when a bearing declared floating is carrying axial load. |
 
-`postprocess_and_record` takes a `catalog` mapping each bearing label to the arguments for its capacity and equivalent-load steps. Either sub-entry may be omitted to skip that step; stiffness is always computed. Capacity is obtained by calling the family through the bearing, so the orchestrator holds no ISO formulas of its own.
-
-### Shared utilities and the results registry
-
-| Name | Purpose |
-|---|---|
-| `check_bearing_ready` | Raises, naming the missing attribute, if a bearing has not been fully assembled for the requested solve. |
-| `warn_if_floating_loaded` | Warns when a bearing declared floating is carrying axial load. |
-| `run_root` | Root solve wrapper: a primary algorithm with a fallback, returning the solution, evaluation count, residual norm and success flag. |
-| `BearingResultBundle` | Everything computed for one bearing label: bearing type, per-row load distribution, stiffness, capacity, dynamic equivalent load, and an open `extra` dictionary. |
-| `BearingResultsLibrary` | Registry of bundles keyed by label — what lubrication, fatigue and life solvers read from. |
-
-| `BearingResultsLibrary` member | Purpose |
-|---|---|
-| `add_load_distribution_library` | Records an entire per-solver local library at once. |
-| `load_distribution_library` | Retrieves that whole sub-library for one solver class. |
-| `set_load_distribution` | Sets one label directly, bypassing a local library. |
-| `set_capacity`, `set_dynamic_equivalent_load`, `set_stiffness`, `set_bearing_type`, `set_extra` | Per-label setters; each overwrites. |
-| `get`, `labels` | Retrieval and enumeration; `get` raises for an unrecorded label. |
-
-### Result shapes
-
-Single-row and multi-row bearings share one result type per contact model.
-
-| Class | Purpose |
-|---|---|
-| `BallLoadDistributionResult` | The raw output of one point-contact raceway solve: radial and axial approach, misalignment, resultant-force angle, per-element deflection and contact angle, the diagnostic tilting moment, iteration count, residual and convergence flag. |
-| `BallBearingResult` | The per-bearing container. `rows` is a list — length one for a single-row bearing, one entry per row otherwise. Multi-row solves also carry the outer-iteration load fractions and diagnostics. |
-| `BallLoadDistributionLibrary` | Local registry of ball results by label. |
-| `RollerLoadDistributionResult` | The line-contact equivalent, with axial approach fixed at zero and the lamina-model arrays added: lamina positions, per-roller tilt, per-lamina deflection and per-lamina load. |
-| `RollerBearingResult` | The per-bearing container, same shape as the ball one. |
-| `RollerLoadDistributionLibrary` | Local registry of roller results by label. |
-
-Per-element contact forces are not stored — they are derived on demand from the converged deflections by the postprocessing functions.
+Both are duplicated in the multi-row branch rather than shared across it. That is consistent with the vertical-slice rule, at the cost of two copies to keep in step.
 
 ### Ball bearings — point contact
 
@@ -218,7 +293,7 @@ Per-element contact forces are not stored — they are derived on demand from th
 
 | Member | Purpose |
 |---|---|
-| `solve` | Solves every point-contact bearing in the given set against the FEM results library, returning a local library. |
+| `solve` | Solves every point-contact bearing in the given set against the shaft results library. |
 | `solve_contact` | The two-equation root solve for one raceway — a whole single-row bearing, or one row of a multi-row one. |
 | `elements` | Per-element elastic deflection and effective contact angle for a given approach and tilt. |
 | `minimum_axial_load` | The smallest axial preload at which the contact closes, by bracketing on the axial approach. |
@@ -226,23 +301,19 @@ Per-element contact forces are not stored — they are derived on demand from th
 
 Initial approach values trust a non-negligible FEM hint and fall back to a Hertz-scale estimate otherwise.
 
-**`ISO16281MultiRowBallSolverSharedDisplacement`** — the multi-row solver reached by dispatch. One root solve on the shared displacement of the rigid ring; each row contributes its own Hertzian reaction, summed. It returns the same result type as the single-row solver, so nothing downstream changes.
-
-A second multi-row formulation based on load-split fractions is kept in the package for comparison. It is not part of dispatch: with negligible axial load and rows of differing stiffness its Jacobian degenerates and it fails to converge, which is why the shared-displacement formulation is the registered one.
-
-**Postprocessing.** Every per-element function returns one entry per row.
+**Post-processing.** Every per-element function returns one entry per row.
 
 | Function or class | Purpose |
 |---|---|
-| `Q_j` | Per-element contact force from the converged deflections. |
-| `phi_j_global` | Element angular positions in the global frame. |
+| `Q_j` | Per-element contact force from the converged deflections, `Q_j = c_p · delta_j^1.5`. |
+| `phi_j_global` | Element angular positions in the global frame, wrapped to `[0, 2π)`. |
 | `contact_distribution` | Angle and contact force pairs, in the global or local frame. |
-| `BallBearingStiffness`, `bearing_stiffness` | Secant stiffness decomposed onto the two bending planes and the axis, with an axial regime label distinguishing no load, engaged contact and closing clearance. |
+| `BallBearingStiffness`, `bearing_stiffness` | Secant stiffness decomposed onto the two bending planes and the axis, with a regime label distinguishing `no_load`, `engaged` and `closing_clearance`. |
 | `DynamicEquivalentRollingElementLoad` | Dynamic equivalent load per rolling element for the inner and outer raceway, with the exponent chosen by which ring rotates relative to the load. |
-| `BasicReferenceRatingLife` | Basic reference rating life for one row and raceway pair. |
-| `combine_row_L10r` | Combines per-row lives into a bearing-level life. |
-| `basic_reference_rating_life` | Per-row lives and the combined bearing life in one call. |
+| `BasicReferenceRatingLife`, `combine_row_L10r`, `basic_reference_rating_life` | Per-row lives and the combined bearing life. |
 | `DynamicEquivalentReferenceLoad` | The reference load corresponding to a computed life, radial and axial. |
+
+Per-element contact forces are **not stored** on the result — they are derived on demand from the converged deflections, so there is one source of truth.
 
 ### Roller bearings — line contact
 
@@ -250,41 +321,43 @@ A second multi-row formulation based on load-split fractions is kept in the pack
 
 | Member | Purpose |
 |---|---|
-| `solve` | Solves every line-contact bearing in the given set, returning a local library. Validates the lamina count and the cached profile length. |
+| `solve` | Solves every line-contact bearing in the given set. Validates the lamina count and the cached profile length. |
 | `solve_contact` | The one-unknown root solve on radial approach. |
 | `elements` | Per-roller and per-lamina deflection and load for a given approach and tilt. |
 | `debug_radial_capacity` | Prints whole-roller and per-lamina capacities for manual cross-check. |
 
-Only the radial approach is solved; the tilt is an input taken from the FEM shaft slope, and the moment equilibrium is evaluated afterwards as a diagnostic rather than as a solve constraint. The reference roller profile is read from the bearing, where it was cached at assembly — the solver never computes it.
+Only the radial approach is solved. The tilt is an input taken from the FEM shaft slope, and moment equilibrium is evaluated afterwards as a diagnostic rather than as a solve constraint. The reference roller profile is read from the bearing, where it was cached at assembly — the solver never computes it.
 
-A shared-displacement multi-row roller solver exists and is registered, mirroring the ball side. No multi-row roller family exists in `core/` yet, so it has not been exercised on a real case.
-
-**Postprocessing.** Same per-row list convention as the ball side.
+**Post-processing.** Same per-row list convention as the ball side.
 
 | Function or class | Purpose |
 |---|---|
 | `Q_j` | Total force per roller, summed over its laminae. |
 | `phi_j_global`, `contact_distribution` | As the ball side. |
-| `lamina_distribution` | Position and load along a single roller — the pressure-profile view. |
+| `lamina_distribution` | Position and load along a single roller — the pressure-profile view, and where edge loading becomes visible. |
 | `RollerBearingStiffness`, `bearing_stiffness` | Secant stiffness in the two bending planes. Axial stiffness is reported as unloaded, which is the physically correct statement for a radial roller bearing. |
-| `stress_riser_factor` | Approximate edge-stress concentration along the roller. Its validity conditions — moderate load, small misalignment, logarithmic profile — are not checked. |
-| `LaminaDynamicEquivalentLoad` | Dynamic equivalent load per lamina for both raceways. Compare against the family's per-lamina capacities, not the whole-roller ones. |
+| `stress_riser_factor` | Approximate edge-stress concentration along the roller. Its validity conditions — moderate load, small misalignment, logarithmic profile — are **not** checked. |
+| `LaminaDynamicEquivalentLoad` | Dynamic equivalent load per lamina, both raceways, ISO/TS 16281 §5.3.4 eq. (61)–(64). Compare against the family's per-lamina capacities `q_ci`/`q_ce`, never against the whole-roller `Q_ci`/`Q_ce`. |
 | `BasicReferenceRatingLife`, `combine_row_L10r`, `basic_reference_rating_life`, `DynamicEquivalentReferenceLoad` | As the ball side, with the line-contact exponents. |
 
-Combining reference rating lives into a modified rating life is not implemented on either side.
+Combining reference rating lives into a **modified** rating life is not implemented on either side.
 
 ---
 
-## Bearings — rating life
+## Bearings — ISO/TS 16281, multi-row thrust
 
-**`BearingLifeSolver`** — ISO 281 basic rating life and static safety, separate from the ISO/TS 16281 internal-distribution stack.
+Multi-row is a genuinely different solve, not a mode of the single-row one: axially stacked rows share one rigid ring, so the ring displacement is a single unknown and each row's reaction is summed against it.
 
-| Member | Purpose |
+| Class | Purpose |
 |---|---|
-| `solve_bearing` | Basic rating life and static safety factor for one bearing from its radial and axial load, speed and design life. |
-| `extract_bearing_forces` | Radial and axial load per bearing label from a statics result. |
+| `ISO16281MultiRowBallSolverSharedDisplacement` | One root solve on the shared displacement of the rigid ring; each row contributes its own Hertzian reaction. Reaches individual rows through `ISO16281BallSolver.elements`. |
+| `ISO16281MultiRowRollerSolverSharedDisplacement` | The line-contact equivalent, mirroring the ball side. |
 
-The equivalent load currently reduces to the radial load: the axial contribution factors are not yet applied.
+A second multi-row formulation based on load-split fractions was tried and is not registered: with negligible axial load and rows of differing stiffness its Jacobian degenerates and it fails to converge. The shared-displacement formulation is the registered one for that reason.
+
+**What "multi-row" does not mean.** For a *radial* bearing — deep groove ball or cylindrical roller — a second row is a plain capacity-rating multiplier on one raceway (ISO 281:2007 Table 1), solved as a single `delta_r` with no rows list and no load split. That case is handled by the single-row solver and the family's own `i`, not here. This package is for **thrust** duty only, where the rows genuinely share a compatibility solve.
+
+The roller multi-row solver has no multi-row roller family in `core/` to run against, so it has not been exercised on a real case.
 
 ---
 
@@ -296,11 +369,11 @@ The equivalent load currently reduces to the radial load: the axial contribution
 |---|---|
 | `compute_geometry` | Full pair geometry with optional profile shift: working centre distance from an imposed value or from the involute equation, transverse and base quantities, tip, root and working diameters, base pitch, and the three contact ratios. |
 | `compute_forces` | Tangential, radial, axial, base-tangential and normal forces from the pinion torque, plus the output torque and ratio. |
-| `to_gear_element` | Assembles a gear element for injection into the system pipeline, referenced to the working pitch circle so the torque consistency check holds. |
+| `to_gear_element` | Assembles a `GearElement` for injection into the system pipeline, referenced to the working pitch circle so the torque consistency check holds. |
 
 **`gears/utils.py`** — stateless building blocks: the involute function, the working pressure angle and centre distance from the involute equation, transverse and overlap contact ratios, the minimum tooth count to avoid undercut, input validation, and the standard rack constants.
 
-The ISO 6336 load capacity module is reserved and not yet written. Its data layer — application factor and dynamic factor by Method B and Method C — already exists in [`axisforge/database/`](../core/README.md#database).
+**`SpurHelicalGears/LoadCapacity_solver/load_capacity.py`** is reserved: the module exists and defines nothing yet. Its data layer — application factor `K_A` and dynamic factor `K_v` by Method B and Method C — is already in [`axisforge/database/`](../core/README.md#database), though those two modules currently import a `core` package path that no longer exists and need repairing before they can be consumed.
 
 ---
 
@@ -312,7 +385,7 @@ Grid Convergence Index by Richardson extrapolation on the resultant transverse d
 |---|---|
 | `RichardsonGCI` | For one triplet of coarse, medium and fine solutions: the refinement ratios, the observed order of convergence, the relative errors, the extrapolated value, the two convergence indices and their pass flags. |
 | `ConvergenceRecord` | The refinement history for one interval: levels attempted, metric history, index history, the converged flag, and the final node set. |
-| `MeshRefinementResult` | One record per interval, plus the union of every final node set and a printable report. |
+| `MeshRefinementResult` | One record per interval, plus `all_extra_nodes` (the union of every final node set) and `print_report`. |
 | `MeshConvergenceStudy` | The orchestrator. |
 
 | `MeshConvergenceStudy` member | Purpose |
@@ -320,12 +393,44 @@ Grid Convergence Index by Richardson extrapolation on the resultant transverse d
 | `run` | Refines each requested interval until the convergence index falls below the threshold or the level cap is reached. |
 | `intervals_from_shaft_system` | Derives the intervals worth refining from the shaft's elements, and reports what was skipped. |
 
-Bearing extents are excluded automatically: the displacement there is a prescribed boundary condition, so refining it gains nothing. The default index threshold is 1% with a safety factor of 1.25 and a cap of eight levels. The convergence metric is the mean absolute transverse displacement per plane and its resultant over physically meaningful evaluation points inside the interval.
+Bearing extents are excluded automatically: displacement there is a prescribed boundary condition, so refining it gains nothing. The default index threshold is 1% with a safety factor of 1.25 and a cap of eight levels. The convergence metric is the mean absolute transverse displacement per plane and its resultant over physically meaningful evaluation points inside the interval.
 
-The union of final node sets is the set to lock into production runs as extra mandatory nodes.
+`all_extra_nodes` is the set to lock into production runs as extra mandatory nodes.
 
 ---
 
-## Lubrication
+## Design contracts
 
-`solvers/lubrification/` is reserved and exports nothing. It is the home for film thickness, lubrication regime and grease solvers in a later phase, and is documented here so the empty package is not mistaken for an oversight.
+- **A solver computes; it does not collect.** No solver owns a registry keyed by shaft or bearing label. That is the study layer's job.
+- **No solver imports another solver.** Ball and roller, single-row and multi-row, shaft and bearing: each is a vertical slice. They meet at the dispatcher and at the result containers.
+- **No hidden state.** Every intermediate quantity is a public attribute. A solver exposes its full working for inspection.
+- **One instance per subject.** A solver's published attributes describe the last thing it solved. Re-solving overwrites them.
+- **Capacity belongs to the element.** A solver never carries its own copy of a standard's capacity formula; it calls the family through the bearing.
+- **A failed solve is still a result.** Convergence metadata (`n_iter`, `residual`, `ok`) is stored, never raised away. Checking it is the consumer's responsibility.
+- **Derive, do not duplicate.** Quantities recoverable from the converged solution — per-element contact force, angular positions — are computed on demand, not stored.
+- **Flag, do not silently fix.** A suspected discrepancy against a standard is documented in place. `stress_riser_factor` not checking its own validity conditions is stated here rather than silently guarded.
+
+---
+
+## Extending this package
+
+**Adding a bearing family.** Nothing in this package changes. Declare the family's `CAPABILITIES` and `REQUIRED_FOR` in `core/`; dispatch resolves it from those declarations. If the family needs a contact law neither solver implements, that is a new solver module under the matching branch, registered with `register_contact_solver`.
+
+**Adding a beam theory.** Register it in `StiffnessMatrixBuilder`'s theory registry and add the element module under `mesh/shaft/element_type/`. `euler_bernoulli` is the reserved slot.
+
+**Adding a solver.** Place it by the analysis it performs, mirroring the tree under `results/`. Give it its own result container in `results/` — never a local `results.py` in the solver package. Carry `n_iter`, `residual` and `ok` if it iterates. Import no other solver.
+
+**Adding post-processing.** It belongs beside the solver whose output it consumes, not in a shared module: the exponents and contact laws differ per branch, and a shared implementation would need a branch on contact type inside it.
+
+---
+
+## Standards referenced
+
+| Standard | Applies to |
+|---|---|
+| ISO/TS 16281 | Rolling bearing internal load distribution — §4 point contact, §5 line contact, §5.3.4 per-lamina equivalent load |
+| ISO 281 | Dynamic load ratings, basic rating life, multi-row reduction factors |
+| ISO 1281-1 | Explanatory notes on ISO 281 |
+| ISO 21771 | Cylindrical gear geometry and mesh force resolution |
+| ISO 53 | Standard basic rack tooth profile |
+| ISO 6336-1 | Application and dynamic factors — data layer present, solver reserved |

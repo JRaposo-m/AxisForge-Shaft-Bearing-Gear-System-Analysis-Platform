@@ -9,14 +9,30 @@ then domain group, down to each capability leaf:
     {"description": "...", "requires": {stage: (token, ...), ...}}
 
 `requires` lives on the leaf itself, not in a separate table -- read the
-description and its prerequisites in the same place. A token WITHOUT a
-dot is a domain prefix, checked against everything requested for that
-stage (loose: "was ANY capability of this domain requested"). A token
-WITH a dot is one exact capability string, checked via has_capability()
-(strict, and always the cascade TERMINAL one -- e.g.
-"systems.parallel_axis_linear" already guarantees Construction's own
-shafts/gears/bearings prerequisites were met via ITS OWN `requires`, so
-a study capability never re-lists those underneath it).
+description and its prerequisites in the same place. Every `token`
+inside one stage's tuple is ANDed against every other token in that
+tuple. A token is one of:
+
+  - WITHOUT a dot: a domain prefix, checked against everything
+    requested for that stage (loose: "was ANY capability of this
+    domain requested").
+  - WITH a dot: one exact capability string, checked via
+    has_capability() (strict, and always the cascade TERMINAL one --
+    e.g. "systems.parallel_axis_linear" already guarantees
+    Construction's own shafts/gears/bearings prerequisites were met via
+    ITS OWN `requires`, so a study capability never re-lists those
+    underneath it).
+  - a NESTED tuple/list of tokens: an OR-group -- true if at least ONE
+    of the tokens inside it holds, each resolved by the same two rules
+    above (recursively). Reach for this when two or more capabilities
+    are interchangeable for one prerequisite slot -- e.g.
+    "gears.internal_meshing" needs an internal ring gear AND *some*
+    external pinion, but the pinion can be EITHER gears.spur OR
+    gears.helical, never both:
+    `("gears.internal", ("gears.spur", "gears.helical"))`. A bare
+    domain-prefix token (no dot, above) is already its own kind of OR
+    -- across EVERY capability in that domain -- so reach for a nested
+    tuple instead when the OR only covers a SUBSET of one domain.
 
 This module is pure metadata -- it imports nothing from axisforge, so it
 can be introspected without pulling in any core/solvers code. verify()
@@ -237,6 +253,18 @@ CATALOGUE: dict = {
                     ".forces() -- that needs a real driving torque, a "
                     "MeshLoads-stage concern."
                 ),
+                # Kept AND, exactly as drafted -- but flagging, not
+                # silently fixing: the pair can be spur+spur,
+                # helical+helical or one of each, so gears.spur alone
+                # (or gears.helical alone) already covers "can build an
+                # external gear" for BOTH slots. Requiring both tokens
+                # forces a script that only ever wants two spur gears to
+                # also request gears.helical for nothing. Same shape as
+                # the gears.internal_meshing fix below -- say if you
+                # want this one changed to
+                # {"construction": (("gears.spur", "gears.helical"),)}
+                # (an OR-group of one) too.
+                "requires": {"construction": ("gears.helical", "gears.spur")},
             },
             "gears.internal_meshing": {
                 "description": (
@@ -250,6 +278,14 @@ CATALOGUE: dict = {
                     "is re-checked here as a guard). Does not call "
                     ".forces()."
                 ),
+                # AND(gears.internal, OR(gears.spur, gears.helical)) --
+                # the ring is always gears.internal, but the pinion is
+                # EITHER an external spur OR helical gear, never both at
+                # once, so the pinion slot is a nested OR-group rather
+                # than two ANDed exact tokens.
+                "requires": {
+                    "construction": ("gears.internal", ("gears.spur", "gears.helical")),
+                },
             },
         },
         "systems": {
@@ -277,6 +313,10 @@ CATALOGUE: dict = {
             },
         },
     },
+
+# ---------------------------------------------------------------------------
+# Studies -- every study capability is a leaf, with its own
+# ---------------------------------------------------------------------------
     "studies": {
         "shafts": {
             "shaft_fem": {
@@ -293,6 +333,52 @@ CATALOGUE: dict = {
                         "any alternative, so this name describes the only "
                         "physics actually applied today, not a chosen "
                         "switch."
+                    ),
+                    "requires": {"construction": ("systems.parallel_axis_linear",)},
+                },
+                "shaft_fem.euler_bernoulli_rigid": {
+                    "description": (
+                        "1D Euler-Bernoulli beam FEM solve for every shaft in a "
+                        "SpurHelicalGearSystem (EulerBernoulliRigidBearingFEMSolver "
+                        "+ ShaftResultsReader, same solve_system() entry point and "
+                        "same rigid-bearing boundary conditions as "
+                        "shaft_fem.timoshenko_rigid -- v=0 always, u=0 additionally "
+                        "for 'locating' bearings). Differs only in element physics: "
+                        "cubic Hermite shape functions, no independent shear-strain "
+                        "field (equivalent to G*As -> infinity, i.e. shear rigidity "
+                        "assumed infinite). Valid for slender shafts (L/D large, "
+                        "no short stepped sections near supports); for anything "
+                        "stubbier, shaft_fem.timoshenko_rigid is the one that does "
+                        "not neglect shear flexibility. Mutually informative with "
+                        "timoshenko_rigid -- same construction prerequisite, "
+                        "different solver class, pick one per study run."
+                    ),
+                    "requires": {"construction": ("systems.parallel_axis_linear",)},
+                },
+                
+                "shaft_fem.comparison": {
+                    "description": (
+                        "Two-solve theory comparison for every shaft in a "
+                        "SpurHelicalGearSystem (comparison_study.run_comparison() + "
+                        "print_comparison()/write_comparison_report(), fixtures/studies/"
+                        "shafts/fem_studies/comparison_study.py) -- calls "
+                        "fem_simple.solve_system() TWICE on the SAME already-resolved "
+                        "system, once per theory (default 'timoshenko' vs 'euler', "
+                        "overridable via run_comparison()'s own theory_a/theory_b "
+                        "kwargs), then reports sigma_b_max/v_max/bearing-reaction "
+                        "delta and delta%% per shaft via comparison_report.py's "
+                        "shaft_comparison_block(). Genuinely theory-agnostic -- does "
+                        "NOT itself require 'shaft_fem.timoshenko_rigid' or "
+                        "'shaft_fem.euler_bernoulli_rigid' to also be requested; it "
+                        "reaches RigidBearingFEMSolver's theory dispatch directly "
+                        "through fem_simple.solve_system(), the same construction "
+                        "prerequisite as those two, nothing more. Comparing two "
+                        "ShaftResults that were NOT solved on the same `system` object "
+                        "would silently produce a meaningless table -- see "
+                        "comparison_report.py's own top docstring; this capability "
+                        "does not (and cannot, from here) guard against that, it is "
+                        "the caller's responsibility, same as for the other two "
+                        "shaft_fem capabilities' `system` parameter."
                     ),
                     "requires": {"construction": ("systems.parallel_axis_linear",)},
                 },
@@ -359,6 +445,17 @@ def requirements_of(capability: str) -> dict[str, tuple[str, ...]]:
 # Verification -- the one place `requires` is walked
 # ---------------------------------------------------------------------------
 
+def _token_ok(token: object, caps_obj) -> bool:
+    """Resolve ONE requirement token against `caps_obj`. A tuple/list is
+    an OR-group -- true if ANY of its own tokens resolves true, each
+    checked by this same function (so an OR-group can itself contain a
+    domain-prefix or exact-capability token, recursively)."""
+    if isinstance(token, (tuple, list)):
+        return any(_token_ok(t, caps_obj) for t in token)
+    return (caps_obj.has_capability(token) if "." in token
+            else any(c.startswith(token + ".") for c in caps_obj._all()))
+
+
 def verify(capability: str, context: dict[str, object]) -> list[str]:
     """
     Check `capability`'s `requires` against `context` -- {stage_name:
@@ -367,10 +464,15 @@ def verify(capability: str, context: dict[str, object]) -> list[str]:
     -> bool and _all() -> set[str] (ConstructionCapabilities and
     StudyCapabilities both do).
 
-    A requirement token WITH a dot is one exact capability string,
-    checked via has_capability() (strict, cascade-terminal). A token
-    WITHOUT a dot is a domain prefix, checked against that stage's own
-    _all() (loose -- "was any capability of this domain requested").
+    Every token in a stage's tuple is ANDed. A token WITH a dot is one
+    exact capability string, checked via has_capability() (strict,
+    cascade-terminal). A token WITHOUT a dot is a domain prefix, checked
+    against that stage's own _all() (loose -- "was any capability of
+    this domain requested"). A token that is itself a tuple/list is an
+    OR-group -- true if at least one of ITS OWN tokens resolves true --
+    for a prerequisite slot where several capabilities are
+    interchangeable (see this module's own docstring, and
+    "gears.internal_meshing" in CATALOGUE, for the worked example).
 
     `capability` unregistered in CATALOGUE -> no known requirements,
     returns [] (resolve()'s own _require() is the authority on whether
@@ -386,11 +488,10 @@ def verify(capability: str, context: dict[str, object]) -> list[str]:
             )
             continue
         for token in tokens:
-            ok = (caps_obj.has_capability(token) if "." in token
-                  else any(c.startswith(token + ".") for c in caps_obj._all()))
-            if not ok:
+            if not _token_ok(token, caps_obj):
+                label = f"one of {token!r}" if isinstance(token, (tuple, list)) else f"'{token}'"
                 errors.append(
-                    f"{capability}: requires '{token}' in '{stage}' "
+                    f"{capability}: requires {label} in '{stage}' "
                     f"(none requested)"
                 )
     return errors

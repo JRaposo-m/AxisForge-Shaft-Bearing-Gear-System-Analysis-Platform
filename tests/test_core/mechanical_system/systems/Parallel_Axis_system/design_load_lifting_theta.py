@@ -22,7 +22,7 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system imp
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import ShaftResultsReader
 from axisforge.mesh.shaft.mesh_generation.mesh_1D import Mesh1D
-from axisforge.solvers.mesh.mesh_convergence_study import MeshConvergenceStudy
+from axisforge.solvers.mesh.convergence_solver import MeshConvergenceStudy
 
 # ===========================================================================
 # PARAMETERS

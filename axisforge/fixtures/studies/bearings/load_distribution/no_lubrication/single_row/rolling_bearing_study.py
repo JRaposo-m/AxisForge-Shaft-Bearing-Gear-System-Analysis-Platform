@@ -18,7 +18,7 @@ from typing import Callable, TYPE_CHECKING
 
 from axisforge.core.machine_elements.bearings.bearing import Bearing
 from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
-from axisforge.fixtures.studies.shafts.results_library import RigidBearingFEMResultsLibrary
+from axisforge.fixtures.studies.shafts.fem_studies.results_library import RigidBearingFEMResultsLibrary
 from axisforge.fixtures.studies.bearings.load_distribution.no_lubrication.results_library import BearingResultsLibrary
 from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.dispatch import resolve_solver_cls
 

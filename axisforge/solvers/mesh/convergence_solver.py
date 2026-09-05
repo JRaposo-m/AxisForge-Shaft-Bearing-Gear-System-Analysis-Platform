@@ -1,5 +1,5 @@
 """
-axisforge/mesh/shaft/mesh_generation/mesh_convergence_study.py
+axisforge/solvers/mesh/convergence_solver.py
 
 Mesh convergence study for distributed radial loads.
 
@@ -9,6 +9,16 @@ Criterion : Richardson extrapolation + Grid Convergence Index (GCI).
 Convergence metric : resultant transverse displacement
                      v = sqrt(v_xz^2 + v_xy^2) per node.
 
+RichardsonGCI/_DummyGCI/MeshConvergenceStudy stay here -- they DO
+calculation, they are this study's solver side, same reasoning
+RigidBearingFEMSolver stays in solvers/ rather than results/.
+ConvergenceRecord and MeshRefinementResult moved OUT to
+axisforge/results/fem_results/convergence_results.py -- pure data,
+same split already applied to ShaftResults; see that module's own
+docstring for the full reasoning (including why MeshRefinementResult's
+old print_report() was dropped on the move, and why shaft_name was
+added to it).
+
 References
 ----------
 Roache, P.J. (1998). Verification and Validation in Computational Science and Engineering.
@@ -17,20 +27,23 @@ Richardson, L.F. (1911). Phil. Trans. R. Soc. London A, 210, 307-357.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.submodel_solver import SubmodelSolver, SubmodelResult
+from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import RigidBearingFEMSolver
+from axisforge.solvers.machine_elements.shaft.fem_solvers.sub_models import SubmodelSolver, SubmodelResult
 from axisforge.mesh.shaft.element_type.elem import Elem
 from axisforge.core.loads import DistributedRadialLoad, LoadPlane
 from axisforge.config import MIN_FACE_WIDTH_FOR_CONVERGENCE_MM, SOLVER_TOLERANCE
-
+from axisforge.results.fem_results.convergence_results import (
+    ConvergenceRecord,
+    MeshRefinementResult,
+)
 
 
 # ===========================================================================
-# Data containers
+# GCI placeholder for the non-uniform-refinement-ratio case
 # ===========================================================================
 
 @dataclass
@@ -38,70 +51,6 @@ class _DummyGCI:
     GCI_f_m:   float = float("nan")
     GCI_m_c:   float = float("nan")
     converged: bool  = False
-
-@dataclass
-class ConvergenceRecord:
-    label: str
-    x_lo: float
-    x_hi: float
-
-    levels: list[str] = field(default_factory=list)
-
-    point_metrics_history: list[tuple[float, float, float]] = field(default_factory=list)
-    """Per level: (f_xz, f_xy, f_res)"""
-
-    gci_history: list[dict] = field(default_factory=list)
-    """Per level transition: {'xz': GCI_xz, 'xy': GCI_xy, 'res': GCI_res}"""
-
-    converged: bool = False
-    x_final: list[float] = field(default_factory=list)
-
-
-@dataclass
-class MeshRefinementResult:
-    """Aggregated study result — one ConvergenceRecord per load."""
-
-    per_load: dict[str, ConvergenceRecord] = field(default_factory=dict)
-
-    @property
-    def all_extra_nodes(self) -> list[float]:
-        """Union of all x_final sets, sorted — ready to pass to Mesh1D."""
-        nodes: set[float] = set()
-        for rec in self.per_load.values():
-            nodes.update(rec.x_final)
-        return sorted(nodes)
-
-    def print_report(self, unit_label: str = "mm") -> None:
-        print("=" * 70)
-        print("  MESH CONVERGENCE STUDY — report  [Richardson GCI]")
-        print("=" * 70)
-        for label, rec in self.per_load.items():
-            status = "converged" if rec.converged else "did not converge (finest level used)"
-            print(f"\n[{label}]  x_lo={rec.x_lo:.3f} {unit_label}  "
-                f"x_hi={rec.x_hi:.3f} {unit_label}  {status}")
-            for lvl, grade in enumerate(rec.levels):
-                print(f"  level {lvl}: {grade}")
-                if lvl < len(rec.gci_history):
-                    gci_dict = rec.gci_history[lvl]
-                    parts = []
-                    for plane, key in [("XZ", "xz"), ("XY", "xy"), ("res", "res")]:
-                        gci_obj = gci_dict[key]
-                        val = gci_obj.GCI_f_m
-                        if np.isnan(val):
-                            parts.append(f"{plane}=nan")
-                        else:
-                            parts.append(f"{plane}={val:.4%}")
-                    print(f"           GCI  [{', '.join(parts)}]")
-            print(f"  -> final nodes ({len(rec.x_final)}): "
-                f"[{', '.join(f'{p:.3f}' for p in rec.x_final)}]")
-
-        print("\n" + "-" * 70)
-        all_nodes = self.all_extra_nodes
-        print(f"TOTAL unique extra_nodes ({len(all_nodes)}):")
-        print(f"  {all_nodes}")
-        print("\n>>> Copy this line into your production code:")
-        print(f"EXTRA_NODES_MM = {all_nodes!r}")
-        print("=" * 70)
 
 
 # ===========================================================================
@@ -115,15 +64,15 @@ class RichardsonGCI:
     Requires a minimum of 3 consecutive refinement levels to compute
     the observed order of convergence p and the GCI per interval.
 
-    Metric: resultant transverse displacement v = sqrt(v_xz^2 + v_xy^2) on the centroid 
+    Metric: resultant transverse displacement v = sqrt(v_xz^2 + v_xy^2) on the centroid
     of the application in question
 
-    If it is an distributed load there will automatically be a node in the centroid 
-    and in the center if it is a gear force. If it is a bearing there will also be a 
+    If it is an distributed load there will automatically be a node in the centroid
+    and in the center if it is a gear force. If it is a bearing there will also be a
     node in the center.
 
     The point is that there must be an analysis in importante points
-        - if there is an machine element in the interval the convergence should be 
+        - if there is an machine element in the interval the convergence should be
         for the mid point or the medium displacement
         - if there's only a distributed load it should be in the centroid
         - if it is a complex case it should be the media and the points of interest
@@ -223,7 +172,7 @@ class MeshConvergenceStudy:
 
     Parameters
     ----------
-    global_solver : solved SimpleFEMSolver (solution used as BCs for submodels)
+    global_solver : solved RigidBearingFEMSolver (solution used as BCs for submodels)
     gci_threshold : fractional GCI threshold (default 0.01 = 1%)
     safety_factor : GCI safety factor Fs (3.0 general, 1.25 if p is verified)
     max_levels    : maximum grade levels before giving up
@@ -233,7 +182,7 @@ class MeshConvergenceStudy:
 
     def __init__(
         self,
-        global_solver: SimpleFEMSolver,
+        global_solver: RigidBearingFEMSolver,
         gci_threshold: float = 0.01,
         safety_factor: float = 1.25,
         max_levels: int = 8,
@@ -258,11 +207,11 @@ class MeshConvergenceStudy:
         """
         if self._global_solver.d_total_xz is None:
             raise RuntimeError(
-                "MeshConvergenceStudy.run() requires a solved SimpleFEMSolver. "
+                "MeshConvergenceStudy.run() requires a solved RigidBearingFEMSolver. "
                 "Call global_solver.solve(shaft_system) first."
             )
 
-        result = MeshRefinementResult()
+        result = MeshRefinementResult(shaft_name=getattr(shaft_system, "name", ""))
         for x_lo, x_hi, label in intervals:
             result.per_load[label] = self._converge_one_load(
                 shaft_system, x_lo, x_hi, label
@@ -455,7 +404,7 @@ class MeshConvergenceStudy:
                     f"Set gear.b to include it in the convergence study."
                 )
                 continue
-            _add(lo, hi, label)    
+            _add(lo, hi, label)
 
         for ld in shaft_system.distributed_radial_loads:
             label = ld.label or f"dist@[{ld.x_lo:.1f},{ld.x_hi:.1f}]"

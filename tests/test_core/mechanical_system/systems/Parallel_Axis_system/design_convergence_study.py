@@ -79,7 +79,7 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system imp
     SpurHelicalMeshLink, SpurHelicalGearSystem,
 )
 from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
-from axisforge.solvers.mesh.mesh_convergence_study import MeshConvergenceStudy
+from axisforge.solvers.mesh.convergence_solver import MeshConvergenceStudy
 
 # ===========================================================================
 # PARAMETERS

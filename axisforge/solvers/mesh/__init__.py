@@ -29,5 +29,5 @@ def __dir__():
     return sorted(list(globals().keys()) + list(_LAZY.keys()))
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .mesh_convergence_study import ConvergenceRecord, MeshRefinementResult, RichardsonGCI, MeshConvergenceStudy
+    from .convergence_solver import ConvergenceRecord, MeshRefinementResult, RichardsonGCI, MeshConvergenceStudy
 

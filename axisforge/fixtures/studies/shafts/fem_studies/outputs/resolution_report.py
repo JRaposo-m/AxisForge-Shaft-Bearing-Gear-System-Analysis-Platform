@@ -1,14 +1,25 @@
 """
-fixtures/studies/text_report.py
+fixtures/studies/shafts/fem_studies/outputs/resolution_report.py
 
-THE principal writer for the whole Resolution domain -- mirrors
-fixtures/construction/outputs/text_report.py's own role, one level up:
-Resolution has only one domain today (shaft_fem), so content-block
-building and file-writing live together in this one module instead of
-being split across per-domain subpackages the way Construction's four
-domains are -- nothing to gain from that split yet with only one thing
-to report. If a second Resolution domain is ever added, split then,
-the same way Construction did.
+CONTENT ONLY, single-solve Resolution blocks for one shaft_fem run
+(e.g. shaft_fem.timoshenko_rigid or shaft_fem.euler_bernoulli_rigid
+alone) -- this module builds text blocks, it does not write any file.
+Moved here, and demoted from writer to pure content module, from the
+former fixtures/studies/text_report.py, which used to double as both
+"the shaft_fem content blocks" AND "the one Resolution writer" on the
+reasoning that Resolution had only one domain and nothing to gain from
+splitting yet (see that module's original docstring, before this
+change). Adding comparison_report.py as this module's sibling was that
+second thing to report -- not a second Resolution DOMAIN (still
+shaft_fem), but a second REPORT SHAPE for it -- and now
+fixtures/studies/text_report.py has become the actual Studies
+aggregator (mirroring fixtures/outputs/construction/text_report.py's
+own role exactly, not just in name): it is the ONLY module in the
+Studies package that opens a file and writes, importing
+shaft_result_block() from here the same way that construction
+aggregator imports bearing_block() from bearing_report.py. See
+fixtures/outputs/construction/bearings/bearing_report.py's own "CONTENT
+ONLY" docstring for the pattern being followed.
 
 Reads axisforge.results.fem_results.shaft_results.ShaftResults (via
 RigidBearingFEMResultsLibrary) -- its own docstring documents FOUR
@@ -84,41 +95,37 @@ they are the same measurement read twice:
         applied exactly there, but not guaranteed identical, and
         computed from a different array).
 
-Writes with encoding="utf-8" explicitly, same reason as every other
-report writer in this package. No shared _io.py-style helper module --
-same explicit preference already applied to fixtures/construction/*/
-outputs/*: this writer owns its own RULE constant and its own write()
-call.
+No file I/O in this module at all -- no encoding, no open(), no RULE
+constant (SUB is still needed, it separates sub-tables WITHIN a block).
+fixtures/studies/text_report.py is now the only place that opens a file
+and writes, same as fixtures/outputs/construction/text_report.py is for
+Construction. comparison_report.py, this module's sibling, duplicates
+this module's own _table() rather than importing it -- that preference
+predates this module losing its writer and still holds for the
+formatting helper itself.
 
-Dependency (results/ and fixtures/ only, read-only access -- no core
-modification):
+Dependency (results/ only, read-only access -- no core modification):
   axisforge.results.fem_results.shaft_results
       ShaftResults, BearingNodeData -- the result SHAPES. BearingNodeData
       is not imported here at all: it is only ever reached through
-      result.bearing_nodes, never named.
-  axisforge.fixtures.studies.shafts.results_library
-      RigidBearingFEMResultsLibrary -- the registry this report walks.
-  This module only ever READS objects handed to it, it never builds
-  them; see fixtures/studies/shafts/fem_simple.py's own solve_system()
-  for that. Both imports are TYPE_CHECKING-only for that reason.
+      result.bearing_nodes, never named. RigidBearingFEMResultsLibrary
+      and SpurHelicalGearSystem are NOT imported here any more -- this
+      module never walks a library or a system now, only formats one
+      already-fetched ShaftResults per call; fixtures/studies/text_report.py
+      is the module that walks both. This module only ever READS the
+      ShaftResults handed to it, it never builds one; see
+      fixtures/studies/shafts/fem_simple.py's own solve_system() for
+      that. TYPE_CHECKING-only for that reason.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-RULE = "=" * 72
 SUB = "-" * 72
 
 if TYPE_CHECKING:  # pragma: no cover
-    from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
-        SpurHelicalGearSystem,
-    )
     from axisforge.results.fem_results.shaft_results import ShaftResults
-    from axisforge.fixtures.studies.shafts.results_library import (
-        RigidBearingFEMResultsLibrary,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -304,63 +311,3 @@ def shaft_result_block(result: "ShaftResults") -> str:
     else:
         sections.append("BEARING NODE DATA: (none)")
     return "\n".join(sections)
-
-
-def write_resolution_report(
-    library: "RigidBearingFEMResultsLibrary",
-    system: "SpurHelicalGearSystem",
-    path: "str | Path",
-    title: str = "",
-) -> str:
-    """
-    Write ONE .txt covering the whole Resolution domain: one
-    "SHAFT: <name>" section per shaft in system.shafts (system's own
-    order), each holding shaft_result_block() for that shaft's result
-    in `library`, or "(no result)" if library.get_or_none(name) is
-    None. Returns the written text, so a caller that wants to
-    inspect/verify it doesn't have to re-open the file it just wrote.
-
-    Parameters
-    ----------
-    library : RigidBearingFEMResultsLibrary
-        Already solved (e.g. via solve_system()). Purely reads
-        `library` -- does not solve or validate it.
-    system : SpurHelicalGearSystem
-        Supplies the shaft ORDER and NAMES this report walks --
-        library itself has no ordering guarantee beyond insertion, and
-        a shaft system's own shaft order is the more meaningful one to
-        read a report in (matches every Construction report writer's
-        own convention).
-    path : str | Path
-        The .txt file to write (parent directory created if missing).
-        A relative path resolves against the process's current working
-        directory -- NOT this module's location, and not the calling
-        script's location either. To have the report always land next
-        to the script that built it, build an absolute path at the
-        call site: Path(__file__).resolve().parent / "report.txt".
-    title : str
-        Header title. Defaults to system.label or "Resolution report".
-    """
-    header_title = title or system.label or "Resolution report"
-    sections = [RULE, header_title.center(72), RULE, ""]
-
-    for ss in system.shafts:
-        sections.append(RULE)
-        sections.append(f"SHAFT: {ss.name}")
-        sections.append(RULE)
-
-        result = library.get_or_none(ss.name)
-        if result is None:
-            sections.append("  (no result -- not solved, or solved into a "
-                             "different library)")
-        else:
-            sections.append(shaft_result_block(result))
-        sections.append("")
-
-    sections.append(RULE)
-    text = "\n".join(sections) + "\n"
-    out_path = Path(path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write(text)
-    return text

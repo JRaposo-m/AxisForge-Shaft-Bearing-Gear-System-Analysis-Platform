@@ -64,7 +64,7 @@ from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import (
 from axisforge.solvers.machine_elements.shaft.static.results_reader import (
     ShaftResultsReader,
 )
-from axisforge.fixtures.studies.shafts.results_library import (
+from axisforge.fixtures.studies.shafts.fem_studies.results_library import (
     RigidBearingFEMResultsLibrary,
 )
 

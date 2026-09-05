@@ -39,6 +39,23 @@ depend on shaft_fem.timoshenko_rigid/euler_bernoulli_rigid also being
 requested -- it calls fem_simple.solve_system() directly, with whatever
 theory_a/theory_b the caller passes to run_comparison().
 
+"shaft_fem.convergence.<region>.<theory>" (6 capabilities: region in
+{gears, external_distributed, total} x theory in {timoshenko,
+euler_bernoulli}) each PIN both a `theory` AND a `regions` set into
+convergence_study.run_convergence(), same functools.partial discipline
+as shaft_fem.timoshenko_rigid/euler_bernoulli_rigid -- the capability
+string alone determines which shaft regions get mesh-refined and under
+which beam theory, never left to a caller-supplied kwarg. "bearings" is
+deliberately not one of the three region choices exposed here -- see
+_convergence_require()'s own docstring below, and
+convergence_study.run_convergence()'s own top docstring, for why: a
+bearing interval today is still a rigid point reaction, not the real
+per-roller load distribution, so "converged" would describe a physics
+model that is itself about to be replaced once a roller-bearing solver
+exists. All six still require only "systems.parallel_axis_linear",
+same reasoning as every other shaft_fem capability -- the baseline
+global solve each one refines around needs an already-resolved system.
+
 Adding a configuration
 -----------------------
 1. Add a branch to `_require()`.
@@ -182,6 +199,23 @@ class StudyCapabilities:
                 "write_comparison_report": write_comparison_report,
             }
 
+        # ---- shaft_fem.convergence.<region>.<theory> ---------------------
+        # region in {gears, external_distributed, total} -- "bearings" is
+        # deliberately not offered here; see this class's own top
+        # docstring and _convergence_require()'s docstring for why.
+        if capability == "shaft_fem.convergence.gears.timoshenko":
+            return self._convergence_require(theory="timoshenko", regions={"gears"})
+
+        if capability == "shaft_fem.convergence.external_distributed.timoshenko":
+            return self._convergence_require(
+                theory="timoshenko", regions={"external_distributed"}
+            )
+
+        if capability == "shaft_fem.convergence.total.timoshenko":
+            return self._convergence_require(
+                theory="timoshenko", regions={"gears", "external_distributed"}
+            )
+
         # ---- bearing_iso16281 --------------------------------------------
         if capability == "bearing_iso16281.single_row":
             from axisforge.fixtures.studies.bearings.load_distribution.no_lubrication.single_row.rolling_bearing_study import (
@@ -196,6 +230,42 @@ class StudyCapabilities:
             }
 
         raise CapabilityError(f"unknown capability: {capability!r}")
+
+    @staticmethod
+    def _convergence_require(theory: str, regions: set[str]) -> dict:
+        """
+        Shared body for all six "shaft_fem.convergence.<region>.<theory>"
+        branches -- avoids repeating the same three imports six times.
+        `theory`/`regions` are pinned into run_convergence() via
+        functools.partial, exactly like shaft_fem.timoshenko_rigid/
+        euler_bernoulli_rigid pin `theory` into fem_simple.solve_system().
+
+        `regions` here is always one of {"gears"},
+        {"external_distributed"}, or {"gears", "external_distributed"}
+        -- called only from the six branches above, never with
+        "bearings" in it. A bearing interval still represents a rigid
+        point reaction rather than the real per-roller load
+        distribution (no roller-bearing solver exists yet to resolve
+        that distribution and feed it into the FEM), so "converging" a
+        mesh around it today would validate a physics model that is
+        itself about to be replaced -- see convergence_study.
+        run_convergence()'s own top docstring for the full reasoning.
+        Bearing convergence stays reachable only by calling
+        MeshConvergenceStudy.intervals_from_shaft_system() directly
+        with regions={"bearings", ...}, never through this capability
+        layer, until that future solver exists.
+        """
+        from functools import partial
+        from axisforge.fixtures.studies.shafts.convergence_studies.convergence_study import (
+            run_convergence,
+        )
+        from axisforge.fixtures.studies.shafts.convergence_studies.convergence_library import (
+            ConvergenceResultsLibrary,
+        )
+        return {
+            "run_convergence": partial(run_convergence, theory=theory, regions=regions),
+            "ConvergenceResultsLibrary": ConvergenceResultsLibrary,
+        }
 
     def resolve(self) -> dict[str, object]:
         self.validate_or_raise()

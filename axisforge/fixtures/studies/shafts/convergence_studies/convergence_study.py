@@ -48,17 +48,52 @@ decides to re-solve the final resolution mesh with it -- not built
 here, this module only produces the MeshRefinementResult that would
 feed that decision.
 
-intervals_from_shaft_study() builds intervals per shaft (gear face
-widths, bearing extents, distributed-load spans -- see
-MeshConvergenceStudy.intervals_from_shaft_system()'s own docstring for
-exactly which regions qualify) fresh for every shaft, since two shafts
-in the same system practically always have different gear positions,
-face widths and bearing spans. Its second return value (label
-ordering) is not needed here -- MeshRefinementResult keys its
-per_load dict by the same labels intervals_from_shaft_system() already
-assigns, so nothing downstream needs a separate ordering list to line
-results back up; run_convergence() only forwards the interval list
-itself to MeshConvergenceStudy.run().
+intervals_from_shaft_system() builds intervals per shaft fresh for
+every shaft, since two shafts in the same system practically always
+have different gear positions, face widths and bearing spans. It scans
+up to THREE sources -- gear face widths, DistributedRadialLoad spans,
+and bearing extents -- gated by its own `regions` parameter (a subset
+of {"gears", "external_distributed", "bearings"}); this module always
+passes `regions` explicitly and NEVER includes "bearings" -- see
+`regions` below for why. It returns (intervals, skipped): a gear or
+bearing with no width defined (extent < MIN_FACE_WIDTH_FOR_
+CONVERGENCE_MM) is left OUT of `intervals` and instead gets a
+human-readable reason appended to `skipped` (DistributedRadialLoad has
+no such minimum-width skip path -- every one always becomes an
+interval, when "external_distributed" is in `regions`). This function
+does NOT discard `skipped` -- an earlier version of this module did
+(naming it `_labels_order` and throwing it away), which silently
+dropped a machine element out of the whole convergence study with no
+trace; that violates this project's own fail-loud convention (see
+fem_simple.py's own guard-rail reasoning) and has been fixed below:
+every skip reason is surfaced via warnings.warn() per shaft, so an
+operator sees exactly which element was excluded and why, without
+run_convergence()'s return type having to change to carry it.
+
+`regions` is NOT exposed as a free-form kwarg here for public capability
+use -- it is PINNED per capability string in study_capabilities.py's
+own `_require()` (functools.partial(run_convergence, regions=..., ...)),
+same discipline already applied to `theory` there. Today's three
+region sets a caller-facing capability may request are {"gears"},
+{"external_distributed"}, and {"gears", "external_distributed"} (named
+"total" at the capability level) -- "bearings" is deliberately never
+one of them: MeshConvergenceStudy.intervals_from_shaft_system()'s own
+bearing interval still represents a RIGID point reaction, not the real
+load distribution across rolling elements, so a "converged" bearing
+mesh today would only mean the mesh converged around a simplification
+that is itself going to change once a roller-bearing solver exists
+that resolves the per-roller distribution and feeds THAT into the FEM.
+Studying convergence against a physics model that is about to be
+replaced would be misleading, not premature-but-harmless -- so bearing
+convergence is left reachable only by calling
+MeshConvergenceStudy.intervals_from_shaft_system() directly with
+regions={"bearings", ...}, never through run_convergence() or any
+shaft_fem.convergence.* capability, until that future work lands.
+run_convergence() itself still accepts `regions` as a parameter (rather
+than hard-coding the two allowed sets) so that direct callers -- and,
+later, the fixture that will exist once roller-bearing convergence is
+real -- are not blocked structurally; only the capability layer
+enforces today's narrower policy.
 
 print_convergence()/write_convergence_report() (the outputs/ content-
 block module mirroring comparison_report.py's shaft_comparison_block())
@@ -81,6 +116,7 @@ Dependency (solvers + fixtures, read-only access -- no core modification):
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING
 
 from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import (
@@ -108,6 +144,7 @@ def run_convergence(
     library: ConvergenceResultsLibrary | None = None,
     *,
     theory: str = "timoshenko",
+    regions: "set[str]" = frozenset({"gears", "external_distributed"}),
     distribute_gear_labels: set[str] | None = None,
     gci_threshold: float = 0.01,
     safety_factor: float = 1.25,
@@ -138,6 +175,15 @@ def run_convergence(
         kwargs for every shaft's baseline GLOBAL solve, applied
         uniformly across all shafts in `system`. Defaults match the
         only configuration that exists today.
+    regions : set[str]
+        Forwarded verbatim to
+        MeshConvergenceStudy.intervals_from_shaft_system(ss, regions=...)
+        for every shaft. Default {"gears", "external_distributed"} --
+        NOT "bearings"; see this module's own top docstring for why
+        bearings are excluded by default here. A direct caller may still
+        pass regions={"bearings"} (or any other combination) explicitly;
+        only the capability layer (study_capabilities.py) pins this to
+        one of today's three allowed sets per capability string.
     gci_threshold, safety_factor, max_levels : MeshConvergenceStudy
         constructor kwargs, applied uniformly across all shafts.
 
@@ -175,7 +221,15 @@ def run_convergence(
             max_levels=max_levels,
         )
 
-        intervals, _labels_order = MeshConvergenceStudy.intervals_from_shaft_system(ss)
+        intervals, skipped = MeshConvergenceStudy.intervals_from_shaft_system(
+            ss, regions=regions,
+        )
+        for reason in skipped:
+            warnings.warn(
+                f"run_convergence: shaft '{ss.name}': {reason}",
+                stacklevel=2,
+            )
+
         result = study.run(ss, intervals)
         library.store(result)
 

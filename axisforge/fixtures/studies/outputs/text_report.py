@@ -1,17 +1,21 @@
 """
-fixtures/studies/text_report.py
+fixtures/studies/outputs/text_report.py
 
 THE principal writer for the whole Studies domain -- mirrors
 fixtures/outputs/construction/text_report.py's own role exactly:
 assembles every Studies domain's own content blocks --
   fixtures/studies/shafts/fem_studies/outputs/resolution_report.py -> shaft_result_block()
   fixtures/studies/shafts/fem_studies/outputs/comparison_report.py -> shaft_comparison_block()
+  fixtures/studies/shafts/convergence_studies/outputs/convergence_report.py -> shaft_convergence_block()
   (bearing_iso16281's own block module, once that domain has one)
 -- into ONE combined .txt file. Domain modules like resolution_report.py
 build text blocks only -- this is now the only module in the whole
 Studies package that actually opens a file and writes, the same split
 Construction already has between its four outputs/*_report.py modules
-and this one's Construction counterpart.
+and this one's Construction counterpart. convergence_report.py follows
+this rule from the start -- it never had its own writer to remove,
+unlike comparison_report.py's now-legacy write_comparison_report() (see
+that module's own docstring for why it still exists standalone).
 
 CONTENT IS PRESENCE-DRIVEN, same principle write_construction_report()
 already follows -- it never reads a ConstructionCapabilities either, it
@@ -32,9 +36,9 @@ module only the objects it has -- same "reads, does not build" boundary
 every report writer in this package keeps.
 
 write_studies_report(system, path, title="", shaft_fem_library=None,
-comparison=None) is the only thing this module does. ONE combined .txt
-per Studies run, same explicit "one file per pipeline stage" preference
-already applied to Construction.
+comparison=None, convergence_library=None) is the only thing this
+module does. ONE combined .txt per Studies run, same explicit "one file
+per pipeline stage" preference already applied to Construction.
 
 comparison_report.py's write_comparison_report() still exists and still
 works standalone (e.g. to get JUST a comparison .txt, without a full
@@ -55,13 +59,19 @@ Dependency (fixtures/ only, read-only access -- no core modification):
   axisforge.fixtures.studies.shafts.fem_studies.outputs.comparison_report
       shaft_comparison_block() -- the shaft_fem two-solve comparison
       content block, reused here for the optional `comparison` section.
-  Neither import is TYPE_CHECKING-only: this module actually CALLS both,
-  it does not just type-annotate against them.
+  axisforge.fixtures.studies.shafts.convergence_studies.outputs.convergence_report
+      shaft_convergence_block() -- the mesh-convergence content block,
+      reused here for the optional `convergence_library` section.
+  None of these three imports is TYPE_CHECKING-only: this module
+  actually CALLS all three, it does not just type-annotate against them.
   axisforge.fixtures.studies.shafts.fem_studies.results_library
       RigidBearingFEMResultsLibrary -- the registry `shaft_fem_library`
       and each half of `comparison` are expected to be. TYPE_CHECKING-only:
       this module only ever reads a library handed to it, it never
       builds one; see fem_simple.py's own solve_system() for that.
+  axisforge.fixtures.studies.shafts.convergence_studies.convergence_library
+      ConvergenceResultsLibrary -- same role as RigidBearingFEMResultsLibrary
+      above, for `convergence_library`. TYPE_CHECKING-only, same reason.
 """
 
 from __future__ import annotations
@@ -75,6 +85,9 @@ from axisforge.fixtures.studies.shafts.fem_studies.outputs.resolution_report imp
 from axisforge.fixtures.studies.shafts.fem_studies.outputs.comparison_report import (
     shaft_comparison_block,
 )
+from axisforge.fixtures.studies.shafts.convergence_studies.outputs.convergence_report import (
+    shaft_convergence_block,
+)
 
 RULE = "=" * 72
 
@@ -85,6 +98,9 @@ if TYPE_CHECKING:  # pragma: no cover
     from axisforge.fixtures.studies.shafts.fem_studies.results_library import (
         RigidBearingFEMResultsLibrary,
     )
+    from axisforge.fixtures.studies.shafts.convergence_studies.convergence_library import (
+        ConvergenceResultsLibrary,
+    )
 
 
 def write_studies_report(
@@ -93,19 +109,22 @@ def write_studies_report(
     title: str = "",
     shaft_fem_library: "RigidBearingFEMResultsLibrary | None" = None,
     comparison: "tuple[RigidBearingFEMResultsLibrary, RigidBearingFEMResultsLibrary, str, str] | None" = None,
+    convergence_library: "ConvergenceResultsLibrary | None" = None,
 ) -> str:
     """
     Write ONE .txt covering the whole Studies domain for `system`: a
     SHAFT_FEM section (one "SHAFT: <name>" per shaft in system.shafts,
     system's own order -- matching every other report writer's own
-    convention) if `shaft_fem_library` is given, then a COMPARISON
-    section (same per-shaft shape, via shaft_comparison_block()) if
-    `comparison` is given. Either, both, or neither -- an empty call
-    (both None) still writes a valid report, just one that says nothing
-    was run, same as a Construction report for a shaft with no bearings
-    says "(none)" rather than omitting the heading. Returns the written
-    text, so a caller that wants to inspect/verify it doesn't have to
-    re-open the file it just wrote.
+    convention) if `shaft_fem_library` is given, a COMPARISON section
+    (same per-shaft shape, via shaft_comparison_block()) if `comparison`
+    is given, and a SHAFT MESH CONVERGENCE section (via
+    shaft_convergence_block()) if `convergence_library` is given. Any
+    combination, or none -- an empty call (all three None) still writes
+    a valid report, just one that says nothing was run, same as a
+    Construction report for a shaft with no bearings says "(none)"
+    rather than omitting the heading. Returns the written text, so a
+    caller that wants to inspect/verify it doesn't have to re-open the
+    file it just wrote.
 
     A future bearing_iso16281 section (once that domain has its own
     report module) joins as another optional parameter here, the same
@@ -116,7 +135,7 @@ def write_studies_report(
     Parameters
     ----------
     system : SpurHelicalGearSystem
-        Supplies the shaft ORDER and NAMES both sections walk -- a
+        Supplies the shaft ORDER and NAMES every section walks -- a
         library itself has no ordering guarantee beyond insertion, and
         a shaft system's own shaft order is the more meaningful one to
         read a report in (matches every Construction report writer's
@@ -145,6 +164,16 @@ def write_studies_report(
         against this SAME `system` -- see comparison_report.py's own
         top docstring for why a mismatched pair silently produces a
         meaningless table; this function does not detect that for you.
+    convergence_library : ConvergenceResultsLibrary | None
+        From any "shaft_fem.convergence.<region>.<theory>" capability
+        (convergence_study.run_convergence() returns this). Omit if no
+        convergence study was run; the SHAFT MESH CONVERGENCE section is
+        skipped entirely in that case. Which regions (gears,
+        external_distributed) and which theory were actually studied is
+        NOT recorded on the library itself -- put that in `title`, or a
+        caller-side note, if it matters for this particular report; see
+        this module's own "presence-driven, not capability-aware" top
+        docstring for why that information does not live here.
     """
     header_title = title or system.label or "Studies report"
     sections = [RULE, header_title.center(72), RULE, ""]
@@ -189,7 +218,24 @@ def write_studies_report(
                 sections.append(shaft_comparison_block(ss.name, result_a, result_b, label_a, label_b))
             sections.append("")
 
-    if shaft_fem_library is None and comparison is None:
+    if convergence_library is not None:
+        sections.append(RULE)
+        sections.append("SHAFT MESH CONVERGENCE")
+        sections.append(RULE)
+        for ss in system.shafts:
+            sections.append(RULE)
+            sections.append(f"SHAFT: {ss.name}")
+            sections.append(RULE)
+
+            result = convergence_library.get_or_none(ss.name)
+            if result is None:
+                sections.append("  (no result -- not studied, or studied "
+                                 "into a different library)")
+            else:
+                sections.append(shaft_convergence_block(result))
+            sections.append("")
+
+    if shaft_fem_library is None and comparison is None and convergence_library is None:
         sections.append("  (no studies run -- nothing was passed to "
                          "write_studies_report())")
         sections.append("")

@@ -9,6 +9,11 @@ Criterion : Richardson extrapolation + Grid Convergence Index (GCI).
 Convergence metric : resultant transverse displacement
                      v = sqrt(v_xz^2 + v_xy^2) per node.
 
+Moved here from axisforge/mesh/shaft/mesh_generation/mesh_convergence_study.py
+-- this is the solver side of the study, so it lives in solvers/ (under a
+new mesh/ sub-package) rather than mesh/shaft/mesh_generation/, the same
+way RigidBearingFEMSolver lives in solvers/ rather than results/.
+
 RichardsonGCI/_DummyGCI/MeshConvergenceStudy stay here -- they DO
 calculation, they are this study's solver side, same reasoning
 RigidBearingFEMSolver stays in solvers/ rather than results/.
@@ -380,10 +385,50 @@ class MeshConvergenceStudy:
         return deduped
 
 
+    VALID_REGIONS = frozenset({"gears", "external_distributed", "bearings"})
+
     @staticmethod
     def intervals_from_shaft_system(
         shaft_system,
+        regions: "set[str] | None" = None,
     ) -> tuple[list[tuple[float, float, str]], list[str]]:
+        """
+        Parameters
+        ----------
+        regions : set[str] | None
+            Which sources to scan for intervals -- any subset of
+            {"gears", "external_distributed", "bearings"}. None (default)
+            scans all three, unchanged from this method's original
+            behaviour, so any existing direct caller keeps working
+            exactly as before.
+
+            "bearings" stays available here even though no fixtures-side
+            capability exposes it today: the interval it produces still
+            only represents a RIGID point reaction (bearing.position),
+            not the real load distribution across rolling elements --
+            that only becomes physically meaningful once a roller-bearing
+            solver exists that resolves the per-roller distribution and
+            feeds THAT into the FEM. Until then, "bearings" is reachable
+            only by calling this method directly with regions=
+            {"bearings", ...} explicitly -- see
+            fixtures/studies/shafts/convergence_studies/convergence_study.py's
+            own run_convergence(), which never passes it.
+
+        Raises
+        ------
+        ValueError
+            If `regions` contains anything outside VALID_REGIONS.
+        """
+        if regions is None:
+            regions = set(MeshConvergenceStudy.VALID_REGIONS)
+        else:
+            unknown = regions - MeshConvergenceStudy.VALID_REGIONS
+            if unknown:
+                raise ValueError(
+                    f"intervals_from_shaft_system: unknown region(s) {sorted(unknown)} "
+                    f"-- expected a subset of {sorted(MeshConvergenceStudy.VALID_REGIONS)}."
+                )
+
         intervals: list[tuple[float, float, str]] = []
         skipped:   list[str] = []
         seen: set[tuple[float, float]] = set()
@@ -394,33 +439,35 @@ class MeshConvergenceStudy:
                 seen.add(key)
                 intervals.append((x_lo, x_hi, label))
 
-        for ge in shaft_system.gears:
-            lo, hi = shaft_system.gear_extent(ge)
-            label  = ge.label or f"gear@{ge.position:.1f}"
-            if (hi - lo) < MIN_FACE_WIDTH_FOR_CONVERGENCE_MM:
-                skipped.append(
-                    f"Gear '{label}' @ {ge.position:.4f} mm — no face width defined "
-                    f"(b < {MIN_FACE_WIDTH_FOR_CONVERGENCE_MM} mm). "
-                    f"Set gear.b to include it in the convergence study."
-                )
-                continue
-            _add(lo, hi, label)
+        if "gears" in regions:
+            for ge in shaft_system.gears:
+                lo, hi = shaft_system.gear_extent(ge)
+                label  = ge.label or f"gear@{ge.position:.1f}"
+                if (hi - lo) < MIN_FACE_WIDTH_FOR_CONVERGENCE_MM:
+                    skipped.append(
+                        f"Gear '{label}' @ {ge.position:.4f} mm — no face width defined "
+                        f"(b < {MIN_FACE_WIDTH_FOR_CONVERGENCE_MM} mm). "
+                        f"Set gear.b to include it in the convergence study."
+                    )
+                    continue
+                _add(lo, hi, label)
 
-        for ld in shaft_system.distributed_radial_loads:
-            label = ld.label or f"dist@[{ld.x_lo:.1f},{ld.x_hi:.1f}]"
-            _add(ld.x_lo, ld.x_hi, label)
+        if "external_distributed" in regions:
+            for ld in shaft_system.distributed_radial_loads:
+                label = ld.label or f"dist@[{ld.x_lo:.1f},{ld.x_hi:.1f}]"
+                _add(ld.x_lo, ld.x_hi, label)
 
-
-        for b in shaft_system.bearings:
-            lo, hi = shaft_system.bearing_extent(b)
-            label  = getattr(b, "label", "") or getattr(b, "designation", "") or f"bearing@{b.position:.1f}"
-            if (hi - lo) < MIN_FACE_WIDTH_FOR_CONVERGENCE_MM:
-                skipped.append(
-                    f"Bearing '{label}' @ {b.position:.4f} mm — no width defined "
-                    f"(b < {MIN_FACE_WIDTH_FOR_CONVERGENCE_MM} mm). "
-                    f"Set bearing.b to include it in the convergence study."
-                )
-                continue
-            _add(lo, hi, label)
+        if "bearings" in regions:
+            for b in shaft_system.bearings:
+                lo, hi = shaft_system.bearing_extent(b)
+                label  = getattr(b, "label", "") or getattr(b, "designation", "") or f"bearing@{b.position:.1f}"
+                if (hi - lo) < MIN_FACE_WIDTH_FOR_CONVERGENCE_MM:
+                    skipped.append(
+                        f"Bearing '{label}' @ {b.position:.4f} mm — no width defined "
+                        f"(b < {MIN_FACE_WIDTH_FOR_CONVERGENCE_MM} mm). "
+                        f"Set bearing.b to include it in the convergence study."
+                    )
+                    continue
+                _add(lo, hi, label)
 
         return intervals, skipped

@@ -21,15 +21,20 @@ class Elem:
     Single 1D beam element between two mesh nodes.
     """
 
+    VALID_SHEAR_THEORIES = ("cowper", "hutchinson")
+
     def __init__(self, length: float, E: float, I: float, A: float,
-                 v: float, idx_node_1: int, idx_node_2: int):
-        self.length     = length
-        self.E          = E
-        self.I          = I
-        self.A          = A
-        self.v          = v
-        self.idx_node_1 = idx_node_1
-        self.idx_node_2 = idx_node_2
+                 v: float, idx_node_1: int, idx_node_2: int,
+                 shear_theory: str = "cowper", radius_ratio: float = 0.0):
+        self.length       = length
+        self.E            = E
+        self.I            = I
+        self.A            = A
+        self.v            = v
+        self.idx_node_1   = idx_node_1
+        self.idx_node_2   = idx_node_2
+        self.shear_theory = shear_theory
+        self.radius_ratio = radius_ratio  # inner/outer radius, 0.0 for solid
 
     # ------------------------------------------------------------------
     # Factory — builds the full element list directly from a Mesh1D
@@ -43,7 +48,8 @@ class Elem:
         raise ValueError(f"No node found at x={x:.4f} mm within tolerance {tol} mm")
 
     @classmethod
-    def from_mesh(cls, mesh: "Mesh1D", node_tol: float = MESH_MIN_NODE_DIST_MM) -> list["Elem"]:
+    def from_mesh(cls, mesh: "Mesh1D", node_tol: float = MESH_MIN_NODE_DIST_MM,
+                  shear_theory: str = "cowper") -> list["Elem"]:
         """
         Build the full element list from a Mesh1D — reads mesh.shaft_system
         and mesh.x_nodes directly. Mesh1D itself carries no knowledge of
@@ -70,12 +76,16 @@ class Elem:
                     v=mat.poisson_ratio,
                     idx_node_1=j,
                     idx_node_2=j + 1,
+                    shear_theory=shear_theory,
+                    # radius_ratio: ligar isto quando 'section' souber distinguir
+                    # maciço/oco, ex. section.inner_diameter / section.diameter
                 ))
         return elements
 
 
     @classmethod
-    def from_x_nodes(cls, x_nodes: list[float], shaft_system: "ShaftSystem") -> list["Elem"]:
+    def from_x_nodes(cls, x_nodes: list[float], shaft_system: "ShaftSystem",
+                      shear_theory: str = "cowper") -> list["Elem"]:
         shaft = shaft_system.shaft
         elements: list[Elem] = []
 
@@ -88,13 +98,14 @@ class Elem:
             mat        = get_material(section.material_id)
 
             elements.append(cls(
-                length     = x_b - x_a,
-                E          = mat.E,
-                I          = section.second_moment_of_area,
-                A          = section.area,
-                v          = mat.poisson_ratio,
-                idx_node_1 = j,
-                idx_node_2 = j + 1,
+                length       = x_b - x_a,
+                E            = mat.E,
+                I            = section.second_moment_of_area,
+                A            = section.area,
+                v            = mat.poisson_ratio,
+                idx_node_1   = j,
+                idx_node_2   = j + 1,
+                shear_theory = shear_theory,
             ))
 
         return elements
@@ -132,6 +143,18 @@ class Elem:
                 f"Elem: node indices must be >= 0, got "
                 f"idx_node_1={self.idx_node_1}, idx_node_2={self.idx_node_2}"
             )
+        if self.shear_theory not in self.VALID_SHEAR_THEORIES:
+            errors.append(
+                f"Elem: shear_theory must be one of {self.VALID_SHEAR_THEORIES}, "
+                f"got '{self.shear_theory}'"
+            )
+        if self.shear_theory == "hutchinson" and self.radius_ratio != 0.0:
+            errors.append(
+                "Elem: shear_theory='hutchinson' with radius_ratio != 0.0 "
+                "(hollow section) is not yet implemented — see "
+                "TimoshenkoBeam._hutchinson_factor(). Use shear_theory='cowper' "
+                "for hollow sections for now."
+            )
 
         return errors
 
@@ -143,4 +166,5 @@ class Elem:
     def __repr__(self) -> str:
         return (f"Elem(length={self.length:.3f} mm, E={self.E:.1f} MPa, "
                 f"I={self.I:.3f} mm^4, A={self.A:.3f} mm^2, v={self.v:.3f}, "
+                f"shear_theory={self.shear_theory!r}, "
                 f"nodes=({self.idx_node_1}, {self.idx_node_2}))")

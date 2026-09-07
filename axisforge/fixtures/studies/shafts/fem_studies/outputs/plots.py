@@ -439,6 +439,7 @@ def write_shaft_figures(
     shaft_name: str,
     base_dir: "str | Path",
     dpi: int = 150,
+    subdir: str | None = None,
 ) -> list[Path]:
     """
     Build and save every figure in _FIGURE_REGISTRY for ONE shaft's
@@ -451,8 +452,15 @@ def write_shaft_figures(
     Returns the list of written file paths (same "return what was
     written" convention write_comparison_report() uses for its own
     text, so a caller can log/verify without re-listing the directory).
+
+    subdir : optional extra path segment inserted between "plots" and
+    <shaft_name> -- e.g. subdir="cowper" writes to
+    <base_dir>/plots/cowper/<shaft_name>/, letting a caller keep
+    multiple shear-theory (or any other) result sets side by side
+    under the same base_dir without collisions. None (default)
+    preserves the original <base_dir>/plots/<shaft_name>/ layout.
     """
-    out_dir = Path(base_dir) / "plots" / shaft_name
+    out_dir = Path(base_dir) / "plots" / (subdir or "") / shaft_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     written: list[Path] = []
@@ -470,6 +478,7 @@ def write_resolution_plots(
     system: "SpurHelicalGearSystem",
     base_dir: "str | Path",
     dpi: int = 150,
+    subdir: str | None = None,
 ) -> dict[str, list[Path]]:
     """
     Walk every shaft in `system.shafts` (system's own order, same
@@ -484,11 +493,14 @@ def write_resolution_plots(
     absent from the returned dict, not present with an empty list, so
     `len(result)` tells a caller how many shafts actually got plotted
     without having to inspect the lists.
+
+    subdir : forwarded unchanged to write_shaft_figures() for every
+    shaft -- see its own docstring.
     """
     out: dict[str, list[Path]] = {}
     for ss in system.shafts:
         result = library.get_or_none(ss.name)
         if result is None:
             continue
-        out[ss.name] = write_shaft_figures(result, ss.name, base_dir, dpi=dpi)
+        out[ss.name] = write_shaft_figures(result, ss.name, base_dir, dpi=dpi, subdir=subdir)
     return out

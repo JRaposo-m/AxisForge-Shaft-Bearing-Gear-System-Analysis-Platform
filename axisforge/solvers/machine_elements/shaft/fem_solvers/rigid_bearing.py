@@ -65,7 +65,8 @@ class RigidBearingFEMSolver:
     """
 
     def __init__(self, theory: str = "timoshenko", 
-                 distribute_gear_labels: set[str] | None = None):
+                 distribute_gear_labels: set[str] | None = None,
+                 shear_theory: str = "cowper"):
         
         """
         distribute_gear_labels : set of gear labels whose mesh loads should be
@@ -73,11 +74,17 @@ class RigidBearingFEMSolver:
                              None or empty -> all gear mesh loads as point loads.
                              e.g. {"pinion", "wheel"} -> only those two distributed.
                              Use {"*"} as a sentinel to distribute ALL gear mesh loads.
+        shear_theory : shear correction factor theory for Timoshenko elements
+                ("cowper" or "hutchinson"). Forwarded unchanged to every
+                Elem built by this solver's solve() call -- has no effect
+                when theory="euler" (Elem still carries it, but
+                EulerBernoulliBeam.stiffness_element() never reads it).
         """
         
         self._builder = StiffnessMatrixBuilder(theory=theory)
         self._distribute_all   = distribute_gear_labels == {"*"}
         self._distribute_labels = distribute_gear_labels or set()
+        self._shear_theory = shear_theory
 
         # --- public result attributes, populated by solve() ---
         self.x_nodes: list[float] | None = None
@@ -110,7 +117,7 @@ class RigidBearingFEMSolver:
 
             mesh = Mesh1D(shaft_system, extra_mandatory=extra_mandatory or [])
             x_nodes = mesh.x_nodes
-            elements = Elem.from_mesh(mesh)
+            elements = Elem.from_mesh(mesh, shear_theory=self._shear_theory)
 
             self.K = self._builder.build_stiffness_matrix(mesh, elements)
 

@@ -62,7 +62,7 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system im
 from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
     SpurHelicalMeshLink, SpurHelicalGearSystem,
 )
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
+from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import RigidBearingFEMSolver
 
 # --- schematic (visual sanity check, no solver dependency) -----------------
 from axisforge.core.mechanical_system.parallel_axis.schematic import (
@@ -307,7 +307,7 @@ sys3.add_load(TorqueLoad(95.0, T3, source="user", label="pulley-load-resistance"
 # ===========================================================================
 # 7. SOLVE — bending/axial FEM + torsion, per shaft
 #
-# SimpleFEMSolver.solve() publishes results as public attributes on the
+# RigidBearingFEMSolver.solve() publishes results as public attributes on the
 # instance (no return value) — one solver instance is kept PER SHAFT so
 # results from all three don't overwrite each other.
 # ===========================================================================
@@ -315,15 +315,15 @@ sys3.add_load(TorqueLoad(95.0, T3, source="user", label="pulley-load-resistance"
 print("=" * 74)
 print("  TORQUE EQUILIBRIUM CHECK (per shaft, must be ~0 N*m)")
 print("=" * 74)
-check_solver = SimpleFEMSolver(theory="timoshenko")
+check_solver = RigidBearingFEMSolver()
 for sh in (sys1, sys2, sys3):
     errs = check_solver.validate_torsion_equilibrium(sh)
     status = "OK" if not errs else " / ".join(errs)
     print(f"  {sh.name:<16} {status}")
 
-solvers: dict[str, SimpleFEMSolver] = {}
+solvers: dict[str, RigidBearingFEMSolver] = {}
 for sh in (sys1, sys2, sys3):
-    s = SimpleFEMSolver(theory="timoshenko")
+    s = RigidBearingFEMSolver()
     s.solve(sh)
     solvers[sh.name] = s
 
@@ -338,13 +338,13 @@ print("  OK — no errors" if not errs else "\n".join(f"  - {e}" for e in errs))
 # 8. POST-PROCESS: recover M(x), V(x) from nodal displacements per element
 # ===========================================================================
 
-def recover_diagrams(solver: SimpleFEMSolver, shaft_system: ShaftSystem):
+def recover_diagrams(solver: RigidBearingFEMSolver, shaft_system: ShaftSystem):
     """
     Per-node bending moment (XZ, XY), shear (XZ, XY), axial force, and
     deflection (v_xz, v_xy) — recovered from element stiffness x nodal
     displacement, same pattern as the legacy StressSolver.
 
-    `solver` is a SimpleFEMSolver instance already solve()'d for
+    `solver` is a RigidBearingFEMSolver instance already solve()'d for
     `shaft_system` — reads its public attributes (x_nodes, elements,
     d_total_xz, d_total_xy, T_total, tau_total).
     """

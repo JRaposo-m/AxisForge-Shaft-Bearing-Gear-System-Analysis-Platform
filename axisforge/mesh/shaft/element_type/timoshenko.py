@@ -9,19 +9,65 @@ import math as math
 
 from axisforge.mesh.shaft.element_type.elem import Elem
 
+
+
 class TimoshenkoBeam:
-    def stiffness_element(self, elem: Elem) -> np.ndarray:
+
+    def _cowper_factor(self, v: float, ratio: float = 0.0) -> float:
+        """
+        Cowper (1966) shear correction factor.
+        ratio = inner_radius / outer_radius (0.0 for solid section).
+        """
+        if ratio == 0.0:
+            # solid circular section
+            return 6 * (1 + v) / (7 + 6 * v)
+        else:
+            # hollow circular section (Cowper 1966)
+            m2 = ratio**2
+            num = 6 * (1 + v) * (1 + m2)**2
+            den = (7 + 6 * v) * (1 + m2)**2 + (20 + 12 * v) * m2
+            return num / den
+
+    def _hutchinson_factor(self, v: float, ratio: float = 0.0) -> float:
+        """
+        Hutchinson (2001) shear correction factor.
+        ratio = inner_radius / outer_radius (0.0 for solid section).
+        """
+        if ratio == 0.0:
+            # solid circular section — confirmed formula
+            return 6 * (1 + v)**2 / (7 + 12 * v + 4 * v**2)
+        else:
+            raise NotImplementedError(
+                "Hutchinson (2001) hollow-section formula ainda não foi "
+                "verificada contra a fonte original neste código. "
+                "Usa theory='cowper' para secções ocas, ou confirma a "
+                "expressão em Hutchinson, ASME J. Appl. Mech. 68 (2001) 87-92 "
+                "antes de ativar este ramo."
+            )
+
+    def _shear_correction_factor(self, elem: Elem, theory: str = "cowper") -> float:
+        ratio = getattr(elem, "radius_ratio", 0.0)  # ajusta ao teu atributo real de Elem
+
+        if theory == "cowper":
+            return self._cowper_factor(elem.v, ratio)
+        elif theory == "hutchinson":
+            return self._hutchinson_factor(elem.v, ratio)
+        else:
+            raise ValueError(f"Unknown shear correction theory: '{theory}'. "
+                            f"Expected 'cowper' or 'hutchinson'.")
+    
+    def stiffness_element(self, elem: Elem, shear_theory: str = "cowper") -> np.ndarray:
         le = elem.length
         E  = elem.E
         I  = elem.I
         A  = elem.A
-        shear_factor = 5/6
         v = elem.v
+        shear_factor = self._shear_correction_factor(elem, shear_theory)
         G = E / (2 * (1 + v))
         k  = np.zeros((6, 6))
         Rod_const   = E * A / le
         Bending_const  = E * I / (le)
-        Shear_const = shear_factor * E * G * A / le
+        Shear_const = shear_factor * G * A / le
         k[0, 0] = k[3, 3] = Rod_const
         k[3, 0] = k[0, 3] = - Rod_const
         k[1, 1] = k[4, 4] = Shear_const
@@ -55,11 +101,11 @@ class TimoshenkoBeam:
         B[2, 5] = 1/2 # curvature κ = d²v/dx²
         return B
     
-    def elasticity_matrix(self, elem: Elem) -> np.ndarray:
+    def elasticity_matrix(self, elem: Elem, shear_theory: str = "cowper") -> np.ndarray:
         E = elem.E
         A = elem.A
         I = elem.I
-        shear_factor = 5/6
+        shear_factor = self._shear_correction_factor(elem, shear_theory)
         D = np.zeros((3, 3))
         D[0, 0] = E
         D[1, 1] = E

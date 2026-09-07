@@ -83,6 +83,7 @@ def solve_system(
     library: RigidBearingFEMResultsLibrary | None = None,
     *,
     theory: str = "timoshenko",
+    shear_theory: str = "cowper",
     distribute_gear_labels: set[str] | None = None,
     extra_mandatory: dict[str, list[float]] | None = None,
 ) -> RigidBearingFEMResultsLibrary:
@@ -152,6 +153,7 @@ def solve_system(
     for ss in system.shafts:
         solver = RigidBearingFEMSolver(
             theory=theory,
+            shear_theory=shear_theory,
             distribute_gear_labels=distribute_gear_labels,
         )
         solver.solve(ss, extra_mandatory=extra_mandatory.get(ss.name))

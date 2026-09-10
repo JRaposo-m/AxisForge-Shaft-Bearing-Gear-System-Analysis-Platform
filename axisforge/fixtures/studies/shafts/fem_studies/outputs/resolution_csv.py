@@ -3,16 +3,30 @@ fixtures/studies/shafts/fem_studies/outputs/resolution_csv.py
 
 CONTENT ONLY, single-solve CSV export for one shaft_fem run's
 per-node data (section 3 of resolution_report.py's own docstring: x,
-M_xz/xy/M, V_xz/xy/V, v_xz/xy/v, T, d, W, Wt, sigma_b, tau) -- sibling
-of resolution_report.py, same "builds text, does not write any file"
-contract. Exists specifically for numerical comparison against an
-external solver (Abaqus) row-by-row: resolution_report.py's fixed-width
-tables are tuned for human legibility (1-4 decimals, unit-labelled
-headers) and lose precision the comparison needs; this module keeps
-full float precision and a machine-parseable format instead, at the
-cost of being unreadable as a text report -- the two modules are not
-alternatives to each other, they serve different readers (a person
-skimming vs. a diff/plot script).
+M_xz/xy/M, V_xz/xy/V, u, v_xz/xy/v, theta_xz/xy, T, d, W, Wt,
+sigma_b, tau) -- sibling of resolution_report.py, same "builds text,
+does not write any file" contract. Exists specifically for numerical
+comparison against an external solver (Abaqus) row-by-row:
+resolution_report.py's fixed-width tables are tuned for human
+legibility (1-4 decimals, unit-labelled headers) and lose precision
+the comparison needs; this module keeps full float precision and a
+machine-parseable format instead, at the cost of being unreadable as
+a text report -- the two modules are not alternatives to each other,
+they serve different readers (a person skimming vs. a diff/plot
+script).
+
+u/theta_xz/theta_xy added alongside v_xz/v_xy/v/T, mirroring the same
+addition to resolution_report.py's deflection_torsion_table() --  full
+per-node axial displacement and bending rotation, not just at the two
+bearing node positions BearingNodeData already covered. Column
+position kept between V and T here for the same reason it was placed
+there in the text table: it groups every kinematic quantity (u, v,
+theta) together, ahead of T, rather than scattering it. This is a
+column-set change to a CSV that gets fully regenerated per run, not an
+append to an existing file, so there is no positional-compatibility
+concern the way there can be with the ShaftResults dataclass itself
+(see that module's own field-order note) -- every consumer of this CSV
+reads by header name.
 
 Does not reuse resolution_report.py's _table() (fixed-width, string
 cells, no precision control) -- csv.writer over io.StringIO instead,
@@ -40,11 +54,12 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 # Column order matches resolution_report.py's three per-node tables,
-# concatenated (BENDING & SHEAR, DEFLECTION & TORSION, SECTION &
-# STRESS), x kept once instead of once per table.
+# concatenated (BENDING & SHEAR, DEFLECTION & TORSION -- now including
+# u/theta_xz/theta_xy, SECTION & STRESS), x kept once instead of once
+# per table.
 _COLUMNS = (
     "x_mm", "M_xz_Nmm", "M_xy_Nmm", "M_Nmm", "V_xz_N", "V_xy_N", "V_N",
-    "v_xz_mm", "v_xy_mm", "v_mm", "T_Nm",
+    "u_mm", "v_xz_mm", "v_xy_mm", "v_mm", "theta_xz_rad", "theta_xy_rad", "T_Nm",
     "d_mm", "W_mm3", "Wt_mm3", "sigma_b_MPa", "tau_MPa",
 )
 
@@ -74,7 +89,8 @@ def resolution_csv(result: "ShaftResults", decimals: int = 10) -> str:
             x,
             result.M_xz[i], result.M_xy[i], result.M[i],
             result.V_xz[i], result.V_xy[i], result.V[i],
-            result.v_xz[i], result.v_xy[i], result.v[i], result.T[i],
+            result.u[i], result.v_xz[i], result.v_xy[i], result.v[i],
+            result.theta_xz[i], result.theta_xy[i], result.T[i],
             result.d[i], result.W[i], result.Wt[i],
             result.sigma_b[i], result.tau[i],
         ]

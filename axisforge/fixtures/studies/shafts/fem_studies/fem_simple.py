@@ -86,6 +86,7 @@ def solve_system(
     shear_theory: str = "cowper",
     distribute_gear_labels: set[str] | None = None,
     extra_mandatory: dict[str, list[float]] | None = None,
+    kGA_override: float | None = None,
 ) -> RigidBearingFEMResultsLibrary:
     """
     Solve every ShaftSystem in system.shafts (one fresh RigidBearingFEMSolver
@@ -130,6 +131,18 @@ def solve_system(
         function only forwards the resulting list). Shafts whose name
         is not a key get extra_mandatory=None (RigidBearingFEMSolver's own
         default -- no extra refinement).
+    kGA_override : float | None
+        Forwarded UNIFORMLY to every shaft's RigidBearingFEMSolver
+        constructor -- see RigidBearingFEMSolver.__init__'s own
+        docstring. Replaces the transverse shear stiffness K*G*A with
+        this exact value for every Timoshenko element in every shaft,
+        instead of computing it from shear_theory (e.g. to test a
+        value read directly from Abaqus's own *Preprint, model=YES
+        section-properties printout). Has no effect when
+        theory="euler" -- forwarded regardless, but silently ignored
+        further down the pipeline (StiffnessMatrixBuilder.
+        build_stiffness_matrix() only passes it on to
+        TimoshenkoBeam.stiffness_element()).
 
     Returns
     -------
@@ -155,6 +168,7 @@ def solve_system(
             theory=theory,
             shear_theory=shear_theory,
             distribute_gear_labels=distribute_gear_labels,
+            kGA_override=kGA_override,
         )
         solver.solve(ss, extra_mandatory=extra_mandatory.get(ss.name))
         result = ShaftResultsReader(solver, ss).read()

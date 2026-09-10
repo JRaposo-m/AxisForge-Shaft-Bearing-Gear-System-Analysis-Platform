@@ -185,14 +185,17 @@ def bending_shear_table(result: "ShaftResults") -> str:
 
 
 def deflection_torsion_table(result: "ShaftResults") -> str:
-    """Per-node table: v_xz, v_xy, v [mm]; T [N.m] -- note T's unit
-    differs from the bending-moment table's N.mm, per ShaftResults'
-    own docstring."""
-    headers = ["x[mm]", "v_xz[mm]", "v_xy[mm]", "v[mm]", "T[N.m]"]
+    """Per-node table: u [mm]; v_xz, v_xy, v [mm]; theta_xz, theta_xy
+    [rad]; T [N.m] -- note T's unit differs from the bending-moment
+    table's N.mm, per ShaftResults' own docstring."""
+    headers = ["x[mm]", "u[mm]", "v_xz[mm]", "v_xy[mm]", "v[mm]",
+               "theta_xz[rad]", "theta_xy[rad]", "T[N.m]"]
     rows = [
-        [f"{x:.1f}", f"{vxz:.4f}", f"{vxy:.4f}", f"{v:.4f}", f"{t:.3f}"]
-        for x, vxz, vxy, v, t in zip(
-            result.x_nodes, result.v_xz, result.v_xy, result.v, result.T,
+        [f"{x:.1f}", f"{u:.4f}", f"{vxz:.4f}", f"{vxy:.4f}", f"{v:.4f}",
+         f"{tz:.6f}", f"{ty:.6f}", f"{t:.3f}"]
+        for x, u, vxz, vxy, v, tz, ty, t in zip(
+            result.x_nodes, result.u, result.v_xz, result.v_xy, result.v,
+            result.theta_xz, result.theta_xy, result.T,
         )
     ]
     return _table(headers, rows)

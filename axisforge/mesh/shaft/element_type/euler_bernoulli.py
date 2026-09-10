@@ -12,7 +12,7 @@ import math as math
 from axisforge.mesh.shaft.element_type.elem import Elem
 
 class EulerBernoulliBeam:
-    def stiffness_element(self, elem: Elem) -> np.ndarray:
+    def stiffness_element(self, elem, shear_theory: str | None = None) -> np.ndarray:
         le = elem.length
         E  = elem.E
         I  = elem.I

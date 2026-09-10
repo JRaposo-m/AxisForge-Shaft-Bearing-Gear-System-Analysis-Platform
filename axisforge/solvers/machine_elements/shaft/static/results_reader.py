@@ -35,6 +35,7 @@ class ShaftResultsReader:
 
         M_xz, M_xy, V_xz, V_xy = self._recover_internal_forces(x_nodes, n)
         v_xz, v_xy              = self._recover_deflections(n)
+        u, theta_xz, theta_xy   = self._recover_axial_and_rotation(n)
         d_arr, W_arr, Wt_arr    = self._section_properties(x_nodes)
 
         M_eq    = np.hypot(M_xz, M_xy)
@@ -78,16 +79,18 @@ class ShaftResultsReader:
             tau_total             = solver.tau_total,
             torsion_contributions = solver.torsion_contributions,
 
-            x       = np.array(x_nodes),
-            M_xz    = M_xz,    M_xy    = M_xy,    M       = M_eq,
-            V_xz    = V_xz,    V_xy    = V_xy,    V       = V_eq,
-            v_xz    = v_xz,    v_xy    = v_xy,    v       = v_eq,
-            T       = solver.T_total,
-            d       = d_arr,   W       = W_arr,   Wt      = Wt_arr,
-            sigma_b = sigma_b, tau     = tau_arr,
+            x        = np.array(x_nodes),
+            M_xz     = M_xz,    M_xy    = M_xy,    M  = M_eq,
+            V_xz     = V_xz,    V_xy    = V_xy,    V  = V_eq,
+            v_xz     = v_xz,    v_xy    = v_xy,    v  = v_eq,
+            u        = u,
+            theta_xz = theta_xz, theta_xy = theta_xy,
+            T        = solver.T_total,
+            d        = d_arr,   W       = W_arr,   Wt = Wt_arr,
+            sigma_b  = sigma_b, tau     = tau_arr,
             bearing_positions = brg_positions,
-            R_xz    = R_xz_arr, R_xy  = R_xy_arr,
-            R       = R_arr,    R_axial = R_axial_arr,
+            R_xz     = R_xz_arr, R_xy  = R_xy_arr,
+            R        = R_arr,    R_axial = R_axial_arr,
             M_max        = float(M_eq[idx_M]),      x_M_max       = float(x_nodes[idx_M]),
             v_max        = float(v_eq[idx_v]),      x_v_max       = float(x_nodes[idx_v]),
             sigma_b_max  = float(sigma_b[idx_sb]),  x_sigma_b_max = float(x_nodes[idx_sb]),
@@ -126,6 +129,21 @@ class ShaftResultsReader:
         return M_xz, M_xy, V_xz, V_xy
 
     def _sweep_plane_from_elements(self, plane: LoadPlane):
+        """
+        FIX: this used to call self._beam.stiffness_element(elem) with
+        no arguments at all -- meaning M/V recovered here ALWAYS used
+        shear_theory="cowper" internally, even when the system was
+        solved with shear_theory="hutchinson" (or with a kGA_override
+        active). k_e here must match the SAME stiffness the solver
+        actually assembled K from (see RigidBearingFEMSolver.solve()),
+        or the recovered M/V is inconsistent with the displacement
+        field d_total it's being multiplied against. Now forwards both
+        solver._shear_theory and solver._kGA_override explicitly.
+        kGA_override is only forwarded when the beam is Timoshenko --
+        EulerBernoulliBeam.stiffness_element() has no such parameter
+        (no shear term to override), same guard
+        StiffnessMatrixBuilder.build_stiffness_matrix() uses.
+        """
         solver   = self._solver
         elements = solver.elements
         x_nodes  = solver.x_nodes
@@ -135,8 +153,12 @@ class ShaftResultsReader:
         V = np.zeros(n)
         M = np.zeros(n)
 
+        stiffness_kwargs = {"shear_theory": solver._shear_theory}
+        if solver._builder.theory == "timoshenko":
+            stiffness_kwargs["kGA_override"] = solver._kGA_override
+
         for elem_idx, elem in enumerate(elements):
-            k_e = self._beam.stiffness_element(elem)
+            k_e = self._beam.stiffness_element(elem, **stiffness_kwargs)
             dof = [
                 3 * elem.idx_node_1,     3 * elem.idx_node_1 + 1, 3 * elem.idx_node_1 + 2,
                 3 * elem.idx_node_2,     3 * elem.idx_node_2 + 1, 3 * elem.idx_node_2 + 2,
@@ -168,6 +190,23 @@ class ShaftResultsReader:
         v_xz   = np.array([solver.d_total_xz[3 * i + 1] for i in range(n)])
         v_xy   = np.array([solver.d_total_xy[3 * i + 1] for i in range(n)])
         return v_xz, v_xy
+
+    def _recover_axial_and_rotation(self, n: int):
+        """
+        Same stride-3 layout (u, v, theta per DOF-triplet) that
+        _bearing_node_data() below already uses per bearing node --
+        applied here to every node instead of only the bearing
+        indices. u is read from d_total_xz for consistency with
+        _bearing_node_data()'s own choice (axial DOF is shared between
+        planes in this element formulation, so d_total_xz[3*i] and
+        d_total_xy[3*i] agree by construction -- reading either is
+        equivalent).
+        """
+        solver   = self._solver
+        u        = np.array([solver.d_total_xz[3 * i]     for i in range(n)])
+        theta_xz = np.array([solver.d_total_xz[3 * i + 2] for i in range(n)])
+        theta_xy = np.array([solver.d_total_xy[3 * i + 2] for i in range(n)])
+        return u, theta_xz, theta_xy
 
     def _section_properties(self, x_nodes: list[float]):
         shaft  = self._sys.shaft
@@ -249,4 +288,3 @@ class ShaftResultsReader:
         psi_xz = float((solver.d_total_xz[3 * i_hi + 1] - solver.d_total_xz[3 * i_lo + 1]) / span)
         psi_xy = float((solver.d_total_xy[3 * i_hi + 1] - solver.d_total_xy[3 * i_lo + 1]) / span)
         return psi_xz, psi_xy
-

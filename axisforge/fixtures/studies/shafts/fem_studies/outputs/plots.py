@@ -29,19 +29,27 @@ now produces exactly TWO figures per quantity instead of three:
      draw here has been dropped for these three; still used by
      bending_stress_figure/shear_stress_figure was ALSO dropped, see
      below), and the PHASE ANGLE of the (xz, xy) vector underneath,
-     via atan2(xy, xz) in degrees -- atan2, not a plain atan(xz/xy)
-     ratio, specifically so that a pure-xz vector (xy = 0) reads as
-     0 deg exactly, a pure-xy vector as +-90 deg, and the sign/quadrant
+     via atan2(xz, xy) in degrees -- atan2, not a plain atan(xz/xy)
+     ratio, specifically so that a pure-xy vector (xz = 0) reads as
+     0 deg exactly, a pure-xz vector as +-90 deg, and the sign/quadrant
      stays correct everywhere without a division-by-zero at xy = 0.
-     The phase axis is always drawn -180..180 deg (fixed y-limits,
-     ticks every 45 deg: -180/-135/-90/-45/0/45/90/135/180, each with
-     its own light dashed gridline so a reader can place a wiggle at a
-     glance without eyeballing between only five marks), not
-     autoscaled, so the SAME angle on two different plots (or two
-     different shafts) always sits at the same height -- an autoscaled
-     phase axis would be actively misleading (e.g. a shaft that only
-     ever swings +-5 deg would get
-     zoomed in enough to look as volatile as one that swings +-170 deg).
+     The convention (0 deg = XY plane) matches loads.py's own
+     theta_deg convention exactly: Fy = magnitude*cos(theta), Fz =
+     magnitude*sin(theta), i.e. theta measured from +Y toward +Z --
+     theta=0 is pure +Y (XY plane), theta=90 is pure +Z (XZ plane).
+     Earlier revisions of this function used atan2(xy, xz) (0 deg = XZ
+     plane), which was the OPPOSITE of the construction convention --
+     confirmed and corrected against this suite's own validation data
+     (see this suite's own validation conversation). The phase axis is
+     always drawn -180..180 deg (fixed y-limits, ticks every 45 deg:
+     -180/-135/-90/-45/0/45/90/135/180, each with its own light dashed
+     gridline so a reader can place a wiggle at a glance without
+     eyeballing between only five marks), not autoscaled, so the SAME
+     angle on two different plots (or two different shafts) always
+     sits at the same height -- an autoscaled phase axis would be
+     actively misleading (e.g. a shaft that only ever swings +-5 deg
+     would get zoomed in enough to look as volatile as one that swings
+     +-170 deg).
 
 Single-component quantities (torsional shear stress tau, torque T)
 keep the single-line-per-figure shape -- there is nothing to pair them
@@ -75,17 +83,14 @@ section_stress_table() (text report), only the standalone PNGs for
 them are gone.
 
 NOT INCLUDED, and deliberately not fabricated: a torsional deformation
-(twist angle, phi) figure and an axial deformation (u along the shaft)
-figure were asked for, but ShaftResults exposes neither as a per-node
-array -- only T (torque, N.m) is stored per node for torsion, and u
-(axial displacement) exists ONLY per bearing, on BearingNodeData
-(bearing_nodes[i].u), not as a length-n array over the whole shaft. Two
-values at two bearing locations is not a meaningful x-vs-u line plot.
-Adding either would require RigidBearingFEMSolver/ShaftResultsReader to
-compute and store a genuine per-node twist-angle and axial-displacement
-array first (neither is fabricated here) -- flagged for the user to
-decide whether that belongs in the solver/results layer before this
-module gains those two figures.
+(twist angle, phi) figure -- ShaftResults does not expose a per-node
+twist-angle array; only T (torque, N.m) is stored per node for
+torsion. u (axial displacement) IS now available per node (result.u,
+added alongside theta_xz/theta_xy -- see shaft_results.py/
+results_reader.py's own notes), so an axial-displacement figure could
+be added; not added here since it wasn't asked for as a figure, only
+the report/CSV needed it -- flag if wanted and it gets a registry
+entry like everything else in this module.
 
 Governing maxima ARE still marked where they always were and were not
 touched by this revision: ShaftResults itself stores M_max/x_M_max,
@@ -262,17 +267,18 @@ def _resultant_and_phase_figure(
 ) -> Figure:
     """
     Two subplots sharing the x axis: resultant magnitude on top (black,
-    no marker), phase angle underneath -- phase = degrees(atan2(y_xy,
-    y_xz)), so a pure-xz vector (y_xy = 0) reads as 0 deg exactly (the
-    convention explicitly requested), a pure-xy vector as +-90 deg, and
-    atan2 (not a plain xz/xy ratio through atan()) keeps the sign and
-    quadrant correct everywhere, including at y_xz = 0, without a
-    division-by-zero. The phase axis is FIXED at -180..180 deg (not
-    autoscaled) with ticks and a light dashed gridline every 45 deg
-    (-180/-135/-90/-45/0/45/90/135/180) -- finer than a plain 5-tick
-    axis, so a reader can place a wiggle in the curve against a nearby
-    reference line instead of eyeballing between only 0/+-90/+-180 --
-    so the same angle always sits at the same height across
+    no marker), phase angle underneath -- phase = degrees(atan2(y_xz,
+    y_xy)), so a pure-xy vector (y_xz = 0) reads as 0 deg exactly (the
+    same convention loads.py's own theta_deg uses: Fy = F*cos(theta),
+    Fz = F*sin(theta), theta measured +Y -> +Z), a pure-xz vector as
+    +-90 deg, and atan2 (not a plain xz/xy ratio through atan()) keeps
+    the sign and quadrant correct everywhere, including at y_xy = 0,
+    without a division-by-zero. The phase axis is FIXED at -180..180
+    deg (not autoscaled) with ticks and a light dashed gridline every
+    45 deg (-180/-135/-90/-45/0/45/90/135/180) -- finer than a plain
+    5-tick axis, so a reader can place a wiggle in the curve against a
+    nearby reference line instead of eyeballing between only 0/+-90/
+    +-180 -- so the same angle always sits at the same height across
     figures/shafts -- see this module's own top docstring for why that
     matters.
     """
@@ -286,7 +292,7 @@ def _resultant_and_phase_figure(
     ax_top.set_ylabel(ylabel_resultant)
     ax_top.grid(True, alpha=0.3)
 
-    phase_deg = np.degrees(np.arctan2(np.asarray(y_xy), np.asarray(y_xz)))
+    phase_deg = np.degrees(np.arctan2(np.asarray(y_xz), np.asarray(y_xy)))
     phase_ticks = [-180, -135, -90, -45, 0, 45, 90, 135, 180]
     ax_bot.plot(x, phase_deg, "-", color="black", linewidth=1.4, zorder=3)
     for t in phase_ticks:
@@ -297,7 +303,7 @@ def _resultant_and_phase_figure(
         )
     ax_bot.set_ylim(-180.0, 180.0)
     ax_bot.set_yticks(phase_ticks)
-    ax_bot.set_ylabel("phase [deg]  (0 deg = xz plane)")
+    ax_bot.set_ylabel("phase [deg]  (0 deg = xy plane)")
     ax_bot.set_xlabel(xlabel)
     ax_bot.grid(True, axis="x", alpha=0.3)
 

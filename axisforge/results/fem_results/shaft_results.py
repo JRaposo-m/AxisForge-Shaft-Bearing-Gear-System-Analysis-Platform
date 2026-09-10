@@ -73,6 +73,11 @@ class ShaftResults:
     v_xy: np.ndarray = field(default_factory=lambda: np.array([]))
     v:    np.ndarray = field(default_factory=lambda: np.array([]))
 
+    # NEW -- axial displacement + bending rotation, node-aligned like v_xz/v_xy above
+    u:        np.ndarray = field(default_factory=lambda: np.array([]))  # axial [mm]
+    theta_xz: np.ndarray = field(default_factory=lambda: np.array([]))  # bending rotation XZ [rad]
+    theta_xy: np.ndarray = field(default_factory=lambda: np.array([]))  # bending rotation XY [rad]
+
     T: np.ndarray = field(default_factory=lambda: np.array([]))
 
     d:  np.ndarray = field(default_factory=lambda: np.array([]))

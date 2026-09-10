@@ -64,10 +64,11 @@ class RigidBearingFEMSolver:
         solver.d_total_xz      # -> np.ndarray, global displacement (XZ)
     """
 
-    def __init__(self, theory: str = "timoshenko", 
+    def __init__(self, theory: str = "timoshenko",
                  distribute_gear_labels: set[str] | None = None,
-                 shear_theory: str = "cowper"):
-        
+                 shear_theory: str = "cowper",
+                 kGA_override: float | None = None):
+
         """
         distribute_gear_labels : set of gear labels whose mesh loads should be
                              treated as distributed over face width.
@@ -79,12 +80,33 @@ class RigidBearingFEMSolver:
                 Elem built by this solver's solve() call -- has no effect
                 when theory="euler" (Elem still carries it, but
                 EulerBernoulliBeam.stiffness_element() never reads it).
+        kGA_override : if given, REPLACES the transverse shear stiffness
+                K*G*A used for every Timoshenko element in this solve --
+                forwarded to StiffnessMatrixBuilder.build_stiffness_matrix()
+                (which assembles K) AND read back by ShaftResultsReader's
+                own _sweep_plane_from_elements() (which recovers M/V from
+                the solved displacement field) via this solver's own
+                _kGA_override attribute, so the two stay consistent with
+                each other. shear_theory is ignored for every element
+                once this is set (see TimoshenkoBeam._shear_correction_factor()'s
+                own docstring). Has no effect when theory="euler" -- same
+                reasoning as shear_theory above, Euler-Bernoulli has no
+                shear term to override.
+
+                Use this to plug in a value read directly from Abaqus's
+                own *Preprint, model=YES section-properties printout
+                (e.g. "K*G(23)*A"/"K*G(13)*A" for a *Beam Section) to
+                test whether matching Abaqus's ACTUAL transverse shear
+                stiffness -- not just AxisForge's own cowper/hutchinson-
+                derived one -- closes a deflection gap against Abaqus.
+                None (default): normal path, unchanged behaviour.
         """
-        
+
         self._builder = StiffnessMatrixBuilder(theory=theory)
         self._distribute_all   = distribute_gear_labels == {"*"}
         self._distribute_labels = distribute_gear_labels or set()
         self._shear_theory = shear_theory
+        self._kGA_override = kGA_override
 
         # --- public result attributes, populated by solve() ---
         self.x_nodes: list[float] | None = None
@@ -110,7 +132,7 @@ class RigidBearingFEMSolver:
     # Public entry point
     # ------------------------------------------------------------------
 
-    def solve(self, 
+    def solve(self,
                 shaft_system: ShaftSystem,
                 extra_mandatory: list[float] | None = None) -> None:
             shaft_system.validate_or_raise()
@@ -119,7 +141,10 @@ class RigidBearingFEMSolver:
             x_nodes = mesh.x_nodes
             elements = Elem.from_mesh(mesh, shear_theory=self._shear_theory)
 
-            self.K = self._builder.build_stiffness_matrix(mesh, elements)
+            self.K = self._builder.build_stiffness_matrix(
+                mesh, elements, shear_theory=self._shear_theory,
+                kGA_override=self._kGA_override,
+            )
 
             free_dofs, constrained_dofs = self._boundary_dofs(x_nodes, shaft_system)
             K_red = self.K[np.ix_(free_dofs, free_dofs)]
@@ -419,7 +444,7 @@ class RigidBearingFEMSolver:
         n_dofs = 3 * len(x_nodes)
         free = [d for d in range(n_dofs) if d not in constrained]
         return free, constrained
-    
+
 
     # ------------------------------------------------------------------
     # Helper
@@ -438,7 +463,7 @@ class RigidBearingFEMSolver:
             if abs(xi - x) < tol:
                 return i
         raise ValueError(f"Position {x:.4f} mm not found in x_nodes.")
-    
+
 
     # ------------------------------------------------------------------
     # Numerical guard
@@ -519,4 +544,3 @@ class RigidBearingFEMSolver:
                 }
 
         return result
-        

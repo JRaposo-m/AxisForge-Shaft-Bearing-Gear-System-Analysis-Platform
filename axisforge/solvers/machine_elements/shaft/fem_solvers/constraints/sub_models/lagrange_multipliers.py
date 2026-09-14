@@ -20,11 +20,11 @@ import numpy as np
 from typing import Callable
 
 
-from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import RigidBearingFEMSolver
-from axisforge.solvers.machine_elements.shaft.static.results_reader import ShaftResultsReader
+from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidBearingFEMSolver
+from axisforge.solvers.machine_elements.shaft.static_solvers.results_reader import ShaftResultsReader
 from axisforge.mesh.shaft.element_type.elem import Elem
 from axisforge.mesh.shaft.mesh_generation.mesh_1D import Mesh1D
-from axisforge.solvers.machine_elements.shaft.fem_solvers.build_stiffness_matrix import StiffnessMatrixBuilder
+from axisforge.solvers.machine_elements.shaft.fem_solvers.timoshenko.build_stiffness_matrix import StiffnessMatrixBuilder
 from axisforge.config import SOLVER_TOLERANCE
 from axisforge.core.loads import LoadPlane
 from axisforge.mesh.shaft.mesh_generation.mesh_grade import Grader

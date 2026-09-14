@@ -36,7 +36,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import RigidBearingFEMSolver
+from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidBearingFEMSolver
 from axisforge.solvers.machine_elements.shaft.fem_solvers.sub_models import SubmodelSolver, SubmodelResult
 from axisforge.mesh.shaft.element_type.elem import Elem
 from axisforge.core.loads import DistributedRadialLoad, LoadPlane

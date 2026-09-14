@@ -54,7 +54,7 @@ from typing import TYPE_CHECKING
 
 from axisforge.fixtures.studies.shafts.fem_studies.fem_simple import solve_system
 from axisforge.fixtures.studies.shafts.fem_studies.results_library import (
-    RigidBearingFEMResultsLibrary,
+    RigidSupportFEMResultsLibrary,
 )
 from axisforge.fixtures.studies.shafts.fem_studies.outputs.comparison_report import (
     shaft_comparison_block,
@@ -75,68 +75,37 @@ __all__ = ["run_comparison", "print_comparison", "write_comparison_report"]
 
 
 def run_comparison(
-    system: "SpurHelicalGearSystem",
-    construction: "ConstructionCapabilities",
+    system, construction,
     theory_a: str = "timoshenko",
-    theory_b: str = "euler",
-    distribute_gear_labels: set[str] | None = None,
-    extra_mandatory: dict[str, list[float]] | None = None,
-) -> tuple[RigidBearingFEMResultsLibrary, RigidBearingFEMResultsLibrary]:
-    """
-    Solve the SAME `system` twice via fem_simple.solve_system() -- once
-    with theory=`theory_a`, once with theory=`theory_b` -- and return
-    the two resulting libraries in that order. `distribute_gear_labels`
-    and `extra_mandatory` are forwarded UNCHANGED to both calls, so the
-    only thing that differs between the two solves is `theory` itself;
-    anything else differing between the two libraries would mean the
-    comparison is no longer isolating beam theory as the one variable
-    (see this module's own top docstring on why that matters).
+    theory_b: str = "euler_bernoulli",
+    *,
+    shear_theory: str | None,
+    integration_method: str | None,
+    distribute_gear_labels=None,
+    extra_mandatory=None,
+):
+    def _settings_for(theory):
+        if theory == "timoshenko":
+            return shear_theory, integration_method
+        return None, None
 
-    Parameters
-    ----------
-    system : SpurHelicalGearSystem
-        Already built AND resolved (see fem_simple.solve_system()'s own
-        docstring). Solved twice, never rebuilt.
-    construction : ConstructionCapabilities
-        The request that built `system` -- forwarded to both
-        solve_system() calls, which each re-check
-        construction.has_capability("systems.parallel_axis_linear")
-        independently (fem_simple.py's own guard, not duplicated here).
-    theory_a, theory_b : str
-        Passed straight through to StiffnessMatrixBuilder via
-        RigidBearingFEMSolver -- must be keys of
-        StiffnessMatrixBuilder._BEAM_THEORIES ("timoshenko", "euler",
-        ...). Not validated here; an unknown value surfaces as
-        ValueError from inside solve_system()'s own RigidBearingFEMSolver
-        construction, same error either side would raise standalone.
-    distribute_gear_labels, extra_mandatory : forwarded verbatim to
-        both solve_system() calls -- see fem_simple.solve_system()'s
-        own docstring for their meaning.
+    st_a, im_a = _settings_for(theory_a)
+    st_b, im_b = _settings_for(theory_b)
 
-    Returns
-    -------
-    tuple[RigidBearingFEMResultsLibrary, RigidBearingFEMResultsLibrary]
-        (library_a, library_b) -- one fresh library per call
-        (solve_system()'s own `library=None` default), never merged.
-    """
-    library_a = solve_system(
-        system, construction,
-        theory=theory_a,
-        distribute_gear_labels=distribute_gear_labels,
-        extra_mandatory=extra_mandatory,
-    )
-    library_b = solve_system(
-        system, construction,
-        theory=theory_b,
-        distribute_gear_labels=distribute_gear_labels,
-        extra_mandatory=extra_mandatory,
-    )
+    library_a = solve_system(system, construction, theory=theory_a,
+                              shear_theory=st_a, integration_method=im_a,
+                              distribute_gear_labels=distribute_gear_labels,
+                              extra_mandatory=extra_mandatory)
+    library_b = solve_system(system, construction, theory=theory_b,
+                              shear_theory=st_b, integration_method=im_b,
+                              distribute_gear_labels=distribute_gear_labels,
+                              extra_mandatory=extra_mandatory)
     return library_a, library_b
 
 
 def print_comparison(
-    library_a: RigidBearingFEMResultsLibrary,
-    library_b: RigidBearingFEMResultsLibrary,
+    library_a: RigidSupportFEMResultsLibrary,
+    library_b: RigidSupportFEMResultsLibrary,
     system: "SpurHelicalGearSystem",
     label_a: str,
     label_b: str,

@@ -62,7 +62,7 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system im
 from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
     SpurHelicalMeshLink, SpurHelicalGearSystem,
 )
-from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import RigidBearingFEMSolver
+from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidBearingFEMSolver
 
 # --- schematic (visual sanity check, no solver dependency) -----------------
 from axisforge.core.mechanical_system.parallel_axis.schematic import (
@@ -348,7 +348,7 @@ def recover_diagrams(solver: RigidBearingFEMSolver, shaft_system: ShaftSystem):
     `shaft_system` — reads its public attributes (x_nodes, elements,
     d_total_xz, d_total_xy, T_total, tau_total).
     """
-    from axisforge.mesh.shaft.element_type.timoshenko import TimoshenkoBeam
+    from axisforge.mesh.shaft.element_type.timoshenko.timoshenko import TimoshenkoBeam
     beam = TimoshenkoBeam()
 
     n = len(solver.x_nodes)

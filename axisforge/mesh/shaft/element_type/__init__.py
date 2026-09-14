@@ -25,5 +25,5 @@ def __dir__():
     return sorted(list(globals().keys()) + list(_LAZY.keys()))
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .timoshenko import TimoshenkoBeam
+    from .timoshenko.timoshenko import TimoshenkoBeam
 

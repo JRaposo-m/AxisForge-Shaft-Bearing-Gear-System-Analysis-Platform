@@ -26,6 +26,16 @@ the returned `solve_system` -- partial() fixes a default, not a
 lock -- but that would have to be a deliberate choice at the call site,
 not an accident of which capability string was requested.
 
+FLAGGED, not yet resolved: fem_simple.solve_system()'s own signature
+has not been reviewed against BeamModelSettings (see
+mesh/shaft/beam_model_settings.py and rigid_support.py) -- that class
+requires beam_theory/shear_theory/integration_method all explicit, no
+defaults. Validation case scripts already show `theory` pinned here
+while `shear_theory` is passed by the caller at each call site (a
+correct no-hidden-default pattern), but no case script observed so far
+supplies `integration_method` anywhere -- fem_simple.py needs checking
+directly before this pinning scheme can be called complete.
+
 "shaft_fem.comparison" is a different SHAPE of capability from the
 other two: it does not return a solve_system pinned to one theory, it
 returns the run_comparison()/print_comparison()/write_comparison_report()
@@ -151,40 +161,40 @@ class StudyCapabilities:
         # ---- shaft_fem --------------------------------------------------
         if capability == "shaft_fem.timoshenko_rigid":
             from functools import partial
-            from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import (
-                RigidBearingFEMSolver,
+            from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import (
+                RigidSupportFEMSolver,
             )
-            from axisforge.solvers.machine_elements.shaft.static.results_reader import (
+            from axisforge.solvers.machine_elements.shaft.static_solvers.results_reader import (
                 ShaftResultsReader,
             )
             from axisforge.fixtures.studies.shafts.fem_studies.results_library import (
-                RigidBearingFEMResultsLibrary,
+                RigidSupportFEMResultsLibrary,
             )
             from axisforge.fixtures.studies.shafts.fem_studies.fem_simple import solve_system as _solve_system
             return {
-                "RigidBearingFEMSolver": RigidBearingFEMSolver,
+                "RigidSupportFEMSolver": RigidSupportFEMSolver,
                 "ShaftResultsReader": ShaftResultsReader,
-                "RigidBearingFEMResultsLibrary": RigidBearingFEMResultsLibrary,
+                "RigidSupportFEMResultsLibrary": RigidSupportFEMResultsLibrary,
                 "solve_system": partial(_solve_system, theory="timoshenko"),
             }
 
         if capability == "shaft_fem.euler_bernoulli_rigid":
             from functools import partial
-            from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import (
-                RigidBearingFEMSolver,
+            from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import (
+                RigidSupportFEMSolver,
             )
-            from axisforge.solvers.machine_elements.shaft.static.results_reader import (
+            from axisforge.solvers.machine_elements.shaft.static_solvers.results_reader import (
                 ShaftResultsReader,
             )
             from axisforge.fixtures.studies.shafts.fem_studies.results_library import (
-                RigidBearingFEMResultsLibrary,
+                RigidSupportFEMResultsLibrary,
             )
             from axisforge.fixtures.studies.shafts.fem_studies.fem_simple import solve_system as _solve_system
             return {
-                "RigidBearingFEMSolver": RigidBearingFEMSolver,
+                "RigidSupportFEMSolver": RigidSupportFEMSolver,
                 "ShaftResultsReader": ShaftResultsReader,
-                "RigidBearingFEMResultsLibrary": RigidBearingFEMResultsLibrary,
-                "solve_system": partial(_solve_system, theory="euler"),
+                "RigidSupportFEMResultsLibrary": RigidSupportFEMResultsLibrary,
+                "solve_system": partial(_solve_system, theory="euler_bernoulli"),
             }
 
         if capability == "shaft_fem.comparison":

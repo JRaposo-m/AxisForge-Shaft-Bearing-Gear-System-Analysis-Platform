@@ -11,6 +11,17 @@ Sign convention:
   - theta_deg measured from +Y toward +Z, right-hand rule about +X.
   - magnitude always >= 0; direction fully encoded by theta.
   - AxialLoad, TorqueLoad act along/about +X — no angular decomposition needed.
+  - Fy/Fz (RadialLoad) and My/Mz (ExternalMoment) are signed vector
+    components about +Y and +Z respectively, right-hand rule — the same
+    convention TorqueLoad already uses about +X (positive = CCW viewed
+    from the positive axis).
+  - My/Mz are therefore work-conjugate with the FEM rotational DOF theta
+    at each node: positive nodal rotation is right-hand-rule about the
+    plane's normal axis (+Z for XY-plane bending, +Y for XZ-plane
+    bending), so a positive applied moment and a positive nodal rotation
+    point the same physical way. This is what element_theories/ assumes
+    when it defines theta on the stiffness/shape-function side — see
+    solvers/README.md.
 
 Units: N for forces, N*mm for moments/torques, mm for position.
 """
@@ -130,6 +141,15 @@ class ExternalMoment(Load):
     Applied bending moment at arbitrary angular orientation theta.
     Same decomposition convention as RadialLoad — theta defines the
     moment vector direction in the YZ cross-section.
+
+    Sign: My is the right-hand-rule moment component about +Y, Mz about
+    +Z — the same convention TorqueLoad uses about +X (positive = CCW
+    viewed from the positive axis). This is what makes My/Mz
+    work-conjugate with the FEM nodal rotation DOF theta: a positive
+    applied moment and a positive nodal rotation point the same physical
+    way in each plane (+Z-about for XY-plane bending, +Y-about for
+    XZ-plane bending). See solvers/README.md / element_theories/ for the
+    element-side definition of theta.
     """
 
     def __init__(self, position: float, magnitude: float,

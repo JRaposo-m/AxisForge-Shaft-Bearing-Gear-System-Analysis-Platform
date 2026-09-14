@@ -9,7 +9,7 @@ from axisforge.core.loads import LoadPlane
 from axisforge.results.fem_results.shaft_results import BearingNodeData, ShaftResults
 
 if TYPE_CHECKING:
-    from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import RigidBearingFEMSolver
+    from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidSupportFEMSolver
     from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
 
 
@@ -21,14 +21,30 @@ def _find_node(x_nodes: list[float], x: float, tol: float = 1e-6) -> int:
 
 
 class ShaftResultsReader:
-    """Post-processes a solved RigidBearingFEMSolver into a ShaftResults. Does not know libraries exist."""
+    """
+    Post-processes a solved RigidSupportFEMSolver into a ShaftResults.
+    Does not know libraries exist.
 
-    def __init__(self, solver: "RigidBearingFEMSolver", shaft_system: "ShaftSystem"):
+    Torsion is no longer part of RigidSupportFEMSolver.solve() -- call
+    static_solvers/torsion.py::solve_torsion(shaft_system, solver.x_nodes)
+    yourself and pass its three return values into read() explicitly.
+    This class never calls solve_torsion() itself.
+    """
+
+    def __init__(self, solver: "RigidSupportFEMSolver", shaft_system: "ShaftSystem"):
         self._solver = solver
         self._sys    = shaft_system
-        self._beam   = solver._builder.beam
 
-    def read(self) -> ShaftResults:
+    def read(self,
+              T_total: np.ndarray,
+              tau_total: np.ndarray,
+              torsion_contributions: list[list[dict]]) -> ShaftResults:
+        """
+        T_total, tau_total, torsion_contributions: the three return
+        values of static_solvers/torsion.py::solve_torsion(shaft_system,
+        solver.x_nodes), computed by the caller and handed in here --
+        this reader does not compute torsion itself.
+        """
         solver  = self._solver
         x_nodes = solver.x_nodes
         n       = len(x_nodes)
@@ -42,7 +58,7 @@ class ShaftResultsReader:
         V_eq    = np.hypot(V_xz, V_xy)
         v_eq    = np.hypot(v_xz, v_xy)
         sigma_b = M_eq / W_arr
-        tau_arr = solver.tau_total
+        tau_arr = tau_total
 
         bearing_reactions = self._bearing_reactions(x_nodes)
         bearing_nodes     = self._bearing_node_data(x_nodes)
@@ -75,9 +91,9 @@ class ShaftResultsReader:
             f_xy_total            = solver.f_xy_total,
             f_xz_reaction         = solver.f_xz_reaction,
             f_xy_reaction         = solver.f_xy_reaction,
-            T_total               = solver.T_total,
-            tau_total             = solver.tau_total,
-            torsion_contributions = solver.torsion_contributions,
+            T_total               = T_total,
+            tau_total             = tau_total,
+            torsion_contributions = torsion_contributions,
 
             x        = np.array(x_nodes),
             M_xz     = M_xz,    M_xy    = M_xy,    M  = M_eq,
@@ -85,7 +101,7 @@ class ShaftResultsReader:
             v_xz     = v_xz,    v_xy    = v_xy,    v  = v_eq,
             u        = u,
             theta_xz = theta_xz, theta_xy = theta_xy,
-            T        = solver.T_total,
+            T        = T_total,
             d        = d_arr,   W       = W_arr,   Wt = Wt_arr,
             sigma_b  = sigma_b, tau     = tau_arr,
             bearing_positions = brg_positions,
@@ -130,19 +146,27 @@ class ShaftResultsReader:
 
     def _sweep_plane_from_elements(self, plane: LoadPlane):
         """
-        FIX: this used to call self._beam.stiffness_element(elem) with
-        no arguments at all -- meaning M/V recovered here ALWAYS used
-        shear_theory="cowper" internally, even when the system was
-        solved with shear_theory="hutchinson" (or with a kGA_override
-        active). k_e here must match the SAME stiffness the solver
-        actually assembled K from (see RigidBearingFEMSolver.solve()),
-        or the recovered M/V is inconsistent with the displacement
-        field d_total it's being multiplied against. Now forwards both
-        solver._shear_theory and solver._kGA_override explicitly.
-        kGA_override is only forwarded when the beam is Timoshenko --
-        EulerBernoulliBeam.stiffness_element() has no such parameter
-        (no shear term to override), same guard
-        StiffnessMatrixBuilder.build_stiffness_matrix() uses.
+        FIX (this pass): the previous version built a 6-entry local dof
+        vector (u, v, theta per node) and multiplied it by k_e from
+        self._beam.stiffness_element(elem, ...) -- but that k_e was
+        always the 4x4 BENDING-ONLY matrix ([v_a, th_a, v_b, th_b]).
+        4x4 @ length-6 doesn't even multiply -- this raised immediately
+        whenever called. Axial and bending are decoupled (see
+        frame_element.py / build_stiffness_matrix.py), so recovering
+        V/M never needed the axial dofs at all -- fixed to use the
+        bending-only 4-slot local vector, matching what
+        elem.stiffness_element() actually returns.
+
+        Also: self._beam (an explicit EulerBernoulliBeam/TimoshenkoBeam
+        instance held by the reader, mirroring the builder's old
+        StiffnessMatrixBuilder.beam) no longer exists -- Elem dispatches
+        its own stiffness_element() by beam_theory now, and already
+        knows its own shear_theory (fixed at construction via
+        BeamModelSettings), so there is no shear_theory to pass in here
+        either. kGA_override is still forwarded explicitly, since it is
+        a per-solve override rather than something Elem was built
+        with -- elem.stiffness_element() itself ignores it for
+        euler_bernoulli elements, same guard used everywhere else.
         """
         solver   = self._solver
         elements = solver.elements
@@ -153,27 +177,21 @@ class ShaftResultsReader:
         V = np.zeros(n)
         M = np.zeros(n)
 
-        stiffness_kwargs = {"shear_theory": solver._shear_theory}
-        if solver._builder.theory == "timoshenko":
-            stiffness_kwargs["kGA_override"] = solver._kGA_override
-
         for elem_idx, elem in enumerate(elements):
-            k_e = self._beam.stiffness_element(elem, **stiffness_kwargs)
-            dof = [
-                3 * elem.idx_node_1,     3 * elem.idx_node_1 + 1, 3 * elem.idx_node_1 + 2,
-                3 * elem.idx_node_2,     3 * elem.idx_node_2 + 1, 3 * elem.idx_node_2 + 2,
-            ]
+            k_e = elem.stiffness_element(kGA_override=solver._kGA_override)  # 4x4, [v_a, th_a, v_b, th_b]
+            i, j = elem.idx_node_1, elem.idx_node_2
+            dof = [3 * i + 1, 3 * i + 2, 3 * j + 1, 3 * j + 2]
             d_e = d_total[dof]
             f_e = k_e @ d_e
 
-            V1, M1 = -f_e[1], -f_e[2]
-            V2, M2 =  f_e[4],  f_e[5]
+            V1, M1 = -f_e[0], -f_e[1]
+            V2, M2 =  f_e[2],  f_e[3]
 
             if elem_idx == 0:
-                V[elem.idx_node_1] = V1
-                M[elem.idx_node_1] = M1
-            V[elem.idx_node_2] = V2
-            M[elem.idx_node_2] = M2
+                V[i] = V1
+                M[i] = M1
+            V[j] = V2
+            M[j] = M2
 
         return V, M
 

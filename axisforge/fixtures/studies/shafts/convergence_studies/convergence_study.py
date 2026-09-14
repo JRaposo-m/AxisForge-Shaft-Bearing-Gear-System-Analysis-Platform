@@ -119,7 +119,7 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING
 
-from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import (
+from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import (
     RigidBearingFEMSolver,
 )
 from axisforge.solvers.mesh.convergence_solver import MeshConvergenceStudy

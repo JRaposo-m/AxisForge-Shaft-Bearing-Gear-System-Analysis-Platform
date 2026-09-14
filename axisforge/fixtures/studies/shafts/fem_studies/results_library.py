@@ -9,8 +9,8 @@ from axisforge.results.fem_results.shaft_results import ShaftResults
 
 
 @dataclass
-class RigidBearingFEMResultsLibrary:
-    """Registry of ShaftResults from the RigidBearingFEMSolver pipeline, keyed by shaft name."""
+class RigidSupportFEMResultsLibrary:
+    """Registry of ShaftResults from the RigidSupportFEMSolver pipeline, keyed by shaft name."""
 
     _store: dict[str, ShaftResults] = field(default_factory=dict, init=False, repr=False)
 

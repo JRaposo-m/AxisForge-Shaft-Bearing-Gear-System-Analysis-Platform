@@ -103,12 +103,16 @@ The concrete bearing families are not re-exported by `bearings` on purpose: a ne
 | `XZ` | Horizontal plane — tangential gear force `Wt` |
 | `XY` | Vertical plane — radial gear force `Wr`, opposed to gravity |
 | `theta` | Angular position, measured `+Y → +Z`, right-hand about `+X` |
+| `M` (bending moment, `ExternalMoment`) | Right-hand-rule moment component about the plane's normal axis — `+Z` for `XY`-plane bending (`My` — see naming note below), `+Y` for `XZ`-plane bending (`Mz`) — the same convention as torque about `+X`. Positive `M` and positive nodal rotation `theta` (the FEM rotational DOF, defined on the element side in `solvers/README.md`) point the same physical way — they are work-conjugate. |
+| `T` (torque, `TorqueLoad`) | Right-hand rule about `+X`; positive = CCW viewed from `+x` |
 
 Units, as stored: length in **mm**, force in **N**, moment in **N·mm**, torque in **N·m**, stress in **MPa**, angles in **degrees** at the constructor interface and **radians** internally, speed in **rpm** at the interface and **rad/s** internally.
 
 Shaft geometry uses the (r, θ, z) convention. θ appears only for localised features such as keyways, since the shaft body itself is a solid of revolution.
 
 A radial load contributes to **both** planes through its `theta`. Consumers must not pre-filter by plane.
+
+> **Naming note.** `ExternalMoment.My`/`.Mz` are named after the axis they act *about* (right-hand rule), not the plane they bend. `My` (moment about `+Y`) is the component that drives `XY`-plane bending; `Mz` (about `+Z`) drives `XZ`-plane bending — the same `component(plane)` pairing `RadialLoad` already uses for `Fy`/`Fz`. This sign convention was fixed against a reference Abaqus case (single cantilever, one end moment) rather than derived in the abstract, precisely because getting `My`/`Mz` versus the element's rotational DOF backwards produces a solve that runs cleanly and returns a plausible, sign-flipped answer — see `solvers/README.md` for where `theta` is defined on the element side and must be checked against this.
 
 ---
 
@@ -444,13 +448,15 @@ Choose the plotting axis that actually separates your shafts: a mesh at 270° of
 | `RadialLoad` | Transverse point force at an angular position, decomposed into Fy and Fz. |
 | `AxialLoad` | Force along the shaft axis, positive in tension. |
 | `TorqueLoad` | Torque about the shaft axis. |
-| `ExternalMoment` | Applied bending moment at an orientation, decomposed into My and Mz. |
+| `ExternalMoment` | Applied bending moment at an orientation, decomposed into My (about `+Y`, drives `XY`-plane bending) and Mz (about `+Z`, drives `XZ`-plane bending) — see the sign-convention note under [Conventions](#conventions). |
 | `DistributedRadialLoad` | Transverse load over an interval, with uniform or callable intensity and direction. |
 | `LoadingProfile` | Fatigue cycle decomposition — stress ratio into mean and amplitude factors. |
 
 `RadialLoad` and `ExternalMoment` expose their plane components and a `component(plane)` accessor. `DistributedRadialLoad` adds the resultant component, the centroid, the component intensity as a function of x, the bending-moment contribution (closed form when uniform, quadrature otherwise), and conversion to an equivalent point load when the direction is constant.
 
 The `source` field is what makes re-resolving safe: `ShaftSystem.set_gear_loads()` replaces every load tagged `"gear_mesh"` and leaves user loads untouched. A design script can therefore add its own loads, re-resolve the power flow, and keep them.
+
+**`ExternalMoment` sign, and why it matters downstream.** `My`/`Mz` are vector components under the right-hand rule about `+Y`/`+Z` — mechanically identical to how `TorqueLoad` is defined about `+X`. This module makes no assumption about beam elements or DOFs; the decomposition is pure coordinate geometry. What it does commit to, for whoever assembles a load vector downstream (`solvers/.../fem_solvers/assembly/`), is that a positive `My`/`Mz` and a positive nodal rotation `theta` must be defined to point the same way — they are work-conjugate, by construction of the FEM stiffness formulation. Getting this backwards between `loads.py` and the element formulation does not raise an error: the solve completes and returns a plausible, sign-flipped result. This was found by comparison against a reference Abaqus case, not by static analysis of the code, and is why the DOF-side convention now lives explicitly in `solvers/README.md` next to the element stiffness definition, rather than only here.
 
 ---
 
@@ -511,6 +517,7 @@ These feed the gear load-capacity solver, whose module is reserved and not yet w
 - **Declared capability, not hard-coded dispatch.** A family declares `CAPABILITIES` and `REQUIRED_FOR`; the solver dispatcher and the fixture capability selector both read those declarations. Adding a family edits no table anywhere else.
 - **Duplicate nothing.** A shoulder lives on a transition, not on both adjacent sections. A `GearElement` delegates its position rather than storing a copy.
 - **Flag, do not silently fix.** The thrust-roller coefficient discrepancy is marked in the source and named in this document rather than quietly corrected.
+- **Sign conventions are cross-package contracts, not local choices.** `ExternalMoment`'s `My`/`Mz` (here) and the FEM rotational DOF `theta` (in `solvers/`) must agree on which physical sense is positive. Neither module can enforce this on its own — it is checked once, against a reference case, and then documented on both sides rather than re-derived from scratch by whoever writes the element formulation next.
 
 ---
 
@@ -520,7 +527,7 @@ These feed the gear load-capacity solver, whose module is reserved and not yet w
 
 **Adding a gear type.** Geometry in `gear_properties/`, pair behaviour in `gear_meshing/`. A train that composes pairs goes in its own subpackage, as `planetary_gear/` does, and owns only train-specific logic.
 
-**Adding a load type.** Subclass `Load`, expose plane components through `component(plane)` if it is directional, and tag its `source` so `set_gear_loads()` knows whether to replace it.
+**Adding a load type.** Subclass `Load`, expose plane components through `component(plane)` if it is directional, and tag its `source` so `set_gear_loads()` knows whether to replace it. If the new type is directional and moment-like (not force-like), state explicitly which axis it is a right-hand-rule component about, and cross-reference the DOF it must stay work-conjugate with once a solver consumes it.
 
 **Adding standard tabular data.** It goes in `database/`, as data only, with no import from `core/`.
 

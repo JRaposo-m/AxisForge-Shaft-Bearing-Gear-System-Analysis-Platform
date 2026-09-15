@@ -18,7 +18,7 @@ from typing import Callable, TYPE_CHECKING
 
 from axisforge.core.machine_elements.bearings.bearing import Bearing
 from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
-from axisforge.fixtures.studies.shafts.fem_studies.results_library import RigidBearingFEMResultsLibrary
+from axisforge.fixtures.studies.shafts.fem_studies.results_library import RigidSupportFEMResultsLibrary
 from axisforge.fixtures.studies.bearings.load_distribution.no_lubrication.results_library import BearingResultsLibrary
 from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.dispatch import resolve_solver_cls
 
@@ -72,7 +72,7 @@ class RollingBearingSolver:
     def solve(self,
               shaft_system: ShaftSystem,
               bearings: dict[str, Bearing],
-              shaft_library: RigidBearingFEMResultsLibrary,
+              shaft_library: RigidSupportFEMResultsLibrary,
               psi_override: dict[str, float] | None = None,
               results: BearingResultsLibrary | None = None,
               ) -> dict[str, list["LoadDistributionResult"]]:
@@ -107,7 +107,7 @@ class RollingBearingSolver:
     def postprocess_and_record(self,
               shaft_system: ShaftSystem,
               bearings: dict[str, Bearing],
-              shaft_library: RigidBearingFEMResultsLibrary,
+              shaft_library: RigidSupportFEMResultsLibrary,
               catalog: dict[str, dict],
               load_distribution: dict[str, list["LoadDistributionResult"]] | None = None,
               results: BearingResultsLibrary | None = None,

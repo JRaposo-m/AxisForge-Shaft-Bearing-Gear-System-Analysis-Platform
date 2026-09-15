@@ -1,5 +1,12 @@
 """
 axisforge/mesh/shaft/beam_model_settings.py
+
+
+The file timoshenko/three_noded.py will not be implemented yet
+since it changes the way the shaft will be meshed and it is not a priority for now.
+
+three_noded.py elements will be implemented inthe future if the two_noded elements
+show problems and limitations in the analysis after the analytical comparations.
 """
 
 from __future__ import annotations

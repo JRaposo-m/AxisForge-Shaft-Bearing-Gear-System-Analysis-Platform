@@ -56,6 +56,10 @@ class ShaftResults:
 
     T_total:               np.ndarray = field(default_factory=lambda: np.array([]))
     tau_total:             np.ndarray = field(default_factory=lambda: np.array([]))
+    # NEW -- twist angle, node-aligned like T_total/tau_total above.
+    # Comes from TorsionSolver.solve() (static_solvers/torsion.py),
+    # integrated node-to-node from phi(x_nodes[0]) = 0.
+    phi_total:             np.ndarray = field(default_factory=lambda: np.array([]))
     torsion_contributions: list       = field(default_factory=list)
 
     # post-processed engineering quantities
@@ -78,7 +82,8 @@ class ShaftResults:
     theta_xz: np.ndarray = field(default_factory=lambda: np.array([]))  # bending rotation XZ [rad]
     theta_xy: np.ndarray = field(default_factory=lambda: np.array([]))  # bending rotation XY [rad]
 
-    T: np.ndarray = field(default_factory=lambda: np.array([]))
+    T:   np.ndarray = field(default_factory=lambda: np.array([]))
+    phi: np.ndarray = field(default_factory=lambda: np.array([]))  # twist angle [rad], same values as phi_total
 
     d:  np.ndarray = field(default_factory=lambda: np.array([]))
     W:  np.ndarray = field(default_factory=lambda: np.array([]))
@@ -101,6 +106,8 @@ class ShaftResults:
     x_sigma_b_max: float = 0.0
     tau_max:       float = 0.0
     x_tau_max:     float = 0.0
+    phi_max:       float = 0.0  # NEW -- max |phi|, same pattern as tau_max
+    x_phi_max:     float = 0.0
 
     # bearing node data
     bearing_nodes: list[BearingNodeData] = field(default_factory=list)

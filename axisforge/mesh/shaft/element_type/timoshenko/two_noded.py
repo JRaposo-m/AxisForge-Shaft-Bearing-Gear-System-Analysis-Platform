@@ -1,6 +1,8 @@
 """
 axisforge/mesh/shaft/element_type/timoshenko/two_noded.py
 
+Analytical comparations will be done to validate this implementation
+and to understand the influence of the mesh refinement and aspect ratio.
 """
 
 from __future__ import annotations
@@ -56,6 +58,15 @@ class TimoshenkoBeam:
 
         return shear_factor.shear_correction_factor(v, ratio, E, A, shear_theory, kGA_override=kGA_override)    
 
+    def shear_rigidity(self, 
+                       elem: Elem, 
+                       *, 
+                       kGA_override: float | None = None) -> float:
+        
+        G = elem.E / (2 * (1 + elem.v))
+        k = self.shear_factor(elem, ShearFactor(), elem.shear_theory, kGA_override=kGA_override)
+        return k * G * elem.A
+    
     def stiffness_element(self, 
                           elem: Elem,
                           integration: str = "single_point",
@@ -68,11 +79,7 @@ class TimoshenkoBeam:
         I  = elem.I
         D_b = E * I
 
-        self.shear_correction_parameter = self.shear_factor(elem, ShearFactor(), shear_theory, kGA_override=kGA_override)
-        A  = elem.A
-        v  = elem.v
-        G  = E / (2 * (1 + v))
-        D_s = self.shear_correction_parameter * G * A
+        D_s = self.shear_rigidity(elem, kGA_override=kGA_override)
 
         if integration == "single_point":
             k_b = np.zeros((4, 4))

@@ -84,6 +84,18 @@ class Elem:
             return TimoshenkoBeam().bending_strain_matrix(zeta, self)
         raise ValueError(f"Elem: unknown beam_theory '{self.beam_theory}'")
 
+    def shear_rigidity(self, *, kGA_override: float | None = None) -> float:
+        if self.beam_theory == "timoshenko":
+            return TimoshenkoBeam().shear_rigidity(self, kGA_override=kGA_override)
+        raise ValueError(f"Elem: shear_rigidity() only applies to 'timoshenko', got '{self.beam_theory}'")
+
+    def shear_strain_matrix(self, zeta:float) -> "np.ndarray":
+        if self.beam_theory == "timoshenko":
+            return TimoshenkoBeam().shear_strain_matrix(zeta, self)
+        else:
+            raise ValueError(f"Elem: '{self.beam_theory}' is not valid"
+                             f" Only timoshenko beam_theory is valid.")            
+
     def stiffness_element(self, *, kGA_override: float | None = None) -> "np.ndarray":
         if self.beam_theory == "euler_bernoulli":
             return EulerBernoulliBeam().stiffness_element(self)

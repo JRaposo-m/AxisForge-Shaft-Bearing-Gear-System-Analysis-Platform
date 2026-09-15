@@ -148,35 +148,42 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system im
 from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
     SpurHelicalMeshLink, SpurHelicalGearSystem,
 )
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.FEM_solvers.simple_fem_solver import SimpleFEMSolver
-from axisforge.solvers.machine_elements.shaft.oneD_analysis.static.static_analysis import (
-    ShaftResultsReader,
-    SimpleFEMResultsLibrary,
+from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidSupportFEMSolver
+from axisforge.solvers.machine_elements.shaft.static_solvers.results_reader import (
+    ShaftResultsReader,)
+from axisforge.fixtures.studies.shafts.fem_studies.results_library import (
+    RigidSupportFEMResultsLibrary,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.single_row_solver import (
+from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.ball_bearing.solver import (
     ISO16281BallSolver,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.results import (
+from axisforge.results.bearings.load_distribution.single_row.ball_bearing_results import (
     BallBearingResult,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Ball_Bearing.postprocessing import (
+from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.ball_bearing.postprocessing import (
     contact_distribution as ball_contact_distribution,
     bearing_stiffness as ball_bearing_stiffness,
     DynamicEquivalentRollingElementLoad as BallDynamicEquivalentRollingElementLoad,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.results import (
+from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.roller_bearing.solver import (
+    ISO16281RollerSolver,
+)
+from axisforge.results.bearings.load_distribution.single_row.roller_bearing_results import (
     RollerBearingResult,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.Roller_Bearing.postprocessing import (
+from axisforge.solvers.machine_elements.bearings.load_distribution.single_row.iso_16281.roller_bearing.postprocessing import (
     contact_distribution as roller_contact_distribution,
     bearing_stiffness as roller_bearing_stiffness,
     LaminaDynamicEquivalentLoad,
 )
-from axisforge.solvers.machine_elements.bearings.ISO_16281.rolling_bearing_solver import (
+from axisforge.fixtures.studies.bearings.load_distribution.no_lubrication.single_row.rolling_bearing_study import (
     RollingBearingSolver,
 )
 from axisforge.mesh.shaft.mesh_generation.mesh_1D import Mesh1D
 from axisforge.mesh.shaft.mesh_generation.mesh_grade import Grader
+
+from axisforge.solvers.machine_elements.shaft.static_solvers.torsion import solve_torsion
+from axisforge.mesh.shaft.beam_model_settings import BeamModelSettings
 
 from dataclasses import dataclass
 from typing import Callable
@@ -639,8 +646,15 @@ print(f"  |  brgXa = 6204 (locating, ball)   brgXb = NU204 (floating, roller){''
 print(f"  +{'─'*(W-4)}+")
 
 shaft_systems = build_systems(B_STUDY)
-library       = SimpleFEMResultsLibrary()
+library       = RigidSupportFEMResultsLibrary()
 load_results  : dict[str, dict] = {}   # name -> {label: list[row result]}, as solve() returns
+
+BEAM_SETTINGS = BeamModelSettings(
+    beam_theory="timoshenko",
+    shear_theory="cowper",
+    integration_method="single_point",   # nunca "exact" -- locking severo, já validado
+)
+
 
 for name, shaft_sys in shaft_systems.items():
 
@@ -651,11 +665,14 @@ for name, shaft_sys in shaft_systems.items():
     bearings    = {b.label: b for b in shaft_sys.bearings}
     extra_nodes = gear_grade_nodes(shaft_sys)
 
+    
     # 1. FEM
     print(f"\n  [1/3]  FEM solve  (mesh: {GEAR_GRADE}) ...")
-    fem = SimpleFEMSolver()
+    fem = RigidSupportFEMSolver(BEAM_SETTINGS)
     fem.solve(shaft_sys, extra_mandatory=extra_nodes)
-    ShaftResultsReader(fem, shaft_sys).read(library)
+    T_total, tau_total, torsion_contributions = solve_torsion(shaft_sys, fem.x_nodes)
+    result = ShaftResultsReader(fem, shaft_sys).read(T_total, tau_total, torsion_contributions)
+    library.store(result)
     print(f"         done  --  {len(fem.x_nodes)} nodes")
 
     # 2. ISO 16281 load distribution -- orchestrated across bearing types.

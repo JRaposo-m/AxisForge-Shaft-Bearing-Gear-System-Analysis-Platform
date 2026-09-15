@@ -1,5 +1,5 @@
 """
-solvers/machine_elements/shaft/oneD_analysis/static/shaft_post_processor.py
+solvers/machine_elements/shaft/static_solvers/shaft_post_processor.py
 
 ShaftPostProcessor — enriches a ShaftResults with stress concentration
 factors (Kt, Kf) at shoulders and other geometric features, producing

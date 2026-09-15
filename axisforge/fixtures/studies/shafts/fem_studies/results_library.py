@@ -33,7 +33,7 @@ class RigidSupportFEMResultsLibrary:
             return self._store[name]
         except KeyError:
             raise KeyError(
-                f"No RigidBearingFEM results stored for shaft '{name}'. "
+                f"No RigidSupportFEM results stored for shaft '{name}'. "
                 f"Available: {self.names()}"
             ) from None
 
@@ -56,4 +56,4 @@ class RigidSupportFEMResultsLibrary:
         return name in self._store
 
     def __repr__(self) -> str:
-        return f"RigidBearingFEMResultsLibrary(shafts={self.names()})"
+        return f"RigidSupportFEMResultsLibrary(shafts={self.names()})"

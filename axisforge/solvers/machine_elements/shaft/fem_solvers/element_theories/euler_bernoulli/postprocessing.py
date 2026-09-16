@@ -106,7 +106,7 @@ class EulerBernoulliPostProcessing:
         E  = elem.E
         I  = elem.I
         le = elem.length
-        Q  = float(E * I / (le ** 3) * ([12, 6 * le, -12, 6 * le] @ a_e))
+        Q  = -float(E * I / (le ** 3) * ([12, 6 * le, -12, 6 * le] @ a_e))
         return (x, Q)
 
     def recover_internal_forces(self, solver: RigidSupportFEMSolver, x_nodes: list[float], n: int):

@@ -36,8 +36,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidBearingFEMSolver
-from axisforge.solvers.machine_elements.shaft.fem_solvers.sub_models import SubmodelSolver, SubmodelResult
+from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidSupportFEMSolver
+from axisforge.solvers.machine_elements.shaft.fem_solvers.constraints.sub_models import SubmodelSolver, SubmodelResult
 from axisforge.mesh.shaft.element_type.elem import Elem
 from axisforge.core.loads import DistributedRadialLoad, LoadPlane
 from axisforge.config import MIN_FACE_WIDTH_FOR_CONVERGENCE_MM, SOLVER_TOLERANCE
@@ -187,7 +187,7 @@ class MeshConvergenceStudy:
 
     def __init__(
         self,
-        global_solver: RigidBearingFEMSolver,
+        global_solver: RigidSupportFEMSolver,
         gci_threshold: float = 0.01,
         safety_factor: float = 1.25,
         max_levels: int = 8,

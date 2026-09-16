@@ -176,6 +176,7 @@ class RigidSupportFEMSolver:
         elements = Elem.from_mesh(mesh, self._settings)
 
         builder = StiffnessMatrixBuilder(mesh, elements, frame=self._FRAME)
+        self._builder = builder  
         self.K = builder.build(kGA_override=self._kGA_override)
 
         free_dofs, constrained_dofs = boundary_dofs(x_nodes, shaft_system)

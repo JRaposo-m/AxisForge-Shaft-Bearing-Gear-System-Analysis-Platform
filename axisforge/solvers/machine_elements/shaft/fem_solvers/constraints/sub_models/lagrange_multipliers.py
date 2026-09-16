@@ -124,7 +124,7 @@ class SubmodelSolver:
         # 6. malha sintética do subdomínio — Elem.from_mesh lê shaft_system correctamente
         mesh_sub = _SubdomainMesh(shaft_system, x_nodes_sub)
         x_nodes  = mesh_sub.x_nodes        # == x_nodes_sub
-        elements = Elem.from_x_nodes(x_nodes_sub, shaft_system)
+        elements = Elem.from_x_nodes(x_nodes_sub, shaft_system, global_solver._settings)
 
         # K_sub agora tem dimensão 3 * len(x_nodes_sub) — sem linhas/colunas a zero
         builder = global_solver._builder
@@ -213,7 +213,7 @@ class SubmodelSolver:
         """
         n_dofs = 3 * mesh.n_nodes
         K = np.zeros((n_dofs, n_dofs))
-        beam = builder.beam
+        
 
         for elem in elements:
             x_a = mesh.x_nodes[elem.idx_node_1]
@@ -222,7 +222,7 @@ class SubmodelSolver:
             if x_b <= self._x_lo or x_a >= self._x_hi:
                 continue
 
-            K_elem = beam.stiffness_element(elem)
+            K_elem = StiffnessMatrixBuilder._element_stiffness_6x6(elem)
             dofs = [
                 3 * elem.idx_node_1,
                 3 * elem.idx_node_1 + 1,

@@ -49,22 +49,27 @@ depend on shaft_fem.timoshenko_rigid/euler_bernoulli_rigid also being
 requested -- it calls fem_simple.solve_system() directly, with whatever
 theory_a/theory_b the caller passes to run_comparison().
 
-"shaft_fem.convergence.<region>.<theory>" (6 capabilities: region in
-{gears, external_distributed, total} x theory in {timoshenko,
-euler_bernoulli}) each PIN both a `theory` AND a `regions` set into
-convergence_study.run_convergence(), same functools.partial discipline
-as shaft_fem.timoshenko_rigid/euler_bernoulli_rigid -- the capability
-string alone determines which shaft regions get mesh-refined and under
-which beam theory, never left to a caller-supplied kwarg. "bearings" is
-deliberately not one of the three region choices exposed here -- see
-_convergence_require()'s own docstring below, and
-convergence_study.run_convergence()'s own top docstring, for why: a
-bearing interval today is still a rigid point reaction, not the real
-per-roller load distribution, so "converged" would describe a physics
-model that is itself about to be replaced once a roller-bearing solver
-exists. All six still require only "systems.parallel_axis_linear",
-same reasoning as every other shaft_fem capability -- the baseline
-global solve each one refines around needs an already-resolved system.
+"shaft_fem.convergence.<region>.timoshenko" (3 capabilities: region in
+{gears, external_distributed, total}) each PIN both a `theory` AND a
+`regions` set into convergence_study.run_convergence(), same
+functools.partial discipline as shaft_fem.timoshenko_rigid/
+euler_bernoulli_rigid -- the capability string alone determines which
+shaft regions get mesh-refined, never left to a caller-supplied kwarg.
+Timoshenko-only for now: euler_bernoulli convergence is not yet
+validated/implemented, so there is no
+"shaft_fem.convergence.<region>.euler_bernoulli" branch here nor a
+matching leaf in the catalogue -- add both together if/when that need
+comes up, following the exact same pattern as the three timoshenko
+ones below. "bearings" is deliberately not one of the three region
+choices exposed here -- see _convergence_require()'s own docstring
+below, and convergence_study.run_convergence()'s own top docstring,
+for why: a bearing interval today is still a rigid point reaction, not
+the real per-roller load distribution, so "converged" would describe a
+physics model that is itself about to be replaced once a
+roller-bearing solver exists. All three still require only
+"systems.parallel_axis_linear", same reasoning as every other
+shaft_fem capability -- the baseline global solve each one refines
+around needs an already-resolved system.
 
 Adding a configuration
 -----------------------
@@ -134,6 +139,19 @@ class StudyCapabilities:
                     errors.append(
                         f"study.{field_name}: '{capability}' is not "
                         f"a '{prefix}.*' capability"
+                    )
+                elif not catalogue.is_registered(capability):
+                    # Domain prefix looks right but the exact string is
+                    # not a leaf in CATALOGUE (typo, or a capability that
+                    # was removed/renamed there but not here). Without
+                    # this check catalogue.verify() would say nothing --
+                    # it treats an unregistered capability as "no known
+                    # requirements" -- and the only place this would ever
+                    # surface is resolve() -> _require()'s own
+                    # CapabilityError fallback, much later than validate().
+                    errors.append(
+                        f"study.{field_name}: '{capability}' is not "
+                        f"registered in the capability catalogue"
                     )
 
         context = {"construction": self.construction, "studies": self}
@@ -244,8 +262,8 @@ class StudyCapabilities:
     @staticmethod
     def _convergence_require(theory: str, regions: set[str]) -> dict:
         """
-        Shared body for all six "shaft_fem.convergence.<region>.<theory>"
-        branches -- avoids repeating the same three imports six times.
+        Shared body for all three "shaft_fem.convergence.<region>.timoshenko"
+        branches -- avoids repeating the same three imports three times.
         `theory`/`regions` are pinned into run_convergence() via
         functools.partial, exactly like shaft_fem.timoshenko_rigid/
         euler_bernoulli_rigid pin `theory` into fem_simple.solve_system().

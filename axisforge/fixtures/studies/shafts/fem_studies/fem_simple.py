@@ -57,14 +57,19 @@ this triple appears (BeamModelSettings itself, RigidSupportFEMSolver) --
 every caller of solve_system(), including every validation case
 script, must now supply integration_method explicitly.
 
-Torsion is NOT solved inside RigidSupportFEMSolver.solve() anymore --
-it is a separate static analysis (static_solvers/torsion.py), called
-here once per shaft, right before handing its three return values into
-ShaftResultsReader.read(). This module is the orchestration point that
-combines the two independent analyses (bending+axial via the FEM
-solver, torsion via pure statics) into one ShaftResults per shaft --
-ShaftResultsReader itself does not call solve_torsion() on its own
-(see that module's own docstring).
+Torsion is NOT touched by this module at all anymore -- it used to be
+solved here (once per shaft, via the old module-level solve_torsion())
+and its three return values were threaded into
+ShaftResultsReader.read(T_total, tau_total, torsion_contributions).
+That function no longer exists: static_solvers/torsion.py now exposes
+a TorsionSolver class (solve() returning T_total, tau_total, phi_total,
+contributions), and ShaftResultsReader.read() builds its own
+TorsionSolver internally and calls it as part of read() -- see that
+module's own docstring. This module's job shrank accordingly: it just
+runs the FEM solve and calls read() with no arguments, same as any
+other post-processing it doesn't need to know about (bending/axial
+recovery were already handled the same way, inside read(), before this
+change).
 
 ShaftResultsReader.read() returns a ShaftResults and stores nothing --
 the reader deliberately does not know libraries exist (see its own
@@ -75,10 +80,8 @@ below is several statements rather than a single read(library) call.
 Dependency (solvers + fixtures, read-only access -- no core modification):
   axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support
       RigidSupportFEMSolver
-  axisforge.solvers.machine_elements.shaft.oneD_analysis.static.results_reader
+  axisforge.solvers.machine_elements.shaft.static_solvers.results_reader
       ShaftResultsReader
-  axisforge.solvers.machine_elements.shaft.static_solvers.torsion
-      solve_torsion
   axisforge.mesh.shaft.beam_model_settings
       BeamModelSettings
   axisforge.fixtures.studies.shafts.fem_studies.results_library
@@ -95,9 +98,6 @@ from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import (
 )
 from axisforge.solvers.machine_elements.shaft.static_solvers.results_reader import (
     ShaftResultsReader,
-)
-from axisforge.solvers.machine_elements.shaft.static_solvers.torsion import (
-    solve_torsion,
 )
 from axisforge.fixtures.studies.shafts.fem_studies.results_library import (
     RigidSupportFEMResultsLibrary,
@@ -220,8 +220,7 @@ def solve_system(
         )
         solver.solve(ss, extra_mandatory=extra_mandatory.get(ss.name))
 
-        T_total, tau_total, torsion_contributions = solve_torsion(ss, solver.x_nodes)
-        result = ShaftResultsReader(solver, ss).read(T_total, tau_total, torsion_contributions)
+        result = ShaftResultsReader(solver, ss).read()
         library.store(result)
 
     return library

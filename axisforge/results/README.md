@@ -88,7 +88,7 @@ The wiring law permits `solvers → results` and forbids the reverse. `results/`
 Two consequences follow, and both are deliberate:
 
 - **A result container never knows which solver produced it.** The ISO/TS 16281 bearing solvers consume `ShaftResults` without importing anything from the shaft FEM package. The coupling is the data shape, nothing more.
-- **Registries do not live here.** A result *shape* is a container; a *library* keyed by shaft or bearing label is an orchestration concern and lives in `fixtures/studies/` — `RigidBearingFEMResultsLibrary` for shafts, `BearingResultsLibrary` for bearings. `results/` defines what one result is; it does not define how a run collects many of them.
+- **Registries do not live here.** A result *shape* is a container; a *library* keyed by shaft or bearing label is an orchestration concern and lives in `fixtures/studies/` — `RigidSupportFEMResultsLibrary` for shafts (renamed from `RigidBearingFEMResultsLibrary`, see [`solvers/README.md`](../solvers/README.md#status)), `BearingResultsLibrary` for bearings. `results/` defines what one result is; it does not define how a run collects many of them.
 
 > **Open item — the multi-row containers have not moved yet.** `solvers/.../multi_row/thrust_bearings/iso_16281/ball_bearings/results.py` and its roller counterpart still define `BallBearingResult`, `RollerBearingResult` and their per-row types locally, under the same names as the copies here but with a different predicate: `is_multirow` there, `is_single` here. Two classes with one name and contradictory predicates is a trap for any consumer that can receive a result from either branch. They belong in `results/bearings/load_distribution/multi_row/`, and this document is written on the assumption that is where they are going.
 
@@ -170,7 +170,7 @@ Angles are radians throughout the result containers. Degrees appear only at the 
 
 ### `fem_results/shaft_results.py`
 
-The complete output of one rigid-bearing shaft FEM solve.
+The complete output of one `RigidSupportFEMSolver` shaft solve (bending + axial) plus one `TorsionSolver` pass, combined by `ShaftResultsReader`.
 
 #### `ShaftResults`
 
@@ -191,7 +191,10 @@ Node-aligned arrays in group 3, all of length `n_nodes` and all indexed against 
 | `M_xz`, `M_xy`, `M` | N·mm | Bending moment per plane and resultant |
 | `V_xz`, `V_xy`, `V` | N | Shear force per plane and resultant |
 | `v_xz`, `v_xy`, `v` | mm | Deflection per plane and resultant |
-| `T` | N·m | Torque diagram |
+| `u` | mm | **New.** Axial displacement, node-aligned like `v_xz`/`v_xy`. |
+| `theta_xz`, `theta_xy` | rad | **New.** Bending rotation per plane, node-aligned like `v_xz`/`v_xy`. |
+| `T` | N·m | Torque diagram — now produced by the separate `TorsionSolver` (see [`solvers/README.md`](../solvers/README.md#torsion)), not by the bending/axial FEM solve itself |
+| `phi` | rad | **New.** Twist angle, same values as `phi_total` below, referenced to `phi = 0` at the first node. |
 | `d` | mm | Local diameter |
 | `W`, `Wt` | mm³ | Bending and torsional section modulus |
 | `sigma_b` | MPa | Bending stress |
@@ -205,10 +208,13 @@ Governing scalars, each stored with the axial location at which it occurs:
 | `v_max` | `x_v_max` | Maximum resultant deflection |
 | `sigma_b_max` | `x_sigma_b_max` | Maximum bending stress |
 | `tau_max` | `x_tau_max` | Maximum torsional shear stress |
+| `phi_max` | `x_phi_max` | **New.** Maximum absolute twist angle. |
 
 There is deliberately **no** `V_max`. Shear is not a governing quantity for the shaft criteria implemented today, and storing a maximum that nothing checks against would invite it to be used as though it were.
 
-Torsion is additionally retained as a per-source breakdown (`torsion_contributions`), giving the contribution of each torque source at each node — the array to consult when a torque diagram does not look as expected.
+Torsion is additionally retained as a per-source breakdown (`torsion_contributions`), giving the contribution of each torque source at each node — the array to consult when a torque diagram does not look as expected. `torsion_contributions` and the torque/twist arrays (`T`, `T_total`, `tau_total`, `phi_total`) are now populated from `TorsionSolver.solve()` (`solvers/machine_elements/shaft/static_solvers/torsion.py`), called independently of the bending/axial FEM solve and read back into `ShaftResults` by `ShaftResultsReader` alongside everything else.
+
+`ShaftResults` also carries a `name: str` field (the key `fixtures/studies/shafts/fem_studies/results_library.RigidSupportFEMResultsLibrary` stores it under) and a raw `K: np.ndarray` (the last-assembled global stiffness matrix), both alongside the raw-solution group described above.
 
 #### `BearingNodeData`
 
@@ -365,11 +371,11 @@ Every solve stores `n_iter`, `residual` and `ok`. A result whose `ok` is `False`
 
 | Container | Written by | Read by |
 |---|---|---|
-| `ShaftResults`, `BearingNodeData` | `solvers/.../shaft/static/results_reader` | `fixtures/studies/shafts/results_library` (`RigidBearingFEMResultsLibrary`), the ISO/TS 16281 ball and roller solvers, `fixtures/studies/text_report` |
+| `ShaftResults`, `BearingNodeData` | `solvers/.../shaft/static_solvers/results_reader` | `fixtures/studies/shafts/fem_studies/results_library` (`RigidSupportFEMResultsLibrary`), the ISO/TS 16281 ball and roller solvers, `fixtures/studies/outputs/text_report` |
 | `BallBearingResult`, `BallLoadDistributionResult` | `solvers/.../single_row/iso_16281/ball_bearing/solver` | ball post-processing, `fixtures/studies/bearings/.../results_library`, `fixtures/studies/bearings/.../rolling_bearing_study` |
 | `RollerBearingResult`, `RollerLoadDistributionResult` | `solvers/.../single_row/iso_16281/roller_bearing/solver` | roller post-processing, `fixtures/studies/bearings/.../results_library`, `fixtures/studies/bearings/.../rolling_bearing_study` |
 
-Registries that collect these results by label — `RigidBearingFEMResultsLibrary` and `BearingResultsLibrary` — live in `fixtures/studies/`, not here. They are orchestration, and orchestration is not a result shape.
+Registries that collect these results by label — `RigidSupportFEMResultsLibrary` and `BearingResultsLibrary` — live in `fixtures/studies/`, not here. They are orchestration, and orchestration is not a result shape.
 
 Note what is **absent** from the "read by" column: no result container is read by another result container, and none is read by `core/` or `mesh/`. That is the property that makes this package safe to change in isolation.
 
@@ -383,7 +389,7 @@ Results are produced by solvers and read by everything downstream. A consumer ne
 from axisforge.results.fem_results.shaft_results import ShaftResults
 
 # Produced by the shaft solve, retrieved from the study's results library
-# (RigidBearingFEMResultsLibrary, from fixtures/studies/shafts/results_library)
+# (RigidSupportFEMResultsLibrary, from fixtures/studies/shafts/fem_studies/results_library)
 result: ShaftResults = library.get("input_shaft")
 
 # Governing values

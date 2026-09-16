@@ -51,13 +51,17 @@ The package is organised around the two stages a design script actually has: **C
 | Construction | `construction/gears/parallel_axis/fixed/` | External, internal, and both meshing fixtures | Implemented |
 | Construction | `construction/systems/parallel_axis/spur_helical/linear_chain_fixture.py` | `ShaftSpec`, `StageSpec`, linear chain factory | Implemented |
 | Construction | `construction/*/outputs/*_report.py`, `construction/outputs/text_report.py` | `write_construction_report` and its blocks | Implemented |
-| Studies | `studies/study_capabilities.py` | `StudyCapabilities` | Implemented |
-| Studies | `studies/shafts/fem_simple.py` | `solve_system` | Implemented |
-| Studies | `studies/shafts/results_library.py` | `RigidBearingFEMResultsLibrary` | Implemented |
+| Studies | `studies/study_capabilities.py` | `StudyCapabilities` | Implemented — now also resolves a `shaft_fem.euler_bernoulli_rigid` capability alongside `shaft_fem.timoshenko_rigid` |
+| Studies | `studies/shafts/fem_studies/fem_simple.py` | `solve_system` | Implemented — **moved from `studies/shafts/fem_simple.py`**; now takes `theory`/`shear_theory`/`integration_method` (assembled into one `BeamModelSettings` internally) instead of a bare `theory` string |
+| Studies | `studies/shafts/fem_studies/results_library.py` | `RigidSupportFEMResultsLibrary` | Implemented — **renamed from `RigidBearingFEMResultsLibrary`**, moved from `studies/shafts/results_library.py` |
+| Studies | `studies/shafts/fem_studies/outputs/{resolution_report,comparison_report,plots}.py` | Per-shaft resolution report block, two-library comparison report, matplotlib figures | Implemented — **new since the last pass**, see [Report writers](#report-writers) |
+| Studies | `studies/shafts/convergence_studies/{convergence_library,convergence_study}.py` | `ConvergenceResultsLibrary`, `run_convergence` | Present, **but see the open item below** — `convergence_study.py` calls the pre-rename `RigidBearingFEMSolver` API, which no longer exists under that name; confirm before relying on it |
 | Studies | `studies/bearings/.../results_library.py` | `BearingResultBundle`, `BearingResultsLibrary` | Implemented |
 | Studies | `studies/bearings/.../single_row/rolling_bearing_study.py` | `RollingBearingSolver` | Implemented |
-| Studies | `studies/text_report.py` | `write_resolution_report` and its blocks | Implemented |
-| — | plots, mesh convergence runs, full integration pipelines | — | Planned |
+| Studies | `studies/outputs/text_report.py` | `write_studies_report` | Implemented — **renamed from `studies/text_report.py`'s `write_resolution_report`**; now composes SHAFT_FEM, COMPARISON and MESH CONVERGENCE sections in one call, each optional (see [Report writers](#report-writers)) |
+| — | full cross-domain integration pipelines (bearing + gear + fatigue in one report) | — | Planned |
+
+> **Open item — `run_convergence()` calls a solver class that no longer exists under that name.** `studies/shafts/convergence_studies/convergence_study.py` does `from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidBearingFEMSolver` and constructs it as `RigidBearingFEMSolver(theory=theory, distribute_gear_labels=distribute_gear_labels)`. The current module only defines `RigidSupportFEMSolver`, constructed from a `BeamModelSettings` instance, not a bare `theory` string (see [`solvers/README.md`](../solvers/README.md#status)). As written, `run_convergence()` cannot be imported. `fem_studies/fem_simple.py`'s `solve_system()` already uses the renamed class and signature correctly — use it as the reference when fixing `convergence_study.py`.
 
 ---
 
@@ -83,7 +87,7 @@ Two rules hold this in place:
 - **`fixtures` reads `axisforge`; `axisforge` never reads `fixtures`.** Capability resolution works by introspecting what each package publishes in its `__init__.py`. It reads only.
 - **Studies depend on Construction, never the reverse.** `StudyCapabilities` carries the `ConstructionCapabilities` that built the system it is about to solve, because a study needs to know which capabilities were requested at build time.
 
-This layer is where the run-level registries live. `RigidBearingFEMResultsLibrary` and `BearingResultsLibrary` are here, not in `solvers/`: a solver computes one thing, and collecting many results under labels is orchestration. `RollingBearingSolver` is here for the same reason — despite its name it is an orchestrator, dispatching a shaft's whole bearing set to the appropriate solvers and merging what comes back.
+This layer is where the run-level registries live. `RigidSupportFEMResultsLibrary`, `ConvergenceResultsLibrary` and `BearingResultsLibrary` are here, not in `solvers/`: a solver computes one thing, and collecting many results under labels is orchestration. `RollingBearingSolver` is here for the same reason — despite its name it is an orchestrator, dispatching a shaft's whole bearing set to the appropriate solvers and merging what comes back.
 
 ---
 
@@ -116,13 +120,21 @@ fixtures/
 │
 └── studies/                            Stage 2 — solve and record
     ├── study_capabilities.py           StudyCapabilities
+    ├── outputs/text_report.py          write_studies_report — SHAFT_FEM + COMPARISON + CONVERGENCE, each optional
     ├── shafts/
-    │   ├── fem_simple.py               solve_system
-    │   └── results_library.py          RigidBearingFEMResultsLibrary
-    ├── bearings/load_distribution/no_lubrication/
-    │   ├── results_library.py          BearingResultBundle, BearingResultsLibrary
-    │   └── single_row/rolling_bearing_study.py    RollingBearingSolver
-    └── text_report.py                  write_resolution_report — the solved-state report
+    │   ├── fem_studies/
+    │   │   ├── fem_simple.py           solve_system
+    │   │   ├── results_library.py      RigidSupportFEMResultsLibrary
+    │   │   └── outputs/
+    │   │       ├── resolution_report.py    shaft_result_block (per-shaft text)
+    │   │       ├── comparison_report.py    shaft_comparison_block, write_comparison_report
+    │   │       └── plots.py                matplotlib figures — bending, shear, deflection, torsion, stress
+    │   └── convergence_studies/
+    │       ├── convergence_library.py  ConvergenceResultsLibrary
+    │       └── convergence_study.py    run_convergence — see the open item under Status
+    └── bearings/load_distribution/no_lubrication/
+        ├── results_library.py          BearingResultBundle, BearingResultsLibrary
+        └── single_row/rolling_bearing_study.py    RollingBearingSolver
 ```
 
 The tree mirrors the domain twice — once under `construction/`, once under `studies/` — rather than being organised by domain with a stage subfolder inside each. The stage is the stronger separation: everything under `construction/` can run without a solver present, and that property is worth being able to see from the path alone.
@@ -146,7 +158,7 @@ Construction  →  Studies
 | Stage | Class | Does | Needs |
 |---|---|---|---|
 | 1 | `ConstructionCapabilities` | Instantiates the objects — shaft, bearings, bearing families, gears, meshing, the shaft and gear system containers. Nothing is solved. | Nothing |
-| 2 | `StudyCapabilities` | Resolves the study entry points: `shaft_fem` (the rigid-bearing FEM solve, read back into a `RigidBearingFEMResultsLibrary`) and `bearing_iso16281` (internal load distribution from those results). | The `ConstructionCapabilities` that built the system |
+| 2 | `StudyCapabilities` | Resolves the study entry points: `shaft_fem` (the rigid-support FEM solve — `shaft_fem.timoshenko_rigid` or `shaft_fem.euler_bernoulli_rigid` — read back into a `RigidSupportFEMResultsLibrary`) and `bearing_iso16281` (internal load distribution from those results). | The `ConstructionCapabilities` that built the system |
 
 `StudyCapabilities` holds the `ConstructionCapabilities` as a field, so a study cannot be declared without the construction it is a study *of*. Its `has_capability()` walks both, which is how a study checks that the system it is about to solve was built with the capabilities that solve requires.
 
@@ -284,17 +296,28 @@ Tip and root relief and the finer roughness parameters are not exposed — a cal
 
 ### Shaft FEM
 
-`studies/shafts/fem_simple.py`.
+`studies/shafts/fem_studies/fem_simple.py` (moved from `studies/shafts/fem_simple.py`).
 
 ```python
 solve_system(system, construction, library=None, *,
-             theory, constraint_bearing, distribute_gear_labels,
-             extra_mandatory) -> RigidBearingFEMResultsLibrary
+             theory, shear_theory, integration_method,
+             distribute_gear_labels=None, extra_mandatory=None,
+             kGA_override=None) -> RigidSupportFEMResultsLibrary
 ```
 
-Solves every `ShaftSystem` in `system.shafts`, **one fresh `RigidBearingFEMSolver` per shaft** — a solver's published attributes describe the last thing it solved, so reusing one across shafts would silently discard results. Each solve is read back through `ShaftResultsReader` and stored in the library under the shaft's name.
+`theory`/`shear_theory`/`integration_method` are assembled into one `BeamModelSettings` internally and applied uniformly to every shaft — kept as three separate parameters (rather than one `BeamModelSettings` argument) specifically so `study_capabilities.py` can pin `theory` via `functools.partial` while a caller still supplies `shear_theory`/`integration_method` per call. There are no defaults, matching `BeamModelSettings.__post_init__`'s own requirement that `theory="euler_bernoulli"` pairs with `shear_theory=None, integration_method=None` and `theory="timoshenko"` requires both non-`None`.
+
+Solves every `ShaftSystem` in `system.shafts`, **one fresh `RigidSupportFEMSolver` per shaft** — a solver's published attributes describe the last thing it solved, so reusing one across shafts would silently discard results. Each solve is read back through `ShaftResultsReader` (which also runs `TorsionSolver` — see [`solvers/README.md`](../solvers/README.md#torsion)) and stored in the library under the shaft's name via `library.store(result)`.
 
 Passing an existing `library` adds to it rather than replacing it, so a study can be built up shaft by shaft.
+
+### Mesh convergence
+
+`studies/shafts/convergence_studies/convergence_study.py` — `run_convergence(system, construction, library=None, *, theory="timoshenko", regions=frozenset({"gears", "external_distributed"}), distribute_gear_labels=None, gci_threshold=0.01, safety_factor=1.25, max_levels=8) -> ConvergenceResultsLibrary`. Same "one fresh solver + one fresh `MeshConvergenceStudy` per shaft" rule as `solve_system()`, and the same `construction.has_capability("systems.parallel_axis_linear")` guard.
+
+Bearing regions are excluded from the default `regions` set on purpose: studying convergence against the rigid-support bearing model, which is about to be replaced by the real ISO/TS 16281 internal load distribution, would measure convergence of a placeholder rather than of the physics that will actually ship. Bearing-region convergence stays reachable only by calling `MeshConvergenceStudy.intervals_from_shaft_system()` directly with `regions={"bearings", ...}`, never through this capability layer, until a bearing-aware convergence path exists.
+
+**See the open item under [Status](#status):** this module currently imports the pre-rename `RigidBearingFEMSolver` name from `rigid_support.py` and calls it with the pre-`BeamModelSettings` constructor signature, neither of which matches that module's current content.
 
 ### Bearing internal load distribution
 
@@ -315,25 +338,31 @@ Passing an existing `library` adds to it rather than replacing it, so a study ca
 
 Registries live here rather than in `solvers/`. Each holds results computed elsewhere and computes nothing itself. Each result type has exactly one slot per key; setters overwrite rather than accumulate history.
 
-### `RigidBearingFEMResultsLibrary`
+### `RigidSupportFEMResultsLibrary`
 
-`studies/shafts/results_library.py`. Registry of `ShaftResults` keyed by `ShaftSystem.name`.
+`studies/shafts/fem_studies/results_library.py` (renamed from `RigidBearingFEMResultsLibrary` in `studies/shafts/results_library.py`). Registry of `ShaftResults` keyed by `ShaftSystem.name` — its `store()` method reads the key straight off `results.name` and raises if it's empty.
 
-This library stores **only** the results of the initial rigid-bearing FEM solve. It is the canonical source of shaft internal forces, deflections, bearing reactions and section stresses, and every downstream consumer reads from it.
+This library stores **only** the results of the initial rigid-support FEM solve (plus the separately-run torsion pass — see [`solvers/README.md`](../solvers/README.md#torsion)). It is the canonical source of shaft internal forces, deflections, bearing reactions and section stresses, and every downstream consumer reads from it.
 
 ```
-RigidBearingFEMSolver
+RigidSupportFEMSolver + TorsionSolver
       │
 ShaftResultsReader.read()      → ShaftResults
       │
-RigidBearingFEMResultsLibrary  ← stored here
+RigidSupportFEMResultsLibrary  ← stored here
       │
       ├── ISO16281BallSolver / ISO16281RollerSolver
       ├── ShaftPostProcessor
       └── (fatigue, static failure — planned)
 ```
 
-Constraints: the key is non-empty; re-storing under the same name overwrites, so a fresh solve replaces a stale one; no solver logic, no interface imports, no database calls.
+Constraints: the key (`results.name`) is non-empty; re-storing under the same name overwrites, so a fresh solve replaces a stale one; no solver logic, no interface imports, no database calls.
+
+### `ConvergenceResultsLibrary`
+
+`studies/shafts/convergence_studies/convergence_library.py` — **new since the last pass**. Per-shaft registry of `MeshRefinementResult`, the same role `RigidSupportFEMResultsLibrary` plays for `ShaftResults`, keyed by `MeshRefinementResult.shaft_name`. `store()` overwrites an existing entry for the same shaft name, same "fresh solve replaces stale" convention. Populated by `run_convergence()` (see [Studies](#studies)) — one call per shaft in `system.shafts`.
+
+`MeshRefinementResult.print_report()` was removed on the result's move into `results/`, and its replacement (an `outputs/` report block for this library, mirroring `comparison_report.py`'s own shape) has not been built yet — `run_convergence()` only solves and stores, it does not print.
 
 ### `BearingResultsLibrary`
 
@@ -368,24 +397,26 @@ Fixed-width ASCII text reports, written to a file with an explicit UTF-8 encodin
 | Writer | Reports on |
 |---|---|
 | `construction/outputs/text_report.write_construction_report(system, path, title)` | The built, unsolved system — composes the shaft, bearing, gear and system report blocks |
-| `studies/text_report.write_resolution_report(library, system, path, title)` | The solved state — one section per shaft |
+| `studies/outputs/text_report.write_studies_report(system, path, title, shaft_fem_library=None, comparison=None, convergence_library=None)` | The solved state — **renamed from `studies/text_report.write_resolution_report`**, and now composes up to three optional sections in one call: SHAFT_FEM (per-shaft, via `shaft_fem_library`), COMPARISON (two libraries side by side, via `comparison`), and MESH CONVERGENCE (via `convergence_library`). Any combination, or none — an empty call still writes a valid report. |
 
-Per-domain blocks live beside the fixtures they describe: `construction/shafts/outputs/shaft_report.py`, `construction/bearings/outputs/bearing_report.py`, `construction/gears/parallel_axis/fixed/outputs/gear_report.py`, `construction/systems/.../outputs/system_report.py`.
+Per-domain blocks live beside the fixtures they describe: `construction/shafts/outputs/shaft_report.py`, `construction/bearings/outputs/bearing_report.py`, `construction/gears/parallel_axis/fixed/outputs/gear_report.py`, `construction/systems/.../outputs/system_report.py`; on the studies side, `studies/shafts/fem_studies/outputs/{resolution_report,comparison_report}.py` and the still-unbuilt convergence report block noted under [Result libraries](#result-libraries).
 
 ### The resolution report's block structure
 
-`studies/text_report.py` exposes each block separately, so a caller can compose a partial report:
+`studies/shafts/fem_studies/outputs/resolution_report.py` (moved from `studies/text_report.py`) exposes each block separately, so a caller can compose a partial report:
 
 | Function | Contents |
 |---|---|
-| `summary_block` | Governing values and their locations: `M_max`, `v_max`, `sigma_b_max`, `tau_max`. |
+| `summary_block` | Governing values and their locations: `M_max`, `v_max`, `sigma_b_max`, `tau_max`, and now `phi_max` (twist angle). |
 | `bending_shear_table` | `x`, `M_xz`, `M_xy`, `M` [N·mm]; `V_xz`, `V_xy`, `V` [N]. |
-| `deflection_torsion_table` | `x`, `v_xz`, `v_xy`, `v` [mm]; `T` [N·m]. |
+| `deflection_torsion_table` | `x`, `v_xz`, `v_xy`, `v` [mm]; `T` [N·m]. `u` (axial displacement) is now available on `ShaftResults` alongside `theta_xz`/`theta_xy` but is not yet in this table — see [`results/README.md`](../results/README.md) for the full field list. |
 | `section_stress_table` | `x`, `d` [mm]; `W`, `Wt` [mm³]; `sigma_b`, `tau` [MPa]. |
 | `bearing_reactions_table` | From the reaction-vector-derived arrays, labelled by index-aligned lookup into `bearing_nodes`. |
 | `bearing_node_kinematics_table` | Position, `u`, `v_xz`, `v_xy`, `theta_xz`, `theta_xy`, `psi_xz`, `psi_xy`. |
 | `bearing_node_loads_table` | Position, `Fr_xz`, `Fr_xy`, `Fr`, `Fa`, `M_xz`, `M_xy` — from the **total** force vector. |
 | `shaft_result_block` | Every block above, in order, for one shaft. |
+
+A sibling `comparison_report.py` (`shaft_comparison_block`, `write_comparison_report`) compares two already-solved `RigidSupportFEMResultsLibrary` instances for the same `system` — e.g. a Timoshenko run against a Euler-Bernoulli run — one "SHAFT: `<name>`" section per shaft, with `label_a`/`label_b` column headers the caller supplies (no default, since the module makes no assumption about what the two sides are). A `plots.py` module in the same `outputs/` package produces the matching matplotlib figures (bending, shear, deflection with resultant + phase, torsion, stress); it deliberately does not include per-node geometry figures (`d(x)`, `W(x)`, `Wt(x)`) — those stayed in the text report only, on explicit feedback that they weren't of interest as standalone figures.
 
 Three formatting decisions are deliberate and should be preserved by any new writer:
 
@@ -421,12 +452,13 @@ system.shafts[-1].add_load(RadialLoad(...))     # driven machine
 write_construction_report(system, "construction.txt", "Drivetrain")
 
 # 5 — Solve and record
-library   = solve_system(system, construction)
+library   = solve_system(system, construction, theory="timoshenko",
+                          shear_theory="cowper", integration_method="exact")
 bearing_results = RollingBearingSolver().postprocess_and_record(
     system, bearings, library, catalog={...})
 
 # 6 — Report
-write_resolution_report(library, system, "resolution.txt", "Drivetrain")
+write_studies_report(system, "resolution.txt", "Drivetrain", shaft_fem_library=library)
 ```
 
 Adding a load after building is safe: `set_gear_loads()` replaces only loads tagged `"gear_mesh"` and leaves user loads untouched, so re-resolving is idempotent.

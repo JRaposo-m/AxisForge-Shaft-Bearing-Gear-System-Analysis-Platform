@@ -28,10 +28,11 @@ AxisForge is a deterministic, solver-centric engineering platform for the analys
 | Capability | Standard / method | Where |
 |---|---|---|
 | Multi-shaft power flow and mesh load injection | ISO 21771 force resolution over a single-source DAG | `core/mechanical_system/` |
-| 1D FEM shaft deflection and internal forces, two planes | Timoshenko beam, selective integration | `mesh/`, `solvers/.../shaft/fem_solvers/` |
-| Submodel refinement with prescribed cut-node state | Lagrange multipliers | `solvers/.../shaft/fem_solvers/sub_models/` |
-| Mesh convergence assessment | Richardson extrapolation + Grid Convergence Index | `solvers/mesh/` |
-| Stress concentration at shoulders and keyways | Peterson / Shigley / Neuber | `solvers/.../shaft/static/postprocessing.py` |
+| 1D FEM shaft deflection and internal forces, two planes | Timoshenko **or Euler-Bernoulli** beam, selected once per shaft via `BeamModelSettings` | `mesh/`, `solvers/.../shaft/fem_solvers/` |
+| Shaft torsion (torque, shear stress, twist angle) | Pure statics, run independently of the bending/axial solve | `solvers/.../shaft/static_solvers/torsion.py` |
+| Submodel refinement with prescribed cut-node state | Lagrange multipliers | `solvers/.../shaft/fem_solvers/constraints/submodel_extraction.py` |
+| Mesh convergence assessment | Richardson extrapolation + Grid Convergence Index | `solvers/mesh/convergence_solver.py` |
+| Stress concentration at shoulders and keyways | Peterson / Shigley / Neuber | `solvers/.../shaft/static_solvers/postprocessing.py` |
 | Internal rolling element load distribution, single row | ISO/TS 16281 §4 (point contact), §5 (line contact) | `solvers/.../bearings/load_distribution/single_row/` |
 | Internal load distribution, multi-row thrust bearings | ISO/TS 16281, shared rigid-ring displacement | `solvers/.../bearings/load_distribution/multi_row/` |
 | Per-element and per-lamina capacity, equivalent load, L10r | ISO 281, ISO 1281-1, ISO/TS 16281 | `core/.../bearings/families/`, the bearing postprocessing modules |
@@ -53,14 +54,14 @@ Gear load capacity, fatigue, lubrication and failure susceptibility are future p
 | `config` | Tolerances, solver defaults, global constants | Implemented |
 | `core/` | Shaft, bearings and families, gears, meshing, planetary trains, systems, loads, materials | Implemented |
 | `database/` | DIN 6885, ISO 3912, ISO 6336-1 K_A and K_v | Implemented — see the note under [Architecture](#architecture) |
-| `mesh/` | 1D node generation, grading, Timoshenko beam | Implemented; Euler–Bernoulli element reserved |
-| `results/` | Result containers: shaft FEM, single-row bearing load distribution | Implemented |
-| `solvers/.../shaft/` | Stiffness assembly, rigid-bearing FEM, submodel, results reader, stress concentration | Implemented; `static_failure` reserved |
+| `mesh/` | 1D node generation, grading, Timoshenko **and Euler-Bernoulli** beam elements, `BeamModelSettings` | Implemented — Euler-Bernoulli is **no longer reserved**; see the open items in [`mesh/README.md`](axisforge/mesh/README.md#status) |
+| `results/` | Result containers: shaft FEM (now including axial displacement, bending rotation and twist angle), single-row bearing load distribution | Implemented |
+| `solvers/.../shaft/` | Stiffness assembly, rigid-*support* FEM (`RigidSupportFEMSolver`, renamed from `RigidBearingFEMSolver`), separate torsion solve, submodel, results reader, stress concentration | Implemented; `static_failure` reserved — see the open items in [`solvers/README.md`](axisforge/solvers/README.md#status) |
 | `solvers/.../bearings/` | ISO/TS 16281 single-row and multi-row thrust, dispatch, postprocessing | Implemented |
 | `solvers/.../gears/` | Geometry and mesh forces | Implemented; ISO 6336 load capacity reserved |
-| `solvers/mesh/` | Mesh convergence, Richardson GCI | Implemented |
+| `solvers/mesh/` | Mesh convergence, Richardson GCI (`convergence_solver.py`, renamed from `mesh_convergence_study.py`) | Implemented |
 | `fixtures/construction/` | Object-building fixtures and construction reports | Implemented |
-| `fixtures/studies/` | Shaft FEM study, bearing load-distribution study, result libraries, resolution report | Implemented |
+| `fixtures/studies/` | Shaft FEM study, mesh-convergence study, bearing load-distribution study, result libraries, combined studies report | Implemented; the mesh-convergence fixture currently calls a pre-rename solver API and does not import — see [`fixtures/README.md`](axisforge/fixtures/README.md#status) |
 
 ---
 
@@ -161,21 +162,27 @@ axisforge/
 │   └── gears/SpurHelicalGears/LoadCapacity_data/   csv_reader · Kv_methodB · Kv_methodC
 │
 ├── mesh/shaft/                                 1D mesh generation and beam elements
+│   ├── beam_model_settings.py                  BeamModelSettings — theory/shear/integration, once per shaft
 │   ├── mesh_generation/                        mesh_1D.py (Mesh1D) · mesh_grade.py (Grader)
-│   └── element_type/                           elem.py (Elem) · timoshenko.py (TimoshenkoBeam)
-│                                               euler_bernoulli.py (reserved)
+│   └── element_type/                           elem.py (Elem) · frame_element.py (FrameElement)
+│                                               euler_bernoulli/two_noded.py (EulerBernoulliBeam)
+│                                               timoshenko/two_noded.py (TimoshenkoBeam)
+│                                               timoshenko/three_noded.py (QuadraticTimoshenkoBeam, not verified)
 │
 ├── results/                                    Result containers — shapes only, no computation
-│   ├── fem_results/shaft_results.py            ShaftResults, BearingNodeData
+│   ├── fem_results/shaft_results.py            ShaftResults (now incl. u, theta_xz/xy, phi/phi_total/phi_max), BearingNodeData
 │   └── bearings/load_distribution/single_row/  ball_bearing_results.py · roller_bearing_results.py
 │
 ├── solvers/
 │   ├── machine_elements/
 │   │   ├── shaft/
-│   │   │   ├── fem_solvers/                    build_stiffness_matrix.py (StiffnessMatrixBuilder)
-│   │   │   │                                   rigid_bearing.py (RigidBearingFEMSolver)
-│   │   │   │   └── sub_models/                 lagrange_multipliers.py (SubmodelResult)
-│   │   │   ├── static/                         results_reader.py (ShaftResultsReader)
+│   │   │   ├── fem_solvers/                    rigid_support.py (RigidSupportFEMSolver, renamed)
+│   │   │   │   ├── assembly/                   build_stiffness_matrix.py (StiffnessMatrixBuilder)
+│   │   │   │   │                               load_assembly/ · numerics/
+│   │   │   │   ├── constraints/                boundary_conditions.py · submodel_extraction.py
+│   │   │   │   └── element_theories/           timoshenko/ · euler_bernoulli/  postprocessing.py
+│   │   │   ├── static_solvers/                 torsion.py (TorsionSolver, split out — see open item)
+│   │   │   │                                   results_reader.py (ShaftResultsReader)
 │   │   │   │                                   postprocessing.py (ShaftPostProcessor)
 │   │   │   │                                   static_failure.py (reserved)
 │   │   │   └── utils.py                        Marin factors, Peterson Kt, Neuber q, Kf
@@ -187,7 +194,7 @@ axisforge/
 │   │   │                                       ball_bearings/ · roller_bearings/
 │   │   └── gears/                              geometry.py (GearSolver) · utils.py
 │   │       └── SpurHelicalGears/LoadCapacity_solver/   load_capacity.py (reserved)
-│   └── mesh/mesh_convergence_study.py          MeshConvergenceStudy, RichardsonGCI
+│   └── mesh/convergence_solver.py              MeshConvergenceStudy, RichardsonGCI (renamed)
 │
 └── fixtures/                                   Analysis-script building blocks
     ├── capabilities/catalogue.py               Capability metadata, no axisforge imports
@@ -197,10 +204,13 @@ axisforge/
     │   └── outputs/text_report.py              write_construction_report
     └── studies/                                Solve and record
         ├── study_capabilities.py               StudyCapabilities
-        ├── shafts/                             fem_simple.py · results_library.py
-        ├── bearings/load_distribution/no_lubrication/
-        │                                       results_library.py · rolling_bearing_study.py
-        └── text_report.py                      write_resolution_report
+        ├── outputs/text_report.py              write_studies_report (renamed, now 3 optional sections)
+        ├── shafts/
+        │   ├── fem_studies/                    fem_simple.py · results_library.py (RigidSupportFEMResultsLibrary)
+        │   │                                   outputs/ (resolution_report.py · comparison_report.py · plots.py)
+        │   └── convergence_studies/            convergence_library.py · convergence_study.py (see open item)
+        └── bearings/load_distribution/no_lubrication/
+                                                results_library.py · rolling_bearing_study.py
 ```
 
 ---
@@ -256,7 +266,8 @@ objs   = construction.resolve()
 system = build_linear_system(...)          # SpurHelicalGearSystem, already resolved
 
 # 2 — Solve every shaft, into the study's results library
-library = solve_system(system, construction)        # RigidBearingFEMResultsLibrary
+library = solve_system(system, construction, theory="timoshenko",
+                        shear_theory="cowper", integration_method="single_point")  # RigidSupportFEMResultsLibrary
 result  = library.get("input_shaft")                # ShaftResults
 
 # 3 — Internal bearing load distribution (ISO/TS 16281)
@@ -277,14 +288,16 @@ ppr = ShaftPostProcessor(shaft_system, result).process()
 
 # 6 — Reports
 write_construction_report(system, "construction.txt", "Drivetrain")
-write_resolution_report(library, system, "resolution.txt", "Drivetrain")
+write_studies_report(system, "resolution.txt", "Drivetrain", shaft_fem_library=library)
 ```
 
 Three contracts govern this sequence:
 
-- **One solver instance per shaft.** `RigidBearingFEMSolver` publishes its results as public attributes; a second `solve()` overwrites them. `solve_system()` creates a fresh solver per shaft for exactly this reason.
+- **One solver instance per shaft.** `RigidSupportFEMSolver` (renamed from `RigidBearingFEMSolver`) publishes its results as public attributes; a second `solve()` overwrites them. `solve_system()` creates a fresh solver per shaft for exactly this reason.
 - **Capacity belongs to the bearing, not to the solver.** Every family owns its own ISO formulas and is called through the bearing: `bearing.family.per_element_dynamic_capacity(bearing, Cr=...)`, and for roller families `bearing.family.per_lamina_dynamic_capacity(bearing, Q_ci, Q_ce)`.
-- **The library is the hand-off.** Downstream solvers read `RigidBearingFEMResultsLibrary`; they never reach back into the FEM solver's attributes.
+- **The library is the hand-off.** Downstream solvers read `RigidSupportFEMResultsLibrary`; they never reach back into the FEM solver's attributes.
+
+Torsion (`T`, `tau`, `phi`) is solved separately from step 2 above, via `TorsionSolver` — `ShaftResultsReader.read()` calls it internally, so `result` already carries the torsion fields; a caller only invokes `TorsionSolver` directly when it wants torsion without a full bending/axial solve.
 
 A shaft may carry a mixed bearing set — different contact types and different row counts — in the same call. `RollingBearingSolver` resolves each bearing to a solver from the capabilities its family declares, so adding a family requires no edit to any dispatch table.
 
@@ -324,10 +337,10 @@ Each top-level package has its own README with the module-by-module reference. T
 
 | Phase | Focus | Status |
 |---|---|---|
-| 1 | Shaft FEM · mesh convergence · gear force integration | Complete |
+| 1 | Shaft FEM (Timoshenko **and now Euler-Bernoulli**, via `BeamModelSettings`) · torsion split into its own solver · mesh convergence · gear force integration | Complete for Timoshenko; Euler-Bernoulli implemented but its own quadratic (three-node) element is unverified — see [`mesh/README.md`](axisforge/mesh/README.md#status) |
 | 2 | Bearing families, capability dispatch, ISO/TS 16281 load distribution | Complete for radial ball, radial roller and multi-row thrust; no multi-row roller family in `core/` to exercise the roller multi-row solver against |
 | 3 | Result containers extracted into `results/` | Single-row complete; multi-row containers still local to their solvers |
-| 4 | Capability declaration and fixture library — Construction and Studies stages | In progress |
+| 4 | Capability declaration and fixture library — Construction and Studies stages | In progress. Mesh-convergence is now wired into the fixtures layer (`fixtures/studies/shafts/convergence_studies/`), but its `run_convergence()` entry point currently calls a pre-rename solver API and does not import — see [`fixtures/README.md`](axisforge/fixtures/README.md#status) |
 | 5 | ISO 6336 gear load capacity — data layer in place, solver module reserved | In progress |
 | 6 | ISO 281 rating life as a standalone solver | Planned |
 | 7 | Fatigue — Goodman / Morrow / Miner | Planned |

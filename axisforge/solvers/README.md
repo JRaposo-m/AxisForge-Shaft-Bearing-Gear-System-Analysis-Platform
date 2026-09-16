@@ -15,6 +15,7 @@ Solvers consume the domain objects in [`core/README.md`](../core/README.md) and 
 - [Import surface](#import-surface)
 - [Conventions](#conventions)
 - [Shaft FEM](#shaft-fem)
+- [Torsion](#torsion)
 - [Shaft results and post-processing](#shaft-results-and-post-processing)
 - [Bearings — ISO/TS 16281, single row](#bearings--isots-16281-single-row)
 - [Bearings — ISO/TS 16281, multi-row thrust](#bearings--isots-16281-multi-row-thrust)
@@ -43,13 +44,17 @@ A solver is a computation. It does not know how many shafts a study has, it does
 
 | Group | Module | Contents | Status |
 |---|---|---|---|
-| `shaft/fem_solvers/` | `build_stiffness_matrix.py` | `StiffnessMatrixBuilder` | Implemented |
-| `shaft/fem_solvers/` | `rigid_bearing.py` | `RigidBearingFEMSolver` | Implemented |
-| `shaft/fem_solvers/sub_models/` | `lagrange_multipliers.py` | `SubmodelResult` and the submodel solve | Implemented |
-| `shaft/static/` | `results_reader.py` | `ShaftResultsReader` | Implemented |
-| `shaft/static/` | `postprocessing.py` | `ShaftPostProcessor`, `PostProcessedResults`, `StressConcentration` | Implemented |
-| `shaft/static/` | `static_failure.py` | static failure criteria | Reserved — module exists, defines nothing |
-| `shaft/` | `utils.py` | Marin factors, Peterson Kt, Neuber q, Kf | Implemented |
+| `shaft/fem_solvers/` | `rigid_support.py` | `RigidSupportFEMSolver` | Implemented — **renamed from `RigidBearingFEMSolver`/`rigid_bearing.py`**, now constructed from a `BeamModelSettings` (see [`mesh/README.md`](../mesh/README.md#beam-model-settings)) instead of a bare theory string |
+| `shaft/fem_solvers/assembly/` | `build_stiffness_matrix.py` | `StiffnessMatrixBuilder` | Implemented — moved under `assembly/`; theory-agnostic, `frame` is now a required constructor argument (see [Shaft FEM](#shaft-fem)) |
+| `shaft/fem_solvers/assembly/load_assembly/` | `point_loads.py`, `distributed_loads.py`, `vector_external_forces.py` | Point-load and distributed-load vector assembly | Present — `assemble_point_load_vector()` and `extract_submodel_values()`'s call shape are carried forward **unverified against the new API** by `rigid_support.py`'s own docstring; confirm before relying on them |
+| `shaft/fem_solvers/assembly/numerics/` | `gauss_quadrature.py`, `numerical_guards.py` | `QuadratureOrderEstimator`, `check_conditioning` | Implemented — `check_conditioning` confirmed: takes only `K_red`, fixed 1e14 condition-number threshold, no tolerance argument |
+| `shaft/fem_solvers/constraints/` | `boundary_conditions.py`, `submodel_extraction.py` | `boundary_dofs`, `extract_submodel_values` | Present — submodel extraction not re-verified against the new module layout (see above) |
+| `shaft/static_solvers/` | `torsion.py` | `TorsionSolver` | Implemented, but **see the open item under [Torsion](#torsion)** — depends on a `Shaft.J_at()` accessor not confirmed to exist |
+| `shaft/static_solvers/` | `results_reader.py` | `ShaftResultsReader` | Implemented — moved from `shaft/static/`, now also assembles `u`, `theta_xz`, `theta_xy`, `phi`/`phi_total`/`phi_max` into `ShaftResults` (see [`results/README.md`](../results/README.md)) |
+| `shaft/fem_solvers/element_theories/timoshenko/` | `postprocessing.py` | `TimoshenkoPostProcessing` | Implemented |
+| `shaft/fem_solvers/element_theories/euler_bernoulli/` | `postprocessing.py` | `EulerBernoulliPostProcessing` | Implemented |
+| `shaft/static_solvers/` | `postprocessing.py` | `ShaftPostProcessor`, `PostProcessedResults`, `StressConcentration` | Implemented — moved from `shaft/static/` |
+| `shaft/static_solvers/` | `static_failure.py` | static failure criteria | Reserved — module exists, defines nothing (moved from `shaft/static/`, still empty) |
 | `bearings/.../single_row/iso_16281/` | `dispatch.py`, `numerics.py`, `validation.py` | Solver resolution, root-solve wrapper, guards | Implemented |
 | `bearings/.../single_row/iso_16281/ball_bearing/` | `solver.py`, `postprocessing.py` | `ISO16281BallSolver` and its post-processing | Implemented |
 | `bearings/.../single_row/iso_16281/roller_bearing/` | `solver.py`, `postprocessing.py` | `ISO16281RollerSolver` and its post-processing | Implemented |
@@ -57,7 +62,9 @@ A solver is a computation. It does not know how many shafts a study has, it does
 | `bearings/.../multi_row/thrust_bearings/iso_16281/roller_bearings/` | `multirow_solver.py`, `postprocessing.py`, `results.py` | `ISO16281MultiRowRollerSolverSharedDisplacement` | Implemented, not exercised — no multi-row roller family exists in `core/` |
 | `gears/` | `geometry.py`, `utils.py` | `GearSolver` and stateless helpers | Implemented |
 | `gears/SpurHelicalGears/LoadCapacity_solver/` | `load_capacity.py` | ISO 6336 load capacity | Reserved — module exists, defines nothing |
-| `mesh/` | `mesh_convergence_study.py` | `MeshConvergenceStudy`, `RichardsonGCI`, `MeshRefinementResult`, `ConvergenceRecord` | Implemented |
+| `mesh/` | `convergence_solver.py` | `MeshConvergenceStudy`, `RichardsonGCI`, `MeshRefinementResult`, `ConvergenceRecord` | Implemented — **renamed from `mesh_convergence_study.py`**, same classes |
+
+> **Open item — the old solver name is still called from `fixtures/`.** `fixtures/studies/shafts/convergence_studies/convergence_study.py` still does `from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidBearingFEMSolver` and constructs it as `RigidBearingFEMSolver(theory=theory, distribute_gear_labels=distribute_gear_labels)`. `rigid_support.py` today defines `RigidSupportFEMSolver`, taking a `BeamModelSettings` instance, not a bare `theory` string — so as written, that import fails, and the mesh-convergence fixture path (`run_convergence`) cannot run until it is updated to match the renamed class and constructor. `fixtures/studies/shafts/fem_studies/fem_simple.py` (the ordinary resolution path) already uses the current name and signature correctly.
 
 ---
 
@@ -81,9 +88,9 @@ Two boundaries are strict and worth stating plainly:
 - **Downward.** A solver may read `core/`, `mesh/`, `config` and `results/`. It never imports `fixtures/`.
 - **Sideways.** A solver never imports another solver. The ball and roller stacks each own a full vertical slice — solve, post-process — and meet only at the dispatcher and at the result containers they share.
 
-Run-level registries are not here. `RigidBearingFEMResultsLibrary`, `BearingResultsLibrary` and `RollingBearingSolver` all live in `fixtures/studies/`: collecting results across a whole gearbox is orchestration, and orchestration is a study concern.
+Run-level registries are not here. `RigidSupportFEMResultsLibrary`, `BearingResultsLibrary` and `RollingBearingSolver` all live in `fixtures/studies/`: collecting results across a whole gearbox is orchestration, and orchestration is a study concern.
 
-> **Open item.** The multi-row branch keeps its own `results.py` in each of `ball_bearings/` and `roller_bearings/`, redefining `BallBearingResult`, `RollerBearingResult` and their per-row types under the same names as the copies in `results/`, with a different predicate (`is_multirow` here, `is_single` there). These belong in `results/bearings/load_distribution/multi_row/`. Until they move, a consumer that can receive a result from either branch cannot rely on either predicate. Separately, `roller_bearings/multirow_solver.py` imports `ball_bearings/results` rather than its own — either a wrong import or undeclared reuse.
+> **Open item.** The multi-row branch keeps its own `results.py` in each of `ball_bearings/` and `roller_bearings/`, redefining `BallBearingResult`, `RollerBearingResult` and their per-row types under the same names as the copies in `results/`, with a different predicate (`is_multirow` here, `is_single` there). These belong in `results/bearings/load_distribution/multi_row/`. Until they move, a consumer that can receive a result from either branch cannot rely on either predicate.
 
 ---
 
@@ -94,15 +101,27 @@ solvers/
 ├── machine_elements/
 │   ├── shaft/
 │   │   ├── fem_solvers/
-│   │   │   ├── build_stiffness_matrix.py     Global stiffness assembly
-│   │   │   ├── rigid_bearing.py              The full shaft solve
-│   │   │   └── sub_models/
-│   │   │       └── lagrange_multipliers.py   Subdomain solve with prescribed cut nodes
-│   │   ├── static/
-│   │   │   ├── results_reader.py             Raw solution → ShaftResults
-│   │   │   ├── postprocessing.py             Stress concentration
-│   │   │   └── static_failure.py             Reserved
-│   │   └── utils.py                          Marin, Peterson, Neuber helpers
+│   │   │   ├── rigid_support.py              RigidSupportFEMSolver — orchestrates the bending + axial solve
+│   │   │   ├── assembly/
+│   │   │   │   ├── build_stiffness_matrix.py         StiffnessMatrixBuilder (frame required)
+│   │   │   │   ├── load_assembly/
+│   │   │   │   │   ├── point_loads.py                assemble_point_load_vector
+│   │   │   │   │   ├── distributed_loads.py           assemble_distributed_load_vector
+│   │   │   │   │   └── vector_external_forces.py      build_load_cases
+│   │   │   │   └── numerics/
+│   │   │   │       ├── gauss_quadrature.py             QuadratureOrderEstimator
+│   │   │   │       └── numerical_guards.py             check_conditioning
+│   │   │   └── constraints/
+│   │   │       ├── boundary_conditions.py              boundary_dofs
+│   │   │       └── submodel_extraction.py              extract_submodel_values
+│   │   ├── fem_solvers/element_theories/
+│   │   │   ├── timoshenko/postprocessing.py            TimoshenkoPostProcessing
+│   │   │   └── euler_bernoulli/postprocessing.py       EulerBernoulliPostProcessing
+│   │   └── static_solvers/
+│   │       ├── torsion.py                              TorsionSolver — separate from the bending/axial solve
+│   │       ├── results_reader.py                       ShaftResultsReader
+│   │       ├── postprocessing.py                       ShaftPostProcessor, StressConcentration
+│   │       └── static_failure.py                       Reserved
 │   ├── bearings/load_distribution/
 │   │   ├── single_row/iso_16281/
 │   │   │   ├── dispatch.py                   Capability-based solver resolution
@@ -119,10 +138,10 @@ solvers/
 │       ├── utils.py                          Involute helpers, rack constants
 │       └── SpurHelicalGears/LoadCapacity_solver/load_capacity.py    Reserved
 └── mesh/
-    └── mesh_convergence_study.py
+    └── convergence_solver.py                 MeshConvergenceStudy, RichardsonGCI (renamed from mesh_convergence_study.py)
 ```
 
-The bearing tree is split by **row count first**, then by standard, then by contact type. That ordering is deliberate: single-row and multi-row are different solve *problems* — one ring displacement versus a load split across co-located rows — whereas ball and roller are different *contact laws* within each. Splitting the other way round would put two unrelated formulations in the same package.
+The bearing tree is split by **row count first**, then by standard, then by contact type. The shaft tree is now split by **what it produces**: `fem_solvers/` for the bending + axial FEM solve and its assembly internals, `static_solvers/` for everything that post-processes a solved state without its own DOFs (torsion, stress recovery, the reserved static-failure module).
 
 ---
 
@@ -130,23 +149,25 @@ The bearing tree is split by **row count first**, then by standard, then by cont
 
 | Import from | Names |
 |---|---|
-| `...shaft.fem_solvers.build_stiffness_matrix` | `StiffnessMatrixBuilder` |
-| `...shaft.fem_solvers.rigid_bearing` | `RigidBearingFEMSolver` |
-| `...shaft.fem_solvers.sub_models.lagrange_multipliers` | `SubmodelResult` |
-| `...shaft.static.results_reader` | `ShaftResultsReader` |
-| `...shaft.static.postprocessing` | `ShaftPostProcessor`, `PostProcessedResults`, `StressConcentration` |
-| `...shaft.utils` | Marin factors, Peterson Kt, Neuber notch sensitivity, Kf |
+| `...shaft.fem_solvers.rigid_support` | `RigidSupportFEMSolver` |
+| `...shaft.fem_solvers.assembly.build_stiffness_matrix` | `StiffnessMatrixBuilder` |
+| `...shaft.fem_solvers.assembly.load_assembly.point_loads` | `assemble_point_load_vector` |
+| `...shaft.fem_solvers.assembly.load_assembly.distributed_loads` | `assemble_distributed_load_vector` |
+| `...shaft.fem_solvers.assembly.numerics.numerical_guards` | `check_conditioning` |
+| `...shaft.fem_solvers.constraints.boundary_conditions` | `boundary_dofs` |
+| `...shaft.fem_solvers.constraints.submodel_extraction` | `extract_submodel_values` |
+| `...shaft.static_solvers.torsion` | `TorsionSolver` |
+| `...shaft.static_solvers.results_reader` | `ShaftResultsReader` |
+| `...shaft.static_solvers.postprocessing` | `ShaftPostProcessor`, `PostProcessedResults`, `StressConcentration` |
 | `...bearings.load_distribution.single_row.iso_16281.dispatch` | `resolve_solver_cls`, `resolve_solver_cls_for_attrs`, `register_contact_solver`, `SolverDispatchError` |
 | `...single_row.iso_16281.ball_bearing.solver` | `ISO16281BallSolver` |
-| `...single_row.iso_16281.ball_bearing.postprocessing` | `BallBearingStiffness`, `DynamicEquivalentRollingElementLoad`, `BasicReferenceRatingLife`, `DynamicEquivalentReferenceLoad`, `Q_j`, `phi_j_global`, `contact_distribution`, `bearing_stiffness`, `combine_row_L10r`, `basic_reference_rating_life`, `debug_radial_capacity` |
 | `...single_row.iso_16281.roller_bearing.solver` | `ISO16281RollerSolver` |
-| `...single_row.iso_16281.roller_bearing.postprocessing` | `RollerBearingStiffness`, `LaminaDynamicEquivalentLoad`, `BasicReferenceRatingLife`, `DynamicEquivalentReferenceLoad`, `Q_j`, `phi_j_global`, `contact_distribution`, `lamina_distribution`, `bearing_stiffness`, `stress_riser_factor`, `debug_radial_capacity` |
 | `...multi_row.thrust_bearings.iso_16281.ball_bearings.multirow_solver` | `ISO16281MultiRowBallSolverSharedDisplacement` |
 | `...multi_row.thrust_bearings.iso_16281.roller_bearings.multirow_solver` | `ISO16281MultiRowRollerSolverSharedDisplacement` |
 | `...gears.geometry` | `GearSolver` |
-| `axisforge.solvers.mesh` | `MeshConvergenceStudy`, `RichardsonGCI`, `MeshRefinementResult`, `ConvergenceRecord` |
+| `axisforge.solvers.mesh.convergence_solver` | `MeshConvergenceStudy`, `RichardsonGCI`, `MeshRefinementResult`, `ConvergenceRecord` |
 
-Ball and roller packages are imported explicitly and never flattened into one namespace: point and line contact produce different result types, and flattening would hide which contact model a name belongs to. Note that `Q_j`, `phi_j_global`, `contact_distribution`, `bearing_stiffness` and `BasicReferenceRatingLife` are each defined **four times**, once per branch and contact type, with the exponents and contact law appropriate to that branch. They are not interchangeable; import from the module matching the bearing in hand.
+Ball and roller packages are imported explicitly and never flattened into one namespace: point and line contact produce different result types, and flattening would hide which contact model a name belongs to.
 
 ---
 
@@ -159,7 +180,7 @@ Ball and roller packages are imported explicitly and never flattened into one na
 | `XY` | Vertical plane — radial gear force `Wr`, opposed to gravity |
 | Torsion | Accumulates left → right; positive counter-clockwise viewed from `+x` |
 
-Units, as stored: length and displacement in **mm**, force in **N**, bending moment in **N·mm**, torque in **N·m**, stress in **MPa**, stiffness in **N/mm**, angles in **rad**. The torque/bending-moment unit discontinuity is real and documented rather than normalised — see [`results/README.md`](../results/README.md#units).
+Units, as stored: length and displacement in **mm**, force in **N**, bending moment in **N·mm**, torque in **N·m**, twist angle `phi` in **rad**, stress in **MPa**, stiffness in **N/mm**, angles in **rad**. The torque/bending-moment unit discontinuity is real and documented rather than normalised — see [`results/README.md`](../results/README.md#units).
 
 Degrees of freedom are three per node: axial displacement, transverse displacement, rotation. Each bending plane is solved independently against the same stiffness matrix and superposed afterwards.
 
@@ -167,25 +188,19 @@ Degrees of freedom are three per node: axial displacement, transverse displaceme
 
 ## Shaft FEM
 
-### `StiffnessMatrixBuilder`
+### `RigidSupportFEMSolver`
 
-Assembles the global stiffness matrix from element contributions. The beam theory is selected by name from an extensible registry; Timoshenko with selective integration is wired today, and `euler_bernoulli` is the reserved second entry.
+`fem_solvers/rigid_support.py`. Models each bearing location as a rigid point **support** boundary condition — it knows nothing about rolling-bearing physics (ISO 281 / ISO/TS 16281, handled elsewhere). "Rigid" is this solver's identity, not one of several modes; a compliant-bearing solver would be a sibling module.
 
-| Member | Purpose |
-|---|---|
-| `build_stiffness_matrix(mesh, elements)` | The assembled global matrix. |
+```python
+settings = BeamModelSettings(beam_theory="timoshenko", shear_theory="cowper", integration_method="exact")
+solver = RigidSupportFEMSolver(settings)
+solver.solve(shaft_system)
+solver.d_total_xz      # global displacement (XZ)
+solver.f_xz_total       # global force, including reactions
+```
 
-### `RigidBearingFEMSolver`
-
-Orchestrates the full shaft solve: node grid, element list, global stiffness, boundary conditions, two independent planar solves sharing the same stiffness matrix, superposition, and the torsion diagram on the same nodes. Bearings are treated as rigid supports — hence the name; a compliant-bearing solver would be a sibling module, not a mode of this one.
-
-Every intermediate quantity is stored as a public attribute.
-
-| Member | Purpose |
-|---|---|
-| `solve` | Runs the whole pipeline for one shaft system, optionally with extra mandatory nodes for local refinement. |
-| `return_values` | Nodal solution quantities within an interval — the hand-off to the submodel solver. |
-| `validate_torsion_equilibrium` | Torsion residual as a list of error strings. |
+Orchestration only. `solve()` calls, in order: `Mesh1D` → `Elem.from_mesh()` (driven by the `BeamModelSettings` passed at construction) → `StiffnessMatrixBuilder` (`frame=True`, fixed — see below) → `boundary_dofs` → the point- and distributed-load assemblers → a linear solve (still beam-theory-agnostic) → publishes public attributes.
 
 | Published attribute | Contents |
 |---|---|
@@ -193,23 +208,54 @@ Every intermediate quantity is stored as a public attribute.
 | `free_dofs`, `constrained_dofs` | Boundary condition partition. |
 | `d_total_xz`, `d_total_xy` | Superposed displacement vectors per plane. |
 | `f_xz_ext`, `f_xy_ext` | External force vectors per plane. |
-| `f_xz_reaction`, `f_xy_reaction` | Reaction vectors — non-zero only at constrained DOFs. |
-| `f_xz_total`, `f_xy_total` | Total nodal force vectors. |
-| `d_contributions` | Per-load-case displacement contributions. |
-| `T_total`, `tau_total` | Torsion diagram and shear stress on the same nodes. |
-| `torsion_contributions` | Per-source torsion contributions, per node. |
+| `f_xz_total`, `f_xy_total` | Total nodal force vectors, including reactions. |
 
-Construction options: the beam theory, the bearing constraint model, and the set of gear labels whose mesh loads are treated as distributed over the face width rather than as point loads.
+Each attribute is `None` until `solve()` has run at least once, and re-calling `solve()` overwrites all of them in place — build a fresh instance if isolation between runs is needed (same "one solver instance per shaft" rule as before).
 
-Distributed loads are integrated by Gauss quadrature whose order is chosen adaptively from the estimated polynomial degree of the shape functions, the load intensity and the direction function — the caller never picks a quadrature rule.
+**Why `frame=True` is fixed, not a caller choice.** This solver accepts `AxialLoad` and injects it into the global force vector, so the axial DOFs must be wired into `K` for the system to be solvable at all; `frame=False` would leave every axial DOF disconnected. Since there is only one correct choice for what this solver does, it is a fixed identity property (`_FRAME = True`), not a constructor argument.
 
-**One solver instance per shaft.** A second `solve()` overwrites every published attribute. `fixtures/studies/shafts/fem_simple.solve_system()` creates a fresh solver per shaft for this reason.
+**Torsion is not produced here.** `T` and `tau` come from `TorsionSolver`, called separately — see [Torsion](#torsion).
+
+### `StiffnessMatrixBuilder`
+
+`fem_solvers/assembly/build_stiffness_matrix.py`. Assembles the global stiffness matrix from element contributions, plus optional nodal stiffness injected at chosen positions (bearings, or any other spring). Fully theory-agnostic — each `Elem` already knows its own `beam_theory` and dispatches its own `stiffness_element()`; this builder never branches on theory itself.
+
+```python
+builder = StiffnessMatrixBuilder(mesh, elements, frame=True)
+builder.add_nodal_stiffness(x=120.0, K_local=K_bearing, dof_slots=[1, 2])
+K = builder.build()
+```
+
+| Member | Purpose |
+|---|---|
+| `__init__(mesh, elements, frame)` | `frame` is required, no default. `frame=True` scatters a combined 6×6 block per element (4×4 bending + 2×2 axial, local order `[u_a, v_a, th_a, u_b, v_b, th_b]`); `frame=False` scatters only the 4×4 bending block and leaves every axial DOF at zero — unconstrained unless the caller removes it separately, which this builder does not check. |
+| `add_nodal_stiffness(x, K_local, dof_slots)` | Adds an arbitrary local stiffness block at the node nearest `x`, at the named DOF slots (`0`=axial, `1`=transverse, `2`=rotation). Generic — it does not know what a bearing is; the caller supplies the numbers. |
+| `build(*, kGA_override=None)` | The assembled global matrix; `kGA_override` is forwarded only to Timoshenko elements, silently ignored for Euler-Bernoulli ones. |
 
 ### The submodel solve
 
-`sub_models/lagrange_multipliers.py` restricts the solution to a subdomain, injecting the global solution at the cut nodes through Lagrange multipliers. Distributed loads are clamped to the subdomain bounds. It is what the mesh convergence study refines against.
+`constraints/submodel_extraction.py` (`extract_submodel_values`) restricts the solution to a subdomain, injecting the global solution at the cut nodes. **Not re-verified against the current module layout** — `rigid_support.py`'s own docstring flags this call as carried forward unchanged in shape from the previous skeleton, without the source having been checked against the new `BeamModelSettings`/`frame` API. Confirm its call contract before relying on it for a new submodel study.
 
-`SubmodelResult` carries the subdomain bounds `x_lo`/`x_hi`, the grade, the local node list, the displacement vectors per plane, and the cut-node reaction multipliers.
+---
+
+## Torsion
+
+### `TorsionSolver`
+
+`shaft/static_solvers/torsion.py`. Pure statics over the same `x_nodes` the bending/axial solve used — no DOF, no stiffness matrix, no dependency on beam theory. `T(x)` is the cumulative sum of `TorqueLoad` up to `x`; `tau(x) = T(x) / Wt(x)` via `Shaft.Wt_at()`; `phi(x)` is the twist angle, integrated node-to-node from `d(phi)/dx = T(x) / (G·J(x))`, referenced to `phi = 0` at the first node.
+
+```python
+T_total, tau_total, phi_total, contributions = TorsionSolver().solve(shaft_system, x_nodes)
+```
+
+| Member | Purpose |
+|---|---|
+| `solve` | Returns `(T_total, tau_total, phi_total, contributions)`, each a length-`n` array aligned with `x_nodes`. |
+| `validate_equilibrium` | Torsion residual as a list of error strings — renamed from the previous module-level `validate_torsion_equilibrium()`. |
+
+This is a **class now**, not the previous module-level `solve_torsion()`/`validate_torsion_equilibrium()` functions, and it is **not called from `RigidSupportFEMSolver.solve()`** — it is invoked independently by whoever assembles a full result set (`ShaftResultsReader.read()`).
+
+> **Open item — `Shaft.J_at()` is not confirmed to exist.** `_twist_angle()` calls `shaft_system.shaft.J_at(x)`, a polar-second-moment-of-area accessor alongside `diameter_at()`/`W_at()`/`Wt_at()`. This is flagged directly in the module's own docstring rather than assumed: if `Wt_at()` is already `J / r_outer` for both solid and hollow sections, `J_at(x)` could be `Wt_at(x) * diameter_at(x) / 2`, but that relationship has not been confirmed against `Shaft`'s actual source. Until it is, `TorsionSolver.solve()` may raise `AttributeError` on `J_at`.
 
 ---
 
@@ -217,28 +263,28 @@ Distributed loads are integrated by Gauss quadrature whose order is chosen adapt
 
 ### `ShaftResultsReader`
 
-Post-processes a solved `RigidBearingFEMSolver` into a `ShaftResults`. It recovers internal forces, deflections, section properties, bearing reactions and per-bearing node data in one pass.
+`static_solvers/results_reader.py`. Post-processes a solved `RigidSupportFEMSolver` (plus a separately-run `TorsionSolver`) into a `ShaftResults`. It recovers internal forces, deflections, section properties, bearing reactions and per-bearing node data in one pass.
 
 | Member | Purpose |
 |---|---|
-| `read()` | Returns a populated `ShaftResults`. |
+| `read()` | Returns a populated `ShaftResults` — see [`results/README.md`](../results/README.md) for the full field list, including the fields new since the last pass (`u`, `theta_xz`, `theta_xy`, `phi`/`phi_total`/`phi_max`/`x_phi_max`). |
 
-The reader **does not know libraries exist**. It returns the container; storing it under a shaft name is the study layer's job. This is a change from the earlier design, where the reader wrote directly into a registry.
+**Bending/shear recovery now dispatches by theory.** `_recover_internal_forces()` reads `beam_theory` off `solver.elements[0]` (every `Elem` built for one shaft shares the same theory, since it comes from one `BeamModelSettings`) and delegates to `TimoshenkoPostProcessing` or `EulerBernoulliPostProcessing` accordingly. This dispatch **is wired** in `results_reader.py` today — the `TODO(owner)` comments still present inside both `element_theories/timoshenko/postprocessing.py` and `element_theories/euler_bernoulli/postprocessing.py`, which describe this dispatch as not yet decided, are stale relative to `results_reader.py`'s own current code.
 
-Two quantities produced here are easy to conflate and are kept deliberately separate, computed from different arrays:
+### `TimoshenkoPostProcessing` / `EulerBernoulliPostProcessing`
 
-| Quantity | Source | Meaning |
+`fem_solvers/element_theories/{timoshenko,euler_bernoulli}/postprocessing.py`. Internal-effort (`M`, `V`) recovery, split out of `ShaftResultsReader` — one class per beam theory, same method shape on both (`recover_element_displacements`, `bending_moment`, `shear_force`, `recover_internal_forces`, `_sweep_plane`).
+
+| Class | `M(x)` | `V(x)` |
 |---|---|---|
-| Bearing **reactions** (`R_xz`, `R_xy`, `R`, `R_axial`) | the reaction vector | Constraint forces, non-zero only at constrained DOFs |
-| Bearing node **loads** (`Fr_xz`, `Fr_xy`, `Fr`, `Fa`) | the total nodal force vector | Total force at that node |
+| `EulerBernoulliPostProcessing` | `M = E·I · B_b(zeta) @ a^(e)` | Constant within an element (third derivative of a cubic shape function) |
+| `TimoshenkoPostProcessing` | Same form, `B_b` dispatched via `elem.bending_strain_matrix()` | `Q = D_s · B_s(zeta) @ a^(e)`, genuinely a function of `x` when `integration_method="exact"` |
 
-At a bearing node with no other load applied at exactly that position they are numerically close, but they are not the same computed quantity and are not guaranteed identical. Report them separately; do not present one as a check on the other.
-
-**Seat misalignment.** `_psi` computes the shaft centreline slope across the bearing seat width — the gradient of transverse displacement between the seat bounds, falling back to the nodal rotation for a zero-width seat. No second FEM pass is needed. This is the prescribed tilt the ISO/TS 16281 solvers consume, and it is what makes the shaft and bearing analyses one coupled calculation rather than two independent ones.
+Both read `a^(e)` — the element's local 4-DOF nodal displacement vector `[v_a, th_a, v_b, th_b]` — straight from the plane's global displacement vector; axial is decoupled and not part of `a^(e)` here.
 
 ### Stress concentration
 
-`ShaftPostProcessor` enriches a `ShaftResults` with stress concentration factors at shoulders and keyways, producing corrected stress arrays for the fatigue and failure solvers. It performs no FEM and no equilibrium — it consumes an already-solved result.
+`ShaftPostProcessor` (in `static_solvers/postprocessing.py`) enriches a `ShaftResults` with stress concentration factors at shoulders and keyways, producing corrected stress arrays for the fatigue and failure solvers. It performs no FEM and no equilibrium — it consumes an already-solved result.
 
 | Class | Purpose |
 |---|---|
@@ -252,18 +298,13 @@ The stresses in `ShaftResults` are **nominal**. Notch effects live only in `Post
 
 ### `shaft/utils.py`
 
-Stateless helpers, reusable by the fatigue solvers.
-
-| Group | Functions |
-|---|---|
-| Marin factors | Surface finish, size, load type, temperature, reliability (from a percentage or from a standard normal deviate), and the combined corrected endurance limit, which returns every factor alongside the result. |
-| Notch factors | Theoretical shoulder Kt in bending and torsion, the Neuber material constant, notch sensitivity, and the fatigue factor from Kt and q. |
-
-The load-type factor is per load mode; for combined bending and torsion the caller must not apply it to both terms.
+Stateless helpers, reusable by the fatigue solvers: Marin factors (surface finish, size, load type, temperature, reliability) and notch factors (theoretical shoulder `Kt` in bending and torsion, the Neuber material constant, notch sensitivity, and the fatigue factor from `Kt` and `q`).
 
 ---
 
 ## Bearings — ISO/TS 16281, single row
+
+*(unchanged from the previous pass — no evidence found of edits to this branch)*
 
 ### Dispatch
 
@@ -276,126 +317,44 @@ A bearing is matched to a solver by the capabilities its family declares and the
 | `register_contact_solver` | The registration decorator, applied by the two single-row solvers. |
 | `SolverDispatchError` | Raised, naming the offending bearing label, when nothing matches. |
 
-Adding a bearing family therefore requires no edit to any dispatch table.
-
-### Shared utilities
-
-| Module | Contents |
-|---|---|
-| `numerics.py` | Root solve wrapper: a primary algorithm with a fallback, returning the solution, evaluation count, residual norm and success flag. |
-| `validation.py` | Readiness guards — raises, naming the missing attribute, if a bearing has not been fully assembled for the requested solve; warns when a bearing declared floating is carrying axial load. |
-
-Both are duplicated in the multi-row branch rather than shared across it. That is consistent with the vertical-slice rule, at the cost of two copies to keep in step.
-
 ### Ball bearings — point contact
 
 **`ISO16281BallSolver`** — one class covers deep groove, angular contact, and each row of a multi-row thrust ball bearing, since the nominal contact angle is read off the bearing. Prescribed-tilt formulation: per raceway, a two-unknown root solve for radial and axial approach in the plane of the resultant radial force.
-
-| Member | Purpose |
-|---|---|
-| `solve` | Solves every point-contact bearing in the given set against the shaft results library. |
-| `solve_contact` | The two-equation root solve for one raceway — a whole single-row bearing, or one row of a multi-row one. |
-| `elements` | Per-element elastic deflection and effective contact angle for a given approach and tilt. |
-| `minimum_axial_load` | The smallest axial preload at which the contact closes, by bracketing on the axial approach. |
-| `debug_radial_capacity` | Prints per-element capacities for manual cross-check, sourced from the same family call production uses. |
-
-Initial approach values trust a non-negligible FEM hint and fall back to a Hertz-scale estimate otherwise.
-
-**Post-processing.** Every per-element function returns one entry per row.
-
-| Function or class | Purpose |
-|---|---|
-| `Q_j` | Per-element contact force from the converged deflections, `Q_j = c_p · delta_j^1.5`. |
-| `phi_j_global` | Element angular positions in the global frame, wrapped to `[0, 2π)`. |
-| `contact_distribution` | Angle and contact force pairs, in the global or local frame. |
-| `BallBearingStiffness`, `bearing_stiffness` | Secant stiffness decomposed onto the two bending planes and the axis, with a regime label distinguishing `no_load`, `engaged` and `closing_clearance`. |
-| `DynamicEquivalentRollingElementLoad` | Dynamic equivalent load per rolling element for the inner and outer raceway, with the exponent chosen by which ring rotates relative to the load. |
-| `BasicReferenceRatingLife`, `combine_row_L10r`, `basic_reference_rating_life` | Per-row lives and the combined bearing life. |
-| `DynamicEquivalentReferenceLoad` | The reference load corresponding to a computed life, radial and axial. |
-
-Per-element contact forces are **not stored** on the result — they are derived on demand from the converged deflections, so there is one source of truth.
 
 ### Roller bearings — line contact
 
 **`ISO16281RollerSolver`** — the lamina-model solver for radial cylindrical roller bearings: zero nominal contact angle, no axial capacity, each roller sliced into at least thirty laminae and corrected for its logarithmic profile.
 
-| Member | Purpose |
-|---|---|
-| `solve` | Solves every line-contact bearing in the given set. Validates the lamina count and the cached profile length. |
-| `solve_contact` | The one-unknown root solve on radial approach. |
-| `elements` | Per-roller and per-lamina deflection and load for a given approach and tilt. |
-| `debug_radial_capacity` | Prints whole-roller and per-lamina capacities for manual cross-check. |
-
-Only the radial approach is solved. The tilt is an input taken from the FEM shaft slope, and moment equilibrium is evaluated afterwards as a diagnostic rather than as a solve constraint. The reference roller profile is read from the bearing, where it was cached at assembly — the solver never computes it.
-
-**Post-processing.** Same per-row list convention as the ball side.
-
-| Function or class | Purpose |
-|---|---|
-| `Q_j` | Total force per roller, summed over its laminae. |
-| `phi_j_global`, `contact_distribution` | As the ball side. |
-| `lamina_distribution` | Position and load along a single roller — the pressure-profile view, and where edge loading becomes visible. |
-| `RollerBearingStiffness`, `bearing_stiffness` | Secant stiffness in the two bending planes. Axial stiffness is reported as unloaded, which is the physically correct statement for a radial roller bearing. |
-| `stress_riser_factor` | Approximate edge-stress concentration along the roller. Its validity conditions — moderate load, small misalignment, logarithmic profile — are **not** checked. |
-| `LaminaDynamicEquivalentLoad` | Dynamic equivalent load per lamina, both raceways, ISO/TS 16281 §5.3.4 eq. (61)–(64). Compare against the family's per-lamina capacities `q_ci`/`q_ce`, never against the whole-roller `Q_ci`/`Q_ce`. |
-| `BasicReferenceRatingLife`, `combine_row_L10r`, `basic_reference_rating_life`, `DynamicEquivalentReferenceLoad` | As the ball side, with the line-contact exponents. |
-
-Combining reference rating lives into a **modified** rating life is not implemented on either side.
-
 ---
 
 ## Bearings — ISO/TS 16281, multi-row thrust
 
-Multi-row is a genuinely different solve, not a mode of the single-row one: axially stacked rows share one rigid ring, so the ring displacement is a single unknown and each row's reaction is summed against it.
+*(unchanged from the previous pass)*
 
-| Class | Purpose |
-|---|---|
-| `ISO16281MultiRowBallSolverSharedDisplacement` | One root solve on the shared displacement of the rigid ring; each row contributes its own Hertzian reaction. Reaches individual rows through `ISO16281BallSolver.elements`. |
-| `ISO16281MultiRowRollerSolverSharedDisplacement` | The line-contact equivalent, mirroring the ball side. |
-
-A second multi-row formulation based on load-split fractions was tried and is not registered: with negligible axial load and rows of differing stiffness its Jacobian degenerates and it fails to converge. The shared-displacement formulation is the registered one for that reason.
-
-**What "multi-row" does not mean.** For a *radial* bearing — deep groove ball or cylindrical roller — a second row is a plain capacity-rating multiplier on one raceway (ISO 281:2007 Table 1), solved as a single `delta_r` with no rows list and no load split. That case is handled by the single-row solver and the family's own `i`, not here. This package is for **thrust** duty only, where the rows genuinely share a compatibility solve.
-
-The roller multi-row solver has no multi-row roller family in `core/` to run against, so it has not been exercised on a real case.
+Multi-row is a genuinely different solve, not a mode of the single-row one: axially stacked rows share one rigid ring, so the ring displacement is a single unknown and each row's reaction is summed against it. `ISO16281MultiRowBallSolverSharedDisplacement` and its roller equivalent implement this; the roller side has no multi-row roller family in `core/` to run against, so it has not been exercised on a real case.
 
 ---
 
 ## Gears
 
-**`GearSolver`** — cylindrical gear geometry and mesh forces, following ISO 21771 and the MAAG conventions. All methods are pure functions with no internal state.
+*(unchanged from the previous pass)*
 
-| Member | Purpose |
-|---|---|
-| `compute_geometry` | Full pair geometry with optional profile shift: working centre distance from an imposed value or from the involute equation, transverse and base quantities, tip, root and working diameters, base pitch, and the three contact ratios. |
-| `compute_forces` | Tangential, radial, axial, base-tangential and normal forces from the pinion torque, plus the output torque and ratio. |
-| `to_gear_element` | Assembles a `GearElement` for injection into the system pipeline, referenced to the working pitch circle so the torque consistency check holds. |
-
-**`gears/utils.py`** — stateless building blocks: the involute function, the working pressure angle and centre distance from the involute equation, transverse and overlap contact ratios, the minimum tooth count to avoid undercut, input validation, and the standard rack constants.
-
-**`SpurHelicalGears/LoadCapacity_solver/load_capacity.py`** is reserved: the module exists and defines nothing yet. Its data layer — application factor `K_A` and dynamic factor `K_v` by Method B and Method C — is already in [`axisforge/database/`](../core/README.md#database), though those two modules currently import a `core` package path that no longer exists and need repairing before they can be consumed.
+**`GearSolver`** — cylindrical gear geometry and mesh forces, following ISO 21771 and the MAAG conventions. All methods are pure functions with no internal state. `SpurHelicalGears/LoadCapacity_solver/load_capacity.py` remains reserved.
 
 ---
 
 ## Mesh convergence
 
-Grid Convergence Index by Richardson extrapolation on the resultant transverse displacement, across three or more refinement levels. It drives repeated submodel solves, which is why it lives with the solvers rather than with the mesh primitives it refines.
+`solvers/mesh/convergence_solver.py` — **renamed from `mesh_convergence_study.py`**, same classes. Grid Convergence Index by Richardson extrapolation on the resultant transverse displacement, across three or more refinement levels.
 
 | Class | Purpose |
 |---|---|
 | `RichardsonGCI` | For one triplet of coarse, medium and fine solutions: the refinement ratios, the observed order of convergence, the relative errors, the extrapolated value, the two convergence indices and their pass flags. |
-| `ConvergenceRecord` | The refinement history for one interval: levels attempted, metric history, index history, the converged flag, and the final node set. |
-| `MeshRefinementResult` | One record per interval, plus `all_extra_nodes` (the union of every final node set) and `print_report`. |
-| `MeshConvergenceStudy` | The orchestrator. |
+| `ConvergenceRecord` | The refinement history for one interval. |
+| `MeshRefinementResult` | One record per interval, plus `all_extra_nodes`. Its `print_report()` method was removed on its move into `results/` — see the `fixtures/studies/shafts/convergence_studies/` note under [`fixtures/README.md`](../fixtures/README.md), which has not been rebuilt yet. |
+| `MeshConvergenceStudy` | The orchestrator (`run`, `intervals_from_shaft_system`). |
 
-| `MeshConvergenceStudy` member | Purpose |
-|---|---|
-| `run` | Refines each requested interval until the convergence index falls below the threshold or the level cap is reached. |
-| `intervals_from_shaft_system` | Derives the intervals worth refining from the shaft's elements, and reports what was skipped. |
-
-Bearing extents are excluded automatically: displacement there is a prescribed boundary condition, so refining it gains nothing. The default index threshold is 1% with a safety factor of 1.25 and a cap of eight levels. The convergence metric is the mean absolute transverse displacement per plane and its resultant over physically meaningful evaluation points inside the interval.
-
-`all_extra_nodes` is the set to lock into production runs as extra mandatory nodes.
+This solver-level module is now driven, at the fixture layer, by `fixtures/studies/shafts/convergence_studies/convergence_study.py` (`run_convergence`) — but see the open item under [Status](#status): that fixture still calls the pre-rename solver API and does not currently import successfully.
 
 ---
 
@@ -405,18 +364,18 @@ Bearing extents are excluded automatically: displacement there is a prescribed b
 - **No solver imports another solver.** Ball and roller, single-row and multi-row, shaft and bearing: each is a vertical slice. They meet at the dispatcher and at the result containers.
 - **No hidden state.** Every intermediate quantity is a public attribute. A solver exposes its full working for inspection.
 - **One instance per subject.** A solver's published attributes describe the last thing it solved. Re-solving overwrites them.
+- **Beam theory is a construction-time input, never inferred.** `RigidSupportFEMSolver` takes a `BeamModelSettings`; nothing downstream guesses which theory produced a result except by reading `beam_theory` explicitly off the elements.
 - **Capacity belongs to the element.** A solver never carries its own copy of a standard's capacity formula; it calls the family through the bearing.
 - **A failed solve is still a result.** Convergence metadata (`n_iter`, `residual`, `ok`) is stored, never raised away. Checking it is the consumer's responsibility.
-- **Derive, do not duplicate.** Quantities recoverable from the converged solution — per-element contact force, angular positions — are computed on demand, not stored.
-- **Flag, do not silently fix.** A suspected discrepancy against a standard is documented in place. `stress_riser_factor` not checking its own validity conditions is stated here rather than silently guarded.
+- **Flag, do not silently fix.** A suspected discrepancy is documented in place — the `Shaft.J_at()` gap in `TorsionSolver` and the pre-rename call in `convergence_study.py` are stated here rather than silently guessed at or patched over.
 
 ---
 
 ## Extending this package
 
-**Adding a bearing family.** Nothing in this package changes. Declare the family's `CAPABILITIES` and `REQUIRED_FOR` in `core/`; dispatch resolves it from those declarations. If the family needs a contact law neither solver implements, that is a new solver module under the matching branch, registered with `register_contact_solver`.
+**Adding a bearing family.** Nothing in this package changes. Declare the family's `CAPABILITIES` and `REQUIRED_FOR` in `core/`; dispatch resolves it from those declarations.
 
-**Adding a beam theory.** Register it in `StiffnessMatrixBuilder`'s theory registry and add the element module under `mesh/shaft/element_type/`. `euler_bernoulli` is the reserved slot.
+**Adding a beam theory.** Add the element module under `mesh/shaft/element_type/` (see [`mesh/README.md`](../mesh/README.md#extending-this-package)) and extend `Elem`'s own dispatch — this package's solvers do not need to change, since `StiffnessMatrixBuilder` and the postprocessing split are already theory-agnostic at the assembly level and theory-specific only in `element_theories/`.
 
 **Adding a solver.** Place it by the analysis it performs, mirroring the tree under `results/`. Give it its own result container in `results/` — never a local `results.py` in the solver package. Carry `n_iter`, `residual` and `ok` if it iterates. Import no other solver.
 

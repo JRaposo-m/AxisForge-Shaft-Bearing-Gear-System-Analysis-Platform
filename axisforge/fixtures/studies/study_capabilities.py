@@ -50,11 +50,25 @@ requested -- it calls fem_simple.solve_system() directly, with whatever
 theory_a/theory_b the caller passes to run_comparison().
 
 "shaft_fem.convergence.<region>.timoshenko" (3 capabilities: region in
-{gears, external_distributed, total}) each PIN both a `theory` AND a
-`regions` set into convergence_study.run_convergence(), same
+{gears, external_distributed, total}) each PIN both a `beam_theory` AND
+a `regions` set into convergence_study.run_convergence(), same
 functools.partial discipline as shaft_fem.timoshenko_rigid/
 euler_bernoulli_rigid -- the capability string alone determines which
 shaft regions get mesh-refined, never left to a caller-supplied kwarg.
+
+## CHANGED (this pass): `_convergence_require()` used to pin
+## `theory=theory` -- that matched run_convergence()'s OLD signature
+## (a bare `theory: str` kwarg). run_convergence() was rewritten to
+## build its own BeamModelSettings internally and take `beam_theory`
+## (plus caller-supplied `shear_theory`/`integration_method`, passed at
+## each call site, exactly like solve_system() already does for
+## fem_simple's `shear_theory`) -- see convergence_study.py's own
+## CHANGED note. This file's pin is updated to match: `beam_theory=theory`
+## instead of `theory=theory`. This was the actual cause of the
+## TypeError ("run_convergence() got an unexpected keyword argument
+## 'theory'") seen when running check_resolution_fem_convergence_total.py
+## after convergence_study.py was already updated but this file wasn't.
+
 Timoshenko-only for now: euler_bernoulli convergence is not yet
 validated/implemented, so there is no
 "shaft_fem.convergence.<region>.euler_bernoulli" branch here nor a
@@ -268,9 +282,23 @@ class StudyCapabilities:
         functools.partial, exactly like shaft_fem.timoshenko_rigid/
         euler_bernoulli_rigid pin `theory` into fem_simple.solve_system().
 
+        ## CHANGED: the partial below now pins `beam_theory=theory`, not
+        ## `theory=theory` -- run_convergence()'s own `theory` kwarg was
+        ## renamed to `beam_theory` when it was rewritten to build its
+        ## own BeamModelSettings internally (see convergence_study.py).
+        ## This method's own parameter is still named `theory` (its
+        ## three call sites above still pass theory="timoshenko") -- only
+        ## the KEYWORD NAME handed to functools.partial changed, to match
+        ## the callee's renamed parameter. Keeping this method's own
+        ## parameter name as `theory` was a deliberate choice: it mirrors
+        ## the `theory="timoshenko"` pins used two branches up for
+        ## shaft_fem.timoshenko_rigid/euler_bernoulli_rigid, so every
+        ## capability branch in this file reads the same way at the call
+        ## site; only the forwarding target's keyword differs.
+
         `regions` here is always one of {"gears"},
         {"external_distributed"}, or {"gears", "external_distributed"}
-        -- called only from the six branches above, never with
+        -- called only from the three branches above, never with
         "bearings" in it. A bearing interval still represents a rigid
         point reaction rather than the real per-roller load
         distribution (no roller-bearing solver exists yet to resolve
@@ -291,7 +319,7 @@ class StudyCapabilities:
             ConvergenceResultsLibrary,
         )
         return {
-            "run_convergence": partial(run_convergence, theory=theory, regions=regions),
+            "run_convergence": partial(run_convergence, beam_theory=theory, regions=regions),
             "ConvergenceResultsLibrary": ConvergenceResultsLibrary,
         }
 

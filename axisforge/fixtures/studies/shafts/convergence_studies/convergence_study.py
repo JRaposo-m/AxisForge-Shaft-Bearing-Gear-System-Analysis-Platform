@@ -1,117 +1,108 @@
 """
 axisforge/fixtures/studies/shafts/convergence_studies/convergence_study.py
 
-Studies stage: runs a mesh convergence study (MeshConvergenceStudy) for
-every ShaftSystem in a SpurHelicalGearSystem's system.shafts, publishing
-every MeshRefinementResult into one ConvergenceResultsLibrary.
+Studies stage: runs a mesh convergence study for every ShaftSystem in a
+SpurHelicalGearSystem's system.shafts, publishing every
+MeshRefinementResult into one ConvergenceResultsLibrary.
 
-This is convergence_studies/'s "does the work" fixture -- same role
-comparison_study.py plays for fem_studies/, and same role fem_simple.py's
-solve_system() plays for a plain resolution: object assembly already
-happened in Construction, this module performs the real work (here, the
-mesh convergence study itself), not just wiring.
+## CHANGED (this pass, confirmed with erg 2026-09-17): `study_kind="moment"`
+## is REMOVED entirely, along with MomentConvergenceStudy and its
+## MomentConvergenceStudy-only kwargs (min_p/max_p/components). Per erg:
+## "antes tinha posto a criar pontos de analise e assim e agora isso vai
+## ser retirado porque esta abordagem do global gostei mesmo muito" --
+## see convergence_solver.py's own CHANGED note for the full reasoning.
+## This dispatcher now only knows two study kinds:
+##
+##   "displacement" -> MeshConvergenceStudy: per-interval
+##       submodels (gear face widths, distributed-load spans, per
+##       `regions`), tracks v at one fixed point per interval.
+##   "global"        -> run_global_convergence() (global_convergence_study.py):
+##       NO submodels/intervals -- refines the WHOLE shaft mesh and
+##       re-solves RigidSupportFEMSolver from scratch at every grade,
+##       tracking a domain-wide criterion (max/mean/rms/max_minus_mean/
+##       a specific node) instead of per-interval points. This is now
+##       the only way M gets tracked at all in this module -- there is
+##       no more per-interval moment study.
+##
+## `_DEFAULT_GCI_THRESHOLD`/`_DEFAULT_SAFETY_FACTOR` are simplified from
+## per-study_kind dicts down to plain scalars (0.01/1.25), since
+## "displacement" is the only study_kind left that resolves a fallback
+## from them at all.
 
-Guarded on construction exactly like fem_simple.solve_system() and
-comparison_study.run_comparison() -- run_convergence() takes the
-ConstructionCapabilities that built `system` as a second required
-argument and raises ValueError immediately unless
-construction.has_capability("systems.parallel_axis_linear"). Same
-reasoning as those two: without a resolved system (gear-mesh loads +
-shaft positions already present), the FEM baseline this study refines
-around would be solved with zero gear-mesh loads, and every GCI number
-that came out of it would be meaningless.
+## CHANGED (earlier pass): `study_kind: "displacement" | "moment"` kwarg
+## was introduced here (see history above for why "moment" is gone
+## again). `study_kind` remains a CALL-TIME kwarg, not partial-pinned by
+## study_capabilities.py -- same treatment as shear_theory/
+## integration_method already get. study_capabilities.py needs NO
+## changes for this: its "shaft_fem.convergence.<region>.timoshenko"
+## capabilities still pin beam_theory + regions only, exactly as
+## before; study_kind is supplied by the caller at each
+## run_convergence() call.
+##
+## `metrics=`/`global_metrics=` are each only meaningful for their own
+## study_kind. Passing the wrong one for the requested study_kind is a
+## hard error rather than a silent no-op, so a caller doesn't get
+## quietly downgraded to a different behaviour by force of habit.
+##
+## gci_threshold/safety_factor default to None and resolve to the
+## displacement defaults (0.01/1.25) if the caller doesn't override.
+## NOT accepted for study_kind="global" at all (each GlobalMetricSpec
+## already carries its own -- see that class's own docstring in
+## global_convergence_study.py); passing them there is a hard error
+## too, for the same "don't let a caller silently think this had an
+## effect" reasoning.
 
-One fresh RigidBearingFEMSolver AND one fresh MeshConvergenceStudy per
-shaft -- same "one solver instance per shaft" rule fem_simple.py
-documents for itself (solve() overwrites; re-using one instance across
-shafts would silently clobber the previous shaft's global solve, and
-MeshConvergenceStudy holds a reference to whichever global_solver it
-was built with, so reusing the MeshConvergenceStudy instance itself
-across shafts would leave it pointed at the wrong shaft's baseline).
+## CHANGED (earlier pass): new `study_kind="global"` value, dispatching
+## into global_convergence_study.run_global_convergence() -- refines the
+## WHOLE shaft mesh and tracks GCI on a domain-wide criterion (max /
+## mean / rms / max_minus_mean / a specific node -- see
+## GlobalMetricSpec.criterion in global_convergence_study.py) instead
+## of per-interval submodels. Brought into THIS dispatcher (rather than
+## staying a separate entry point) per erg's own framing: "podias
+## colocar aqui que tipo de analise de convergencia... se e global ou
+## nao". `regions` has no effect for study_kind="global" (there are no
+## intervals -- the whole shaft is always the domain) -- left
+## unguarded (not a hard error) since passing it is harmless, unlike
+## `metrics`/`global_metrics` which would silently change semantics if
+## misapplied; `regions` genuinely does nothing either way. New
+## `global_metrics`/`kGA_override` kwargs are only meaningful for
+## study_kind="global"; `kGA_override` is otherwise unused by this
+## dispatcher (the baseline solve for displacement never took it
+## either, before or after this pass -- unchanged).
 
-theory / distribute_gear_labels are applied UNIFORMLY to every shaft's
-global solver, same convention fem_simple.solve_system() already uses
-for its own theory / distribute_gear_labels kwargs -- defaults match
-the only configuration that exists today (RigidBearingFEMSolver(
-theory="timoshenko")). There is no constraint_bearing kwarg here
-either, for the same reason fem_simple.py's own docstring gives: rigid
-supports are this solver's identity, not a mode it selects between.
+Everything else below (the capability guard, the "one instance per
+shaft" rule, intervals_from_shaft_system()'s region gating -- called
+only for study_kind="displacement" now, it lives on MeshConvergenceStudy
+-- the ShaftResultsReader flow for the displacement baseline) is
+UNCHANGED from the previous version.
 
-global_solver.solve(ss) is called WITHOUT extra_mandatory -- this is
-deliberately the coarse/baseline global solve the convergence study
-refines *around*; passing pre-refined nodes into it would defeat the
-point of measuring convergence from a genuine baseline. Per-shaft
-extra_mandatory (the refinement THIS study discovers, e.g. via
-MeshRefinementResult.all_extra_nodes) is consumed downstream by
-fem_simple.solve_system()'s own extra_mandatory dict, once a caller
-decides to re-solve the final resolution mesh with it -- not built
-here, this module only produces the MeshRefinementResult that would
-feed that decision.
-
-intervals_from_shaft_system() builds intervals per shaft fresh for
-every shaft, since two shafts in the same system practically always
-have different gear positions, face widths and bearing spans. It scans
-up to THREE sources -- gear face widths, DistributedRadialLoad spans,
-and bearing extents -- gated by its own `regions` parameter (a subset
-of {"gears", "external_distributed", "bearings"}); this module always
-passes `regions` explicitly and NEVER includes "bearings" -- see
-`regions` below for why. It returns (intervals, skipped): a gear or
-bearing with no width defined (extent < MIN_FACE_WIDTH_FOR_
-CONVERGENCE_MM) is left OUT of `intervals` and instead gets a
-human-readable reason appended to `skipped` (DistributedRadialLoad has
-no such minimum-width skip path -- every one always becomes an
-interval, when "external_distributed" is in `regions`). This function
-does NOT discard `skipped` -- an earlier version of this module did
-(naming it `_labels_order` and throwing it away), which silently
-dropped a machine element out of the whole convergence study with no
-trace; that violates this project's own fail-loud convention (see
-fem_simple.py's own guard-rail reasoning) and has been fixed below:
-every skip reason is surfaced via warnings.warn() per shaft, so an
-operator sees exactly which element was excluded and why, without
-run_convergence()'s return type having to change to carry it.
-
-`regions` is NOT exposed as a free-form kwarg here for public capability
-use -- it is PINNED per capability string in study_capabilities.py's
-own `_require()` (functools.partial(run_convergence, regions=..., ...)),
-same discipline already applied to `theory` there. Today's three
-region sets a caller-facing capability may request are {"gears"},
-{"external_distributed"}, and {"gears", "external_distributed"} (named
-"total" at the capability level) -- "bearings" is deliberately never
-one of them: MeshConvergenceStudy.intervals_from_shaft_system()'s own
-bearing interval still represents a RIGID point reaction, not the real
-load distribution across rolling elements, so a "converged" bearing
-mesh today would only mean the mesh converged around a simplification
-that is itself going to change once a roller-bearing solver exists
-that resolves the per-roller distribution and feeds THAT into the FEM.
-Studying convergence against a physics model that is about to be
-replaced would be misleading, not premature-but-harmless -- so bearing
-convergence is left reachable only by calling
-MeshConvergenceStudy.intervals_from_shaft_system() directly with
-regions={"bearings", ...}, never through run_convergence() or any
-shaft_fem.convergence.* capability, until that future work lands.
-run_convergence() itself still accepts `regions` as a parameter (rather
-than hard-coding the two allowed sets) so that direct callers -- and,
-later, the fixture that will exist once roller-bearing convergence is
-real -- are not blocked structurally; only the capability layer
-enforces today's narrower policy.
-
-print_convergence()/write_convergence_report() (the outputs/ content-
-block module mirroring comparison_report.py's shaft_comparison_block())
-do not exist yet -- MeshRefinementResult.print_report() was removed on
-its move to results/ (see convergence_results.py's own docstring) and
-its replacement has not been built. This module deliberately does not
-reintroduce ad-hoc printing to fill that gap: the loop below only
-solves and stores, matching fem_simple.solve_system()'s own shape
-(no printing there either -- callers print from the library they get
-back, e.g. check_resolution_fem.py's own per-shaft summary lines).
+## RENAMED (2026-09-17): convergence_solver.py's per-interval study
+## class is back to being called plain `MeshConvergenceStudy` -- the
+## "DisplacementConvergenceStudy" name (plus a `MeshConvergenceStudy = ...`
+## back-compat alias underneath it) is gone. See that module's own
+## RENAMED note. This file already imported it as `MeshConvergenceStudy`
+## (the alias) before this pass, so no import-site change was needed
+## here, only the docstring mentions below.
 
 Dependency (solvers + fixtures, read-only access -- no core modification):
-  axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing
-      RigidBearingFEMSolver -- builds each shaft's baseline global solve.
+  axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support
+      RigidSupportFEMSolver -- builds each shaft's baseline global solve
+      (displacement path only -- global_convergence_study.py builds its
+      own, at every grade, not just once).
+  axisforge.solvers.machine_elements.shaft.static_solvers.results_reader
+      ShaftResultsReader -- turns that solve into the ShaftResults the
+      displacement study actually consumes.
   axisforge.solvers.mesh.convergence_solver
-      MeshConvergenceStudy -- does the actual refinement/GCI work.
+      MeshConvergenceStudy -- does the actual refinement/GCI work for
+      study_kind="displacement".
+  axisforge.solvers.mesh.metric_spec
+      MetricSpec -- only meaningful for study_kind="displacement".
+  axisforge.fixtures.studies.shafts.convergence_studies.global_convergence_study
+      GlobalMetricSpec, run_global_convergence -- do the actual
+      refinement/GCI work for study_kind="global".
   axisforge.fixtures.studies.shafts.convergence_studies.convergence_library
-      ConvergenceResultsLibrary -- the result SHAPE this module publishes into.
+      ConvergenceResultsLibrary -- the result SHAPE this module publishes into,
+      shared by both study_kind values.
 """
 
 from __future__ import annotations
@@ -119,12 +110,22 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING
 
+from axisforge.mesh.shaft.beam_model_settings import BeamModelSettings
 from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import (
-    RigidBearingFEMSolver,
+    RigidSupportFEMSolver,
+)
+from axisforge.solvers.machine_elements.shaft.static_solvers.results_reader import (
+    ShaftResultsReader,
 )
 from axisforge.solvers.mesh.convergence_solver import MeshConvergenceStudy
+from axisforge.solvers.mesh.metric_spec import MetricSpec
 from axisforge.fixtures.studies.shafts.convergence_studies.convergence_library import (
     ConvergenceResultsLibrary,
+)
+from axisforge.fixtures.studies.shafts.convergence_studies.global_convergence_study import (
+    DomainSpec,
+    GlobalMetricSpec,
+    run_global_convergence,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -137,87 +138,235 @@ if TYPE_CHECKING:  # pragma: no cover
 
 __all__ = ["run_convergence"]
 
+_STUDY_KINDS = ("displacement", "global")
+
+# Fallback defaults for a "displacement" study whose caller doesn't
+# override gci_threshold/safety_factor -- mirrors
+# MeshConvergenceStudy's own constructor defaults exactly
+# (convergence_solver.py). "global" is NOT covered by these on purpose
+# -- see the guard in run_convergence() below: gci_threshold/
+# safety_factor are rejected outright for study_kind="global" rather
+# than resolving to some invented default, because GlobalMetricSpec
+# already carries its own per-metric thresholds and there is no single
+# scalar that could override "all of them" without silently reshaping
+# the caller's metrics list.
+_DEFAULT_GCI_THRESHOLD = 0.01
+_DEFAULT_SAFETY_FACTOR = 1.25
+
 
 def run_convergence(
     system: "SpurHelicalGearSystem",
     construction: "ConstructionCapabilities",
     library: ConvergenceResultsLibrary | None = None,
     *,
-    theory: str = "timoshenko",
+    beam_theory: str = "timoshenko",
+    shear_theory: str | None = "cowper",
+    integration_method: str | None = "exact",
     regions: "set[str]" = frozenset({"gears", "external_distributed"}),
     distribute_gear_labels: set[str] | None = None,
-    gci_threshold: float = 0.01,
-    safety_factor: float = 1.25,
+    kGA_override: float | None = None,
+    study_kind: str = "displacement",
+    metrics: list[MetricSpec] | None = None,
+    global_metrics: list[GlobalMetricSpec] | None = None,
+    domain: DomainSpec = "full",
+    gci_threshold: float | None = None,
+    safety_factor: float | None = None,
     max_levels: int = 8,
 ) -> ConvergenceResultsLibrary:
     """
-    Run a mesh convergence study on every ShaftSystem in system.shafts
-    (one fresh RigidBearingFEMSolver + one fresh MeshConvergenceStudy per
-    shaft), storing each shaft's MeshRefinementResult in `library`.
+    Run a mesh convergence study on every ShaftSystem in system.shafts,
+    storing each shaft's MeshRefinementResult in `library`. One
+    dispatcher, two study kinds:
+
+      "displacement" -> MeshConvergenceStudy: per-interval
+          submodels (gear face widths, distributed-load spans, per
+          `regions`), tracks v at one fixed point per interval.
+      "global"        -> run_global_convergence() (global_convergence_study.py):
+          NO submodels/intervals -- refines the WHOLE shaft mesh and
+          re-solves RigidSupportFEMSolver from scratch at every grade,
+          tracking a domain-wide criterion (max/mean/rms/
+          max_minus_mean/a specific node -- see
+          GlobalMetricSpec.criterion) instead of per-interval points.
+          This is the only way to track M (moment) convergence in this
+          module -- there is no more per-interval moment study.
 
     Parameters
     ----------
     system : SpurHelicalGearSystem
-        Already built AND resolved (gear-mesh loads + shaft positions
-        already present -- e.g. via build_linear_system()). Purely read
-        here -- this function does not itself resolve or validate it.
+        Already built AND resolved. Purely read here.
     construction : ConstructionCapabilities
-        The request that built `system`. Checked via
-        construction.has_capability("systems.parallel_axis_linear") --
-        raises ValueError immediately if False. See this module's own
-        top docstring for why.
+        Checked via construction.has_capability("systems.parallel_axis_linear").
     library : ConvergenceResultsLibrary | None
-        Reused if given -- re-running a shaft name already present
-        overwrites it (ConvergenceResultsLibrary.store()'s own "fresh
-        solve replaces stale" behaviour). A new, empty library is
-        created if omitted.
-    theory, distribute_gear_labels : RigidBearingFEMSolver constructor
-        kwargs for every shaft's baseline GLOBAL solve, applied
-        uniformly across all shafts in `system`. Defaults match the
-        only configuration that exists today.
+        Reused if given; a new one created if omitted. Shared type
+        across both study_kind values, so a library can be re-passed
+        across calls to accumulate e.g. a "displacement" run and a
+        "global" run for the same system side by side (distinct
+        shaft_name keys don't collide; re-solving the same shaft under
+        a different study_kind DOES overwrite its previous
+        MeshRefinementResult -- one result per shaft per library, same
+        "fresh solve replaces stale" rule as every other Library in
+        this project).
+    beam_theory : "timoshenko" | "euler_bernoulli"
+        Pinned via study_capabilities.py's partial application per
+        capability string -- a direct caller may still pass it
+        explicitly. Applies to both study_kind values.
+    shear_theory, integration_method : passed at call time, exactly
+        like solve_system() -- built into one BeamModelSettings,
+        applied uniformly across every shaft's solve(s), for whichever
+        study_kind is requested.
     regions : set[str]
-        Forwarded verbatim to
-        MeshConvergenceStudy.intervals_from_shaft_system(ss, regions=...)
-        for every shaft. Default {"gears", "external_distributed"} --
-        NOT "bearings"; see this module's own top docstring for why
-        bearings are excluded by default here. A direct caller may still
-        pass regions={"bearings"} (or any other combination) explicitly;
-        only the capability layer (study_capabilities.py) pins this to
-        one of today's three allowed sets per capability string.
-    gci_threshold, safety_factor, max_levels : MeshConvergenceStudy
-        constructor kwargs, applied uniformly across all shafts.
+        Forwarded to MeshConvergenceStudy.intervals_from_shaft_system()
+        for study_kind="displacement" only. Has NO EFFECT for
+        study_kind="global" (there are no intervals -- the whole shaft
+        is always the domain); passing a non-default value there is
+        not an error, it is simply unused. Default
+        {"gears", "external_distributed"} -- NOT "bearings"; see this
+        module's original top docstring for why.
+    distribute_gear_labels, kGA_override : RigidSupportFEMSolver
+        constructor kwargs, applied uniformly across all shafts and
+        both study_kind values (kGA_override reaches the baseline
+        solve for "displacement", and every grade's solve for
+        "global").
+    study_kind : "displacement" | "global"
+        Picks which study actually runs -- see the two-way summary
+        above. Anything else raises ValueError.
+    metrics : list[MetricSpec] | None
+        Forwarded to MeshConvergenceStudy. None -> its own
+        default_displacement_metrics(). Only valid when study_kind=
+        "displacement" -- passing it for study_kind="global" raises
+        ValueError.
+    global_metrics : list[GlobalMetricSpec] | None
+        Forwarded to run_global_convergence(). None -> its own
+        default_global_metrics() (resultant v + resultant M,
+        criterion="max"). Only valid when study_kind="global" --
+        passing it for study_kind="displacement" raises ValueError.
+        Build GlobalMetricSpec instances directly (criterion="mean"/
+        "rms"/"max_minus_mean"/"node", the last with an explicit
+        node_x) for anything beyond the plain "max" default.
+    domain : "full" | "bearing_to_bearing" | (x_lo, x_hi)
+        Only meaningful for study_kind="global" -- forwarded straight
+        to run_global_convergence() (see that function's own docstring
+        in global_convergence_study.py). Must be left at its default
+        ("full") for study_kind="displacement" -- that study has its
+        own domain concept (`regions` + per-interval submodels);
+        passing a non-default `domain` there raises ValueError.
+    gci_threshold, safety_factor : float | None
+        For study_kind="displacement": None (the default) resolves to
+        0.01/1.25. Pass explicitly to override. For study_kind=
+        "global": must be left None -- each GlobalMetricSpec in
+        `global_metrics` already carries its own; passing either here
+        raises ValueError (see this module's own top-of-file CHANGED
+        note for why there is no single sensible override to apply
+        across a whole metrics list).
+    max_levels : maximum grade levels before giving up, applied
+        uniformly across all shafts, for whichever study_kind is
+        requested.
 
     Returns
     -------
     ConvergenceResultsLibrary
-        The same `library` passed in (or a new one), now holding one
-        MeshRefinementResult per shaft in system.shafts, keyed by
-        shaft name.
     """
+    if study_kind not in _STUDY_KINDS:
+        raise ValueError(
+            f"run_convergence: study_kind must be one of {_STUDY_KINDS}, "
+            f"got {study_kind!r}"
+        )
+
+    if study_kind == "global":
+        if metrics is not None:
+            raise ValueError(
+                "run_convergence: metrics= is only accepted with "
+                "study_kind='displacement' -- pass global_metrics= for "
+                "study_kind='global' instead."
+            )
+        if gci_threshold is not None or safety_factor is not None:
+            raise ValueError(
+                "run_convergence: gci_threshold=/safety_factor= are not "
+                "accepted with study_kind='global' -- each GlobalMetricSpec "
+                "in `global_metrics` already carries its own gci_threshold/"
+                "safety_factor (see global_convergence_study.default_global_metrics()); "
+                "there is no single scalar that could override an entire "
+                "metrics list without silently reshaping it. Build "
+                "GlobalMetricSpec instances (or call "
+                "default_global_metrics(v_gci_threshold=..., M_gci_threshold=..., "
+                "...)) with the thresholds you want instead."
+            )
+    else:  # study_kind == "displacement"
+        if global_metrics is not None:
+            raise ValueError(
+                "run_convergence: global_metrics= is only accepted with "
+                "study_kind='global'."
+            )
+        if domain != "full":
+            raise ValueError(
+                "run_convergence: domain= is only accepted with "
+                "study_kind='global' -- study_kind='displacement' has its "
+                "own domain concept (`regions` + per-interval submodels), "
+                "so passing a non-default `domain` here is almost certainly "
+                "a mistake rather than a no-op you intended."
+            )
+
     if not construction.has_capability("systems.parallel_axis_linear"):
         raise ValueError(
             "run_convergence: construction did not request "
             "'systems.parallel_axis_linear' -- the only Construction "
             "capability that resolves the system (gear-mesh loads + "
             "shaft positions) before returning it. Without it, `system` "
-            "cannot be trusted to have been resolved, and the baseline "
-            "global solve this study refines around would be built with "
-            "zero gear-mesh loads."
+            "cannot be trusted to have been resolved, and the solve(s) "
+            "this study refines around would be built with zero "
+            "gear-mesh loads."
         )
 
     library = library if library is not None else ConvergenceResultsLibrary()
 
+    # ------------------------------------------------------------------
+    # study_kind="global" -- no submodels, no baseline solve here at all;
+    # run_global_convergence() builds and solves everything itself, once
+    # per grade per shaft. Dispatch and return early.
+    # ------------------------------------------------------------------
+    if study_kind == "global":
+        return run_global_convergence(
+            system, construction, library,
+            beam_theory=beam_theory,
+            shear_theory=shear_theory,
+            integration_method=integration_method,
+            metrics=global_metrics,
+            domain=domain,
+            max_levels=max_levels,
+            distribute_gear_labels=distribute_gear_labels,
+            kGA_override=kGA_override,
+        )
+
+    # ------------------------------------------------------------------
+    # study_kind="displacement" -- unchanged from the previous version:
+    # one baseline global solve per shaft, then a per-interval submodel
+    # study bounded by it.
+    # ------------------------------------------------------------------
+    resolved_gci = gci_threshold if gci_threshold is not None else _DEFAULT_GCI_THRESHOLD
+    resolved_safety = safety_factor if safety_factor is not None else _DEFAULT_SAFETY_FACTOR
+
+    settings = BeamModelSettings(
+        beam_theory=beam_theory,
+        shear_theory=shear_theory,
+        integration_method=integration_method,
+    )
+
     for ss in system.shafts:
-        global_solver = RigidBearingFEMSolver(
-            theory=theory,
+        global_solver = RigidSupportFEMSolver(
+            settings,
             distribute_gear_labels=distribute_gear_labels,
         )
         global_solver.solve(ss)
 
+        reader = ShaftResultsReader(global_solver, ss)
+        shaft_results = reader.read()
+
         study = MeshConvergenceStudy(
-            global_solver,
-            gci_threshold=gci_threshold,
-            safety_factor=safety_factor,
+            shaft_results,
+            settings,
+            metrics=metrics,
+            gci_threshold=resolved_gci,
+            safety_factor=resolved_safety,
             max_levels=max_levels,
         )
 

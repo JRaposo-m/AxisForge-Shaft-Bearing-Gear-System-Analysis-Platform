@@ -3,31 +3,80 @@ axisforge/solvers/machine_elements/shaft/fem_solvers/sub_models/lagrange_multipl
 
 Submodel solver for Richardson GCI convergence study.
 
-Wraps RigidBearingFEMSolver and restricts metric evaluation to a
-subdomain [x_lo, x_hi] — typically the extent of a distributed
-radial load. The full shaft_system is solved; only the extraction
-of metric values is localised to the subdomain.
+Restricts a solve to a subdomain [x_lo, x_hi], with the global solution
+injected as prescribed displacement BCs at the two cut nodes via
+Lagrange multipliers. Used exclusively by MeshConvergenceStudy -- not
+part of the production solve pipeline.
 
-Used exclusively by MeshConvergenceStudy — not part of the
-production solve pipeline.
+## CHANGED (this pass), per solvers/README.md's own design contract
+## ("No solver imports another solver... they meet only at the
+## dispatcher and at the result containers"):
+##
+##   - solve() now takes `shaft_results: ShaftResults` instead of
+##     `global_solver: RigidSupportFEMSolver`. RigidSupportFEMSolver is
+##     no longer imported here at all -- BC data comes from
+##     ShaftResults' own d_total_xz/d_total_xy/f_xz_total/f_xy_total
+##     fields, via the free function extract_submodel_values()
+##     (constraints/submodel_extraction.py), not a solver method.
+##   - solve() also takes `settings: BeamModelSettings` explicitly
+##     (was: reached through global_solver._settings) -- Elem.from_x_nodes()
+##     needs it to build submodel elements with the right beam theory.
+##   - `_build_submodel_stiffness` (manual element-by-element loop using
+##     StiffnessMatrixBuilder._element_stiffness_6x6, which does not
+##     exist in the current assembly API) is REPLACED by
+##     StiffnessMatrixBuilder(mesh_sub, elements, frame=True).build(),
+##     the same builder rigid_support.py itself uses. No manual
+##     "skip elements outside [x_lo,x_hi]" check needed anymore --
+##     elements are already built only from x_nodes_sub, so there are
+##     no out-of-range elements to skip.
+##   - `_assemble_load_vector`/`_assemble_distributed_load_vector`
+##     (custom inline Gauss-quadrature code, duplicating logic that now
+##     lives in assembly/load_assembly/) are REPLACED by
+##     assemble_point_load_vector()/assemble_distributed_load_vector()
+##     + QuadratureOrderEstimator, the same calls rigid_support.py's
+##     own solve() makes.
+##   - `_build_submodel_load_cases` is KEPT, not replaced by
+##     build_load_cases() (assembly/load_assembly/vector_external_forces.py)
+##     -- that function has no concept of a subdomain; filtering loads
+##     to [x_lo, x_hi] and clamping distributed-load spans to it is
+##     genuinely submodel-specific restriction logic, not a duplicate
+##     of anything in assembly/. It already returns cases in the exact
+##     shape assemble_point_load_vector()/assemble_distributed_load_vector()
+##     expect, unchanged.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Callable, TYPE_CHECKING
 
 import numpy as np
-from typing import Callable
 
-
-from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidSupportFEMSolver
-from axisforge.solvers.machine_elements.shaft.static_solvers.results_reader import ShaftResultsReader
+from axisforge.mesh.shaft.beam_model_settings import BeamModelSettings
 from axisforge.mesh.shaft.element_type.elem import Elem
 from axisforge.mesh.shaft.mesh_generation.mesh_1D import Mesh1D
-from axisforge.solvers.machine_elements.shaft.fem_solvers.assembly.build_stiffness_matrix import StiffnessMatrixBuilder
+from axisforge.mesh.shaft.mesh_generation.mesh_grade import Grader
 from axisforge.config import SOLVER_TOLERANCE
 from axisforge.core.loads import LoadPlane
-from axisforge.mesh.shaft.mesh_generation.mesh_grade import Grader
+
+from axisforge.solvers.machine_elements.shaft.fem_solvers.assembly.build_stiffness_matrix import (
+    StiffnessMatrixBuilder,
+)
+from axisforge.solvers.machine_elements.shaft.fem_solvers.assembly.load_assembly.point_loads import (
+    assemble_point_load_vector,
+)
+from axisforge.solvers.machine_elements.shaft.fem_solvers.assembly.load_assembly.distributed_loads import (
+    assemble_distributed_load_vector,
+)
+from axisforge.solvers.machine_elements.shaft.fem_solvers.assembly.numerics.gauss_quadrature import (
+    QuadratureOrderEstimator,
+)
+from axisforge.solvers.machine_elements.shaft.fem_solvers.constraints.submodel_extraction import (
+    extract_submodel_values,
+)
+
+if TYPE_CHECKING:  # pragma: no cover
+    from axisforge.results.fem_results.shaft_results import ShaftResults
 
 
 # ===========================================================================
@@ -35,8 +84,10 @@ from axisforge.mesh.shaft.mesh_generation.mesh_grade import Grader
 # ===========================================================================
 
 @dataclass
-class SubmodelResult:
-    """Full solution of the submodel within [x_lo, x_hi]."""
+class SubmodelSolution:
+    """Raw solve output for the submodel within [x_lo, x_hi] -- pre-postprocessing.
+    See SubmodelResult in results/fem_results/submodel_results.py for the
+    postprocessed, metric-bearing shape built FROM this one."""
 
     x_lo: float
     x_hi: float
@@ -58,6 +109,12 @@ class SubmodelResult:
     lam_xy: np.ndarray
     """Lagrange multipliers — XY plane (reaction forces at cut nodes)."""
 
+    elements: list[Elem] = field(default_factory=list)
+    """Local element list for this grade's subdomain mesh (same objects
+    used to build K_sub). Required by any post-hoc postprocessing call
+    (TimoshenkoPostProcessing.bending_moment()/shear_force()) that needs
+    element geometry/rigidity plus a reconstructable a_e -- d_xz/d_xy
+    alone are not enough for that."""
 
 
 # ===========================================================================
@@ -66,129 +123,180 @@ class SubmodelResult:
 
 class _SubdomainMesh(Mesh1D):
     """
-    Mesh1D sintética para o subdomínio [x_lo, x_hi].
-    Bypassa _create_mesh — usa os nós já filtrados directamente.
-    Usada exclusivamente pelo SubmodelSolver.
+    Synthetic Mesh1D for the subdomain [x_lo, x_hi]. Bypasses
+    _create_mesh -- uses the already-filtered nodes directly. Used
+    exclusively by SubmodelSolver.
     """
     def __init__(self, shaft_system, x_nodes_sub: list[float]):
         super().__init__(shaft_system)
-        self._x_nodes = x_nodes_sub   # injeta directamente, sem recalcular
+        self._x_nodes = x_nodes_sub
+
 
 class SubmodelSolver:
     """
-    Solves the full shaft_system and extracts metric values
-    restricted to the subdomain [x_lo, x_hi].
-
-    Parameters
-    ----------
-    theory  : FEM theory string forwarded to RigidBearingFEMSolver
-    metric  : quantity to extract — "sigma_b" | "M_max" | "l2_M"
+    Solves a subdomain [x_lo, x_hi] of shaft_system, with the global
+    solution (given as a ShaftResults) injected as prescribed
+    displacement BCs at the two cut nodes.
     """
-    def __init__(self,
-                 x_lo: float,
-                 x_hi: float):
-
+    def __init__(self, x_lo: float, x_hi: float):
         self._x_lo = x_lo
         self._x_hi = x_hi
 
     def solve(self,
-              global_solver: RigidSupportFEMSolver,
+              shaft_results: "ShaftResults",
               shaft_system,
-              grade: str) -> SubmodelResult:
+              settings: BeamModelSettings,
+              grade: str,
+              *,
+              kGA_override: float | None = None) -> SubmodelSolution:
 
         x_lo = self._x_lo
         x_hi = self._x_hi
-        # 1. verifica que o global_solver já foi corrido
-        if global_solver.d_total_xz is None:
+
+        # 1. shaft_results must already be a solved result, not a fresh/empty one
+        if shaft_results.d_total_xz is None or len(shaft_results.d_total_xz) == 0:
             raise RuntimeError(
-                "SubmodelSolver.solve() requires a solved RigidBearingFEMSolver. "
-                "Call global_solver.solve(shaft_system) first."
+                "SubmodelSolver.solve() requires an already-solved ShaftResults "
+                "(shaft_results.d_total_xz is empty/None). Run RigidSupportFEMSolver "
+                "+ ShaftResultsReader (or equivalent) first, and pass the result here "
+                "-- SubmodelSolver never solves the global model itself."
             )
 
-        # 2. extrai BCs dos nós de corte via return_values
-        bc_data = global_solver.return_values(global_solver.x_nodes, [x_lo, x_hi])
+        # 2. BC data at the cut nodes, via the free extraction function --
+        #    not a solver method (see module docstring)
+        bc_data = extract_submodel_values(
+            shaft_results.x_nodes, [x_lo, x_hi],
+            shaft_results.d_total_xz, shaft_results.d_total_xy,
+            shaft_results.f_xz_total, shaft_results.f_xy_total,
+        )
 
-        # 3. grade -> nós candidatos dentro do subdomínio
-        grader     = Grader(x_lo, x_hi, global_solver.x_nodes)
+        # 3. grade -> candidate nodes within the subdomain
+        grader     = Grader(x_lo, x_hi, shaft_results.x_nodes)
         candidates = grader.get_grade(grade)
 
-        # 4. malha global com os candidatos extra (garante que estão na malha)
+        # 4. global mesh with the extra candidates (ensures they land on the mesh)
         mesh_full = Mesh1D(shaft_system, extra_mandatory=candidates)
 
-        # 5. filtrar apenas os nós do subdomínio — dimensão correcta para K_sub
+        # 5. filter to the subdomain's own nodes
         x_nodes_sub = [
             x for x in mesh_full.x_nodes
             if x_lo - SOLVER_TOLERANCE <= x <= x_hi + SOLVER_TOLERANCE
         ]
 
-        # 6. malha sintética do subdomínio — Elem.from_mesh lê shaft_system correctamente
-        mesh_sub = _SubdomainMesh(shaft_system, x_nodes_sub)
-        x_nodes  = mesh_sub.x_nodes        # == x_nodes_sub
-        elements = Elem.from_x_nodes(x_nodes_sub, shaft_system, global_solver._settings)
-
-        # K_sub agora tem dimensão 3 * len(x_nodes_sub) — sem linhas/colunas a zero
-        builder = global_solver._builder
-        K_sub   = self._build_submodel_stiffness(mesh_sub, elements, builder)
-
-        # --- force vectors ---
+        # ## CHANGED (was: x_lo/x_hi only): force-keep every HARD point
+        # this solve actually needs as an exact node, regardless of what
+        # Mesh1D's dedupe (MESH_MIN_NODE_DIST_MM merge in _create_mesh)
+        # did to it. At deep grades a Grader-bisection candidate can
+        # land closer than MESH_MIN_NODE_DIST_MM to one of these; Mesh1D's
+        # merge then silently drops whichever point sorted second. First
+        # caught this for x_lo/x_hi themselves (_build_constraint_matrix's
+        # Lagrange-multiplier BC attachment needs them); this run
+        # surfaced the SAME class of bug for a point load position
+        # (assemble_point_load_vector's Elem.find_node_index -- e.g. a
+        # gear-mesh radial load sitting exactly at the gear's own
+        # position). Both come from the same root cause, so both are
+        # fixed the same way here: gather every position
+        # _build_submodel_load_cases()/assemble_point_load_vector()/
+        # _build_constraint_matrix() will look up by exact coordinate
+        # (x_lo, x_hi, and every radial/axial/moment load position and
+        # clamped distributed-load edge within [x_lo, x_hi]) and force
+        # each one to survive the filter above. Not fixing this in
+        # Mesh1D itself: that dedupe is shared by the whole codebase,
+        # and it has no way to know which of its inputs are "hard"
+        # points a downstream lookup will require exactly vs soft
+        # refinement candidates -- only this caller does.
         load_cases = self._build_submodel_load_cases(shaft_system)
+        hard_points: set[float] = {x_lo, x_hi}
+        for lc in load_cases:
+            for x, _ in lc.get("radial_xz", []):
+                hard_points.add(x)
+            for x, _ in lc.get("radial_xy", []):
+                hard_points.add(x)
+            for x, _ in lc.get("axial", []):
+                hard_points.add(x)
+            for x, _ in lc.get("moments_xz", []):
+                hard_points.add(x)
+            for x, _ in lc.get("moments_xy", []):
+                hard_points.add(x)
+            for dl in lc.get("distributed_xz", []):
+                hard_points.add(dl["x_lo"])
+                hard_points.add(dl["x_hi"])
+            for dl in lc.get("distributed_xy", []):
+                hard_points.add(dl["x_lo"])
+                hard_points.add(dl["x_hi"])
+
+        for x_hard in hard_points:
+            if not any(abs(x - x_hard) <= SOLVER_TOLERANCE for x in x_nodes_sub):
+                x_nodes_sub.append(x_hard)
+        x_nodes_sub = sorted(set(x_nodes_sub))
+
+        # 6. synthetic subdomain mesh + its own elements (settings passed
+        #    explicitly now -- no more global_solver._settings reach-through)
+        mesh_sub = _SubdomainMesh(shaft_system, x_nodes_sub)
+        x_nodes  = mesh_sub.x_nodes
+        elements = Elem.from_x_nodes(x_nodes_sub, shaft_system, settings)
+
+        # K_sub via the real builder -- no manual element loop, no
+        # out-of-range skip needed (elements are already submodel-only)
+        K_sub = StiffnessMatrixBuilder(mesh_sub, elements, frame=True).build(
+            kGA_override=kGA_override,
+        )
+
+        # --- force vectors, via the real assembly primitives ---
+        # load_cases already built above (step 5) to determine hard
+        # points -- reused here as-is, not rebuilt.
+        estimator  = QuadratureOrderEstimator(settings.beam_theory)
 
         n_dofs = 3 * len(x_nodes)
         f_xz   = np.zeros(n_dofs)
         f_xy   = np.zeros(n_dofs)
 
         for lc in load_cases:
-            f_xz += self._assemble_load_vector(
-                x_nodes, lc["radial_xz"], lc["axial"], lc["moments_xz"]
+            f_xz += assemble_point_load_vector(
+                x_nodes, lc["radial_xz"], lc["axial"], lc["moments_xz"],
             )
-            f_xy += self._assemble_load_vector(
-                x_nodes, lc["radial_xy"], [], lc["moments_xy"]
+            f_xy += assemble_point_load_vector(
+                x_nodes, lc["radial_xy"], [], lc["moments_xy"],
             )
 
             if lc.get("distributed_xz"):
-                for d in lc["distributed_xz"]:
-                    f_xz += self._assemble_distributed_load_vector(
-                        x_nodes, elements, d["x_lo"], d["x_hi"], d["q"],
-                        builder, theta_fn=d.get("theta_fn")
-                    )
-
+                f_xz += assemble_distributed_load_vector(
+                    x_nodes, elements, lc["distributed_xz"], estimator,
+                )
             if lc.get("distributed_xy"):
-                for d in lc["distributed_xy"]:
-                    f_xy += self._assemble_distributed_load_vector(
-                        x_nodes, elements, d["x_lo"], d["x_hi"], d["q"],
-                        builder, theta_fn=d.get("theta_fn")
-                    )
-
+                f_xy += assemble_distributed_load_vector(
+                    x_nodes, elements, lc["distributed_xy"], estimator,
+                )
 
         # --- constraint matrix and prescribed vectors ---
         C, p_dofs = self._build_constraint_matrix(x_nodes)
         q_xz, q_xy = self._build_prescribed_vectors(x_nodes, bc_data)
 
-        n   = n_dofs          # 9
-        n_c = C.shape[0]      # 6
+        n   = n_dofs
+        n_c = C.shape[0]
 
-        K_aug = np.zeros((n + n_c, n + n_c))   # (15, 15)
-        K_aug[:n, :n] = K_sub                  # (9, 9)
-        K_aug[:n, n:] = C.T                    # (9, 6)
-        K_aug[n:, :n] = C                      # (6, 9)
+        K_aug = np.zeros((n + n_c, n + n_c))
+        K_aug[:n, :n] = K_sub
+        K_aug[:n, n:] = C.T
+        K_aug[n:, :n] = C
 
-        rhs_xz = np.zeros(n + n_c)             # (15,)
+        rhs_xz = np.zeros(n + n_c)
         rhs_xz[:n] = f_xz
-        rhs_xz[n:] = q_xz                      # q_xz deve ser (6,)
+        rhs_xz[n:] = q_xz
 
         rhs_xy = np.zeros(n + n_c)
         rhs_xy[:n] = f_xy
-        rhs_xy[n:] = q_xy                      # q_xy deve ser (6,)
+        rhs_xy[n:] = q_xy
 
         sol_xz = np.linalg.solve(K_aug, rhs_xz)
         sol_xy = np.linalg.solve(K_aug, rhs_xy)
 
         d_xz   = sol_xz[:n]
         d_xy   = sol_xy[:n]
-        lam_xz = sol_xz[n:]   # (6,)
-        lam_xy = sol_xy[n:]   # (6,)
+        lam_xz = sol_xz[n:]
+        lam_xy = sol_xy[n:]
 
-        return SubmodelResult(
+        return SubmodelSolution(
             x_lo=self._x_lo,
             x_hi=self._x_hi,
             grade=grade,
@@ -197,56 +305,16 @@ class SubmodelSolver:
             d_xy=d_xy,
             lam_xz=lam_xz,
             lam_xy=lam_xy,
+            elements=elements,
         )
 
     # ------------------------------------------------------------------
-    # Stiffness matrix for the submodel
-    # ------------------------------------------------------------------
-
-    def _build_submodel_stiffness(self,
-                                  mesh: Mesh1D,
-                                  elements: list[Elem],
-                                  builder: StiffnessMatrixBuilder) -> np.ndarray:
-        """
-        Assemble stiffness matrix for elements within [x_lo, x_hi] only.
-        Node indices are local to the submodel mesh.
-        """
-        n_dofs = 3 * mesh.n_nodes
-        K = np.zeros((n_dofs, n_dofs))
-        
-
-        for elem in elements:
-            x_a = mesh.x_nodes[elem.idx_node_1]
-            x_b = mesh.x_nodes[elem.idx_node_2]
-
-            if x_b <= self._x_lo or x_a >= self._x_hi:
-                continue
-
-            K_elem = StiffnessMatrixBuilder._element_stiffness_6x6(elem)
-            dofs = [
-                3 * elem.idx_node_1,
-                3 * elem.idx_node_1 + 1,
-                3 * elem.idx_node_1 + 2,
-                3 * elem.idx_node_2,
-                3 * elem.idx_node_2 + 1,
-                3 * elem.idx_node_2 + 2,
-            ]
-            for i, gi in enumerate(dofs):
-                for j, gj in enumerate(dofs):
-                    K[gi, gj] += K_elem[i, j]
-
-        return K
-
-    # ------------------------------------------------------------------
-    # Load-case construction (decomposes RadialLoad/ExternalMoment by plane)
+    # Load-case construction (submodel-specific: filters + clamps to
+    # [x_lo, x_hi]; NOT a duplicate of build_load_cases() -- see module
+    # docstring) -- unchanged from the previous draft.
     # ------------------------------------------------------------------
 
     def _build_submodel_load_cases(self, shaft_system) -> list[dict]:
-        """
-        Same as RigidBearingFEMSolver._build_load_cases but filtered to
-        loads within [x_lo, x_hi]. Distributed loads are clamped
-        to the subdomain bounds.
-        """
         cases: list[dict] = []
 
         for ld in shaft_system.radial_loads:
@@ -314,71 +382,8 @@ class SubmodelSolver:
         return cases
 
     # ------------------------------------------------------------------
-    # Load vector assembly (u, v, theta per node)
-    # ------------------------------------------------------------------
-
-    def _assemble_distributed_load_vector(
-        self,
-        x_nodes: list[float],
-        elements: list[Elem],
-        x_lo: float,
-        x_hi: float,
-        q: Callable[[float], float],
-        builder: StiffnessMatrixBuilder,
-        theta_fn: Callable[[float], float] | None = None) -> np.ndarray:
-
-        beam = builder.beam
-        f    = np.zeros(3 * len(x_nodes))
-
-        for elem in elements:
-            x_a = x_nodes[elem.idx_node_1]
-            x_b = x_nodes[elem.idx_node_2]
-
-            if x_b <= x_lo or x_a >= x_hi:
-                continue
-
-            x_lo_elem = max(x_a, x_lo)
-            x_hi_elem = min(x_b, x_hi)
-
-            x_map  = beam.global_to_natural_radial(x_lo_elem, x_hi_elem, elem)
-            q_zeta = beam.vetor_global_to_natural(q, x_map)
-            J      = beam.jacobian(elem)
-
-            n_gauss = beam.gauss_order(q, x_lo_elem, x_hi_elem, elem, theta_fn=theta_fn)
-            gauss_pts, gauss_wts = beam.gauss_quadrature(n_gauss)
-
-            f_elem = np.zeros(6)
-            for xi, w in zip(gauss_pts, gauss_wts):
-                N = beam.shape_functions(xi, elem)
-                f_elem[1] += N[1] * q_zeta(xi) * J * w
-                f_elem[4] += N[4] * q_zeta(xi) * J * w
-
-            f[3 * elem.idx_node_1 + 1] += f_elem[1]
-            f[3 * elem.idx_node_2 + 1] += f_elem[4]
-
-        return f
-
-    def _assemble_load_vector(
-        self,
-        x_nodes: list[float],
-        radial: list,
-        axial: list,
-        moments: list) -> np.ndarray:
-
-        f = np.zeros(3 * len(x_nodes))
-        for x, mag in axial:
-            i = Elem.find_node_index(x_nodes, x)
-            f[3 * i] += mag
-        for x, mag in radial:
-            i = Elem.find_node_index(x_nodes, x)
-            f[3 * i + 1] += mag
-        for x, mag in moments:
-            i = Elem.find_node_index(x_nodes, x)
-            f[3 * i + 2] += mag
-        return f
-
-    # ------------------------------------------------------------------
-    # Constraints definitions
+    # Constraints (Lagrange multipliers at the two cut nodes) --
+    # unchanged from the previous draft.
     # ------------------------------------------------------------------
 
     def _build_constraint_matrix(
@@ -394,10 +399,10 @@ class SubmodelSolver:
         p_dofs = [
             3 * i_lo,      3 * i_lo + 1,  3 * i_lo + 2,
             3 * i_hi,      3 * i_hi + 1,  3 * i_hi + 2,
-        ]                                          # sempre 6
+        ]
 
-        n_c = len(p_dofs)                          # = 6
-        C = np.zeros((n_c, n_dofs))               # (6, 9) para grade_0
+        n_c = len(p_dofs)
+        C = np.zeros((n_c, n_dofs))
         for row, dof in enumerate(p_dofs):
             C[row, dof] = 1.0
 
@@ -408,9 +413,6 @@ class SubmodelSolver:
         x_nodes: list[float],
         bc_data: dict,
     ) -> tuple[np.ndarray, np.ndarray]:
-
-        i_lo = Elem.find_node_index(x_nodes, self._x_lo)
-        i_hi = Elem.find_node_index(x_nodes, self._x_hi)
 
         q_xz = np.array([
             bc_data[self._x_lo]["u"],

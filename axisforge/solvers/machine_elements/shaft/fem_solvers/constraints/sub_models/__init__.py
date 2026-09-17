@@ -6,10 +6,10 @@ axisforge/solvers/shaft/fem_solvers/sub_models/__init__.py
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-__all__ = ["SubmodelResult", "SubmodelSolver", ]
+__all__ = ["SubmodelSolution", "SubmodelSolver", ]
 
 _LAZY = {
-    "SubmodelResult": ".lagrange_multipliers",
+    "SubmodelSolution": ".lagrange_multipliers",
     "SubmodelSolver": ".lagrange_multipliers",
 }
 
@@ -26,5 +26,5 @@ def __dir__():
     return sorted(list(globals().keys()) + list(_LAZY.keys()))
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .lagrange_multipliers import SubmodelResult, SubmodelSolver
+    from .lagrange_multipliers import SubmodelSolution, SubmodelSolver
 

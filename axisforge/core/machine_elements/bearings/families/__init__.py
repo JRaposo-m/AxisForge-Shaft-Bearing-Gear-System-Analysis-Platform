@@ -1,50 +1,60 @@
-# families/__init__.py  (ROLLUP de ball_bearing + roller_bearing — a base para a seleção)
+# families/__init__.py  (rollup — fonte de verdade é o _FAMILY_REGISTRY em family.py)
 """
 axisforge/core/machine_elements/bearings/families/__init__.py
 
-Roll-up de todas as BearingFamily disponiveis (ball_bearing/ e
-roller_bearing/, cada um radial+thrust por baixo). E' a partir daqui que
-bearing.py e' capaz de listar/selecionar familias, e mais tarde de onde
-um capabilities.py para bearings vai ler -- nunca ao contrario.
+Rollup de todas as BearingFamily concretas registadas via @register_family
+em family.py. E' a partir daqui que bearing.py lista/seleciona familias, e
+de onde um capabilities.py para bearings vai ler.
 
-Lazy-loaded: nunca importa os .py finais diretamente, reencaminha
-sempre para o __init__.py do subpacote (rollup em cascata).
+Lazy no primeiro acesso: nada e' importado ate' o primeiro
+`families.<Nome>` (ou `available_families()`); a partir dai o registo
+(_FAMILY_REGISTRY, populado pelo decorator @register_family a correr) e'
+a fonte de verdade -- nao ha' lista nome->submodulo a manter a mao, logo
+nao ha' como desalinhar (ver nota se separares em ball_bearing.py /
+roller_bearing.py: atualiza _SUBMODULES).
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-__all__ = [
-    "DeepGrooveBallFamily", "AngularContactFamily", "SelfAligningBallFamily",
-    "MultiRowThrustBallFamily", "SingleRowThrustBallFamily",
-    "CylindricalRollerFamily",
-    "ThrustCylindricalRollerFamily", "ThrustNeedleRollerFamily",
-    "MultiRowThrustCylindricalRollerFamily",
-]
+_SUBMODULES = (".family",)  # TODO: trocar para (".ball_bearing", ".roller_bearing") se/quando separares o ficheiro
+_loaded = False
 
-_LAZY = {
-    "DeepGrooveBallFamily": ".ball_bearing",
-    "AngularContactFamily": ".ball_bearing",
-    "SelfAligningBallFamily": ".ball_bearing",
-    "MultiRowThrustBallFamily": ".ball_bearing",
-    "SingleRowThrustBallFamily": ".ball_bearing",
-    "CylindricalRollerFamily": ".roller_bearing",
-    "ThrustCylindricalRollerFamily": ".roller_bearing",
-    "ThrustNeedleRollerFamily": ".roller_bearing",
-    "MultiRowThrustCylindricalRollerFamily": ".roller_bearing",
-}
+
+def _ensure_loaded() -> dict[str, type]:
+    global _loaded
+    if not _loaded:
+        import importlib
+        for mod in _SUBMODULES:
+            importlib.import_module(mod, __name__)
+        _loaded = True
+    from .family import _FAMILY_REGISTRY
+    return _FAMILY_REGISTRY
+
 
 def __getattr__(name: str):
-    if name in _LAZY:
-        import importlib
-        module = importlib.import_module(_LAZY[name], __name__)
-        value = getattr(module, name)
+    registry = _ensure_loaded()
+    if name in registry:
+        value = registry[name]
         globals()[name] = value
         return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-def __dir__():
-    return sorted(list(globals().keys()) + list(_LAZY.keys()))
 
-if TYPE_CHECKING:  # pragma: no cover
-    from .ball_bearing import DeepGrooveBallFamily, AngularContactFamily, SelfAligningBallFamily, MultiRowThrustBallFamily, SingleRowThrustBallFamily
-    from .roller_bearing import CylindricalRollerFamily, ThrustCylindricalRollerFamily, ThrustNeedleRollerFamily, MultiRowThrustCylindricalRollerFamily
+def __dir__():
+    return sorted(set(globals()) | set(_ensure_loaded()))
+
+
+def available_families() -> dict[str, type]:
+    """Nome -> classe BearingFamily, para quem precisar de listar/selecionar
+    sem já saber os nomes de antemão (ex.: capabilities.py, uma UI de
+    seleção de catálogo). Dispara o import na primeira chamada."""
+    return dict(_ensure_loaded())
+
+
+if TYPE_CHECKING:  # pragma: no cover -- só para autocomplete/type checkers, não corre
+    from .family import (
+        DeepGrooveBallFamily, AngularContactFamily, SelfAligningBallFamily,
+        ThrustBallSingleRowFamily, ThrustBallMultiRowFamily,
+        CylindricalRollerFamily, ThrustCylindricalRollerFamily,
+        RollerThrustMultiRowFamily,
+    )

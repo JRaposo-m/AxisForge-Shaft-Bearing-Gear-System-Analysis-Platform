@@ -56,7 +56,7 @@ class BearingFamily(ABC):
 
     @staticmethod
     @abstractmethod
-    def per_element_dynamic_capacity(bearing, Cr: float | None = None) -> tuple[float, float]: ...
+    def per_element_dynamic_capacity(bearing, capacity: float | None = None) -> tuple[float, float]: ...
 
 
 
@@ -283,11 +283,16 @@ class ThrustBallSingleRowFamily(BearingFamily):
     }
     RI_OVER_DW = 0.535
     RE_OVER_DW = 0.535
-    REDUCTION_FACTOR = 0.90   # thrust single-row: sem redução (ver nota acima -- confirmar valor com a norma)
+    LAM = 0.90   # thrust single-row
 
     @property
     def name(self) -> str:
-        return "thrust_ball"
+        return "thrust_ball_single_row"
+
+    @staticmethod
+    def eta(alpha_0: float) -> float:
+        """Reduction factor eta for Formula (18)-(20)/(23)-(25). alpha_0 in radians."""
+        return 1.0 - np.sin(alpha_0) / 3.0
 
     @classmethod
     def reference_raceway_radii(cls, Dw: float) -> tuple[float, float]:
@@ -311,38 +316,43 @@ class ThrustBallSingleRowFamily(BearingFamily):
             alpha_0, s = bc.contact_angle_and_clearance(A, alpha_0_deg=alpha_0_deg)
 
         stiff = bc.PointContactStiffness(Dw, ri, re, E, nu, alpha_0, Dpw)
+        eta = self.eta(alpha_0)
+        g = stiff.gamma
+        Ri = stiff.raceway_contact_radius
+        cp = stiff.stiffness
 
         phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
         return dict(bearing_type=self.BEARING_TYPE, ri=ri, re=re, Dw=Dw, Dpw=Dpw,
-                    Z=Z, s=s, E=E, nu=nu, A=A, alpha_0=alpha_0, Ri=stiff.raceway_contact_radius,
-                    phi_j=phi_j, gamma=stiff.gamma, cp=stiff.stiffness,
-                    raceway_radii_from_reference=True, reduction_factor=self.REDUCTION_FACTOR)
+                    Z=Z, s=s, E=E, nu=nu, A=A, alpha_0=alpha_0, eta=eta, Ri=Ri,
+                    phi_j=phi_j, gamma=g, cp=cp,
+                    raceway_radii_from_reference=True, lam=self.LAM)
 
     @staticmethod
-    def _capacity_class(alpha_0: float) -> type[bcap.CapacityCalculator]:
+    def _capacity_class(alpha_0: float) -> type[bcap.ThrustCapacityCalculator]:
         if np.isclose(alpha_0, np.pi / 2):
             return bcap.PointContactCapacityThrust_90deg
         return bcap.PointContactCapacityThrust_Non_90deg
 
     @staticmethod
-    def _capacity_calculator(row_or_bearing) -> bcap.CapacityCalculator:
+    def _capacity_calculator(row_or_bearing, i: int = 1) -> bcap.ThrustCapacityCalculator:
         """row_or_bearing: um dict de assemble_geometry() OU um Bearing
-        já montado -- ambos têm os mesmos campos por nome."""
+        já montado. i não vem da geometria (não afeta ri/re/alpha_0/...),
+        por isso entra aqui como argumento próprio, não lido do row/bearing."""
         get = row_or_bearing.__getitem__ if isinstance(row_or_bearing, dict) else \
               (lambda k: getattr(row_or_bearing, k))
         cls_ = ThrustBallSingleRowFamily._capacity_class(get("alpha_0"))
         return cls_(Z=get("Z"), Dw=get("Dw"), alpha_0=get("alpha_0"),
                      ri=get("ri"), re=get("re"), gamma=get("gamma"),
-                     reduction_factor=get("reduction_factor"))
+                     lam=get("lam"), eta=get("eta"), i=i)
 
     @staticmethod
-    def per_element_dynamic_capacity(bearing, Cr=None):
-        return ThrustBallSingleRowFamily._capacity_calculator(bearing).Q_elements
+    def per_element_dynamic_capacity(bearing, Ca=None, i: int = 1):
+        return ThrustBallSingleRowFamily._capacity_calculator(bearing, i=i).Q_elements
 
     @staticmethod
-    def dynamic_capacity(bearing):
-        return ThrustBallSingleRowFamily._capacity_calculator(bearing).Cr
+    def dynamic_capacity(bearing, i: int = 1):
+        return ThrustBallSingleRowFamily._capacity_calculator(bearing, i=i).Ca
 
 
 @register_family
@@ -354,10 +364,10 @@ class ThrustBallMultiRowFamily(BearingFamily):
     Sec 6.4). É esta a classe a usar quando as filas NÃO são idênticas;
     quando são, ThrustBallFamily sozinha (chamada N vezes) já chega."""
 
-    BEARING_TYPE = BearingType.THRUST_BALL_MULTIROW
+    BEARING_TYPE = BearingType.THRUST_BALL
     DUTY = "thrust"
     CAPABILITIES = frozenset({"point_contact"})
-    REQUIRED_FOR = {"point_contact": frozenset({"rows", "Cr", "Q_elements"})}
+    REQUIRED_FOR = {"point_contact": frozenset({"rows", "Ca", "Q_elements"})}
 
     _single_row_family = ThrustBallSingleRowFamily()
 
@@ -384,18 +394,270 @@ class ThrustBallMultiRowFamily(BearingFamily):
         capacity_kwargs_rows = [
             dict(Z=row["Z"], Dw=row["Dw"], alpha_0=row["alpha_0"],
                  ri=row["ri"], re=row["re"], gamma=row["gamma"],
-                 reduction_factor=row["reduction_factor"])
+                 lam=row["lam"], eta=row["eta"])
             for row in assembled_rows
         ]
-        Cr_total = cls_.combine_multirow(capacity_kwargs_rows)
+        Ca_total = cls_.combine_multirow(capacity_kwargs_rows)
 
         return dict(bearing_type=self.BEARING_TYPE, rows=assembled_rows,
-                    Cr=Cr_total, Q_elements=[c.Q_elements for c in calculators])
+                    Ca=Ca_total, Q_elements=[c.Q_elements for c in calculators])
 
     @staticmethod
     def dynamic_capacity(bearing):
-        return bearing.Cr
+        return bearing.Ca
+
+    @staticmethod
+    def per_element_dynamic_capacity(bearing, Ca=None):
+        return bearing.Q_elements
+
+
+# =====================================================================
+# ---- roller bearing / thrust, point contact --------------------------
+# =====================================================================
+
+@register_family
+class CylindricalRollerFamily(BearingFamily):
+    BEARING_TYPE = BearingType.CYLINDRICAL_ROLLER
+    DUTY = "radial"
+    CAPABILITIES = frozenset({"line_contact"})
+    REQUIRED_FOR = {
+        "line_contact": frozenset({
+            "Dwe", "Lwe", "Dpw", "Z", "s", "n_s", "alpha_0",
+            "x_k", "phi_j", "gamma", "cL", "cs", "P_xk", "i",
+        }),
+    }
+    LAMBDA_V = 0.83
+    _LOG_ARG_EPS = 1e-12  # floor for the log() argument in the profile function
+    # in te future this shall be passed to config.py
+
+    @property
+    def name(self) -> str:
+        return "cylindrical_roller"
+
+    @classmethod
+    def _reference_roller_profile(cls, x_k: np.ndarray, Dwe: float, Lwe: float) -> np.ndarray:
+        """P(x_k) [mm] -- ISO/TS 16281 Sec 6.2 eq.(42)-(44)."""
+        P = np.zeros_like(x_k)
+        if Lwe <= 2.5 * Dwe:
+            arg = 1.0 - (2.0 * x_k / Lwe) ** 2
+            arg = np.maximum(arg, cls._LOG_ARG_EPS)
+            P = 0.000350 * Dwe * np.log(1.0 / arg)
+        else:
+            half_flat = (Lwe - 2.5 * Dwe) / 2.0
+            edge = np.abs(x_k) > half_flat
+            if np.any(edge):
+                xe = x_k[edge]
+                arg = 1.0 - ((2.0 * np.abs(xe) - (Lwe - 2.5 * Dwe)) / (2.5 * Dwe)) ** 2
+                arg = np.maximum(arg, cls._LOG_ARG_EPS)
+                P[edge] = 0.000500 * Dwe * np.log(1.0 / arg)
+        return P
+
+    def assemble_geometry(self, catalog, Dwe, Lwe, Dpw, Z, s, n_s, alpha_0_deg, i=1) -> dict[str, Any]:
+
+        if catalog.arrangement not in ("floating", "non-locating"):
+            raise ValueError(
+                f"CylindricalRollerFamily(label={catalog.label or catalog.designation!r}): "
+                f"arrangement={catalog.arrangement!r} is not valid -- an NU/N-type "
+                f"bearing has no flange to react axial load, so it cannot be "
+                f"'locating'. Use 'floating' or 'non-locating' on the BearingCatalog."
+            )
+        if n_s < 30:
+            raise ValueError(f"CylindricalRollerFamily: n_s must be >= 30, got {n_s}")
+        if s < 0:
+            raise ValueError(f"CylindricalRollerFamily: s must be >= 0, got {s}")
+        if i < 1:
+            raise ValueError(f"CylindricalRollerFamily: i (number of rows) must be >= 1, got {i}")
+
+        alpha_0 = np.radians(alpha_0_deg)
+
+        stiff = bc.LineContactStiffness(Dwe, Dpw, alpha_0, Lwe, n_s)
+
+        g   = stiff.gamma
+        x_k = stiff.lamina_positions
+        cL  = stiff.stiffness
+        cs  = stiff.lamina_stiffness
+        P_xk = self._reference_roller_profile(x_k, Dwe, Lwe)
+
+        phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
+
+        return dict(bearing_type=self.BEARING_TYPE, Dwe=Dwe, Lwe=Lwe, Dpw=Dpw, 
+                    Z=Z, s=s, n_s=n_s, alpha_0=alpha_0, x_k=x_k, phi_j=phi_j, 
+                    gamma=g, cL=cL, lambda_v = self.LAMBDA_V, cs=cs, P_xk=P_xk, i=i)
 
     @staticmethod
     def per_element_dynamic_capacity(bearing, Cr=None):
+        calc = bcap.LineContactCapacityRadial(
+            Z=bearing.Z, Dwe=bearing.Dwe, Lwe=bearing.Lwe, alpha_0=bearing.alpha_0,
+            gamma=bearing.gamma, lambda_v=bearing.lambda_v, n_s=bearing.n_s, i=bearing.i)
+        return calc.Q_elements
+
+    @staticmethod
+    def dynamic_capacity(bearing):
+        calc = bcap.LineContactCapacityRadial(
+            Z=bearing.Z, Dwe=bearing.Dwe, Lwe=bearing.Lwe, alpha_0=bearing.alpha_0,
+            gamma=bearing.gamma, lambda_v=bearing.lambda_v, n_s=bearing.n_s, i=bearing.i)
+        return calc.Cr
+
+    @staticmethod
+    def per_lamina_dynamic_capacity(bearing):
+        calc = bcap.LineContactCapacityRadial(
+            Z=bearing.Z, Dwe=bearing.Dwe, Lwe=bearing.Lwe, alpha_0=bearing.alpha_0,
+            gamma=bearing.gamma, lambda_v=bearing.lambda_v, n_s=bearing.n_s, i=bearing.i)
+        return calc.per_lamina
+
+# =====================================================================
+# ---- roller bearing / thrust, line contact --------------------------
+# =====================================================================
+
+@register_family
+class ThrustCylindricalRollerFamily(BearingFamily):
+    BEARING_TYPE = BearingType.THRUST_CYLINDRICAL_ROLLER
+    DUTY = "thrust"
+    CAPABILITIES = frozenset({"line_contact"})
+    REQUIRED_FOR = {
+        "line_contact": frozenset({
+            "Dwe", "Lwe", "Dpw", "Z", "s", "n_s", "alpha_0",
+            "x_k", "phi_j", "gamma", "cL", "cs", "P_xk",
+        }),
+    }
+    LAMBDA_V = 0.73
+    _LOG_ARG_EPS = 1e-12 
+
+    @property
+    def name(self) -> str:
+        return "thrust_cylindrical_roller"
+
+    @staticmethod
+    def eta(alpha_0: float) -> float:
+        return 1.0 - 0.5 * np.sin(alpha_0)
+
+    @classmethod
+    def _reference_roller_profile(cls, x_k: np.ndarray, Dwe: float, Lwe: float) -> np.ndarray:
+        """P(x_k) [mm] -- ISO/TS 16281 Sec 6.2 eq.(42)-(44). Identical to
+        CylindricalRollerFamily's (radial) -- same roller, same profile."""
+        P = np.zeros_like(x_k)
+        if Lwe <= 2.5 * Dwe:
+            arg = 1.0 - (2.0 * x_k / Lwe) ** 2
+            arg = np.maximum(arg, cls._LOG_ARG_EPS)
+            P = 0.000350 * Dwe * np.log(1.0 / arg)
+        else:
+            half_flat = (Lwe - 2.5 * Dwe) / 2.0
+            edge = np.abs(x_k) > half_flat
+            if np.any(edge):
+                xe = x_k[edge]
+                arg = 1.0 - ((2.0 * np.abs(xe) - (Lwe - 2.5 * Dwe)) / (2.5 * Dwe)) ** 2
+                arg = np.maximum(arg, cls._LOG_ARG_EPS)
+                P[edge] = 0.000500 * Dwe * np.log(1.0 / arg)
+        return P
+
+    def assemble_geometry(self, catalog, Dwe, Lwe, Dpw, Z, s, n_s,
+                           alpha_0_deg, i: int = 1) -> dict[str, Any]:
+        if not isinstance(Z, (int, np.integer)):
+            raise TypeError(f"ThrustCylindricalRollerFamily: Z must be a scalar int, got {type(Z).__name__}")
+        if n_s < 30:
+            raise ValueError(f"ThrustCylindricalRollerFamily: n_s must be >= 30, got {n_s}")
+        if s < 0:
+            raise ValueError(f"ThrustCylindricalRollerFamily: s must be >= 0, got {s}")
+        if not (0.0 < alpha_0_deg <= 90.0):
+            raise ValueError(f"ThrustCylindricalRollerFamily: alpha_0_deg must be in (0, 90], got {alpha_0_deg}")
+
+        alpha_0 = np.radians(alpha_0_deg)
+        eta     = self.eta(alpha_0)
+
+        stiff = bc.LineContactStiffness(Dwe, Dpw, alpha_0, Lwe, n_s)
+
+        g    = stiff.gamma
+        x_k  = stiff.lamina_positions
+        cL   = stiff.stiffness
+        cs   = stiff.lamina_stiffness
+        P_xk = self._reference_roller_profile(x_k, Dwe, Lwe)
+
+        phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
+
+        return dict(bearing_type=self.BEARING_TYPE, Dwe=Dwe, Lwe=Lwe, Dpw=Dpw,
+                    Z=Z, s=s, n_s=n_s, alpha_0=alpha_0, x_k=x_k, phi_j=phi_j,
+                    gamma=g, cL=cL, cs=cs, P_xk=P_xk, eta=eta,
+                    lambda_v=self.LAMBDA_V, i=i)
+
+    @staticmethod
+    def _capacity_class(alpha_0: float) -> type[bcap.ThrustCapacityCalculator]:
+        if np.isclose(alpha_0, np.pi / 2):
+            return bcap.LineContactCapacityThrust_90deg
+        return bcap.LineContactCapacityThrust_Non_90deg
+
+    @staticmethod
+    def _capacity_calculator(row_or_bearing, i: int = 1) -> bcap.ThrustCapacityCalculator:
+        get = row_or_bearing.__getitem__ if isinstance(row_or_bearing, dict) else \
+              (lambda k: getattr(row_or_bearing, k))
+        cls_ = ThrustCylindricalRollerFamily._capacity_class(get("alpha_0"))
+        return cls_(Z=get("Z"), Dwe=get("Dwe"), Lwe=get("Lwe"), alpha_0=get("alpha_0"),
+                     gamma=get("gamma"), lambda_v=get("lambda_v"), eta=get("eta"), i=i)
+
+    @staticmethod
+    def per_element_dynamic_capacity(bearing, Ca=None, i: int = 1):
+        return ThrustCylindricalRollerFamily._capacity_calculator(bearing, i=i).Q_elements
+
+    @staticmethod
+    def dynamic_capacity(bearing, i: int = 1):
+        return ThrustCylindricalRollerFamily._capacity_calculator(bearing, i=i).Ca
+
+    @staticmethod
+    def per_lamina_dynamic_capacity(bearing, i: int = 1):
+        return ThrustCylindricalRollerFamily._capacity_calculator(bearing, i=i).per_lamina
+
+
+@register_family
+class RollerThrustMultiRowFamily(BearingFamily):
+    """Espelha ThrustBallMultiRowFamily: filas podem diferir entre si
+    (Dwe, alpha_0, Z, eta próprios por fila); reutiliza
+    RollerThrustSingleRowFamily.assemble_geometry() fila a fila e combina
+    via combine_multirow() herdado de _MultirowCombinableLineContact --
+    cuja fórmula, note-se, ainda precisa de ser derivada/confirmada (ver
+    nota acima sobre os expoentes 9/2 e 2/9 por analogia)."""
+
+    BEARING_TYPE = BearingType.THRUST_CYLINDRICAL_ROLLER
+    DUTY = "thrust"
+    CAPABILITIES = frozenset({"multirow_capacity"})
+    REQUIRED_FOR = {
+        "multirow_capacity": frozenset({"rows", "i"}),
+    }
+
+    _single_row_family = ThrustCylindricalRollerFamily()
+
+    @property
+    def name(self) -> str:
+        return "thrust_cylindrical_roller_multirow"
+
+    def assemble_geometry(self, catalog, rows: list[dict]) -> dict[str, Any]:
+        """rows = [{"Dwe":.., "Lwe":.., "Dpw":.., "Z":.., "s":.., "n_s":..,
+        "alpha_0_deg":.., "eta":..}, ...]"""
+        assembled_rows = [
+            self._single_row_family.assemble_geometry(catalog, **row_kwargs)
+            for row_kwargs in rows
+        ]
+
+        calculators = [ThrustCylindricalRollerFamily._capacity_calculator(row) for row in assembled_rows]
+
+        cls_ = type(calculators[0])
+        if any(type(c) is not cls_ for c in calculators):
+            raise ValueError(
+                "RollerThrustMultiRowFamily: cannot combine rows with mixed "
+                "90 deg / non-90 deg contact angle via combine_multirow().")
+
+        capacity_kwargs_rows = [
+            dict(Z=row["Z"], Dwe=row["Dwe"], Lwe=row["Lwe"], alpha_0=row["alpha_0"],
+                 gamma=row["gamma"], lambda_v=row["lambda_v"], eta=row["eta"])
+            for row in assembled_rows
+        ]
+        Ca_total = cls_.combine_multirow(capacity_kwargs_rows)  # depende do fix pendente
+
+        return dict(bearing_type=self.BEARING_TYPE, rows=assembled_rows,
+                    Ca=Ca_total, Q_elements=[c.Q_elements for c in calculators])
+
+    @staticmethod
+    def dynamic_capacity(bearing):
+        return bearing.Ca
+
+    @staticmethod
+    def per_element_dynamic_capacity(bearing, Ca=None):
         return bearing.Q_elements

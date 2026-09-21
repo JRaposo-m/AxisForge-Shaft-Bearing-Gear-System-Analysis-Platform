@@ -55,8 +55,6 @@ class PointContactStiffness:
     two duties differ only in which alpha_0/ri/re a family supplies,
     never in this class's own math."""
 
-    CONTACT_TYPE = "point"
-
     def __init__(self, Dw: float, ri: float, re: float, E: float, nu: float,
                  alpha_0: float, Dpw: float):
         self.Dw, self.ri, self.re = Dw, ri, re
@@ -159,17 +157,40 @@ class SelfAligningPointContactStiffness(PointContactStiffness):
 # ---- line contact / radial + thrust -- SKETCH ONLY --------------------
 # ---------------------------------------------------------------------
 
-class LineContactStiffnessRadial:
+class LineContactStiffness:
     CONTACT_TYPE = "line"
     DUTY = "radial"
 
-    def __init__(self, *args, **kwargs):
-        raise NotImplementedError("Line-contact (radial) Hertz stiffness not derived yet.")
+    def __init__(self, Dwe: float, Dpw: float, alpha_0: float,
+                 Lwe: float, n_s: int):
+        
+        self.Dwe, self.Dpw, self.alpha_0 = Dwe, Dpw, alpha_0
+        self.Lwe, self.n_s = Lwe, n_s
+        self._cache: dict[str, float] = {}
 
+    @property
+    def lamina_positions(self) -> np.ndarray:
+        """x_k -- lamina midpoints, strictly inside (-Lwe/2, Lwe/2). Sec 5.2.2."""
+        lamina_length = self.Lwe / self.n_s
+        return lamina_length * (np.arange(self.n_s) + 0.5) - self.Lwe / 2.0
 
-class LineContactStiffnessThrust:
-    CONTACT_TYPE = "line"
-    DUTY = "thrust"
+    @property
+    def gamma(self) -> float:
+        if "gamma" not in self._cache:
+            if np.isclose(self.alpha_0, np.pi / 2, atol=1e-9):
+                self._cache["gamma"] = self.Dwe / self.Dpw
+            else:
+                self._cache["gamma"] = self.Dwe * np.cos(self.alpha_0) / self.Dpw
+        return self._cache["gamma"]
 
-    def __init__(self, *args, **kwargs):
-        raise NotImplementedError("Line-contact (thrust) Hertz stiffness not derived yet.")
+    @property
+    def stiffness(self) -> float:
+        """(c_L) [N/mm^(10/9)] --  eq.(35)."""
+        c_L = 35948.0 * self.Lwe ** (8.0 / 9.0)
+        return c_L
+
+    @property
+    def lamina_stiffness(self) -> float:
+        """(c_s) [N/mm^(10/9)] --  eq.(35)."""
+        c_s = self.stiffness / self.n_s
+        return c_s 

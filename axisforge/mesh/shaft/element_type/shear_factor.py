@@ -1,5 +1,5 @@
 """
-mesh/shaft/element_type/timoshenko_selective_integration/timoshenko/shear_factor.py
+mesh/shaft/element_type/shear_factor.py
 """
 
 class ShearFactor:

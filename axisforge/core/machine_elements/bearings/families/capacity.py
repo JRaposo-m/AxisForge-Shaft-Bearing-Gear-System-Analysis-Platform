@@ -91,10 +91,14 @@ class _MultirowCombinablePointContact:
     @classmethod
     def combine_multirow(cls, rows: Sequence[dict]) -> float:
         if len(rows) < 2:
-            raise ValueError(...)
+            raise ValueError(
+                f"combine_multirow requires at least 2 rows; got {len(rows)}. "
+                f"Use .Ca directly for a single row."
+            )
         instances = [cls(**row) for row in rows]
         Ca_rows = [inst.dynamic_rating for inst in instances]
         Z_rows = [row["Z"] for row in rows]
+
         total_Z = sum(Z_rows)
         bracket = sum((z / ca) ** (10.0 / 3.0) for z, ca in zip(Z_rows, Ca_rows))
         return total_Z * bracket ** (-3.0 / 10.0)
@@ -108,7 +112,10 @@ class _MultirowCombinableLineContact:
     @classmethod
     def combine_multirow(cls, rows: Sequence[dict]) -> float:
         if len(rows) < 2:
-            raise ValueError(...)
+            raise ValueError(
+                f"combine_multirow requires at least 2 rows; got {len(rows)}. "
+                f"Use .Ca directly for a single row."
+            )
         instances = [cls(**row) for row in rows]
         Ca_rows = [inst.dynamic_rating for inst in instances]
         Z_rows = [row["Z"] for row in rows]
@@ -512,8 +519,7 @@ class LineContactCapacityThrust_90deg(ThrustCapacityCalculator, _MultirowCombina
     @property
     def Q_elements(self) -> tuple[float, float]:
         Q = (1.0 / self.lambda_v) * (self.Ca / self.Z) * 2.0 ** (2.0 / 9.0)
-        Q_ci, Q_ce = Q 
-        return Q_ci, Q_ce
+        return Q, Q
 
     @property
     def per_lamina(self) -> tuple[float, float]:

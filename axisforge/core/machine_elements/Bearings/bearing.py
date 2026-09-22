@@ -1,5 +1,5 @@
 """
-core/machine_elements/Bearings/bearing.py
+core/machine_elements/bearings/bearing.py
 
 Bearing -- the orchestrator. Catalogue data + family-derived geometry,
 assembled ONCE via Bearing.assemble() and immutable from then on. Never
@@ -11,8 +11,8 @@ Do not instantiate directly -- always go through Bearing.assemble().
 from __future__ import annotations
 from typing import Any
 
-from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
-from axisforge.core.machine_elements.bearings.family import BearingFamily
+from axisforge.core.machine_elements.bearings.base import BearingCatalog
+from axisforge.core.machine_elements.bearings.base import BearingFamily
 
 
 class Bearing:
@@ -62,6 +62,7 @@ class Bearing:
         for attr, value in computed.items():
             setattr(bearing, attr, value)
         bearing.duty = family.DUTY
+        bearing.bearing_type = family.BEARING_TYPE
 
         missing_by_analysis: dict[str, list[str]] = {}
         for analysis in enabled:
@@ -145,6 +146,14 @@ class Bearing:
                 f"{tag}: arrangement must be 'locating', 'floating', or "
                 f"'non-locating', got '{self.arrangement}'"
             )
+        if self.d <= 0:
+            errors.append(f"{tag}: d must be > 0, got {self.d}")
+        if self.D <= 0:
+            errors.append(f"{tag}: D must be > 0, got {self.D}")
+        if self.D <= self.d:
+            errors.append(f"{tag}: D must be > d, got D={self.D}, d={self.d}")
+        if self.b < 0:
+            errors.append(f"{tag}: b must be >= 0, got {self.b}")
 
         for analysis in self._enabled_analyses:
             required = self._family.REQUIRED_FOR.get(analysis, frozenset())

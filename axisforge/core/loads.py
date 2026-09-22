@@ -1,5 +1,5 @@
 """
-mechanical_system/loads.py
+core/loads.py
 
 Point load primitives applied to a shaft.
 
@@ -486,3 +486,17 @@ class LoadingProfile:
     @property
     def is_fully_reversed(self) -> bool:
         return self.R == -1.0
+
+# adicionar no fim de core/loads.py
+
+__all__ = [
+    "LoadPlane",
+    "Load",
+    "RadialLoad",
+    "AxialLoad",
+    "TorqueLoad",
+    "ExternalMoment",
+    "DistributedRadialLoad",
+    "Load_T",
+    "LoadingProfile",
+]

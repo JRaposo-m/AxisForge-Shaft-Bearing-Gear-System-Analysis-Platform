@@ -263,3 +263,22 @@ def available_materials() -> list[str]:
 def available_gear_materials() -> list[str]:
     """Return list of embedded gear material IDs."""
     return list(_GEAR_LIBRARY)
+
+# adicionar no fim de core/materials.py, antes da secção de embedded library (ou onde preferires)
+
+__all__ = [
+    "Material",
+    "GearMaterial",
+    "S355",
+    "CrMo42",
+    "AISI_1045",
+    "AISI_4340",
+    "GEAR_STEEL",
+    "GEAR_ADI",
+    "GEAR_POM",
+    "GEAR_PA66",
+    "get_material",
+    "get_gear_material",
+    "available_materials",
+    "available_gear_materials",
+]

@@ -15,11 +15,11 @@ from typing import Any, TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from axisforge.core.machine_elements.bearings.catalog import BearingCatalog
+    from axisforge.core.machine_elements.bearings.base import BearingCatalog
 
-from axisforge.core.machine_elements.bearings.bearing_types import BearingType
-from . import iso16281_contact as bc
-from . import capacity as bcap
+from axisforge.core.machine_elements.bearings.base import BearingType
+import axisforge.core.machine_elements.bearings.families.iso16281_contact as bc
+import axisforge.core.machine_elements.bearings.families.capacity as bcap
 
 
 # =====================================================================

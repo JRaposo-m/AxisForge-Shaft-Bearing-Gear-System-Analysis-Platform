@@ -4,8 +4,19 @@ axisforge/solvers/machine_elements/bearings/load_distribution/single_row/iso_162
 Single-row ISO/TS 16281 contact solvers -- abstract contract on top,
 concrete point-contact (ball) and line-contact (roller) solvers below.
 Everything that RUNS the iterative solve lives here; result shapes live
-in results/bearings/load_distribution/single_row/*; postprocessing lives
-in contact_postprocessing.py (never imported from here -- one-directional).
+in results/bearings/load_distribution/single_row/*.
+
+Postprocessing (contact_postprocessing.py) is imported here on purpose --
+this was a one-directional dependency (contact_solver.py never imported
+contact_postprocessing.py) until the `postprocess` flag below was added.
+The rule was deliberately relaxed: a solver constructed with
+postprocess=True now runs contact_postprocessing.py's functions itself
+and attaches the results directly onto the *LoadDistributionResult row
+(Q_j, stiffness, L10r, Pref_r, Pref_a -- all optional fields, default
+None), so an external orchestrator only ever has to call solve() once to
+get everything. contact_postprocessing.py itself still never imports this
+module -- only the *Result shapes it produces -- so that half of the
+one-directional rule stands.
 
 Multi-row (shared-displacement) solvers now live here too, immediately
 after their single-row sibling, following the same abstract-on-top /
@@ -18,7 +29,8 @@ step beyond what ISO/TS 16281 itself states (the standard gives
 per-raceway equations, not row combination), valid as-is only for
 thrust bearings. That physics is explicitly NOT touched by this pass --
 only paths, decorator style and code shape were aligned with the
-single-row classes.
+single-row classes. Postprocessing is likewise NOT wired up for
+multi-row solvers -- see MultiRowSolverBase._extra_ready_checks().
 
 References
 ----------
@@ -43,6 +55,9 @@ from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281.val
     check_bearing_ready, warn_if_floating_loaded,
 )
 from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281.dispatch import register_contact_solver
+from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281 import (
+    contact_postprocessing as pp,
+)
 from axisforge.results.bearings.load_distribution.single_row.ball_bearing_results import (
     BallLoadDistributionResult, BallBearingResult,
 )
@@ -76,6 +91,12 @@ class SolverBase(ABC):
     _solve_one_bearing() doesn't return a single *LoadDistributionResult
     (e.g. a multi-row solver, which returns a whole row set + fractions)
     can still go through this same loop without solve() knowing about it.
+
+    postprocess : when True, each concrete single-row solver attaches
+    Q_j/stiffness/L10r/Pref_r/Pref_a onto its *LoadDistributionResult row
+    via _attach_postprocessing() (see ISO16281BallSolver/ISO16281RollerSolver
+    below). False by default -- solve_contact()'s own return value is
+    unchanged either way, this only adds fields that default to None.
     """
 
     CAPABILITY: str = ""
@@ -83,9 +104,11 @@ class SolverBase(ABC):
     MULTIROW_SOLVER: type | None = None
     _result_cls: type | None = None
 
-    def __init__(self, tol: float = SOLVER_TOLERANCE, psi_input: bool = False):
-        self.tol       = tol
-        self.psi_input = psi_input
+    def __init__(self, tol: float = SOLVER_TOLERANCE, psi_input: bool = False,
+                 postprocess: bool = False):
+        self.tol         = tol
+        self.psi_input   = psi_input
+        self.postprocess = postprocess
 
     def solve(self,
               shaft_system: ShaftSystem,
@@ -164,6 +187,21 @@ class SolverBase(ABC):
         _wrap_result() on that solver expects)."""
         ...
 
+    @staticmethod
+    def _Cr_Ca(bearing: Bearing) -> tuple[float | None, float | None]:
+        """(Cr, Ca) for Pref, dispatched off bearing.duty -- bearing.C is
+        the single catalog dynamic rating field, serving as Cr for a
+        radial-duty family or Ca for a thrust-duty family (see
+        BearingCatalog/Bearing -- there is no separate Cr/Ca field)."""
+        if bearing.duty == "radial":
+            return bearing.C, None
+        if bearing.duty == "thrust":
+            return None, bearing.C
+        raise NotImplementedError(
+            f"Bearing '{bearing.label}': duty={bearing.duty!r} not radial/thrust -- "
+            f"Cr/Ca dispatch for Pref is undefined."
+        )
+
 
 class LineContactSolverBase(SolverBase):
     """Specialization for line-contact (lamina-model) solvers -- adds the
@@ -203,6 +241,11 @@ class MultiRowSolverBase(SolverBase, ABC):
     bearings -- see module docstring. Reviewing/extending this to real
     radial multi-row behavior is a separate, later task.
 
+    postprocess=True is refused here (see _extra_ready_checks()) -- the
+    Cr/Ca-per-row and L10r-row-combination semantics for postprocess were
+    never designed for the shared-displacement multi-row case, unlike
+    single-row where they are unambiguous.
+
     SINGLE_ROW_SOLVER: the sibling single-row solver class (e.g.
     ISO16281BallSolver) this reuses for elements() (its static kinematics
     primitive) and for its REQUIRED_ATTRS / MIN_LAMINAE where relevant --
@@ -228,6 +271,15 @@ class MultiRowSolverBase(SolverBase, ABC):
         return [SimpleNamespace(**row) if isinstance(row, dict) else row for row in rows]
 
     def _extra_ready_checks(self, bearing: Bearing, label: str) -> None:
+        if self.postprocess:
+            raise NotImplementedError(
+                f"Bearing '{label}': postprocess=True is not supported on "
+                f"multi-row solvers ({type(self).__name__}) -- row-level "
+                f"postprocessing linkage (Cr/Ca per row, L10r row combination) "
+                f"has not been designed/reviewed for shared-displacement "
+                f"multi-row bearings. Use postprocess=False and call "
+                f"contact_postprocessing.py's functions directly if needed."
+            )
         for j, row in enumerate(self._row_views(bearing)):
             row_label = f"{label}[row{j}]"
             check_bearing_ready(row, row_label, self.SINGLE_ROW_SOLVER.REQUIRED_ATTRS)
@@ -301,13 +353,47 @@ class ISO16281BallSolver(SolverBase):
 
     def _solve_one_bearing(self, bearing: Bearing, node, phi_Fr: float, psi: float
                             ) -> BallLoadDistributionResult:
-        return self.solve_contact(
+        row = self.solve_contact(
             bearing,
             Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy, Fa=node.Fa,
             delta_r_init=float(np.hypot(node.v_xz, node.v_xy)),
             delta_a_init=node.u,
             psi=psi, phi_Fr=phi_Fr,
         )
+        if self.postprocess:
+            self._attach_postprocessing(bearing, row, node.Fr_xz, node.Fr_xy, node.Fa)
+        return row
+
+    @staticmethod
+    def _attach_postprocessing(bearing: Bearing, row: BallLoadDistributionResult,
+                               Fr_xz: float, Fr_xy: float, Fa: float) -> None:
+        """Runs everything contact_postprocessing.py offers for a ball row
+        and attaches it onto `row` in place -- Q_j, stiffness, L10r,
+        Pref_r/Pref_a. inner_rotating/outer_rotating are left at
+        DynamicEquivalentRollingElementLoad.from_distribution()'s own
+        defaults (True/False) -- Bearing has no such attribute to read
+        from, this mirrors the ISO/TS 16281 "usual case" (inner ring
+        rotating) assumption baked into that default."""
+        wrapper = BallBearingResult.single(row)
+
+        row.Q_j       = pp.ball_Q_j(bearing, wrapper)
+        row.stiffness = pp.bearing_stiffness(bearing, wrapper, Fr_xz=Fr_xz, Fr_xy=Fr_xy, Fa=Fa)
+
+        Q_ci, Q_ce = bearing.family.per_element_dynamic_capacity(bearing)
+        equiv = pp.DynamicEquivalentRollingElementLoad.from_distribution(
+            bearing, row, label=bearing.label,
+        )
+        life = pp.BallBasicReferenceRatingLife.from_loads(
+            label=bearing.label, Q_ci=Q_ci, Q_ei=equiv.Q_ei, Q_ce=Q_ce, Q_ee=equiv.Q_ee,
+        )
+        row.L10r = life.L10r
+
+        Cr, Ca = SolverBase._Cr_Ca(bearing)
+        pref = pp.BallDynamicEquivalentReferenceLoad.from_L10r(
+            label=bearing.label, L10r=life.L10r, Cr=Cr, Ca=Ca,
+        )
+        row.Pref_r = pref.Pref_r
+        row.Pref_a = pref.Pref_a
 
     @staticmethod
     def elements(bearing: Bearing, delta_r: float, delta_a: float, Vpsi: np.ndarray):
@@ -491,12 +577,48 @@ class ISO16281RollerSolver(LineContactSolverBase):
 
     def _solve_one_bearing(self, bearing: Bearing, node, phi_Fr: float, psi: float
                             ) -> RollerLoadDistributionResult:
-        return self.solve_contact(
+        row = self.solve_contact(
             bearing,
             Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy,
             delta_r_init=float(np.hypot(node.v_xz, node.v_xy)),
             psi=psi, phi_Fr=phi_Fr,
         )
+        if self.postprocess:
+            self._attach_postprocessing(bearing, row, node.Fr_xz, node.Fr_xy)
+        return row
+
+    @staticmethod
+    def _attach_postprocessing(bearing: Bearing, row: RollerLoadDistributionResult,
+                               Fr_xz: float, Fr_xy: float) -> None:
+        """Runs everything contact_postprocessing.py offers for a roller
+        row and attaches it onto `row` in place -- Q_j, stiffness, L10r,
+        Pref_r/Pref_a. Fa is always 0.0 -- radial roller bearings carry no
+        axial load. inner_rotating/outer_rotating left at
+        LaminaDynamicEquivalentLoad.from_distribution()'s own defaults
+        (True/False), same reasoning as the ball solver."""
+        wrapper = RollerBearingResult.single(row)
+
+        row.Q_j       = pp.roller_Q_j(bearing, wrapper)
+        row.stiffness = pp.bearing_stiffness(bearing, wrapper, Fr_xz=Fr_xz, Fr_xy=Fr_xy, Fa=0.0)
+
+        q_kci, q_kce = bearing.family.per_lamina_dynamic_capacity(bearing)
+        equiv = pp.LaminaDynamicEquivalentLoad.from_distribution(
+            bearing, row, label=bearing.label,
+        )
+        q_kci_arr = np.full_like(equiv.q_kei, q_kci)
+        q_kce_arr = np.full_like(equiv.q_kee, q_kce)
+        life = pp.RollerBasicReferenceRatingLife.from_loads(
+            label=bearing.label, q_kci=q_kci_arr, q_kei=equiv.q_kei,
+            q_kce=q_kce_arr, q_kee=equiv.q_kee,
+        )
+        row.L10r = life.L10r
+
+        Cr, Ca = SolverBase._Cr_Ca(bearing)
+        pref = pp.RollerDynamicEquivalentReferenceLoad.from_L10r(
+            label=bearing.label, L10r=life.L10r, Cr=Cr, Ca=Ca,
+        )
+        row.Pref_r = pref.Pref_r
+        row.Pref_a = pref.Pref_a
 
     @staticmethod
     def elements(bearing: Bearing, delta_r: float, psi: float):

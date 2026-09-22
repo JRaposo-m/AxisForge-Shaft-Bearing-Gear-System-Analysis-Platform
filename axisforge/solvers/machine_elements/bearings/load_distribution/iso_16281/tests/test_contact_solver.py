@@ -7,7 +7,13 @@ dois multi-row.
 
 Física: testes de equilíbrio/contrato (residual ~0, sinais plausíveis,
 relações entre grandezas), não valores certificados contra a norma --
-tal como os testes de capacity.py em bearings/families/tests."""
+tal como os testes de capacity.py em bearings/families/tests.
+
+Inclui também o caminho postprocess=True (SolverBase._Cr_Ca, e
+_attach_postprocessing() de cada solver concreto) -- contrato apenas
+(campos ficam None com postprocess=False, ficam preenchidos e
+plausíveis com postprocess=True), não os valores em si, já cobertos
+contract-a-contract em test_contact_postprocessing.py."""
 import math
 from types import SimpleNamespace
 
@@ -125,6 +131,41 @@ class TestSolverBaseSolve:
         node = make_node(Fa=100.0, label="b1")
         with pytest.warns(UserWarning, match="floating but Fa"):
             solver.solve(SimpleNamespace(), {"b1": bearing}, make_shaft_results(node))
+
+
+class TestSolverBasePostprocessFlag:
+    """postprocess é só mais um argumento guardado em self -- o que ele
+    desencadeia é testado nos solvers concretos (TestISO16281*Postprocess
+    abaixo) e o guard de multi-row (TestMultiRowSolverBasePostprocessGuard)."""
+
+    def test_defaults_to_false(self):
+        assert _StubSolver().postprocess is False
+
+    def test_can_be_set_true(self):
+        assert _StubSolver(postprocess=True).postprocess is True
+
+
+class TestSolverBaseCrCaDispatch:
+    """SolverBase._Cr_Ca(bearing) -- dispatch de Cr/Ca a partir de
+    bearing.C/bearing.duty, usado por _attach_postprocessing() de ambos
+    os solvers concretos para alimentar *DynamicEquivalentReferenceLoad."""
+
+    def test_radial_duty_gives_Cr_only(self):
+        bearing = SimpleNamespace(label="b1", duty="radial", C=1234.0)
+        Cr, Ca = SolverBase._Cr_Ca(bearing)
+        assert Cr == 1234.0
+        assert Ca is None
+
+    def test_thrust_duty_gives_Ca_only(self):
+        bearing = SimpleNamespace(label="b1", duty="thrust", C=999.0)
+        Cr, Ca = SolverBase._Cr_Ca(bearing)
+        assert Cr is None
+        assert Ca == 999.0
+
+    def test_unknown_duty_raises(self):
+        bearing = SimpleNamespace(label="b1", duty="bogus", C=1.0)
+        with pytest.raises(NotImplementedError, match="Cr/Ca dispatch"):
+            SolverBase._Cr_Ca(bearing)
 
 
 # =====================================================================
@@ -256,6 +297,63 @@ class TestISO16281BallSolverMinimumAxialLoad:
                                       Fa_bracket=(0.0, 1.0))
 
 
+class _FakeBallFamily:
+    """Stub de bearing.family só para exercitar a ligação em
+    _attach_postprocessing() -- devolve (Q_ci, Q_ce) fixos, não uma
+    capacidade real; a fórmula de per_element_dynamic_capacity() já tem
+    os seus próprios testes em bearings/families/tests."""
+    @staticmethod
+    def per_element_dynamic_capacity(bearing):
+        return 500.0, 500.0
+
+
+class TestISO16281BallSolverPostprocess:
+    """_solve_one_bearing() com postprocess=True chama
+    _attach_postprocessing(), que por sua vez chama
+    contact_postprocessing.py -- aqui só se verifica a ligação (campos
+    None vs. preenchidos, sinais plausíveis), os valores em si já estão
+    cobertos em test_contact_postprocessing.py."""
+
+    def test_postprocess_false_leaves_new_fields_none(self, ball_bearing):
+        solver = ISO16281BallSolver(postprocess=False)
+        node = make_node(Fr_xz=500.0, Fa=100.0, label="B1")
+        row = solver._solve_one_bearing(ball_bearing, node, phi_Fr=0.0, psi=0.0)
+
+        assert row.Q_j is None
+        assert row.stiffness is None
+        assert row.L10r is None
+        assert row.Pref_r is None
+        assert row.Pref_a is None
+
+    def test_postprocess_true_attaches_all_fields_for_radial_duty(self, ball_bearing):
+        ball_bearing.family = _FakeBallFamily()
+        ball_bearing.C = 5000.0
+        ball_bearing.duty = "radial"
+        solver = ISO16281BallSolver(postprocess=True)
+        node = make_node(Fr_xz=500.0, Fa=100.0, label="B1")
+        row = solver._solve_one_bearing(ball_bearing, node, phi_Fr=0.0, psi=0.0)
+
+        assert row.Q_j is not None
+        assert row.Q_j.shape == (ball_bearing.Z,)
+        assert (row.Q_j >= 0.0).all()
+        assert row.stiffness is not None
+        assert row.stiffness.label == "B1"
+        assert row.L10r is not None and row.L10r > 0.0
+        assert row.Pref_r is not None and row.Pref_r > 0.0
+        assert row.Pref_a is None  # duty radial -- só Cr foi passado, sem Ca
+
+    def test_postprocess_true_thrust_duty_gives_axial_pref_only(self, ball_bearing):
+        ball_bearing.family = _FakeBallFamily()
+        ball_bearing.C = 5000.0
+        ball_bearing.duty = "thrust"
+        solver = ISO16281BallSolver(postprocess=True)
+        node = make_node(Fr_xz=500.0, Fa=100.0, label="B1")
+        row = solver._solve_one_bearing(ball_bearing, node, phi_Fr=0.0, psi=0.0)
+
+        assert row.Pref_r is None
+        assert row.Pref_a is not None and row.Pref_a > 0.0
+
+
 # =====================================================================
 # ISO16281RollerSolver -- line contact
 # =====================================================================
@@ -325,6 +423,60 @@ class TestISO16281RollerSolverSolveContact:
         assert np.all(result.alpha_j == roller_bearing.alpha_0)
 
 
+class _FakeRollerFamily:
+    """Stub de bearing.family, espelha _FakeBallFamily mas para
+    per_lamina_dynamic_capacity() -- devolve (q_ci, q_ce) escalares
+    fixos, como a família real (ver capacity.py: per_lamina é um par
+    escalar, não arrays por lamina)."""
+    @staticmethod
+    def per_lamina_dynamic_capacity(bearing):
+        return 200.0, 200.0
+
+
+class TestISO16281RollerSolverPostprocess:
+    """Espelha TestISO16281BallSolverPostprocess para o lado roller --
+    mesma ligação (_attach_postprocessing()), valores só verificados
+    contract-level, física certificada em test_contact_postprocessing.py."""
+
+    def test_postprocess_false_leaves_new_fields_none(self, roller_bearing):
+        solver = ISO16281RollerSolver(postprocess=False)
+        node = make_node(Fr_xz=1000.0, label="B2")
+        row = solver._solve_one_bearing(roller_bearing, node, phi_Fr=0.0, psi=0.0)
+
+        assert row.Q_j is None
+        assert row.stiffness is None
+        assert row.L10r is None
+        assert row.Pref_r is None
+        assert row.Pref_a is None
+
+    def test_postprocess_true_attaches_all_fields_for_radial_duty(self, roller_bearing):
+        roller_bearing.family = _FakeRollerFamily()
+        roller_bearing.C = 8000.0
+        roller_bearing.duty = "radial"
+        solver = ISO16281RollerSolver(postprocess=True)
+        node = make_node(Fr_xz=1000.0, label="B2")
+        row = solver._solve_one_bearing(roller_bearing, node, phi_Fr=0.0, psi=0.0)
+
+        assert row.Q_j is not None
+        assert row.Q_j.shape == (roller_bearing.Z,)
+        assert (row.Q_j >= 0.0).all()
+        assert row.stiffness is not None
+        assert row.L10r is not None and row.L10r > 0.0
+        assert row.Pref_r is not None and row.Pref_r > 0.0
+        assert row.Pref_a is None  # duty radial -- roller radial não leva axial de qualquer forma
+
+    def test_postprocess_true_thrust_duty_gives_axial_pref_only(self, roller_bearing):
+        roller_bearing.family = _FakeRollerFamily()
+        roller_bearing.C = 8000.0
+        roller_bearing.duty = "thrust"
+        solver = ISO16281RollerSolver(postprocess=True)
+        node = make_node(Fr_xz=1000.0, label="B2")
+        row = solver._solve_one_bearing(roller_bearing, node, phi_Fr=0.0, psi=0.0)
+
+        assert row.Pref_r is None
+        assert row.Pref_a is not None and row.Pref_a > 0.0
+
+
 # =====================================================================
 # MultiRowSolverBase -- shared-displacement multi-row (não revisto para
 # acoplamento fila-a-fila -- ver docstring do próprio módulo)
@@ -385,6 +537,32 @@ class TestISO16281MultiRowBallSolver:
         Fr_row0, _ = row_reactions[0]
         Fr_row1, _ = row_reactions[1]
         assert Fr_row0 == pytest.approx(Fr_row1, rel=1e-6)
+
+
+class TestMultiRowSolverBasePostprocessGuard:
+    """postprocess=True nunca foi desenhado/revisto para o caso
+    shared-displacement multi-row (Cr/Ca por fila, combinação de L10r
+    entre filas) -- _extra_ready_checks() recusa de imediato, antes de
+    sequer validar bearing.rows."""
+
+    def test_ball_multirow_rejects_postprocess_true(self):
+        solver = ISO16281MultiRowBallSolverSharedDisplacement(postprocess=True)
+        bearing = SimpleNamespace(label="b1")  # nem sequer .rows -- não chega a ser lido
+        with pytest.raises(NotImplementedError, match="postprocess=True is not supported"):
+            solver._extra_ready_checks(bearing, "b1")
+
+    def test_roller_multirow_rejects_postprocess_true(self):
+        solver = ISO16281MultiRowRollerSolverSharedDisplacement(postprocess=True)
+        bearing = SimpleNamespace(label="b2")
+        with pytest.raises(NotImplementedError, match="postprocess=True is not supported"):
+            solver._extra_ready_checks(bearing, "b2")
+
+    def test_ball_multirow_postprocess_false_unaffected(self):
+        """postprocess=False continua a validar as filas normalmente --
+        o guard não interfere com o caminho já testado acima."""
+        solver = ISO16281MultiRowBallSolverSharedDisplacement(postprocess=False)
+        bearing = SimpleNamespace(label="b1", rows=[dict(BALL_BEARING_KWARGS), dict(BALL_BEARING_KWARGS)])
+        solver._extra_ready_checks(bearing, "b1")  # não deve levantar
 
 
 class TestISO16281MultiRowRollerSolver:

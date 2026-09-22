@@ -20,7 +20,7 @@ _recover_internal_forces_euler_bernoulli = EulerBernoulliPostProcessing().recove
 _torsion_solver = TorsionSolver()
 
 if TYPE_CHECKING:
-    from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidSupportFEMSolver
+    from axisforge.solvers.machine_elements.shaft.fem_solvers.global_solver.rigid_support import RigidSupportFEMSolver
     from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
 
 

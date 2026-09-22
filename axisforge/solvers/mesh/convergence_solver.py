@@ -109,11 +109,11 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from axisforge.solvers.machine_elements.shaft.fem_solvers.constraints.sub_models.lagrange_multipliers import (
+from axisforge.solvers.machine_elements.shaft.fem_solvers.submodel_solver.lagrange_multipliers import (
     SubmodelSolver,
     SubmodelSolution,
 )
-from axisforge.solvers.machine_elements.shaft.fem_solvers.constraints.sub_models.postprocessing import (
+from axisforge.solvers.machine_elements.shaft.fem_solvers.submodel_solver.submodel_postprocessing import (
     SubmodelConvergencePostProcessing,
 )
 from axisforge.config import MIN_FACE_WIDTH_FOR_CONVERGENCE_MM

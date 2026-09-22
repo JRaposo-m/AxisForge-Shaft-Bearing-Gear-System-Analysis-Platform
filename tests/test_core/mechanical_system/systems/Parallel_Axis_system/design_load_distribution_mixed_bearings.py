@@ -148,7 +148,7 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system im
 from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
     SpurHelicalMeshLink, SpurHelicalGearSystem,
 )
-from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidSupportFEMSolver
+from axisforge.solvers.machine_elements.shaft.fem_solvers.global_solver.rigid_support import RigidSupportFEMSolver
 from axisforge.solvers.machine_elements.shaft.static_solvers.results_reader import (
     ShaftResultsReader,)
 from axisforge.fixtures.studies.shafts.fem_studies.results_library import (

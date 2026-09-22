@@ -28,6 +28,6 @@ def __dir__():
     return sorted(list(globals().keys()) + list(_LAZY.keys()))
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .rigid_support import RigidBearingFEMSolver
+    from .global_solver.rigid_support import RigidBearingFEMSolver
     from .sub_models import SubmodelResult, SubmodelSolver
 

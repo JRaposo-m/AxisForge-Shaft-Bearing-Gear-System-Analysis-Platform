@@ -1,5 +1,5 @@
 """
-axisforge/solvers/machine_elements/shaft/fem_solvers/sub_models/lagrange_multipliers.py
+axisforge/solvers/machine_elements/shaft/fem_solvers/submodel_solver/lagrange_multipliers.py
 
 Submodel solver for Richardson GCI convergence study.
 
@@ -8,7 +8,40 @@ injected as prescribed displacement BCs at the two cut nodes via
 Lagrange multipliers. Used exclusively by MeshConvergenceStudy -- not
 part of the production solve pipeline.
 
-## CHANGED (this pass), per solvers/README.md's own design contract
+MOVED (this pass): out of fem_solvers/constraints/sub_models/ into its
+own submodel_solver/ folder, sibling to global_solver/ (rigid_support.py
++ torsion.py) -- same reasoning: this is a solver, at the same
+conceptual level as RigidSupportFEMSolver (raw DOFs in, from a
+ShaftSystem/subdomain), just nested three folders deeper than it for no
+real reason.
+
+CHANGED (this pass): SubmodelSolution now carries kGA_override -- it was
+received by solve() and used to build K_sub, but previously discarded
+rather than published. submodel_solver/postprocessing.py needs it to
+recover V through TimoshenkoPostProcessing.shear_force() the same way
+the global pipeline does (element_postprocessing.py's ElementTheoryPostProcessor
+reads it off the object it's given via getattr(solver, "_kGA_override", None)).
+
+CHANGED (this pass, second decision): solve() now calls
+SubmodelPostProcessor().process(...) itself at the end and returns a
+SubmodelResult directly, instead of returning the raw SubmodelSolution
+and leaving it to a caller to chain the two steps. Deliberate deviation
+from the global pipeline's shape (RigidSupportFEMSolver.solve() does
+NOT call ShaftResultsReader itself -- that stays a separate step for
+the caller) -- decided specifically for this solver because, unlike
+RigidSupportFEMSolver, SubmodelSolver has no known consumer that ever
+wants the raw DOFs without the postprocessed result, so the separate
+"caller" step was just a pass-through file with nothing of its own to
+decide. SubmodelSolution still exists as an internal intermediate (built
+and consumed inside solve(), never returned) -- kept because
+SubmodelPostProcessor.process() needs it and because it's the natural
+place for elements/kGA_override to live, not because anything outside
+this module still needs to see it. If a future caller does need the raw
+DOFs (e.g. for debugging a specific grade's solve before trusting the
+postprocessed numbers), that would be the moment to add back a way to
+get at SubmodelSolution directly -- not done pre-emptively here.
+
+## CHANGED (previous pass), per solvers/README.md's own design contract
 ## ("No solver imports another solver... they meet only at the
 ## dispatcher and at the result containers"):
 ##
@@ -74,9 +107,13 @@ from axisforge.solvers.machine_elements.shaft.fem_solvers.assembly.numerics.gaus
 from axisforge.solvers.machine_elements.shaft.fem_solvers.constraints.submodel_extraction import (
     extract_submodel_values,
 )
+from axisforge.solvers.machine_elements.shaft.fem_solvers.submodel_solver.submodel_postprocessing import (
+    SubmodelPostProcessor,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from axisforge.results.fem_results.shaft_results import ShaftResults
+    from axisforge.results.fem_results.submodel_results import SubmodelResult
 
 
 # ===========================================================================
@@ -87,7 +124,8 @@ if TYPE_CHECKING:  # pragma: no cover
 class SubmodelSolution:
     """Raw solve output for the submodel within [x_lo, x_hi] -- pre-postprocessing.
     See SubmodelResult in results/fem_results/submodel_results.py for the
-    postprocessed, metric-bearing shape built FROM this one."""
+    postprocessed, engineering-quantity shape built FROM this one, via
+    submodel_solver/postprocessing.py."""
 
     x_lo: float
     x_hi: float
@@ -116,6 +154,14 @@ class SubmodelSolution:
     element geometry/rigidity plus a reconstructable a_e -- d_xz/d_xy
     alone are not enough for that."""
 
+    kGA_override: float | None = None
+    """Carried over unchanged from the kGA_override this SubmodelSolution
+    was solved with -- published (not just consumed internally) so that
+    submodel_solver/postprocessing.py can hand it to
+    TimoshenkoPostProcessing.shear_force() the same way the global
+    pipeline does, without the caller having to remember and re-thread
+    the original solve()'s argument by hand."""
+
 
 # ===========================================================================
 # Submodel solver
@@ -136,7 +182,11 @@ class SubmodelSolver:
     """
     Solves a subdomain [x_lo, x_hi] of shaft_system, with the global
     solution (given as a ShaftResults) injected as prescribed
-    displacement BCs at the two cut nodes.
+    displacement BCs at the two cut nodes, and returns the postprocessed
+    SubmodelResult directly -- solve() does both steps itself (see
+    module docstring's second CHANGED note for why this solver, unlike
+    RigidSupportFEMSolver, folds postprocessing into the same call
+    instead of leaving it to a separate caller).
     """
     def __init__(self, x_lo: float, x_hi: float):
         self._x_lo = x_lo
@@ -148,7 +198,7 @@ class SubmodelSolver:
               settings: BeamModelSettings,
               grade: str,
               *,
-              kGA_override: float | None = None) -> SubmodelSolution:
+              kGA_override: float | None = None) -> "SubmodelResult":
 
         x_lo = self._x_lo
         x_hi = self._x_hi
@@ -205,6 +255,16 @@ class SubmodelSolver:
         # and it has no way to know which of its inputs are "hard"
         # points a downstream lookup will require exactly vs soft
         # refinement candidates -- only this caller does.
+        #
+        # STILL OPEN (flagged, not fixed this pass): the metric evaluation
+        # points that submodel_solver/postprocessing.py's caller (the
+        # convergence study) will sample are NOT in this hard_points set --
+        # only load positions and x_lo/x_hi are. See the conversation note
+        # this pass is part of: if a caller samples a field at an x that
+        # doesn't survive Mesh1D's dedupe, find_node_index-style lookups
+        # downstream will either raise or silently match the wrong node.
+        # Left as-is here because it belongs to whoever calls this solver
+        # with a set of evaluation points in mind, not to this solve() itself.
         load_cases = self._build_submodel_load_cases(shaft_system)
         hard_points: set[float] = {x_lo, x_hi}
         for lc in load_cases:
@@ -296,7 +356,7 @@ class SubmodelSolver:
         lam_xz = sol_xz[n:]
         lam_xy = sol_xy[n:]
 
-        return SubmodelSolution(
+        solution = SubmodelSolution(
             x_lo=self._x_lo,
             x_hi=self._x_hi,
             grade=grade,
@@ -306,7 +366,13 @@ class SubmodelSolver:
             lam_xz=lam_xz,
             lam_xy=lam_xy,
             elements=elements,
+            kGA_override=kGA_override,
         )
+
+        # solve() returns the postprocessed result directly -- see the
+        # module docstring's second CHANGED note. SubmodelSolution stays
+        # a local, unreturned intermediate.
+        return SubmodelPostProcessor().process(solution)
 
     # ------------------------------------------------------------------
     # Load-case construction (submodel-specific: filters + clamps to

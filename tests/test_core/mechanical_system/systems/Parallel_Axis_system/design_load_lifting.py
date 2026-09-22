@@ -62,7 +62,7 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system im
 from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
     SpurHelicalMeshLink, SpurHelicalGearSystem,
 )
-from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_support import RigidBearingFEMSolver
+from axisforge.solvers.machine_elements.shaft.fem_solvers.global_solver.rigid_support import RigidBearingFEMSolver
 
 # --- schematic (visual sanity check, no solver dependency) -----------------
 from axisforge.core.mechanical_system.parallel_axis.schematic import (

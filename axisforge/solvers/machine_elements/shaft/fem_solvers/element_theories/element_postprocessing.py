@@ -51,13 +51,13 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import numpy as np
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from axisforge.core.loads import LoadPlane
 
 if TYPE_CHECKING:
-    from axisforge.solvers.machine_elements.shaft.fem_solvers.global_solver.rigid_support import RigidSupportFEMSolver
     from axisforge.mesh.shaft.element_type.elem import Elem
+
 
 
 class ElementTheoryPostProcessor(ABC):
@@ -100,7 +100,7 @@ class ElementTheoryPostProcessor(ABC):
     both sides against each other.
     """
 
-    def recover_element_displacements(self, solver: "RigidSupportFEMSolver", x_nodes: list[float], n: int):
+    def recover_element_displacements(self, solver: Any, x_nodes: list[float], n: int):
         """
         Returns a list of (elem, a_xz, a_xy), one entry per element in
         solver.elements order, each a_* a length-4 array [v_a, th_a, v_b, th_b].
@@ -112,7 +112,7 @@ class ElementTheoryPostProcessor(ABC):
             out.append((elem, a_xz, a_xy))
         return out
 
-    def _element_nodal_displacements(self, solver: "RigidSupportFEMSolver", elem, plane: LoadPlane) -> np.ndarray:
+    def _element_nodal_displacements(self, solver: Any, elem, plane: LoadPlane) -> np.ndarray:
         """
         a^(e) = [v_a, th_a, v_b, th_b] -- the local 4-dof nodal displacement
         vector for one element in one plane, pulled straight from that
@@ -154,23 +154,28 @@ class ElementTheoryPostProcessor(ABC):
         """
         raise NotImplementedError
 
-    def recover_internal_forces(self, solver: "RigidSupportFEMSolver", x_nodes: list[float], n: int):
+    def recover_internal_forces(self, solver: Any, x_nodes: list[float], n: int):
         """
         Returns (M_xz, M_xy, V_xz, V_xy), each a length-n np.ndarray
-        aligned with x_nodes -- the shape ShaftResultsReader.read() /
-        ShaftResults expect (one M and V value per mesh node, matching
-        x_nodes/x exactly).
+        aligned with x_nodes -- the shape ShaftResults/SubmodelResult
+        expect (one M and V value per mesh node, matching x_nodes/x
+        exactly).
 
-        This is the entry point results_reader.py should call. Being a
-        bound method (not a module-level function like the old sweep),
-        the caller instantiates the concrete subclass first, e.g.:
-            EulerBernoulliPostProcessing().recover_internal_forces(solver, x_nodes, n)
+        `solver` is anything exposing .elements/.d_total_xz/.d_total_xy
+        (and optionally ._kGA_override) -- structurally, not by type.
+        Being a bound method (not a module-level function like the old
+        sweep), the caller instantiates the concrete subclass first,
+        e.g.: EulerBernoulliPostProcessing().recover_internal_forces(solver, x_nodes, n).
+        global_solver/ and submodel_solver/ each define their own
+        origin-specific subclasses that override this to accept their
+        real solution type directly (RigidSupportSolution /
+        SubmodelSolution) -- see those folders' postprocessing.py.
         """
         M_xz, V_xz = self._sweep_plane(solver, x_nodes, n, LoadPlane.XZ)
         M_xy, V_xy = self._sweep_plane(solver, x_nodes, n, LoadPlane.XY)
         return M_xz, M_xy, V_xz, V_xy
 
-    def _sweep_plane(self, solver: "RigidSupportFEMSolver", x_nodes: list[float], n: int, plane: LoadPlane):
+    def _sweep_plane(self, solver: Any, x_nodes: list[float], n: int, plane: LoadPlane):
         """
         Builds M and V over every mesh node, for one plane. kGA_override
         is read off the solver once per sweep and passed to every

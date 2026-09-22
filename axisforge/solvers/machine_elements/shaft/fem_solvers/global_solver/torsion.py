@@ -1,25 +1,23 @@
 """
-axisforge/solvers/machine_elements/shaft/static_solvers/torsion.py
+axisforge/solvers/machine_elements/shaft/fem_solvers/global_solver/torsion.py
 
 No DOF, no stiffness matrix, no dependency on Timoshenko vs.
 Euler-Bernoulli -- it is pure statics over the same x_nodes: T(x) =
 cumulative sum of TorqueLoad up to x, tau(x) = T(x)/Wt(x) via
-Shaft.Wt_at(), and now phi(x) = twist angle, integrated node-to-node
-from d(phi)/dx = T(x)/(G*J(x)). Kept in its own module (a sibling of
-fem_solvers/, not inside it) because it is genuinely independent of
-everything else -- it does not even need the FEM elements.
+Shaft.Wt_at(), and phi(x) = twist angle, integrated node-to-node from
+d(phi)/dx = T(x)/(G*J(x)).
 
-Not called from rigid_support.py::RigidSupportFEMSolver.solve() -- that
-solver only produces bending + axial results. TorsionSolver.solve() is
-called independently by whoever orchestrates a full result set for a
-shaft (ShaftResultsReader.read(), which is expected to take its
-(T_total, tau_total, phi_total, torsion_contributions) as explicit
-arguments -- results_reader.py's read() signature will need updating
-to accept the new phi_total on top of the three it already takes).
+MOVED (this pass): out of static_solvers/ into global_solver/, sibling
+to rigid_support.py and postprocessing.py -- still genuinely
+independent of everything else here (doesn't even need the FEM
+elements), the move is only about physical location matching the rest
+of this pass's folder cleanup.
 
-CLASS CHANGE from the previous module-level-function version: solve_torsion()
-and validate_torsion_equilibrium() are now TorsionSolver.solve() and
-.validate_equilibrium(), so callers instantiate TorsionSolver() once.
+Called from global_solver/postprocessing.py's build_shaft_result() --
+NOT from rigid_support.py's solve(), which stays bending+axial only
+(see that module's docstring). TorsionSolver.solve() is called
+independently there, the same way ShaftResultsReader.read() used to
+call it directly.
 
 MISSING PIECE -- flagging rather than guessing: _twist_angle() below
 calls shaft_system.shaft.J_at(x), a polar-second-moment-of-area accessor
@@ -28,7 +26,8 @@ as I've seen of the Shaft class). This file will raise AttributeError
 until that's added. If Wt_at() is already J/r_outer for your section
 definitions, J_at() could just be Wt_at(x) * (diameter_at(x) / 2) --
 but I don't have Shaft's source to confirm that relationship holds for
-both solid and hollow sections, so I'm not assuming it here.
+both solid and hollow sections, so I'm not assuming it here. Still open
+from the previous pass -- unchanged.
 """
 
 from __future__ import annotations
@@ -43,7 +42,7 @@ from axisforge.config import SOLVER_TOLERANCE
 class TorsionSolver:
     """
     Pure statics over x_nodes -- see module docstring. solve() returns
-    everything ShaftResultsReader.read() needs for the torsional part of
+    everything build_shaft_result() needs for the torsional part of
     ShaftResults: T(x), tau(x), phi(x), and the per-node load
     contributions breakdown.
     """
@@ -80,8 +79,6 @@ class TorsionSolver:
 
         Units: TorqueLoad.magnitude is N*m (per loads.py); Wt_at returns
         mm^3 -> tau = T[N*m]*1000 / Wt[mm^3] = N/mm^2 = MPa.
-
-        Unchanged from the previous solve_torsion() function.
         """
         torque_sources = self._torque_sources(shaft_system)
 
@@ -158,9 +155,6 @@ class TorsionSolver:
         missing or mis-signed load (e.g. the driven-side reaction torque
         was never added, or GearSystem._forces_to_loads produced the
         wrong sign for one of the sources).
-
-        Unchanged from the previous validate_torsion_equilibrium()
-        function.
         """
         errors: list[str] = []
         net = sum(ld.magnitude for ld in shaft_system.torque_loads)

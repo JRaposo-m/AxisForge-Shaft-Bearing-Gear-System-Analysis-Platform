@@ -1,100 +1,76 @@
 """
-axisforge/solvers/mesh/convergence_solver.py   [DRAFT]
+axisforge/solvers/mesh/convergence_solver.py
 
-Mesh convergence study for distributed radial loads.
+Grid Convergence Index (Richardson extrapolation) math + per-interval
+convergence bookkeeping. NÃO corre solves e NÃO sabe nada de
+ShaftSystem/gears/bearings/SubmodelSolver -- só importa de results/
+(mais stdlib/numpy). Isso é deliberado (confirmado com erg
+2026-09-22): o loop de grades (chamar SubmodelSolver por grade_0,
+grade_1, ...) e a resolução de "pontos" nomeados (ex: "centroid" de uma
+carga distribuída, ponto de engrenamento de uma engrenagem) para um x
+real ficam num dispatcher fora deste módulo -- este módulo só recebe,
+já pronto, um SubmodelResult por nível de refinamento, mais os pontos
+já resolvidos a float, e devolve se convergiu.
 
-Strategy  : SubmodelSolver with successive grades (grade_0, grade_1, ...)
-Criterion : Richardson extrapolation + Grid Convergence Index (GCI),
-            evaluated INDEPENDENTLY per tracked metric (see metric_spec.py).
-
-## CHANGED (this pass), per solvers/README.md's design contract ("No
-## solver imports another solver... they meet only at the dispatcher
-## and at the result containers"):
-##   - MeshConvergenceStudy no longer takes a RigidSupportFEMSolver.
-##     It takes `shaft_results: ShaftResults` + `settings: BeamModelSettings`
-##     instead -- both threaded straight through to SubmodelSolver.solve(),
-##     which itself now takes the same two (see lagrange_multipliers.py).
-##     RigidSupportFEMSolver is no longer imported here at all.
-##   - _converge_one_load() no longer extracts metric values itself
-##     (the old `spec.eval_strategy.points()` + `spec.field_fn()` inline
-##     loop). Extraction is delegated to
-##     SubmodelConvergencePostProcessing.process() (sub_models/postprocessing.py),
-##     which returns a SubmodelResult (results/fem_results/submodel_results.py)
-##     -- this module reads SubmodelResult.metric_values/.x_nodes only.
-
-## DONE (was open): FixedPointStrategy.points() in metric_spec.py is no
-## longer a stub -- both it and this module's own _eval_points_for_interval()
-## now delegate to one shared free function, metric_spec.eval_points_for_interval(),
-## so there's exactly one implementation instead of two copies that could
-## silently drift apart. See _eval_points_for_interval() below.
-
-## CHANGED (this pass, confirmed with erg 2026-09-17): two follow-up
-## fixes to the M-in-load-free-interval problem, decided together --
-##   1. RichardsonGCI's relative-error math is UNCHANGED (still
-##      e = delta / f_local) -- but it no longer leaks a raw
-##      ZeroDivisionError when f_coarse/f_medium is exactly 0.0, or when
-##      a level has only 1 node. Both paths now raise ValueError
-##      explicitly, same as every other degenerate case already handled,
-##      so _compute_gci()'s single except clause is the only place that
-##      ever needs to catch a convergence-math failure. _compute_gci()'s
-##      except clause is also widened from `except ValueError` to
-##      `except (ValueError, ZeroDivisionError, ArithmeticError)` as
-##      defense in depth.
-##   2. (superseded by the removal below -- kept here for history) an
-##      earlier pass stopped MomentConvergenceStudy from refusing
-##      load-free intervals up front, instead of skipping them.
-
-## CHANGED (this pass, confirmed with erg 2026-09-17): MomentConvergenceStudy
-## -- the per-interval, ratio-selected multi-point (pt0/pt1/pt2) moment
-## tracker -- is REMOVED from this module entirely. Per erg: "antes
-## tinha posto a criar pontos de analise e assim e agora isso vai ser
-## retirado porque esta abordagem do global gostei mesmo muito". The
-## whole reason that class existed -- a single fixed evaluation point
-## per interval (DisplacementConvergenceStudy's approach) being too
-## coarse a proxy for a derived, piecewise-constant field like M over a
-## WIDE interval -- doesn't apply anymore: the global bearing-to-bearing
-## study (axisforge/fixtures/studies/shafts/convergence_studies/
-## global_convergence_study.py) tracks M as an aggregate (max/mean/rms/
-## max_minus_mean) over the WHOLE refined domain, not a handful of
-## fixed points chosen by a size-ratio heuristic, so there is no longer
-## a "which points, how many" question to answer at the per-interval
-## level at all.
+## REESCRITO nesta passagem (substituindo por completo o draft
+## anterior, que estava desalinhado da arquitetura atual em 3 pontos
+## de raiz -- ver conversa: SubmodelConvergencePostProcessing não
+## existe; SubmodelSolver.solve() já devolve SubmodelResult
+## pós-processado diretamente, não uma SubmodelSolution crua para
+## reprocessar aqui; SubmodelResult.metric_values foi removido e
+## substituído pelos arrays completos):
 ##
-## What stays: the per-interval submodel study (v_xz/v_xy/v_res, one
-## fixed point per interval) is UNCHANGED in behaviour -- it is still
-## the right tool for "does v converge, per feature" (see
-## check_resolution_fem_convergence_total.py), and it never depended on
-## anything MomentConvergenceStudy-specific. RichardsonGCI/_DummyGCI/
-## _compute_gci are also UNCHANGED and still metric-agnostic -- they
-## are reused as-is by global_convergence_study.py.
+##   - metric_spec.py (MetricSpec, eval_points_for_interval,
+##     default_displacement_metrics, *Strategy) -- REMOVIDO daqui.
+##     Substituído por duas coisas INDEPENDENTES uma da outra:
+##       1. "formas de avaliar" -- funções genéricas, registadas por
+##          decorator (register_eval_form), que operam sobre um array
+##          NUMPY simples (mais x_nodes/x quando precisam de um
+##          ponto) -- nunca sabem de que variável (M, v, ...) o array
+##          veio.
+##       2. "variável" -- só o NOME do campo em SubmodelResult
+##          (v_xz, M_xz, u, ...), usado com getattr() para ir buscar o
+##          array antes de chamar a forma de avaliar.
+##     O utilizador combina as duas em tuplos simples:
+##       ("M_xz", "max_minus_mean")              -- sem ponto
+##       ("v_xz", "at_point", "centroid")         -- com ponto
+##     (motivo de serem independentes: o problema de convergência de M
+##     na análise bearing-a-bearing NÃO era resolvido por avaliação
+##     pontual -- o pico de M(x) desloca-se ligeiramente entre grades
+##     -- e sim pelo desvio entre o máximo e a média de M sobre o
+##     intervalo inteiro. Essa mesma forma de avaliar, max_minus_mean,
+##     não tem nada de específico a M -- serve para qualquer variável.)
+##   - SubmodelSolver/SubmodelSolution (submodel_solver/lagrange_multipliers.py)
+##     -- REMOVIDO. O loop de grades sai para o dispatcher; este módulo
+##     recebe SubmodelResult já resolvidos via add_level().
+##   - SubmodelConvergencePostProcessing (submodel_solver/submodel_postprocessing.py)
+##     -- REMOVIDO (nunca existiu como tal -- ver nota acima -- e mesmo
+##     que existisse seria redundante: SubmodelResult que chega aqui já
+##     está pós-processado).
+##   - intervals_from_shaft_system() -- REMOVIDO daqui. Lia
+##     shaft_system.gears/.bearings/.distributed_radial_loads e
+##     axisforge.config.MIN_FACE_WIDTH_FOR_CONVERGENCE_MM -- nenhum dos
+##     dois é results/. Passa a ser trabalho do dispatcher (é ele quem
+##     já precisa de conhecer ShaftSystem para resolver os "pontos"
+##     nomeados e para correr o SubmodelSolver).
 ##
-## RENAMED (this pass, confirmed with erg 2026-09-17): the class itself
-## goes back to being called `MeshConvergenceStudy` (no more
-## `DisplacementConvergenceStudy` name + a `MeshConvergenceStudy = ...`
-## back-compat alias underneath it). Per erg: "isto desapareceu por
-## causa do global correto, entao nao faz sentido manter o nome como
-## displacement... passava para um geral como o MeshConvergenceStudy
-## apenas" -- the "Displacement" qualifier only ever made sense as a
-## contrast against MomentConvergenceStudy (a sibling class tracking a
-## different variable); now that MomentConvergenceStudy is gone and M
-## convergence lives entirely in the global study instead, there is no
-## longer a family of per-interval study classes to disambiguate
-## between -- just the one, so it gets the one general name. It still
-## only ever tracks whatever MetricSpec list it's given (v by default,
-## via default_displacement_metrics()) -- nothing about its actual
-## behaviour changed, only the name.
-##
-## What else moved because of this: metric_spec.py's "moment_point"/
-## "moment_centroid" MetricSpec kinds, build_moment_point_metrics(),
-## default_moment_metrics(), the dead field_M_xz/xy/res field functions,
-## and PeakTrackingStrategy (only ever wired for a moment-tracking
-## strategy that no longer exists) are removed there too -- see that
-## module's own CHANGED note. convergence_study.py's study_kind="moment"
-## branch and its min_p/max_p/components kwargs are removed -- the
-## dispatcher now only knows "displacement" and "global". ConvergenceRecord's
-## n_points/point_x fields (only ever set by MomentConvergenceStudy) are
-## removed from convergence_results.py, and convergence_report.py's
-## "tracked points (fixed at grade_0)" rendering is removed to match.
+## O que fica exatamente igual: RichardsonGCI e _DummyGCI -- já eram
+## metric-agnostic (só recebem floats + listas de x_nodes), não tinham
+## nenhum dos três imports banidos, não precisaram de mudar uma linha.
+
+TODO(owner): as funções de "forma de avaliar" estão neste mesmo
+ficheiro (max/mean/max_minus_mean/at_point) em vez de num
+eval_forms.py à parte (ao estilo de contact_postprocessing.py separado
+de contact_solver.py no iso_16281/) -- ainda não confirmaste se
+preferes separado. Fácil de mover depois, mantido aqui por agora para
+não multiplicar ficheiros antes de estabilizar a forma.
+
+TODO(owner): peak_shifted (ConvergenceRecord, results/fem_results/convergence_results.py)
+fica sempre vazio aqui -- nenhuma forma de avaliar devolve hoje "onde
+está o extremo", só o valor. Se quiseres isto de volta, uma forma como
+"max_minus_mean" teria de devolver (valor, x_do_extremo) em vez de só
+valor, e add_level() teria de comparar esse x entre níveis -- não feito
+nesta passagem.
 
 References
 ----------
@@ -104,33 +80,114 @@ Richardson, L.F. (1911). Phil. Trans. R. Soc. London A, 210, 307-357.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import Callable, TYPE_CHECKING
 
 import numpy as np
 
-from axisforge.solvers.machine_elements.shaft.fem_solvers.submodel_solver.lagrange_multipliers import (
-    SubmodelSolver,
-    SubmodelSolution,
-)
-from axisforge.solvers.machine_elements.shaft.fem_solvers.submodel_solver.submodel_postprocessing import (
-    SubmodelConvergencePostProcessing,
-)
-from axisforge.config import MIN_FACE_WIDTH_FOR_CONVERGENCE_MM
-from axisforge.results.fem_results.convergence_results import (
-    ConvergenceRecord,
-    MeshRefinementResult,
-)
-from axisforge.results.fem_results.submodel_results import SubmodelResult
-from axisforge.solvers.mesh.metric_spec import (
-    MetricSpec,
-    default_displacement_metrics,
-    eval_points_for_interval,
-)
+from axisforge.results.fem_results.convergence_results import ConvergenceRecord, MeshRefinementResult
 
 if TYPE_CHECKING:  # pragma: no cover
-    from axisforge.mesh.shaft.beam_model_settings import BeamModelSettings
-    from axisforge.results.fem_results.shaft_results import ShaftResults
+    from axisforge.results.fem_results.submodel_results import SubmodelResult
+
+
+# ===========================================================================
+# Registo de "formas de avaliar" -- independentes de qualquer variável.
+# Mesmo padrão de dispatch.py::register_contact_solver() (iso_16281/).
+# ===========================================================================
+
+EvalFormAggregate = Callable[[np.ndarray], float]
+"""Assinatura para uma forma que agrega sobre o array inteiro -- não
+precisa de saber onde é cada nó, só dos valores. Ex: max, mean,
+max_minus_mean."""
+
+EvalFormPoint = Callable[[np.ndarray, list, float], float]
+"""Assinatura para uma forma que lê um único ponto -- recebe
+(values, x_nodes, x). Ex: at_point."""
+
+_EVAL_FORM_REGISTRY: dict[str, "EvalFormAggregate | EvalFormPoint"] = {}
+_POINT_FORMS: set[str] = set()
+
+
+def register_eval_form(name: str, *, needs_point: bool = False):
+    """
+    Decorator -- regista uma forma de avaliar sob um nome, independente
+    de qualquer variável (a função nunca vê M/v/theta -- só o array de
+    valores que o chamador já foi buscar com getattr()).
+
+    needs_point : marca se a assinatura da função é
+        (values, x_nodes, x) -- True -- ou só (values) -- False
+        (default). add_level() usa isto para saber se tem de resolver
+        um ponto nomeado para esta forma antes de a chamar.
+    """
+    def decorator(fn):
+        if name in _EVAL_FORM_REGISTRY:
+            raise ValueError(f"register_eval_form: '{name}' already registered")
+        _EVAL_FORM_REGISTRY[name] = fn
+        if needs_point:
+            _POINT_FORMS.add(name)
+        return fn
+    return decorator
+
+
+def resolve_eval_form(name: str):
+    try:
+        return _EVAL_FORM_REGISTRY[name]
+    except KeyError:
+        raise ValueError(
+            f"resolve_eval_form: unknown eval form '{name}' -- "
+            f"registered: {sorted(_EVAL_FORM_REGISTRY)}"
+        ) from None
+
+
+# --- formas concretas -- genéricas, nenhuma sabe de que variável veio o array ---
+
+@register_eval_form("max")
+def _eval_max(values: np.ndarray) -> float:
+    return float(np.max(np.abs(values)))
+
+
+@register_eval_form("mean")
+def _eval_mean(values: np.ndarray) -> float:
+    return float(np.mean(values))
+
+
+@register_eval_form("max_minus_mean")
+def _eval_max_minus_mean(values: np.ndarray) -> float:
+    """
+    Desvio absoluto entre o máximo (em módulo) e a média, sobre o
+    array inteiro -- a forma que resultou para M na análise
+    bearing-a-bearing, quando avaliação pontual não resultava (o pico
+    de M(x) desloca-se ligeiramente entre grades; comparar
+    max-vs-mean é robusto a esse deslocamento, ao contrário de fixar
+    um x)."""
+    return float(np.max(np.abs(values)) - np.mean(values))
+
+
+@register_eval_form("max_minus_mean_relative")
+def _eval_max_minus_mean_relative(values: np.ndarray) -> float:
+    """Versão normalizada de max_minus_mean -- ver essa docstring.
+    Levanta se a média for exatamente 0.0 (caso degenerado, ex. um
+    campo antissimétrico sobre o intervalo) em vez de propagar um
+    ZeroDivisionError silencioso; _compute_gci() já sabe apanhar isto
+    e cair para _DummyGCI, tal como para qualquer outro degenerado."""
+    mean = float(np.mean(values))
+    if mean == 0.0:
+        raise ValueError("max_minus_mean_relative: mean is 0.0 -- cannot normalize")
+    return float((np.max(np.abs(values)) - mean) / mean)
+
+
+@register_eval_form("at_point", needs_point=True)
+def _eval_at_point(values: np.ndarray, x_nodes: list, x: float) -> float:
+    """Lê o valor no nó cuja posição bate com x -- x tem de já
+    coincidir com um nó de x_nodes (o dispatcher é responsável por
+    isso, o mesmo mecanismo de hard_points que SubmodelSolver.solve()
+    já usa para garantir que um ponto pedido sobrevive ao dedupe da
+    malha)."""
+    for i, xi in enumerate(x_nodes):
+        if abs(xi - x) < 1e-6:
+            return float(values[i])
+    raise ValueError(f"at_point: x={x} not found in x_nodes (tol=1e-6)")
 
 
 # ===========================================================================
@@ -145,7 +202,8 @@ class _DummyGCI:
 
 
 # ===========================================================================
-# Richardson GCI
+# Richardson GCI -- inalterado desta passagem, já era metric-agnostic
+# (só floats + listas de x_nodes, nunca um MetricSpec/solver/SubmodelResult).
 # ===========================================================================
 
 class RichardsonGCI:
@@ -158,25 +216,20 @@ class RichardsonGCI:
 
     Parameters
     ----------
-    f_coarse        : metric value at coarse level
-    f_medium        : metric value at medium level
-    f_fine          : metric value at fine level
-    x_nodes_coarse  : node positions at coarse level
-    x_nodes_medium  : node positions at medium level
-    x_nodes_fine    : node positions at fine level
+    f_coarse, f_medium, f_fine : valor da forma de avaliar em cada nível
+    x_nodes_coarse/medium/fine : posições dos nós em cada nível
     gci_threshold   : fractional error threshold for convergence (default 0.01 = 1%)
     safety_factor   : Fs — 1.25 if p is verified in asymptotic range, 3.0 otherwise
-    min_p           : lower clamp on observed order — guards against coarse-level noise
-    max_p           : upper clamp on observed order — guards against super-convergence artefacts
+    min_p, max_p    : clamp on observed order
     """
 
     def __init__(self,
                  f_coarse: float,
                  f_medium: float,
                  f_fine: float,
-                 x_nodes_coarse: list[float],
-                 x_nodes_medium: list[float],
-                 x_nodes_fine: list[float],
+                 x_nodes_coarse: list,
+                 x_nodes_medium: list,
+                 x_nodes_fine: list,
                  gci_threshold: float = 0.01,
                  safety_factor: float = 1.25,
                  min_p: float | None = None,
@@ -191,10 +244,6 @@ class RichardsonGCI:
         self.f_medium       = f_medium
         self.f_fine         = f_fine
 
-        # Explicit guard before dividing, instead of letting a level
-        # with only 1 node raise a raw ZeroDivisionError. Raise
-        # ValueError here, let _compute_gci's fallback handle it like
-        # any other "can't build a real GCI from this" case.
         n_c = len(x_nodes_coarse) - 1
         n_m = len(x_nodes_medium) - 1
         n_f = len(x_nodes_fine) - 1
@@ -225,15 +274,6 @@ class RichardsonGCI:
 
         self.r = self.r_f_m
 
-        # "trivially converged" short-circuit. A tracked metric can be
-        # essentially FLAT across grades -- e.g. M_xy for a shaft whose
-        # load is entirely in the XZ plane. If the level-to-level change
-        # is already negligible relative to the metric's own scale
-        # (RELATIVE_FLAT_TOL) AND in absolute terms (ABS_FLAT_TOL, for a
-        # metric whose true value is itself ~0), treat this transition
-        # as converged outright -- GCI_m_c=GCI_f_m=0.0, converged=True --
-        # instead of raising. p/e_m_c/e_f_m/f_h0 stay their NaN defaults
-        # (getattr(..., float("nan")) upstream in gci_detail_table()).
         scale = max(abs(self.f_coarse), abs(self.f_medium), abs(self.f_fine), 1.0)
         RELATIVE_FLAT_TOL = 1e-8
         ABS_FLAT_TOL = 1e-9
@@ -252,14 +292,6 @@ class RichardsonGCI:
             self.converged = True
             return
 
-        # observed order of convergence
-        # guard the ratio BEFORE log, not after -- a sign change between
-        # (f_coarse-f_medium) and (f_medium-f_fine) (oscillatory
-        # convergence) makes this ratio negative, and np.log() of a
-        # negative number silently returns nan instead of raising. Raise
-        # explicitly here so the existing except -> _DummyGCI() fallback
-        # in _compute_gci handles this exactly like the other degenerate
-        # cases.
         if self.f_medium == self.f_fine:
             raise ValueError(
                 "f_medium == f_fine -- cannot compute observed order p "
@@ -281,19 +313,12 @@ class RichardsonGCI:
         if max_p is not None:
             self.p = min(self.p, max_p)
 
-        # guard against the degenerate p ~= 0 case (r**p - 1 == 0) --
-        # both the f_h0 extrapolation and the GCI formulas divide by
-        # r**p - 1.
         if abs(self.r**self.p - 1.0) < 1e-12:
             raise ValueError(
                 f"Degenerate observed order p={self.p:.6g} (r**p - 1 ~= 0) -- "
                 f"cannot extrapolate or compute GCI for this metric/interval."
             )
 
-        # Explicit guard before dividing by f_coarse/f_medium -- a
-        # metric that lands exactly on 0.0 at a level (M sampled at a
-        # sign-change node) raises ValueError here instead of a raw
-        # ZeroDivisionError, falling back to _DummyGCI the same way.
         if self.f_coarse == 0.0:
             raise ValueError(
                 "f_coarse == 0.0 -- cannot compute relative error e_m_c "
@@ -318,280 +343,201 @@ class RichardsonGCI:
         self.converged     = self.converged_f_m and self.converged_m_c
 
 
-def _compute_gci(f_c, f_m, f_f, x_c, x_m, x_f, spec: MetricSpec) -> "RichardsonGCI | _DummyGCI":
+def _compute_gci(f_c, f_m, f_f, x_c, x_m, x_f, *,
+                  gci_threshold: float, safety_factor: float,
+                  min_p: float | None, max_p: float | None) -> "RichardsonGCI | _DummyGCI":
     """
-    Metric-agnostic GCI computation with fallback -- shared by
-    MeshConvergenceStudy (this module) and by
-    global_convergence_study.run_global_convergence() (imports this
-    function directly). `spec` only needs to duck-type gci_threshold/
-    safety_factor/min_p/max_p; this function never checks its concrete
-    type.
-
-    except clause is widened from `except ValueError` to
-    `except (ValueError, ZeroDivisionError, ArithmeticError)` as
-    defense in depth -- RichardsonGCI itself converts every
-    division-by-zero path it knows about into an explicit ValueError,
-    but this still catches a future degenerate case that raises
-    ZeroDivisionError/ArithmeticError directly.
+    Metric-agnostic GCI computation with fallback. CHANGED nesta
+    passagem: recebia um `spec: MetricSpec` e lia
+    gci_threshold/safety_factor/min_p/max_p dele -- agora recebe-os
+    diretamente como kwargs, porque MetricSpec deixou de existir.
+    Isto significa que, tal como está, gci_threshold/safety_factor/
+    min_p/max_p são os MESMOS para todos os pedidos (field, form[, point])
+    de um MeshConvergenceStudy -- já não há override por-métrica
+    individual como um MetricSpec permitia. Se precisares de thresholds
+    diferentes por pedido, diz -- não implementado aqui porque o tuplo
+    simples que escolheste não carrega essa informação.
     """
     try:
         return RichardsonGCI(
             f_coarse=f_c, f_medium=f_m, f_fine=f_f,
             x_nodes_coarse=x_c, x_nodes_medium=x_m, x_nodes_fine=x_f,
-            gci_threshold=spec.gci_threshold,
-            safety_factor=spec.safety_factor,
-            min_p=spec.min_p,
-            max_p=spec.max_p,
+            gci_threshold=gci_threshold, safety_factor=safety_factor,
+            min_p=min_p, max_p=max_p,
         )
     except (ValueError, ZeroDivisionError, ArithmeticError):
-        # non-uniform refinement ratio, degenerate/non-monotonic order,
-        # a metric landing exactly on 0.0, a level with 1 node, etc.
-        # (see RichardsonGCI's own guards) -- dummy, converged=False
         return _DummyGCI()
 
 
 # ===========================================================================
-# Orchestrator -- DISPLACEMENT (per-interval, local submodels)
+# Request label -- deriva a chave de dicionário usada em
+# ConvergenceRecord.point_metrics_history/gci_history a partir do tuplo
+# (field, form[, point]).
+# ===========================================================================
+
+EvalRequest = tuple  # (field_name, form_name) ou (field_name, form_name, point_name)
+
+
+def _request_label(request: EvalRequest) -> str:
+    return ":".join(request)
+
+
+# ===========================================================================
+# Orchestrator -- SEM solves. Recebe um SubmodelResult por nível, já
+# resolvido por um dispatcher; só faz a bookkeeping de convergência +
+# GCI.
 # ===========================================================================
 
 class MeshConvergenceStudy:
     """
-    Runs the mesh refinement study for all the intervals selected
-    in a ShaftSystem, tracking whichever metrics its `metrics` list
-    says to (v_xz/v_xy/v_res by default, via
-    default_displacement_metrics()), one fixed evaluation point per
-    interval.
-
-    ## RENAMED (2026-09-17): this class used to be split into
-    ## DisplacementConvergenceStudy + MomentConvergenceStudy (two
-    ## sibling per-interval studies, one per tracked variable). Now
-    ## that MomentConvergenceStudy is removed -- M convergence lives
-    ## entirely in the global bearing-to-bearing study instead (see
-    ## global_convergence_study.py) -- there is only ever one
-    ## per-interval study class again, so it goes back to its original,
-    ## general name rather than keeping a "Displacement" qualifier that
-    ## no longer contrasts against anything.
-
-    Strategy  : SubmodelSolver with successive grades (grade_0, grade_1, ...)
-    Criterion : RichardsonGCI, run independently per tracked metric.
-                ALL intervals must satisfy GCI < threshold for EVERY
-                requested metric. See metric_spec.py.
+    Bookkeeping de convergência por intervalo, dado um SubmodelResult
+    por nível de refinamento -- fornecido de fora (não corre nenhum
+    solve). Ver módulo docstring para a divisão de responsabilidades
+    com o dispatcher.
 
     Parameters
     ----------
-    shaft_results : ShaftResults
-        Already-solved global result (RigidSupportFEMSolver + a reader
-        that populates ShaftResults) -- used as prescribed BCs for every
-        submodel. This solver never solves the global model itself and
-        never imports RigidSupportFEMSolver (see solvers/README.md's
-        design contract).
-    settings : BeamModelSettings
-        Forwarded to SubmodelSolver.solve() for every submodel element
-        build -- must match whatever theory shaft_results was solved
-        with.
-    metrics : list[MetricSpec] | None
-        Which variables to track, and how. Defaults to
-        default_displacement_metrics() -- v_xz/v_xy/v_res.
-    gci_threshold, safety_factor : fallback defaults for MetricSpecs
-        built without their own (each MetricSpec carries its own; these
-        have no effect on a `metrics` list that already sets them).
-    max_levels : maximum grade levels before giving up.
+    requests : list[tuple]
+        Cada tuplo é (field_name, form_name) ou
+        (field_name, form_name, point_name). field_name é lido de
+        SubmodelResult via getattr(); form_name tem de estar registado
+        via register_eval_form(); point_name só é necessário quando a
+        forma tem needs_point=True, e o valor real (x) para esse nome
+        vem do parâmetro `points` de add_level() -- resolvido pelo
+        dispatcher, nunca aqui.
+    gci_threshold, safety_factor, min_p, max_p :
+        Aplicados a TODOS os pedidos -- ver nota em _compute_gci()
+        sobre a perda do override por-métrica que MetricSpec permitia.
+    min_levels_for_gci : Richardson requires 3 evaluations minimum.
     """
 
-    _MIN_LEVELS_FOR_GCI = 3  # Richardson requires 3 evaluations minimum
+    _MIN_LEVELS_FOR_GCI = 3
 
     def __init__(
         self,
-        shaft_results: "ShaftResults",
-        settings: "BeamModelSettings",
-        metrics: list[MetricSpec] | None = None,
+        requests: list[EvalRequest],
         gci_threshold: float = 0.01,
         safety_factor: float = 1.25,
-        max_levels: int = 8,
+        min_p: float | None = None,
+        max_p: float | None = None,
     ):
-        self._shaft_results = shaft_results
-        self._settings       = settings
-        self._metrics        = metrics if metrics is not None else default_displacement_metrics()
-        self._gci_threshold = gci_threshold
-        self._safety_factor = safety_factor
-        self._max_levels    = max_levels
-        self._postproc = SubmodelConvergencePostProcessing()
-
-    def run(self,
-            shaft_system,
-            intervals: list[tuple[float, float, str]]) -> MeshRefinementResult:
-        """
-        Run the convergence study for the specified intervals.
-
-        Parameters
-        ----------
-        shaft_system : full ShaftSystem
-        intervals    : list of (x_lo, x_hi, label) — any zone of interest,
-                       not limited to distributed radial loads.
-                       e.g. bearing zones, gear face widths, custom regions.
-        """
-        if self._shaft_results.d_total_xz is None or len(self._shaft_results.d_total_xz) == 0:
-            raise RuntimeError(
-                "MeshConvergenceStudy.run() requires an already-solved ShaftResults "
-                "(shaft_results.d_total_xz is empty/None). Solve the global model "
-                "first (RigidSupportFEMSolver + a results reader) and pass the "
-                "resulting ShaftResults in -- this study never solves the global "
-                "model itself."
-            )
-
-        result = MeshRefinementResult(shaft_name=getattr(shaft_system, "name", ""))
-        for x_lo, x_hi, label in intervals:
-            result.per_load[label] = self._converge_one_load(
-                shaft_system, x_lo, x_hi, label
-            )
-        return result
-
-    def _converge_one_load(self, shaft_system, x_lo, x_hi, label) -> ConvergenceRecord:
-        rec    = ConvergenceRecord(label=label, x_lo=x_lo, x_hi=x_hi)
-        solver = SubmodelSolver(x_lo=x_lo, x_hi=x_hi)
-
-        # history[grade_index] = (grade_name, SubmodelSolution, SubmodelResult)
-        history: list[tuple[str, SubmodelSolution, SubmodelResult]] = []
-        grade0_x_nodes: list[float] | None = None
-
-        for level in range(self._max_levels):
-            grade = f"grade_{level}"
-            prev_solution = history[-1][1] if history else None
-
-            solution = solver.solve(self._shaft_results, shaft_system, self._settings, grade)
-            if level == 0:
-                grade0_x_nodes = list(solution.x_nodes)
-
-            submodel_result = self._postproc.process(
-                solution, self._metrics, shaft_system, grade0_x_nodes, prev_solution,
-            )
-
-            rec.levels.append(grade)
-            rec.point_metrics_history.append(submodel_result.metric_values)
-            history.append((grade, solution, submodel_result))
-
-            if len(history) >= self._MIN_LEVELS_FOR_GCI:
-                _, _, res_c = history[-3]
-                _, _, res_m = history[-2]
-                _, _, res_f = history[-1]
-
-                gci_this_transition: dict[str, RichardsonGCI] = {}
-                for spec in self._metrics:
-                    gci_this_transition[spec.name] = self._compute_gci(
-                        res_c.metric_values[spec.name],
-                        res_m.metric_values[spec.name],
-                        res_f.metric_values[spec.name],
-                        res_c.x_nodes, res_m.x_nodes, res_f.x_nodes,
-                        spec,
-                    )
-                rec.gci_history.append(gci_this_transition)
-
-                if all(g.converged for g in gci_this_transition.values()):
-                    rec.converged = True
-                    rec.x_final   = list(res_f.x_nodes)
-                    return rec
-
-        if history:
-            rec.x_final = list(history[-1][2].x_nodes)
-        return rec
-
-    def _compute_gci(self, f_c, f_m, f_f, x_c, x_m, x_f, spec: MetricSpec) -> "RichardsonGCI | _DummyGCI":
-        """One-line delegator to the module-level _compute_gci() above."""
-        return _compute_gci(f_c, f_m, f_f, x_c, x_m, x_f, spec)
-
-    # ===========================================================================
-    # Helpers
-    # ===========================================================================
-
-    def _eval_points_for_interval(
-        self,
-        shaft_system,
-        x_lo: float,
-        x_hi: float,
-    ) -> list[float]:
-        """
-        One-line delegator to metric_spec.eval_points_for_interval() --
-        was a full standalone copy of the same body. FixedPointStrategy
-        (metric_spec.py) calls that same shared function directly, so
-        this method and FixedPointStrategy.points() are guaranteed to
-        stay identical.
-        """
-        return eval_points_for_interval(shaft_system, x_lo, x_hi)
-
-    VALID_REGIONS = frozenset({"gears", "external_distributed", "bearings"})
-
-    @staticmethod
-    def intervals_from_shaft_system(
-        shaft_system,
-        regions: "set[str] | None" = None,
-    ) -> tuple[list[tuple[float, float, str]], list[str]]:
-        """
-        Parameters
-        ----------
-        regions : set[str] | None
-            Which sources to scan for intervals -- any subset of
-            {"gears", "external_distributed", "bearings"}. None (default)
-            scans all three.
-
-            "bearings" stays available here even though no fixtures-side
-            capability exposes it today: the interval it produces still
-            only represents a RIGID point reaction (bearing.position),
-            not the real load distribution across rolling elements.
-
-        Raises
-        ------
-        ValueError
-            If `regions` contains anything outside VALID_REGIONS.
-        """
-        if regions is None:
-            regions = set(MeshConvergenceStudy.VALID_REGIONS)
-        else:
-            unknown = regions - MeshConvergenceStudy.VALID_REGIONS
-            if unknown:
+        self._requests = list(requests)
+        for request in self._requests:
+            form_name = request[1]
+            resolve_eval_form(form_name)  # valida cedo -- falha já na construção, não a meio de um estudo
+            needs_point = form_name in _POINT_FORMS
+            if needs_point and len(request) != 3:
                 raise ValueError(
-                    f"intervals_from_shaft_system: unknown region(s) {sorted(unknown)} "
-                    f"-- expected a subset of {sorted(MeshConvergenceStudy.VALID_REGIONS)}."
+                    f"MeshConvergenceStudy: request {request} uses form "
+                    f"'{form_name}', which needs a point -- expected "
+                    f"(field_name, form_name, point_name)."
+                )
+            if not needs_point and len(request) != 2:
+                raise ValueError(
+                    f"MeshConvergenceStudy: request {request} uses form "
+                    f"'{form_name}', which takes no point -- expected "
+                    f"(field_name, form_name)."
                 )
 
-        intervals: list[tuple[float, float, str]] = []
-        skipped:   list[str] = []
-        seen: set[tuple[float, float]] = set()
+        self._gci_threshold = gci_threshold
+        self._safety_factor = safety_factor
+        self._min_p = min_p
+        self._max_p = max_p
 
-        def _add(x_lo: float, x_hi: float, label: str) -> None:
-            key = (round(x_lo, 4), round(x_hi, 4))
-            if key not in seen:
-                seen.add(key)
-                intervals.append((x_lo, x_hi, label))
+        # bookkeeping privado -- x_nodes por nível, por record. Não
+        # guardado em ConvergenceRecord (não é um campo desse dataclass
+        # e não fui autorizado a alterar convergence_results.py) --
+        # vive só durante a vida desta instância de MeshConvergenceStudy,
+        # chaveado por id(rec). Pressupõe que cada ConvergenceRecord é
+        # processado até ao fim (converged ou max_levels esgotados)
+        # antes de o objeto ser descartado -- não pensado para
+        # sobreviver a um record reconstruído com o mesmo id() depois
+        # de o original ser garbage-collected.
+        self._x_nodes_history: dict[int, list[list[float]]] = {}
 
-        if "gears" in regions:
-            for ge in shaft_system.gears:
-                lo, hi = shaft_system.gear_extent(ge)
-                label  = ge.label or f"gear@{ge.position:.1f}"
-                if (hi - lo) < MIN_FACE_WIDTH_FOR_CONVERGENCE_MM:
-                    skipped.append(
-                        f"Gear '{label}' @ {ge.position:.4f} mm — no face width defined "
-                        f"(b < {MIN_FACE_WIDTH_FOR_CONVERGENCE_MM} mm). "
-                        f"Set gear.b to include it in the convergence study."
+    def new_record(self, label: str, x_lo: float, x_hi: float) -> ConvergenceRecord:
+        return ConvergenceRecord(label=label, x_lo=x_lo, x_hi=x_hi)
+
+    def add_level(
+        self,
+        rec: ConvergenceRecord,
+        grade: str,
+        result: "SubmodelResult",
+        points: dict[str, float] | None = None,
+    ) -> bool:
+        """
+        Regista mais um nível de refinamento em `rec`. Devolve True se
+        esta atualização atingiu convergência (rec.converged e
+        rec.x_final ficam definidos) -- o dispatcher usa o retorno para
+        decidir se para o loop de grades.
+
+        points : {point_name: x} para os pedidos que precisam de ponto
+            -- já resolvido (ex: "centroid" -> 47.3) por quem chama.
+            Ausente/None se nenhum pedido desta study precisar de ponto.
+        """
+        metrics: dict[str, float] = {}
+        for request in self._requests:
+            field_name, form_name = request[0], request[1]
+            values = getattr(result, field_name)
+            form = resolve_eval_form(form_name)
+
+            if form_name in _POINT_FORMS:
+                point_name = request[2]
+                if points is None or point_name not in points:
+                    raise ValueError(
+                        f"add_level: request {request} needs point "
+                        f"'{point_name}', not provided in `points`."
                     )
-                    continue
-                _add(lo, hi, label)
+                value = form(values, result.x_nodes, points[point_name])
+            else:
+                value = form(values)
 
-        if "external_distributed" in regions:
-            for ld in shaft_system.distributed_radial_loads:
-                label = ld.label or f"dist@[{ld.x_lo:.1f},{ld.x_hi:.1f}]"
-                _add(ld.x_lo, ld.x_hi, label)
+            metrics[_request_label(request)] = value
 
-        if "bearings" in regions:
-            for b in shaft_system.bearings:
-                lo, hi = shaft_system.bearing_extent(b)
-                label  = getattr(b, "label", "") or getattr(b, "designation", "") or f"bearing@{b.position:.1f}"
-                if (hi - lo) < MIN_FACE_WIDTH_FOR_CONVERGENCE_MM:
-                    skipped.append(
-                        f"Bearing '{label}' @ {b.position:.4f} mm — no width defined "
-                        f"(b < {MIN_FACE_WIDTH_FOR_CONVERGENCE_MM} mm). "
-                        f"Set bearing.b to include it in the convergence study."
-                    )
-                    continue
-                _add(lo, hi, label)
+        rec.levels.append(grade)
+        rec.point_metrics_history.append(metrics)
 
-        return intervals, skipped
+        x_history = self._x_nodes_history.setdefault(id(rec), [])
+        x_history.append(list(result.x_nodes))
+
+        if len(rec.levels) >= self._MIN_LEVELS_FOR_GCI:
+            gci_this_transition: dict[str, "RichardsonGCI | _DummyGCI"] = {}
+            for label in metrics:
+                f_c = rec.point_metrics_history[-3][label]
+                f_m = rec.point_metrics_history[-2][label]
+                f_f = rec.point_metrics_history[-1][label]
+                x_c, x_m, x_f = x_history[-3], x_history[-2], x_history[-1]
+                gci_this_transition[label] = _compute_gci(
+                    f_c, f_m, f_f, x_c, x_m, x_f,
+                    gci_threshold=self._gci_threshold,
+                    safety_factor=self._safety_factor,
+                    min_p=self._min_p, max_p=self._max_p,
+                )
+            rec.gci_history.append(gci_this_transition)
+
+            if all(g.converged for g in gci_this_transition.values()):
+                rec.converged = True
+                rec.x_final = list(result.x_nodes)
+                return True
+
+        return False
+
+    def finalize_unconverged(self, rec: ConvergenceRecord, result: "SubmodelResult") -> None:
+        """
+        Chamar quando max_levels foi esgotado sem convergir --
+        replica o fallback do draft antigo ("if history: rec.x_final =
+        list(history[-1][2].x_nodes)"), incluindo a mesma ressalva já
+        documentada em MeshRefinementResult.all_extra_nodes: isto
+        publica x_final mesmo sem rec.converged==True. Chamador
+        (dispatcher) decide se quer mesmo isso -- não mudado aqui, só
+        exposto explicitamente em vez de ficar escondido dentro de um
+        loop.
+        """
+        rec.x_final = list(result.x_nodes)
+
+
+def build_mesh_refinement_result(shaft_name: str, per_load: dict[str, ConvergenceRecord]) -> MeshRefinementResult:
+    """Pequeno helper -- monta o MeshRefinementResult final a partir
+    dos ConvergenceRecord já preenchidos pelo dispatcher, um por
+    intervalo. Não faz mais nada além de instanciar a dataclass."""
+    return MeshRefinementResult(shaft_name=shaft_name, per_load=per_load)

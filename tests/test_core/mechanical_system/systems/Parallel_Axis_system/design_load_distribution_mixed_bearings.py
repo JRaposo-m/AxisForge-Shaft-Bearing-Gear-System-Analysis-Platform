@@ -149,7 +149,7 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system imp
     SpurHelicalMeshLink, SpurHelicalGearSystem,
 )
 from axisforge.solvers.machine_elements.shaft.fem_solvers.global_solver.rigid_support import RigidSupportFEMSolver
-from axisforge.solvers.machine_elements.shaft.static_solvers.results_reader import (
+from axisforge.solvers.machine_elements.shaft.fem_solvers.global_solver.global_postprocessing import (
     ShaftResultsReader,)
 from axisforge.fixtures.studies.shafts.fem_studies.results_library import (
     RigidSupportFEMResultsLibrary,
@@ -182,7 +182,7 @@ from axisforge.fixtures.studies.bearings.load_distribution.no_lubrication.single
 from axisforge.mesh.shaft.mesh_generation.mesh_1D import Mesh1D
 from axisforge.mesh.shaft.mesh_generation.mesh_grade import Grader
 
-from axisforge.solvers.machine_elements.shaft.static_solvers.torsion import solve_torsion
+from axisforge.solvers.machine_elements.shaft.fem_solvers.global_solver.torsion import solve_torsion
 from axisforge.mesh.shaft.beam_model_settings import BeamModelSettings
 
 from dataclasses import dataclass

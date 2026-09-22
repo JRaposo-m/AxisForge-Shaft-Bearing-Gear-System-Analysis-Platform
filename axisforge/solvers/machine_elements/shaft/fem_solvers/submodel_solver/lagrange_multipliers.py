@@ -108,7 +108,7 @@ from axisforge.solvers.machine_elements.shaft.fem_solvers.constraints.submodel_e
     extract_submodel_values,
 )
 from axisforge.solvers.machine_elements.shaft.fem_solvers.submodel_solver.submodel_postprocessing import (
-    SubmodelPostProcessor,
+    build_submodel_result,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -372,7 +372,7 @@ class SubmodelSolver:
         # solve() returns the postprocessed result directly -- see the
         # module docstring's second CHANGED note. SubmodelSolution stays
         # a local, unreturned intermediate.
-        return SubmodelPostProcessor().process(solution)
+        return build_submodel_result(solution)
 
     # ------------------------------------------------------------------
     # Load-case construction (submodel-specific: filters + clamps to

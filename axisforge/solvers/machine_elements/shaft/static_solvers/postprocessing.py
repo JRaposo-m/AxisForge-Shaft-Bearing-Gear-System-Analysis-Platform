@@ -20,7 +20,7 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from axisforge.solvers.machine_elements.shaft.static_solvers.results_reader import ShaftResults
+from axisforge.solvers.machine_elements.shaft.fem_solvers.global_solver.global_postprocessing import ShaftResults
 
 if TYPE_CHECKING:
     from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem

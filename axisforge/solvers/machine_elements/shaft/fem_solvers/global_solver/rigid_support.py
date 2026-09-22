@@ -1,11 +1,55 @@
 """
-axisforge/solvers/machine_elements/shaft/fem_solvers/rigid_support.py
+axisforge/solvers/machine_elements/shaft/fem_solvers/global_solver/rigid_support.py
 
 RigidSupportFEMSolver -- models each bearing location as a rigid point
 SUPPORT boundary condition. Knows nothing about rolling-bearing physics
 (ISO 281 / ISO/TS 16281, handled elsewhere in AxisForge). "Rigid" is
 this solver's identity, not one of several modes -- a compliant-bearing
 solver is a sibling module, not a flag on this one.
+
+MOVED (this pass): into global_solver/, sibling to submodel_solver/ --
+same reasoning discussed for lagrange_multipliers.py: this and
+SubmodelSolver are the same kind of thing (a solver that turns a
+ShaftSystem/BeamModelSettings into raw DOFs), so they live at the same
+folder depth now.
+
+BREAKING CHANGE (this pass): solve() used to return None and publish
+every intermediate quantity (x_nodes, elements, d_total_xz, ...) as
+public attributes on the solver instance itself -- re-calling solve()
+overwrote them in place. It now returns a ShaftResults directly --
+same shift already made for SubmodelSolver
+(submodel_solver/lagrange_multipliers.py), and now made consistent here
+too: solve() builds the raw RigidSupportSolution internally, then calls
+global_solver/postprocessing.py's build_shaft_result() on it (M/V
+recovery, torsion, bearing reactions, section properties) and returns
+the finished ShaftResults. RigidSupportSolution stays as a local,
+unreturned intermediate, same role SubmodelSolution plays in
+lagrange_multipliers.py. Every existing caller doing
+    solver.solve(shaft_system)
+    solver.d_total_xz
+needs updating to
+    result = solver.solve(shaft_system)
+    result.d_total_xz
+This solver is more likely than SubmodelSolver to already have callers
+elsewhere in the codebase (validation/fem_studies) -- check before
+relying on this file. This is also a bigger behavioural change than the
+submodel case: solve() now always runs TorsionSolver too, so every call
+pays for torsion even if a caller only wanted the bending/axial DOFs
+(e.g. an optimization loop varying bearing stiffness) -- see the
+"no solver imports another solver" note in postprocessing.py's
+docstring if that cost turns out to matter later.
+
+RigidSupportSolution's field names (elements, d_total_xz, d_total_xy,
+_kGA_override) are chosen to match exactly what
+element_theories/element_postprocessing.py's ElementTheoryPostProcessor
+expects -- deliberately, so global_solver/postprocessing.py's
+GlobalEulerBernoulliPostProcessing/GlobalTimoshenkoPostProcessing need
+no view/adapter object, unlike submodel_solver's SubmodelSolution (which
+chose shorter, locally-nicer names -- d_xz/d_xy -- and pays for that
+with _SubmodelSolverView). The leading underscore on _kGA_override is
+unusual for a public dataclass field; kept anyway for that exact-name
+match, since it mirrors the private attribute name
+RigidSupportFEMSolver already used internally for the same value.
 
 Orchestration only: solve() calls, in order,
   Mesh1D -> Elem.from_mesh (BeamModelSettings-driven)
@@ -14,12 +58,13 @@ Orchestration only: solve() calls, in order,
   -> load_cases.py -> assembly/load_assembly/point_loads.py +
      assembly/load_assembly/distributed_loads.py
   -> linear solve (still beam-theory-agnostic)
-  -> publishes public attributes.
+  -> returns RigidSupportSolution.
 
-Torsion is NOT part of this solver -- it lives in
-static_solvers/torsion.py as a separate static analysis on the same
-ShaftSystem/x_nodes, called independently by whoever needs it. This
-solver only produces bending + axial results.
+Torsion is NOT part of this solver -- it lives in global_solver/torsion.py
+as a separate static analysis on the same ShaftSystem/x_nodes, called
+from global_solver/postprocessing.py's build_shaft_result() (not from
+solve() itself) -- see that module's docstring for why it lives there
+and not here. This solver only produces bending + axial results.
 
 Why frame=True is fixed, not a caller choice: this solver accepts
 AxialLoad and injects it into the global force vector, so the axial
@@ -49,19 +94,16 @@ reusing the same K. Axial DOF is shared between planes -- AxialLoad is
 injected only into the XZ load vector, never XY, to avoid double-
 counting it.
 
-solve() does not return anything -- every intermediate quantity is a
-public attribute on the instance. Call solve() once, then read the
-attributes:
-
-  x_nodes, elements, free_dofs, constrained_dofs,
-  d_total_xz, d_total_xy, f_xz_ext, f_xy_ext
-
-Each is None until solve() has run at least once. Re-calling solve()
-overwrites all of them in place -- build a fresh instance if isolation
-between runs is needed.
+DROPPED (this pass): the previous version stored an unused
+`self._builder = builder` on the instance, left over with no reader
+anywhere -- removed, since RigidSupportSolution has no use for the
+builder object itself, only its output (K).
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -85,13 +127,64 @@ from axisforge.solvers.machine_elements.shaft.fem_solvers.assembly.numerics.gaus
 from axisforge.solvers.machine_elements.shaft.fem_solvers.assembly.numerics.numerical_guards import (
     check_conditioning,
 )
-from axisforge.solvers.machine_elements.shaft.fem_solvers.assembly.load_assembly.vector_external_forces import build_load_cases
+from axisforge.solvers.machine_elements.shaft.fem_solvers.assembly.load_assembly.vector_external_forces import (
+    build_load_cases,
+)
 from axisforge.solvers.machine_elements.shaft.fem_solvers.constraints.boundary_conditions import (
     boundary_dofs,
 )
 from axisforge.solvers.machine_elements.shaft.fem_solvers.constraints.submodel_extraction import (
     extract_submodel_values,
 )
+from axisforge.solvers.machine_elements.shaft.fem_solvers.global_solver.global_postprocessing import (
+    build_shaft_result,
+)
+
+if TYPE_CHECKING:  # pragma: no cover
+    from axisforge.results.fem_results.shaft_results import ShaftResults
+
+
+@dataclass
+class RigidSupportSolution:
+    """
+    Raw solve output for the whole shaft -- pre-postprocessing. Mirrors
+    SubmodelSolution (submodel_solver/lagrange_multipliers.py): data,
+    not behaviour. See module docstring for why the field names match
+    element_postprocessing.py exactly.
+    """
+
+    x_nodes: list[float]
+    elements: list[Elem]
+
+    K: np.ndarray
+    free_dofs: list[int]
+    constrained_dofs: list[int]
+
+    d_total_xz: np.ndarray
+    d_total_xy: np.ndarray
+    f_xz_ext: np.ndarray
+    f_xy_ext: np.ndarray
+    f_xz_total: np.ndarray
+    f_xy_total: np.ndarray
+    f_xz_reaction: np.ndarray
+    f_xy_reaction: np.ndarray
+
+    _kGA_override: float | None = None
+
+    def return_values(self, x: list[float]) -> dict[float, dict[str, float]]:
+        """
+        Same job RigidSupportFEMSolver.return_values() always did --
+        kept as a method here (not a free function) to preserve the
+        existing call shape for whoever already calls
+        solver.return_values(x); the underlying logic
+        (extract_submodel_values) is unchanged, only where it's called
+        from moved (solver -> solution).
+        """
+        return extract_submodel_values(
+            self.x_nodes, x,
+            self.d_total_xz, self.d_total_xy,
+            self.f_xz_total, self.f_xy_total,
+        )
 
 
 class RigidSupportFEMSolver:
@@ -102,12 +195,15 @@ class RigidSupportFEMSolver:
                                       shear_theory="cowper",
                                       integration_method="exact")
         solver = RigidSupportFEMSolver(settings)
-        solver.solve(shaft_system)
-        solver.d_total_xz      # -> np.ndarray, global displacement (XZ)
-        solver.f_xz_total      # -> np.ndarray, global force (incl. reactions)
+        result = solver.solve(shaft_system)
+        result.d_total_xz      # -> np.ndarray, global displacement (XZ)
+        result.f_xz_total      # -> np.ndarray, global force (incl. reactions)
+        result.M_xz, result.T, result.phi   # -> already postprocessed, torsion included
 
-    Torsion results (T, tau) are not produced here -- call
-    static_solvers/torsion.py separately on the same shaft_system.
+    solve() does both steps itself (raw solve + postprocessing) and
+    returns the finished ShaftResults -- see module docstring's
+    BREAKING CHANGE note for why, and for the cost this carries (torsion
+    + full postprocessing runs on every call now, unconditionally).
     """
 
     # This solver always assembles full frame elements (axial + bending)
@@ -151,24 +247,13 @@ class RigidSupportFEMSolver:
         self._distribute_labels = distribute_gear_labels or set()
         self._kGA_override = kGA_override
 
-        # --- public result attributes, populated by solve() ---
-        self.x_nodes: list[float] | None = None
-        self.elements: list[Elem] | None = None
-        self.free_dofs: list[int] | None = None
-        self.constrained_dofs: list[int] | None = None
-
-        self.d_total_xz: np.ndarray | None = None
-        self.d_total_xy: np.ndarray | None = None
-        self.f_xz_ext: np.ndarray | None = None
-        self.f_xy_ext: np.ndarray | None = None
-
     # ------------------------------------------------------------------
     # Public entry point
     # ------------------------------------------------------------------
 
     def solve(self,
               shaft_system: ShaftSystem,
-              extra_mandatory: list[float] | None = None) -> None:
+              extra_mandatory: list[float] | None = None) -> "ShaftResults":
         shaft_system.validate_or_raise()
 
         mesh = Mesh1D(shaft_system, extra_mandatory=extra_mandatory or [])
@@ -176,11 +261,10 @@ class RigidSupportFEMSolver:
         elements = Elem.from_mesh(mesh, self._settings)
 
         builder = StiffnessMatrixBuilder(mesh, elements, frame=self._FRAME)
-        self._builder = builder  
-        self.K = builder.build(kGA_override=self._kGA_override)
+        K = builder.build(kGA_override=self._kGA_override)
 
         free_dofs, constrained_dofs = boundary_dofs(x_nodes, shaft_system)
-        K_red = self.K[np.ix_(free_dofs, free_dofs)]
+        K_red = K[np.ix_(free_dofs, free_dofs)]
         check_conditioning(K_red)
 
         load_cases = build_load_cases(
@@ -219,34 +303,28 @@ class RigidSupportFEMSolver:
         d_total_xz[free_dofs] = np.linalg.solve(K_red, f_xz_ext[free_dofs])
         d_total_xy[free_dofs] = np.linalg.solve(K_red, f_xy_ext[free_dofs])
 
-        f_xz_total = self.K @ d_total_xz
-        f_xy_total = self.K @ d_total_xy
+        f_xz_total = K @ d_total_xz
+        f_xy_total = K @ d_total_xy
 
-        # --- publish ---
-        self.x_nodes          = x_nodes
-        self.elements         = elements
-        self.free_dofs        = free_dofs
-        self.constrained_dofs = constrained_dofs
-
-        self.f_xz_ext         = f_xz_ext
-        self.f_xy_ext         = f_xy_ext
-
-        self.d_total_xz       = d_total_xz
-        self.d_total_xy       = d_total_xy
-        self.f_xz_total       = f_xz_total
-        self.f_xy_total       = f_xy_total
-
-        self.f_xz_reaction    = f_xz_total - f_xz_ext
-        self.f_xy_reaction    = f_xy_total - f_xy_ext
-
-    # ------------------------------------------------------------------
-    # Thin wrapper -- keep the public API unchanged for callers already
-    # using solver.return_values()
-    # ------------------------------------------------------------------
-
-    def return_values(self, x_nodes: list[float], x: list[float]) -> dict[float, dict[str, float]]:
-        return extract_submodel_values(
-            x_nodes, x,
-            self.d_total_xz, self.d_total_xy,
-            self.f_xz_total, self.f_xy_total,
+        solution = RigidSupportSolution(
+            x_nodes=x_nodes,
+            elements=elements,
+            K=K,
+            free_dofs=free_dofs,
+            constrained_dofs=constrained_dofs,
+            d_total_xz=d_total_xz,
+            d_total_xy=d_total_xy,
+            f_xz_ext=f_xz_ext,
+            f_xy_ext=f_xy_ext,
+            f_xz_total=f_xz_total,
+            f_xy_total=f_xy_total,
+            f_xz_reaction=f_xz_total - f_xz_ext,
+            f_xy_reaction=f_xy_total - f_xy_ext,
+            _kGA_override=self._kGA_override,
         )
+
+        # solve() returns the postprocessed result directly -- see the
+        # module docstring's BREAKING CHANGE note. RigidSupportSolution
+        # stays a local, unreturned intermediate, same role
+        # SubmodelSolution plays in lagrange_multipliers.py.
+        return build_shaft_result(solution, shaft_system)

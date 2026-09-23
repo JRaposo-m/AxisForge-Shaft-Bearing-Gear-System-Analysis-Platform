@@ -29,19 +29,20 @@ AxisForge is a deterministic, solver-centric engineering platform for the analys
 |---|---|---|
 | Multi-shaft power flow and mesh load injection | ISO 21771 force resolution over a single-source DAG | `core/mechanical_system/` |
 | 1D FEM shaft deflection and internal forces, two planes | Timoshenko **or Euler-Bernoulli** beam, selected once per shaft via `BeamModelSettings` | `mesh/`, `solvers/.../shaft/fem_solvers/` |
-| Shaft torsion (torque, shear stress, twist angle) | Pure statics, run independently of the bending/axial solve | `solvers/.../shaft/static_solvers/torsion.py` |
-| Submodel refinement with prescribed cut-node state | Lagrange multipliers | `solvers/.../shaft/fem_solvers/constraints/submodel_extraction.py` |
+| Shaft torsion (torque, shear stress, twist angle) | Pure statics, run independently of the bending/axial solve | `solvers/.../shaft/fem_solvers/global_solver/torsion.py` |
+| Submodel refinement with prescribed cut-node state | Lagrange multipliers | `solvers/.../shaft/fem_solvers/submodel_solver/` |
 | Mesh convergence assessment | Richardson extrapolation + Grid Convergence Index | `solvers/mesh/convergence_solver.py` |
 | Stress concentration at shoulders and keyways | Peterson / Shigley / Neuber | `solvers/.../shaft/static_solvers/postprocessing.py` |
-| Internal rolling element load distribution, single row | ISO/TS 16281 §4 (point contact), §5 (line contact) | `solvers/.../bearings/load_distribution/single_row/` |
-| Internal load distribution, multi-row thrust bearings | ISO/TS 16281, shared rigid-ring displacement | `solvers/.../bearings/load_distribution/multi_row/` |
+| Internal rolling element load distribution, single- and multi-row | ISO/TS 16281 §4 (point contact), §5 (line contact) | `solvers/.../bearings/load_distribution/iso_16281/` |
 | Per-element and per-lamina capacity, equivalent load, L10r | ISO 281, ISO 1281-1, ISO/TS 16281 | `core/.../bearings/families/`, the bearing postprocessing modules |
 | Spur, helical and internal gear geometry and mesh forces | ISO 21771, ISO 53, KHK, MAAG | `core/.../gears/`, `solvers/.../gears/` |
 | Planetary train kinematics and ideal torque split | Willis equation, Arnaudov & Karaivanov | `core/.../gears/parallel_axis/planetary_gear/` |
 | Application and dynamic factor data layer | ISO 6336-1 Method B and Method C | `database/gears/` |
 | Keyway geometry lookup | DIN 6885, ISO 3912 | `database/shaft/keyway/` |
-| Assembly visualisation | matplotlib line schematic | `core/mechanical_system/.../schematic.py` |
-| Construction and resolution text reports | fixed-width ASCII writers | `fixtures/*/text_report.py` |
+
+Construction and resolution text reports, and the analysis-script fixtures that drive them, are no longer part of this repository — see the note under [Architecture](#architecture).
+
+> **Removed, not yet replaced.** A matplotlib line-schematic module (`core/mechanical_system/parallel_axis/schematic.py`) previously appeared here as "Assembly visualisation". It no longer exists on disk — see [`core/README.md`](axisforge/core/README.md#schematic). If assembly visualisation is still wanted, it needs to be rebuilt; nothing in the current tree replaces it.
 
 Gear load capacity, fatigue, lubrication and failure susceptibility are future phases — see [Roadmap](#roadmap).
 
@@ -52,16 +53,16 @@ Gear load capacity, fatigue, lubrication and failure susceptibility are future p
 | Package | Contents | Status |
 |---|---|---|
 | `config` | Tolerances, solver defaults, global constants | Implemented |
-| `core/` | Shaft, bearings and families, gears, meshing, planetary trains, systems, loads, materials | Implemented |
+| `core/` | Shaft, bearings and families, gears, meshing, planetary trains, systems, loads, materials | Implemented — bearings restructured, see [`core/README.md`](axisforge/core/README.md#bearings) |
 | `database/` | DIN 6885, ISO 3912, ISO 6336-1 K_A and K_v | Implemented — see the note under [Architecture](#architecture) |
-| `mesh/` | 1D node generation, grading, Timoshenko **and Euler-Bernoulli** beam elements, `BeamModelSettings` | Implemented — Euler-Bernoulli is **no longer reserved**; see the open items in [`mesh/README.md`](axisforge/mesh/README.md#status) |
-| `results/` | Result containers: shaft FEM (now including axial displacement, bending rotation and twist angle), single-row bearing load distribution | Implemented |
-| `solvers/.../shaft/` | Stiffness assembly, rigid-*support* FEM (`RigidSupportFEMSolver`, renamed from `RigidBearingFEMSolver`), separate torsion solve, submodel, results reader, stress concentration | Implemented; `static_failure` reserved — see the open items in [`solvers/README.md`](axisforge/solvers/README.md#status) |
-| `solvers/.../bearings/` | ISO/TS 16281 single-row and multi-row thrust, dispatch, postprocessing | Implemented |
+| `mesh/` | 1D node generation, grading, Timoshenko **and Euler-Bernoulli** beam elements via a registered-formulation hierarchy, `BeamModelSettings` | Implemented — Euler-Bernoulli is **no longer reserved**; `element_type/` restructured into a `BeamFormulation` registry — see [`mesh/README.md`](axisforge/mesh/README.md#status) |
+| `results/` | Result containers: shaft FEM (incl. axial displacement, bending rotation and twist angle), bearing load distribution (single- and multi-row, one shared shape) and reference life, per-bearing aggregate | Implemented — bearing containers unified, see [`results/README.md`](axisforge/results/README.md#status) |
+| `solvers/.../shaft/` | Stiffness assembly, rigid-*support* FEM (`RigidSupportFEMSolver`), separate torsion solve, Lagrange-multiplier submodel solve, functional (not class-based) result assembly, stress concentration | Implemented; `static_failure` reserved, and `static_solvers/__init__.py` is currently broken — see the open items in [`solvers/README.md`](axisforge/solvers/README.md#status) |
+| `solvers/.../bearings/` | ISO/TS 16281, single- and multi-row, one package (`iso_16281/`), dispatch, postprocessing | Implemented |
 | `solvers/.../gears/` | Geometry and mesh forces | Implemented; ISO 6336 load capacity reserved |
-| `solvers/mesh/` | Mesh convergence, Richardson GCI (`convergence_solver.py`, renamed from `mesh_convergence_study.py`) | Implemented |
-| `fixtures/construction/` | Object-building fixtures and construction reports | Implemented |
-| `fixtures/studies/` | Shaft FEM study, mesh-convergence study, bearing load-distribution study, result libraries, combined studies report | Implemented; the mesh-convergence fixture currently calls a pre-rename solver API and does not import — see [`fixtures/README.md`](axisforge/fixtures/README.md#status) |
+| `solvers/mesh/` | Mesh convergence, Richardson GCI (`convergence_solver.py`) | Implemented |
+
+`fixtures/` is **not part of this repository any more** — it moved out into a separate repository (`AxisForge-Design-Studies`, under `axisforge_bridge`), which consumes `axisforge` as an installed package rather than living inside it. It no longer has a row here for the same reason `axisforge` itself doesn't list its own downstream consumers. See the note under [Architecture](#architecture).
 
 ---
 
@@ -104,7 +105,7 @@ Any field suffixed `_xz` or `_xy` is one plane's component of a quantity whose r
 
 ## Architecture
 
-Five layers, with a strictly one-way dependency:
+Four layers within this repository, plus one external consumer, with a strictly one-way dependency:
 
 ```
                 config
@@ -119,21 +120,23 @@ Five layers, with a strictly one-way dependency:
                           │  writes
                           ▼
                       results                 result shapes only, no computation
-                          │  reads
+              ▬ ▬ ▬ ▬ ▬ ▬ ▬│▬ ▬ ▬ ▬ ▬ ▬ ▬ ▬    package boundary — axisforge ends here
                           ▼
-                     fixtures                 studies, libraries, reports
+     axisforge_bridge / fixtures            (separate repository: AxisForge-Design-Studies)
+                                             studies, libraries, reports — installs and imports
+                                             axisforge, never the reverse
 ```
 
 Rules, in force:
 
 - `core/` depends on `config`, `database/`, NumPy and the standard library. It never imports a solver.
-- `results/` imports NumPy and the standard library only — nothing from `axisforge` at all.
+- `results/` imports NumPy and the standard library only at runtime — nothing from `axisforge` at all (`TYPE_CHECKING`-only imports from `solvers/`, erased at runtime, are the sole exception, used for annotations).
 - `solvers/` depends on `core/`, `mesh/`, `config` and `results/`. **No solver imports another solver's internals** — only the shared result containers.
-- `fixtures/` depends on everything below it. **Nothing in `axisforge` imports from `fixtures/`.**
+- **`fixtures/` is not part of `axisforge` any more.** It moved out into its own repository, `AxisForge-Design-Studies` (package `axisforge_bridge`), which installs `axisforge` (this repository) as a normal dependency and imports it — the dependency is one-way, outward, and this repository has no knowledge of that one. Any reference to `fixtures/` elsewhere in this document that still shows it as a subpackage of `axisforge/` is describing the repository's state **before** that split, and should be read as historical unless it says otherwise.
 
-`results/` is the narrow waist: a solver depends on the container it writes, a consumer on the container it reads, and neither depends on the other.
+`results/` is the narrow waist within this repository: a solver depends on the container it writes, a consumer on the container it reads, and neither depends on the other.
 
-> **Open item.** `database/gears/.../Kv_methodB` and `Kv_methodC` import from `core/`, inverting the `database → core` direction stated above, and they do so through a package path (`core.mechanical_system.Parallel_Axis_systems`) that no longer exists. Both modules need their imports repaired before the gear load-capacity solver can consume them.
+> **Open item.** `database/gears/.../Kv_methodB` and `Kv_methodC` import from `core/`, inverting the `database → core` direction stated above, and they do so through a package path (`core.mechanical_system.Parallel_Axis_systems`) that no longer exists. Both modules need their imports repaired before the gear load-capacity solver can consume them. (Not re-verified against the current `core/` tree in this pass — the path they should point to instead is `core.mechanical_system.parallel_axis.spur_helical`.)
 
 ---
 
@@ -141,6 +144,9 @@ Rules, in force:
 
 ```
 axisforge/
+├── __init__.py                                 Top-level rollup — eager cascade config → core → mesh →
+│                                               results → solvers, with a name-collision check across
+│                                               subpackages and a best-effort __version__
 ├── config.py                                   Tolerances, solver defaults, global constants
 │
 ├── core/                                       Domain model — geometry and data, no solving
@@ -149,13 +155,15 @@ axisforge/
 │   ├── materials.py                            Material, GearMaterial
 │   ├── machine_elements/
 │   │   ├── shaft/shaft.py                      Shaft, ShaftSection, Shoulder, Keyway, KeywayType
-│   │   ├── bearings/                           Bearing, BearingCatalog, BearingFamily, BearingType
-│   │   │   └── families/                       ball_bearing/ · roller_bearing/, each radial/ + thrust/
+│   │   ├── bearings/                           base.py (BearingType, BearingCatalog, BearingFamily)
+│   │   │                                       bearing.py (Bearing)
+│   │   │   └── families/                       family.py (every concrete family, @register_family)
+│   │   │                                       capacity.py · iso16281_contact.py (shared math)
 │   │   └── gears/parallel_axis/                gear_properties/ · gear_meshing/ · planetary_gear/
 │   └── mechanical_system/parallel_axis/
-│       ├── spur_helical/                       ShaftSystem, GearElement,
-│       │                                       SpurHelicalMeshLink, SpurHelicalGearSystem
-│       └── schematic.py                        matplotlib line schematic
+│       └── spur_helical/                       ShaftSystem, GearElement,
+│                                               SpurHelicalMeshLink, SpurHelicalGearSystem
+│                                               (schematic.py removed — see the note under "What it does")
 │
 ├── database/                                   Standard tabular data — no solving
 │   ├── shaft/keyway/                           DIN 6885 (Parallel/) · ISO 3912 (Woodruff_key/)
@@ -164,54 +172,57 @@ axisforge/
 ├── mesh/shaft/                                 1D mesh generation and beam elements
 │   ├── beam_model_settings.py                  BeamModelSettings — theory/shear/integration, once per shaft
 │   ├── mesh_generation/                        mesh_1D.py (Mesh1D) · mesh_grade.py (Grader)
-│   └── element_type/                           elem.py (Elem) · frame_element.py (FrameElement)
-│                                               euler_bernoulli/two_noded.py (EulerBernoulliBeam)
-│                                               timoshenko/two_noded.py (TimoshenkoBeam)
-│                                               timoshenko/three_noded.py (QuadraticTimoshenkoBeam, not verified)
+│   └── element_type/                           elem.py — BeamFormulation, ShearDeformableBeamFormulation,
+│                                               EulerBernoulliBeam, TimoshenkoBeam, FrameElement,
+│                                               ElemBase, Elem, QuadraticTimoshenkoElem (placeholder,
+│                                               raises NotImplementedError), _FORMULATION_REGISTRY
+│                                               shear_factor.py — ShearFactor (Cowper / Hutchinson)
 │
 ├── results/                                    Result containers — shapes only, no computation
-│   ├── fem_results/shaft_results.py            ShaftResults (now incl. u, theta_xz/xy, phi/phi_total/phi_max), BearingNodeData
-│   └── bearings/load_distribution/single_row/  ball_bearing_results.py · roller_bearing_results.py
+│   ├── _base.py                                Shared conventions (frozen/kw_only dataclass helpers)
+│   ├── fem_results/                            shaft_results.py (ShaftResults, BearingNodeData)
+│   │                                           submodel_results.py (SubmodelResult)
+│   ├── convergence_results/                    convergence_results.py (ConvergenceRecord, MeshRefinementResult)
+│   └── bearings/
+│       ├── load_distribution/                  load_distribution_results.py — LoadDistributionResult /
+│       │                                       BallLoadDistributionResult / LineContactLoadDistributionResult /
+│       │                                       RollerLoadDistributionResult, BearingResult /
+│       │                                       BallBearingResult / RollerBearingResult (n_rows >= 1, no
+│       │                                       separate single-/multi-row class)
+│       ├── life/                               basic_life_results.py (BasicReferenceRatingLifeResult)
+│       └── bearing_analysis_result.py          BearingAnalysisResult — the per-bearing aggregate
 │
 ├── solvers/
 │   ├── machine_elements/
 │   │   ├── shaft/
-│   │   │   ├── fem_solvers/                    rigid_support.py (RigidSupportFEMSolver, renamed)
+│   │   │   ├── fem_solvers/
+│   │   │   │   ├── global_solver/              rigid_support.py (RigidSupportFEMSolver)
+│   │   │   │   │                               torsion.py (TorsionSolver)
+│   │   │   │   │                               global_postprocessing.py (build_shaft_result — replaces
+│   │   │   │   │                               the previous ShaftResultsReader class)
+│   │   │   │   ├── submodel_solver/            lagrange_multipliers.py (SubmodelSolver, SubmodelSolution)
+│   │   │   │   │                               submodel_postprocessing.py (build_submodel_result)
 │   │   │   │   ├── assembly/                   build_stiffness_matrix.py (StiffnessMatrixBuilder)
 │   │   │   │   │                               load_assembly/ · numerics/
 │   │   │   │   ├── constraints/                boundary_conditions.py · submodel_extraction.py
-│   │   │   │   └── element_theories/           timoshenko/ · euler_bernoulli/  postprocessing.py
-│   │   │   ├── static_solvers/                 torsion.py (TorsionSolver, split out — see open item)
-│   │   │   │                                   results_reader.py (ShaftResultsReader)
-│   │   │   │                                   postprocessing.py (ShaftPostProcessor)
+│   │   │   │   └── element_theories/           element_postprocessing.py (ElementTheoryPostProcessor,
+│   │   │   │                                   Euler/TimoshenkoPostProcessing — one module, not a
+│   │   │   │                                   timoshenko/euler_bernoulli subfolder split)
+│   │   │   ├── static_solvers/                 postprocessing.py (ShaftPostProcessor)
 │   │   │   │                                   static_failure.py (reserved)
+│   │   │   │                                   __init__.py is currently broken — see solvers/README.md
 │   │   │   └── utils.py                        Marin factors, Peterson Kt, Neuber q, Kf
-│   │   ├── bearings/load_distribution/
-│   │   │   ├── single_row/iso_16281/           dispatch.py · numerics.py · validation.py
-│   │   │   │                                   ball_bearing/ · roller_bearing/
-│   │   │   └── multi_row/thrust_bearings/iso_16281/
-│   │   │                                       numerics.py · validation.py
-│   │   │                                       ball_bearings/ · roller_bearings/
+│   │   ├── bearings/load_distribution/iso_16281/     dispatch.py · numerics.py · validation.py
+│   │   │                                       contact_solver.py (single- and multi-row, ball and roller)
+│   │   │                                       contact_postprocessing.py (stiffness, basic reference life)
 │   │   └── gears/                              geometry.py (GearSolver) · utils.py
 │   │       └── SpurHelicalGears/LoadCapacity_solver/   load_capacity.py (reserved)
-│   └── mesh/convergence_solver.py              MeshConvergenceStudy, RichardsonGCI (renamed)
+│   └── mesh/convergence_solver.py              MeshConvergenceStudy, RichardsonGCI
 │
-└── fixtures/                                   Analysis-script building blocks
-    ├── capabilities/catalogue.py               Capability metadata, no axisforge imports
-    ├── construction/                           Build objects — nothing is solved
-    │   ├── construction_capabilities.py        ConstructionCapabilities, CapabilityError
-    │   ├── shafts/ · bearings/ · gears/ · systems/     fixtures + per-domain report writers
-    │   └── outputs/text_report.py              write_construction_report
-    └── studies/                                Solve and record
-        ├── study_capabilities.py               StudyCapabilities
-        ├── outputs/text_report.py              write_studies_report (renamed, now 3 optional sections)
-        ├── shafts/
-        │   ├── fem_studies/                    fem_simple.py · results_library.py (RigidSupportFEMResultsLibrary)
-        │   │                                   outputs/ (resolution_report.py · comparison_report.py · plots.py)
-        │   └── convergence_studies/            convergence_library.py · convergence_study.py (see open item)
-        └── bearings/load_distribution/no_lubrication/
-                                                results_library.py · rolling_bearing_study.py
+└── (nothing below solvers/ — this repository ends here; see the note under Architecture)
 ```
+
+`fixtures/` — construction fixtures, studies, result libraries, report writers — used to be the sixth top-level subpackage here. It has moved to a separate repository (`AxisForge-Design-Studies`, package `axisforge_bridge`), which now consumes `axisforge` as an installed dependency. Its own tree, and whatever README documents it, live there — not in this repository, and this document was not able to review it in this pass.
 
 ---
 
@@ -231,29 +242,37 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical import (
 )
 from axisforge.mesh.shaft.mesh_generation               import Mesh1D, Grader
 from axisforge.results.fem_results.shaft_results        import ShaftResults, BearingNodeData
-from axisforge.solvers.machine_elements.shaft.fem_solvers.rigid_bearing import (
-    RigidBearingFEMSolver,
+from axisforge.solvers.machine_elements.shaft.fem_solvers.global_solver.rigid_support import (
+    RigidSupportFEMSolver,
 )
-from axisforge.solvers.machine_elements.shaft.static.results_reader import ShaftResultsReader
+from axisforge.solvers.machine_elements.shaft.fem_solvers.global_solver.global_postprocessing import (
+    build_shaft_result,
+)
 from axisforge.solvers.mesh                             import MeshConvergenceStudy
+
+# Every name above is also reachable straight off the top-level package,
+# e.g. `axisforge.Bearing`, `axisforge.Mesh1D`, `axisforge.RigidSupportFEMSolver` —
+# the rollups exist precisely so a caller does not have to know the full path.
 ```
 
-Three properties of this surface are worth knowing:
+Three properties of this surface are worth knowing — **one of them corrected from a previous pass of this document**:
 
-- **Imports are lazy.** A package's `__init__.py` executes nothing heavy until a name is used, so importing a package you only partly need costs nothing.
-- **Roll-ups cascade.** A parent package forwards to its child package, never to a leaf module, so a module rename never propagates past one file.
-- **The surface is introspectable.** `dir(package)` and `package.__all__` list what a package offers without importing it. This is what lets `fixtures/` resolve an import set from a declaration — see [`fixtures/README.md`](axisforge/fixtures/README.md#capabilities).
+- **Imports are eager, not lazy.** Every package's `__init__.py` (`core`, `mesh`, `results`, `solvers`, and the top-level `axisforge` package itself) imports its full public surface immediately, by explicit name, deliberately without lazy loading or `__getattr__` tricks — this is a consistent, stated design choice across the whole codebase now, the opposite of what a previous pass of this document claimed. The one exception is `solvers/machine_elements/shaft/static_solvers/__init__.py`, which still uses a lazy `__getattr__` pointing at a module that no longer exists — that is a known bug, not the intended pattern; see the open item in [`solvers/README.md`](axisforge/solvers/README.md#status).
+- **Roll-ups cascade.** A parent package forwards to its child package, never to a leaf module, so a module rename never propagates past one file. Names are written out explicitly at each level (not `import *` re-exported blindly) so the public surface stays grep-able.
+- **The surface is introspectable.** `dir(package)` and `package.__all__` list what a package offers without importing it. This is what lets `axisforge_bridge` (`AxisForge-Design-Studies`, the separate repository that consumes this one — see [Architecture](#architecture)) resolve an import set from a declaration, the way `fixtures/`'s capability selector used to when it still lived inside this repository.
 
-Two surfaces are deliberately narrow:
+One surface that **used to be** deliberately narrow no longer is:
 
-- `bearings` exports only `Bearing`, `BearingCatalog`, `BearingFamily`, `BearingType`. Concrete families live in `bearings.families`, so adding a family changes nothing in `core/`.
-- Ball and roller solver packages are imported explicitly and never flattened into one namespace: point and line contact produce different result types, and a shared namespace would hide which contact model a name belongs to.
+- Concrete bearing families **are** re-exported eagerly now, from `axisforge.core.machine_elements.bearings.families` up through every rollup level to `axisforge` itself, generated automatically from the `@register_family` registry rather than written by hand. A previous pass of this document said the opposite ("families are not re-exported on purpose") — that was true of the old, one-file-per-subtype structure and no longer describes the current one. See [`core/README.md`](axisforge/core/README.md#import-surface).
+- Ball and roller solver packages are still imported explicitly and never flattened into one namespace: point and line contact produce different result types, and a shared namespace would hide which contact model a name belongs to.
 
 ---
 
 ## Analysis pipeline
 
-The canonical solve sequence, expressed through the fixtures layer:
+> **`fixtures/` has moved.** This pipeline used to run through `fixtures/` when that package lived inside this repository — it now lives in the separate `AxisForge-Design-Studies` repository (`axisforge_bridge`), which this review did not have access to. The example below is kept as a record of the pipeline's *shape* (construction → shaft solve → bearing load distribution → capacity/life → stress concentration → reports), not as a verified, current call sequence: several names in it are already known to be stale against the `axisforge` API documented above — in particular, `ShaftResultsReader` no longer exists as a class (see [`solvers/README.md`](axisforge/solvers/README.md#shaft-results-and-post-processing)). The authoritative version of this pipeline now belongs in `axisforge_bridge`'s own documentation, not here.
+
+The canonical solve sequence, as it looked while `fixtures/` was still part of this repository:
 
 ```python
 # 1 — Declare what the script builds, and build it
@@ -293,13 +312,13 @@ write_studies_report(system, "resolution.txt", "Drivetrain", shaft_fem_library=l
 
 Three contracts govern this sequence:
 
-- **One solver instance per shaft.** `RigidSupportFEMSolver` (renamed from `RigidBearingFEMSolver`) publishes its results as public attributes; a second `solve()` overwrites them. `solve_system()` creates a fresh solver per shaft for exactly this reason.
+- **One solver instance per shaft.** `RigidSupportFEMSolver` publishes its results as public attributes; a second `solve()` overwrites them. `solve_system()` creates a fresh solver per shaft for exactly this reason.
 - **Capacity belongs to the bearing, not to the solver.** Every family owns its own ISO formulas and is called through the bearing: `bearing.family.per_element_dynamic_capacity(bearing, Cr=...)`, and for roller families `bearing.family.per_lamina_dynamic_capacity(bearing, Q_ci, Q_ce)`.
 - **The library is the hand-off.** Downstream solvers read `RigidSupportFEMResultsLibrary`; they never reach back into the FEM solver's attributes.
 
-Torsion (`T`, `tau`, `phi`) is solved separately from step 2 above, via `TorsionSolver` — `ShaftResultsReader.read()` calls it internally, so `result` already carries the torsion fields; a caller only invokes `TorsionSolver` directly when it wants torsion without a full bending/axial solve.
+Torsion (`T`, `tau`, `phi`) is solved separately from step 2 above, via `TorsionSolver` — the function that assembles a full `ShaftResults` (`build_shaft_result()`, `solvers/.../fem_solvers/global_solver/global_postprocessing.py` — see [`solvers/README.md`](axisforge/solvers/README.md#shaft-results-and-post-processing)) calls it internally, so `result` already carries the torsion fields; a caller only invokes `TorsionSolver` directly when it wants torsion without a full bending/axial solve.
 
-A shaft may carry a mixed bearing set — different contact types and different row counts — in the same call. `RollingBearingSolver` resolves each bearing to a solver from the capabilities its family declares, so adding a family requires no edit to any dispatch table.
+A shaft may carry a mixed bearing set — different contact types and different row counts — in the same call. The bearing solver resolves each bearing to a solver from the capabilities its family declares, so adding a family requires no edit to any dispatch table. `solve()` returns one `BearingAnalysisResult` per bearing label (see [`results/README.md`](axisforge/results/README.md#bearingsbearing_analysis_resultpy)), not the bare load-distribution result this example's step 4 implies — whatever wrapper `axisforge_bridge` uses today (`BearingResultBundle` above, or its replacement) needs checking against that current shape there, not here.
 
 ---
 
@@ -313,22 +332,23 @@ Each top-level package has its own README with the module-by-module reference. T
 | [`axisforge/mesh/README.md`](axisforge/mesh/README.md) | Node generation, grading, beam elements |
 | [`axisforge/results/README.md`](axisforge/results/README.md) | Result containers · units and invariants · how to read a result |
 | [`axisforge/solvers/README.md`](axisforge/solvers/README.md) | Shaft FEM · Post-processing · Bearings (ISO/TS 16281) · Gears · Mesh convergence |
-| [`axisforge/fixtures/README.md`](axisforge/fixtures/README.md) | Capability declaration · construction fixtures · studies · report writers |
+| `axisforge/fixtures/README.md` | **No longer applicable.** `fixtures/` is not part of this repository — capability declaration, construction fixtures, studies and report writers now live in the separate `AxisForge-Design-Studies` repository (package `axisforge_bridge`), which has its own documentation, not reachable from here. |
 
 ---
 
 ## Design principles
 
 - **Low coupling, high cohesion.** Solvers depend only on explicit result containers, never on each other's internals.
-- **Declared surface, lazy import.** A package states what it offers and imports nothing until asked.
+- **Declared surface, eager import.** A package states what it offers and imports it immediately, by explicit name — see the correction under [Importing](#importing).
 - **No hidden state.** Every intermediate quantity is a public attribute; a solver exposes its full working for inspection.
 - **Headless solvers.** The analysis stack runs without any interface layer; presentation is always a consumer, never a dependency.
 - **Deterministic and explainable.** No black-box methods, no probabilistic life prediction, no machine learning.
 - **Composition over inheritance.** A planetary train composes two pair-meshing objects; a bearing composes a family rather than subclassing one.
 - **Capacity belongs to the element.** A solver never carries its own copy of a standard's formula.
 - **Fail fast on geometry.** Validation happens at construction; invalid geometry is never silently accepted.
-- **One file per concern.** Each subtype, function group, solver and result shape lives in its own module.
-- **Flag, do not silently fix.** A suspected discrepancy against a standard is documented in place, never quietly corrected.
+- **Declared, self-registering capability over hand-written dispatch.** A bearing family registers itself (`@register_family`); a beam formulation registers itself (`@register_formulation`) — the same shape used twice, and the public export list is generated from the registry rather than kept in sync by hand.
+- **One file per concern, but shared structure through a common base where the shape genuinely is shared.** Each subtype, function group, solver and result shape lives in its own module or class; where two variants share real structure (a ball and a roller row, say), that structure lives once on a shared abstract base rather than being duplicated.
+- **Flag, do not silently fix.** A suspected discrepancy against a standard, or a structural inconsistency found during a review pass, is documented in place, never quietly corrected.
 - **`validate()` returns, `validate_or_raise()` raises.** Every domain object follows this pair.
 
 ---
@@ -337,12 +357,12 @@ Each top-level package has its own README with the module-by-module reference. T
 
 | Phase | Focus | Status |
 |---|---|---|
-| 1 | Shaft FEM (Timoshenko **and now Euler-Bernoulli**, via `BeamModelSettings`) · torsion split into its own solver · mesh convergence · gear force integration | Complete for Timoshenko; Euler-Bernoulli implemented but its own quadratic (three-node) element is unverified — see [`mesh/README.md`](axisforge/mesh/README.md#status) |
-| 2 | Bearing families, capability dispatch, ISO/TS 16281 load distribution | Complete for radial ball, radial roller and multi-row thrust; no multi-row roller family in `core/` to exercise the roller multi-row solver against |
-| 3 | Result containers extracted into `results/` | Single-row complete; multi-row containers still local to their solvers |
-| 4 | Capability declaration and fixture library — Construction and Studies stages | In progress. Mesh-convergence is now wired into the fixtures layer (`fixtures/studies/shafts/convergence_studies/`), but its `run_convergence()` entry point currently calls a pre-rename solver API and does not import — see [`fixtures/README.md`](axisforge/fixtures/README.md#status) |
+| 1 | Shaft FEM (Timoshenko **and now Euler-Bernoulli**, via `BeamModelSettings`) · torsion split into its own solver · mesh convergence · gear force integration | Complete for Timoshenko; Euler-Bernoulli implemented. A 3-node quadratic Timoshenko element (`QuadraticTimoshenkoElem`) is reserved in the class hierarchy but deliberately not functional — see [`mesh/README.md`](axisforge/mesh/README.md#elements) |
+| 2 | Bearing families, capability dispatch, ISO/TS 16281 load distribution | Complete for radial ball, radial roller and multi-row thrust; `ThrustNeedleRollerFamily` (previously listed here) is currently absent from `core/`; no multi-row roller family in `core/` to exercise the roller multi-row solver against |
+| 3 | Result containers extracted into `results/` | Complete for bearings — single- and multi-row now share one container shape (`BearingResult`, `n_rows >= 1`), not separate single-row/multi-row containers |
+| 4 | Capability declaration and fixture library — Construction and Studies stages | **Moved out of this repository.** This phase now lives entirely in the separate `AxisForge-Design-Studies` repository (`axisforge_bridge`), which consumes `axisforge` as a dependency — see the notes under [Status](#status) and [Analysis pipeline](#analysis-pipeline). Its progress is tracked there, not here. |
 | 5 | ISO 6336 gear load capacity — data layer in place, solver module reserved | In progress |
-| 6 | ISO 281 rating life as a standalone solver | Planned |
+| 6 | ISO 281 rating life as a standalone solver | Planned — `results/bearings/life/basic_life_results.py` currently implements only the ISO/TS 16281 *reference* life; a `L10` catalogue-method sibling is reserved but not started |
 | 7 | Fatigue — Goodman / Morrow / Miner | Planned |
 | 8 | Lubrication — EHD film thickness, grease | Planned |
 | 9 | Static failure criteria · failure susceptibility scoring · SQLite data layer | Planned |

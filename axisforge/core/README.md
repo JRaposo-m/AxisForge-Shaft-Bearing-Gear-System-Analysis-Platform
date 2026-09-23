@@ -45,13 +45,13 @@ A domain object is a complete, self-consistent description of a physical thing. 
 | Group | Module | Contents | Status |
 |---|---|---|---|
 | `machine_elements/shaft/` | `shaft.py` | `Shaft`, `ShaftSection`, `Shoulder`, `Keyway`, `KeywayType` | Implemented |
-| `machine_elements/bearings/` | `bearing.py`, `catalog.py`, `family.py`, `bearing_types.py` | Orchestration primitives | Implemented |
-| `machine_elements/bearings/families/` | ball and roller, radial and thrust | Nine concrete families | Implemented; static capacity `Ca0` outstanding for all |
+| `machine_elements/bearings/` | `base.py` (`BearingType`, `BearingCatalog`, `BearingFamily`), `bearing.py` (`Bearing`) | Orchestration primitives | Implemented — **restructured**: `catalog.py`/`bearing_types.py` no longer exist as separate files, folded into `base.py` |
+| `machine_elements/bearings/families/` | `family.py` (all concrete families + `@register_family` registry), `capacity.py`, `iso16281_contact.py` | Eight concrete families | Implemented; static capacity `Ca0` outstanding for all — see [Families](#families) for what changed |
 | `machine_elements/gears/parallel_axis/gear_properties/` | `spur_helical_gear.py`, `internal_gear.py` | Single-gear geometry | Implemented |
 | `machine_elements/gears/parallel_axis/gear_meshing/` | `spurhelical_meshing.py`, `internal_meshing.py` | Pair meshing | Implemented |
 | `machine_elements/gears/parallel_axis/planetary_gear/` | `planetary_gear_meshing.py` | Single-stage epicyclic train | Implemented |
 | `mechanical_system/parallel_axis/spur_helical/` | `shaft_system.py`, `gear_system.py` | `ShaftSystem`, `GearElement`, `SpurHelicalMeshLink`, `SpurHelicalGearSystem` | Implemented |
-| `mechanical_system/parallel_axis/` | `schematic.py` | matplotlib line schematic | Implemented |
+| `mechanical_system/parallel_axis/` | `schematic.py` | matplotlib line schematic | **Removed** — the module no longer exists on disk (only a stale `.pyc` remains) and `parallel_axis/__init__.py` does not import it. See [Schematic](#schematic). |
 | — | `loads.py` | Six load types plus `LoadingProfile` | Implemented |
 | — | `materials.py` | `Material`, `GearMaterial`, embedded libraries | Implemented |
 | `database/` | keyways, `K_A`, `K_v` | Standard tabular data | Implemented; the two `K_v` modules have broken imports — see [Database](#database) |
@@ -86,11 +86,12 @@ A domain object is a complete, self-consistent description of a physical thing. 
 | `axisforge.core.machine_elements.bearings.families` | every concrete `*Family` class |
 | `axisforge.core.machine_elements.gears.parallel_axis` | `SpurHelicalGear`, `InternalGear`, `SpurHelicalGearMeshing`, `InternalGearMeshing`, `PlanetaryGearTrainMeshing` |
 | `axisforge.core.mechanical_system.parallel_axis.spur_helical` | `ShaftSystem`, `GearElement`, `SpurHelicalMeshLink`, `SpurHelicalGearSystem` |
-| `axisforge.core.mechanical_system.parallel_axis.schematic` | `draw_gear_system`, `draw_shaft_system`, `draw_shaft_detail`, `gear_anchor`, `recommended_figsize` |
 | `axisforge.core.loads` | the load classes |
 | `axisforge.core.materials` | `Material`, `GearMaterial`, the lookups |
 
-The concrete bearing families are not re-exported by `bearings` on purpose: a new family is a new file under `families/`, and nothing else in `core/` changes.
+`axisforge.core.mechanical_system.parallel_axis.schematic` **no longer exists** — see [Schematic](#schematic).
+
+The concrete bearing families **are** re-exported eagerly, from `axisforge.core.machine_elements.bearings.families` and up through every rollup level to `axisforge` itself — a new family is a new class in `families/family.py` decorated `@register_family`, and its name appears in every `__all__` above it automatically, with nothing written by hand.
 
 ---
 
@@ -186,16 +187,19 @@ A bearing is **catalogue data plus family-derived geometry**, assembled once and
 
 ```
 bearings/
+├── base.py            BearingType, BearingCatalog, BearingFamily (ABC) — the three small,
+│                      mutually-coupled primitives, kept together on purpose (see the
+│                      module's own docstring): BearingFamily.assemble_geometry() reads
+│                      BearingCatalog; BearingFamily.BEARING_TYPE is a BearingType.
 ├── bearing.py         Bearing — the orchestrator
-├── bearing_types.py   BearingType
-├── catalog.py         BearingCatalog
-├── family.py          BearingFamily (ABC)
 └── families/
-    ├── ball_bearing/{radial,thrust}/{functions,subtypes}/
-    └── roller_bearing/{radial,thrust}/{functions,subtypes}/
+    ├── family.py           Every concrete BearingFamily, each decorated @register_family
+    ├── capacity.py         Shared capacity mathematics (point and line contact, radial and thrust)
+    ├── iso16281_contact.py Shared contact-stiffness mathematics (point and line contact)
+    └── tests/
 ```
 
-Within a family directory, `functions/` holds the shared contact and capacity mathematics for that contact type and duty; `subtypes/` holds the family classes, each owning its own standard-table constants so one table row can change without affecting another.
+**Superseded structure.** An earlier pass of this package split families by contact type and duty into their own subtree (`ball_bearing/{radial,thrust}/{functions,subtypes}/`, `roller_bearing/{radial,thrust}/{functions,subtypes}/`), each subtype in its own file. That split is gone: every concrete family is now a class in the single `families/family.py`, self-registering via a `@register_family` decorator into a module-level `_FAMILY_REGISTRY: dict[str, type[BearingFamily]]`. `families/__init__.py` does `globals().update(_FAMILY_REGISTRY)` and builds `__all__` from `sorted(_FAMILY_REGISTRY)` — the export list is generated from the registry, not written by hand, so a new family can never be added to `family.py` and forgotten in the public surface. `capacity.py` and `iso16281_contact.py` hold the shared math for both contact types and both duties in one place each, rather than one copy per `ball_bearing/`/`roller_bearing/` subtree.
 
 ### Orchestration primitives
 
@@ -229,8 +233,11 @@ Catalogue attributes mirrored onto the instance: `d`, `D`, `b`, `C`, `C0`, `desi
 | `BEARING_TYPE`, `DUTY` | Labels mirrored onto the bearing. |
 | `name` | Short identifier, e.g. `"deep_groove_ball"`. |
 | `assemble_geometry` | Pure function from raw geometry inputs to the flat attribute dict the bearing mirrors. |
+| `dynamic_capacity`, `per_element_dynamic_capacity` | Now declared as abstract on the contract itself (see the open item just below), not just a convention every family happens to follow. |
 
 `CAPABILITIES` and `REQUIRED_FOR` are load-bearing beyond assembly: the ISO/TS 16281 dispatcher resolves which solver a bearing gets from exactly these declarations, and the fixture capability selector reads them to build its analysis menu. **Adding a family therefore requires no edit anywhere else.**
+
+> **Open item — two different classes are both called `BearingFamily`.** `base.py` defines a `BearingFamily(ABC)` with `__init_subclass__` enforcement (checks that `REQUIRED_FOR`'s keys exactly match `CAPABILITIES`, and that `DUTY` agrees with `BEARING_TYPE.duty`) and re-exports it as the public `axisforge.core.machine_elements.bearings.BearingFamily`. But `families/family.py` does **not** import that class — it defines its own separate, module-local `class BearingFamily(ABC)` (same name, same four class-level attributes, plus `dynamic_capacity`/`per_element_dynamic_capacity` as extra abstract methods, but **no** `__init_subclass__` check), and every concrete family (`DeepGrooveBallFamily`, `AngularContactFamily`, …) subclasses *that* one. The practical effect: the consistency checks documented above as enforced "at class-definition time" never actually run for any real family, because none of them inherit from the class that has the check; and `isinstance(DeepGrooveBallFamily(), BearingFamily)` is `False` when `BearingFamily` is the one imported from the package's public surface (`base.py`'s), since they are two unrelated classes that happen to share a name. Flagged here rather than silently fixed — this needs a decision (probably: `family.py` should import and subclass `base.py`'s `BearingFamily` and drop its own copy) before more families are added on top of it.
 
 **`BearingType`** — enum label only: `DEEP_GROOVE_BALL`, `ANGULAR_CONTACT`, `SELF_ALIGNING_BALL`, `THRUST_BALL`, `CYLINDRICAL_ROLLER`, `TAPERED_ROLLER`, `SPHERICAL_ROLLER`, `THRUST_CYLINDRICAL_ROLLER`, `THRUST_NEEDLE_ROLLER`. Nothing dispatches on it; it exists so reports can group bearings without importing every family class. Extend it for a genuinely new family — a new life exponent or ISO 281 `p` — not for every subtype variant.
 
@@ -253,17 +260,20 @@ bearing = Bearing.assemble(
 
 ### Families
 
+Eight concrete families today, all in `families/family.py`, each self-registering via `@register_family`:
+
 | Family | Duty / contact | Specified by | Capacity notes |
 |---|---|---|---|
 | `DeepGrooveBallFamily` | radial, point | diametral clearance `s` | `ri = re = 0.52·Dw`; reduction factor 0.95 (1 row) / 0.90 (2 rows) |
 | `AngularContactFamily` | radial, point | nominal contact angle in (0°, 45°] | same raceway ratios as DGBB; reduction factor 0.95 for both row counts |
-| `SelfAligningBallFamily` | radial, point | nominal contact angle in (0°, 45°] | `ri = 0.53·Dw`; `re` derived from γ, not a fixed ratio of `Dw`; overall Cr not available |
-| `SingleRowThrustBallFamily` | thrust, point | nominal contact angle in (45°, 90°] | `ri = re = 0.535·Dw`; reduction factor 0.90; η = 1 − sin α₀/3 |
-| `MultiRowThrustBallFamily` | thrust, point | a list of per-row specifications | per-row Ca combined by the multi-row formula |
+| `SelfAligningBallFamily` | radial, point | nominal contact angle in (0°, 45°] | `ri = 0.53·Dw`; `re` derived from γ, not a fixed ratio of `Dw`; reduction factor 1.0 for both row counts, overall `Cr` **is** now computed (the previous "overall Cr not available" note no longer applies). The family's own docstring flags that its contact stiffness model may not be properly derived for this bearing type yet — treat capacity numbers from this family as provisional until that is resolved. |
+| `ThrustBallSingleRowFamily` (renamed from `SingleRowThrustBallFamily`) | thrust, point | nominal contact angle in (45°, 90°] | `ri = re = 0.535·Dw`; `lam` (single-row) = 0.90; η = 1 − sin α₀/3 |
+| `ThrustBallMultiRowFamily` (renamed from `MultiRowThrustBallFamily`) | thrust, point | a list of per-row specifications | per-row Ca combined by the multi-row formula |
 | `CylindricalRollerFamily` | radial, line | clearance `s` and lamina count `n_s` | λ_v = 0.83; rejects a locating arrangement — an NU/N-type bearing has no flange to react axial load |
-| `ThrustCylindricalRollerFamily` | thrust, line | nominal contact angle | λ_v = 0.73; η = 1 − 0.15·sin α |
-| `MultiRowThrustCylindricalRollerFamily` | thrust, line | a list of per-row specifications | per-row Ca combined by the multi-row formula |
-| `ThrustNeedleRollerFamily` | thrust, line | flat race, contact angle fixed at 90° | λ_v = 0.73 |
+| `ThrustCylindricalRollerFamily` | thrust, line | nominal contact angle | λ_v = 0.73; η = 1 − 0.5·sin α — **corrected from a previous pass of this document**, which stated η = 1 − 0.15·sin α; the source's coefficient is 0.5, confirm against the standard if that number was carried from somewhere specific |
+| `RollerThrustMultiRowFamily` (renamed from `MultiRowThrustCylindricalRollerFamily`) | thrust, line | a list of per-row specifications | per-row Ca combined by the multi-row formula; the combination itself is flagged in the source as not yet derived/confirmed (exponents 9/2 and 2/9 carried over by analogy with the ball case) |
+
+> **Open item — `ThrustNeedleRollerFamily` no longer exists.** The previous pass of this document listed a ninth family, flat-race thrust needle roller with contact angle fixed at 90° and λ_v = 0.73. It is not present in the current `family.py` — dropped during the restructuring, or not yet ported back. If it is still needed, it has to be re-added rather than assumed to still be there under a different name.
 
 Every family exposes the same capacity entry points, called through the bearing:
 
@@ -273,22 +283,22 @@ Every family exposes the same capacity entry points, called through the bearing:
 | `per_lamina_dynamic_capacity` | `(q_ci, q_ce)` — per lamina, roller families only. |
 | `dynamic_capacity` | The overall bearing Cr or Ca from geometry alone. |
 
-**Radial versus thrust multi-row.** These are different things and are handled differently. A *radial* family's `i` (two rows of a deep-groove ball or cylindrical roller bearing) is a plain capacity-rating multiplier on one raceway per ISO 281:2007 Table 1 — solved as a single ring displacement, no rows list, no load split. A *thrust* multi-row family assembles `rows` (a list of per-row attribute dicts) and `i` instead of flat top-level geometry, because the per-row fields only mean something per row and the rows genuinely share a compatibility solve. Callers reach a row through `bearing.rows[j]`. A separate `MultiRowCylindricalRollerFamily` was tried for the radial case and retired; do not reintroduce it.
+**Radial versus thrust multi-row.** These are different things and are handled differently. A *radial* family's `i` (two rows of a deep-groove ball or cylindrical roller bearing) is a plain capacity-rating multiplier on one raceway per ISO 281:2007 Table 1 — solved as a single ring displacement, no rows list, no load split. A *thrust* multi-row family (`ThrustBallMultiRowFamily`, `RollerThrustMultiRowFamily`) assembles `rows` (a list of per-row attribute dicts, built by calling the matching single-row family's `assemble_geometry()` once per row — composition, not a re-implementation) and combines them via each capacity calculator's own `combine_multirow()`. Callers reach a row through `bearing.rows[j]`. A separate `MultiRowCylindricalRollerFamily` was tried for the radial case and retired; do not reintroduce it.
 
 ### Shared mathematics
 
+Flattened since the previous pass of this document: shared math for **both** contact types and **both** duties now lives in two files, not one pair per contact-type subtree.
+
 | Module | Contents |
 |---|---|
-| `ball_bearing/*/functions/contact_stiffness.py` | Contact angle from clearance, γ, raceway contact radius, curvature sums and differences, Hertzian spring constant `c_p`, plus a self-aligning variant for the degenerate outer-race case. |
-| `ball_bearing/*/functions/capacity.py` | Overall Cr / Ca and per-element `(Q_ci, Q_ce)` for point contact, radial and thrust duty, including the multi-row combination. |
-| `roller_bearing/*/functions/contact_stiffness.py` | Lamina midpoint positions, γ, and the line-contact spring constants `(cL, cs)`. |
-| `roller_bearing/*/functions/capacity.py` | Overall Cr / Ca, whole-roller `(Q_ci, Q_ce)`, per-lamina `(q_ci, q_ce)`, and the multi-row combination. |
+| `families/iso16281_contact.py` | Contact angle and clearance resolution, `PointContactStiffness` and its `SelfAligningPointContactStiffness` variant (γ, raceway contact radius, curvature sums/differences, Hertzian spring constant `c_p`), and `LineContactStiffness` (lamina midpoint positions, γ, the line-contact spring constants `cL`/`cs`). |
+| `families/capacity.py` | `PointContactCapacityRadial`, `PointContactCapacityThrust_90deg`/`_Non_90deg`, `LineContactCapacityRadial`, `LineContactCapacityThrust_90deg`/`_Non_90deg`, and the shared `ThrustCapacityCalculator` base with its `combine_multirow()`. |
 
-The reference roller profile lives on each roller subtype rather than in `functions/`, because a future tapered or spherical family needs a different profile formula. It is computed once at assembly and cached on the bearing, so no solver recomputes it per iteration.
+The reference roller profile (`_reference_roller_profile`, ISO/TS 16281 Sec 6.2 eq. 42–44) is still duplicated between `CylindricalRollerFamily` and `ThrustCylindricalRollerFamily` rather than centralised in `capacity.py`/`iso16281_contact.py` — the two copies are identical today, which is itself a signal that a future tapered/spherical profile should either share this one or make the duplication deliberate.
 
-**Open items.** Static capacity (`Ca0`) is not implemented for any family — the source tables are not in place. The thrust-roller per-element formula omits a leading coefficient that its radial counterpart carries; this is ported as received and marked in the source, pending confirmation against the standard.
+**Open items.** Static capacity (`Ca0`) is not implemented for any family — the source tables are not in place. `ThrustNeedleRollerFamily` no longer exists (see [Families](#families)). `SelfAligningBallFamily`'s own docstring flags that its contact-stiffness treatment may not be properly elaborated for this bearing type. `RollerThrustMultiRowFamily.combine_multirow()` carries exponents taken by analogy with the ball case, not yet independently derived or confirmed. The `BearingFamily` duplicate-class issue is a separate, structural open item — see the note under [Orchestration primitives](#orchestration-primitives).
 
-**Solver coverage.** Point-contact families are served by the ISO/TS 16281 ball solver, `CylindricalRollerFamily` by the roller solver, and multi-row thrust bearings by the multi-row solver registered on their row solver. The self-aligning ball family has capacity support but no internal load-distribution solver. Tapered and spherical roller bearings need a coordinate transform neither solver implements.
+**Solver coverage.** Point-contact families are served by the ISO/TS 16281 ball solver, `CylindricalRollerFamily` by the roller solver, and multi-row thrust bearings by the multi-row solver in the same `contact_solver.py` module (see [`solvers/README.md`](../solvers/README.md#bearings--isots-16281)). The self-aligning ball family has capacity support but no internal load-distribution solver. Tapered and spherical roller bearings need a coordinate transform neither solver implements.
 
 ---
 
@@ -423,17 +433,7 @@ Fan-out is grouped by the **identity** of the driver `GearElement`, not by geome
 
 ## Schematic
 
-`mechanical_system/parallel_axis/schematic.py` — a matplotlib line schematic of a real assembly. It owns nothing: it reads sections, shaft positions, bearings, gears and links, and draws. Both axes plot real millimetres with equal aspect, so a bearing block, a shaft diameter and the distance between two shafts are directly comparable. It is a visual and topological check, not a solver, and it draws no loads.
-
-| Function | Purpose |
-|---|---|
-| `draw_gear_system` | Every shaft as a 1D line, plus dotted connectors marking which gears mesh. |
-| `draw_shaft_system` | One shaft as a line, optionally with element detail. |
-| `draw_shaft_detail` | 2D detail of one shaft: stepped profile, shoulder transitions, bearings and gears flush against the shaft edge. |
-| `gear_anchor` | Real coordinates of a gear's symbol centre, for connector lines. |
-| `recommended_figsize` | A width/height pair clamped to a sensible ratio for the given assembly. |
-
-Choose the plotting axis that actually separates your shafts: a mesh at 270° offsets the shaft position along z, and plotting against y would stack every shaft at zero.
+> **Removed.** The previous pass of this document described `mechanical_system/parallel_axis/schematic.py` — a matplotlib line schematic (`draw_gear_system`, `draw_shaft_system`, `draw_shaft_detail`, `gear_anchor`, `recommended_figsize`) drawing a real assembly from sections, shaft positions, bearings, gears and links. That module **no longer exists on disk** — only a stale `.pyc` remains under `mechanical_system/parallel_axis/__pycache__/` — and the current `parallel_axis/__init__.py` does not import anything named `schematic`. Whether this was a deliberate removal pending a rewrite, or a casualty of the `mechanical_system` restructuring, has not been confirmed. If a visual/topological check of an assembly is still wanted, it needs to be re-added; nothing in the current tree replaces it.
 
 ---
 
@@ -523,7 +523,7 @@ These feed the gear load-capacity solver, whose module is reserved and not yet w
 
 ## Extending this package
 
-**Adding a bearing family.** One new file under `families/<contact>/<duty>/subtypes/`. Declare `CAPABILITIES`, `REQUIRED_FOR`, `BEARING_TYPE`, `DUTY` and `name`; implement `assemble_geometry()` as a pure function returning a flat attribute dict, plus the capacity entry points. Put shared mathematics in that duty's `functions/`, and anything genuinely specific to the subtype — a profile formula, a raceway ratio — on the subtype itself. Extend `BearingType` only if this is a genuinely new family in the ISO 281 sense. Nothing else in `core/` changes, and no solver or dispatch table changes.
+**Adding a bearing family.** One new class in `families/family.py`, decorated `@register_family`. Declare `CAPABILITIES`, `REQUIRED_FOR`, `BEARING_TYPE`, `DUTY` and `name`; implement `assemble_geometry()` as a pure function returning a flat attribute dict, plus the capacity entry points (`dynamic_capacity`, `per_element_dynamic_capacity`, and `per_lamina_dynamic_capacity` for line contact). Put shared mathematics in `iso16281_contact.py`/`capacity.py`, and anything genuinely specific to the family — a profile formula, a raceway ratio — as a class constant or method on the family itself. Extend `BearingType` only if this is a genuinely new family in the ISO 281 sense. The registration decorator means the class appears in the public surface automatically; nothing else needs editing by hand. **Until the `BearingFamily` duplicate-class issue above is resolved, subclass the local `BearingFamily` defined in `family.py` itself, to stay consistent with every existing family** — not `base.py`'s, which no concrete family currently uses.
 
 **Adding a gear type.** Geometry in `gear_properties/`, pair behaviour in `gear_meshing/`. A train that composes pairs goes in its own subpackage, as `planetary_gear/` does, and owns only train-specific logic.
 

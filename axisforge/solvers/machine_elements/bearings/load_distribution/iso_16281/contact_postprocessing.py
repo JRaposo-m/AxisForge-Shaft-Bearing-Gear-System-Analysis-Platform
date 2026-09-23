@@ -16,6 +16,10 @@ used under the same name, folded in here instead of kept in a parallel
 file, per the same "abstract/shared on top, concretes below, one file"
 shape as contact_solver.py.
 
+Shared-displacement state (delta_r, delta_a, psi, phi_Fr) is stored ONCE
+on the *BearingResult, not per row -- functions below read it from
+`result`, and per-row data (delta_j, q_jk, x_k, ...) from `result.rows[i]`.
+
 Never imports contact_solver.py's solver classes -- only the *Result
 shapes they produce. contact_solver.py never imports this file -- one-
 directional, postprocessing depends on the solve output shape, not the
@@ -43,10 +47,8 @@ from typing import ClassVar
 import numpy as np
 
 from axisforge.core.machine_elements.bearings.bearing import Bearing
-from axisforge.results.bearings.load_distribution.single_row.ball_bearing_results import (
+from axisforge.results.bearings.load_distribution.load_distribution_results import (
     BallLoadDistributionResult, BallBearingResult,
-)
-from axisforge.results.bearings.load_distribution.single_row.roller_bearing_results import (
     RollerLoadDistributionResult, RollerBearingResult,
 )
 
@@ -57,7 +59,7 @@ from axisforge.results.bearings.load_distribution.single_row.roller_bearing_resu
 # =====================================================================
 
 class ContactBearingStiffness:
-    """Secant stiffness of a single-row contact bearing (point or line),
+    """Secant stiffness of a contact bearing (point or line),
     XZ / XY / axial axes -- identical projection either way:
 
         delta_r_xz = delta_r * cos(phi_Fr);  Kr_xz = Fr_xz / delta_r_xz
@@ -66,7 +68,10 @@ class ContactBearingStiffness:
 
     float('inf') where the corresponding displacement is negligible.
     Ka_regime: "no_load" (Fa=0) / "engaged" (delta_a>=0) /
-    "closing_clearance" (delta_a<0)."""
+    "closing_clearance" (delta_a<0).
+
+    TODO (review): inf when a projected displacement is ~0 (e.g.
+    phi_Fr ~ 90 deg -> Kr_xz = inf) is known to be wrong."""
 
     __slots__ = ("label", "delta_r_xz", "Kr_xz", "delta_r_xy", "Kr_xy", "Ka", "Ka_regime")
 
@@ -105,12 +110,11 @@ def bearing_stiffness(bearing: Bearing, result, Fr_xz: float, Fr_xy: float,
                       Fa: float = 0.0, eps: float = 1e-9) -> ContactBearingStiffness:
     """Secant stiffness (Kr_xz, Kr_xy, Ka) of the whole bearing -- shared
     by ball (pass Fa explicitly) and roller (Fa defaults 0.0 -- radial
-    roller bearings carry no axial load). For a multi-row bearing, row 0
-    is representative: shared-displacement rows share delta_r/delta_a by
-    construction (see contact_solver.py's MultiRowSolverBase), so any row
-    gives the same stiffness -- not something that needs _row_views()."""
+    roller bearings carry no axial load). delta_r/delta_a/phi_Fr are read
+    from the *BearingResult itself: stored once per bearing (shared
+    displacement), not per row -- so 1 or N rows give the same call."""
     return ContactBearingStiffness.from_result(
-        label=bearing.label, result=result.rows[0],
+        label=bearing.label, result=result,
         Fr_xz=Fr_xz, Fr_xy=Fr_xy, Fa=Fa, eps=eps,
     )
 
@@ -188,7 +192,7 @@ def ball_phi_j_global(bearing: Bearing, result: BallBearingResult):
     """Ball angular positions in the global frame [rad], wrapped to
     [0, 2*pi). Single-row -> ndarray(Z,); multi-row -> list thereof."""
     views = _row_views(bearing, result)
-    out = [(rb.phi_j + rr.phi_Fr) % (2.0 * np.pi) for rb, rr in views]
+    out = [(rb.phi_j + result.phi_Fr) % (2.0 * np.pi) for rb, rr in views]
     return out[0] if len(out) == 1 else out
 
 
@@ -200,7 +204,7 @@ def ball_contact_distribution(bearing: Bearing, result: BallBearingResult,
     out = []
     for rb, rr in views:
         if frame == "global":
-            phi = (rb.phi_j + rr.phi_Fr) % (2.0 * np.pi)
+            phi = (rb.phi_j + result.phi_Fr) % (2.0 * np.pi)
         elif frame == "local":
             phi = rb.phi_j
         else:
@@ -324,7 +328,7 @@ def roller_phi_j_global(bearing: Bearing, result: RollerBearingResult):
     """Roller angular positions in the global frame [rad], wrapped to
     [0, 2*pi). Single-row -> ndarray(Z,); multi-row -> list thereof."""
     views = _row_views(bearing, result)
-    out = [(rb.phi_j + rr.phi_Fr) % (2.0 * np.pi) for rb, rr in views]
+    out = [(rb.phi_j + result.phi_Fr) % (2.0 * np.pi) for rb, rr in views]
     return out[0] if len(out) == 1 else out
 
 
@@ -336,7 +340,7 @@ def roller_contact_distribution(bearing: Bearing, result: RollerBearingResult,
     out = []
     for rb, rr in views:
         if frame == "global":
-            phi = (rb.phi_j + rr.phi_Fr) % (2.0 * np.pi)
+            phi = (rb.phi_j + result.phi_Fr) % (2.0 * np.pi)
         elif frame == "local":
             phi = rb.phi_j
         else:

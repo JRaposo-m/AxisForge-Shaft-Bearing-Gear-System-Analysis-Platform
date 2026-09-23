@@ -78,7 +78,7 @@ class Mesh1D:
         for ld in shaft_system.distributed_radial_loads:
             x_mandatory += [ld.x_lo, ld.x_hi]
             x_mandatory.append(ld.centroid(LoadPlane.XY))
-            x_mandatory.append(ld.centroid(LoadPlane.XY))
+            x_mandatory.append(ld.centroid(LoadPlane.XZ))
 
         # extra positions injected externally (e.g. mesh convergence study)
         x_mandatory += self._extra_mandatory

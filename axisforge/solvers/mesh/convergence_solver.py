@@ -2,75 +2,7 @@
 axisforge/solvers/mesh/convergence_solver.py
 
 Grid Convergence Index (Richardson extrapolation) math + per-interval
-convergence bookkeeping. NÃO corre solves e NÃO sabe nada de
-ShaftSystem/gears/bearings/SubmodelSolver -- só importa de results/
-(mais stdlib/numpy). Isso é deliberado (confirmado com erg
-2026-09-22): o loop de grades (chamar SubmodelSolver por grade_0,
-grade_1, ...) e a resolução de "pontos" nomeados (ex: "centroid" de uma
-carga distribuída, ponto de engrenamento de uma engrenagem) para um x
-real ficam num dispatcher fora deste módulo -- este módulo só recebe,
-já pronto, um SubmodelResult por nível de refinamento, mais os pontos
-já resolvidos a float, e devolve se convergiu.
-
-## REESCRITO nesta passagem (substituindo por completo o draft
-## anterior, que estava desalinhado da arquitetura atual em 3 pontos
-## de raiz -- ver conversa: SubmodelConvergencePostProcessing não
-## existe; SubmodelSolver.solve() já devolve SubmodelResult
-## pós-processado diretamente, não uma SubmodelSolution crua para
-## reprocessar aqui; SubmodelResult.metric_values foi removido e
-## substituído pelos arrays completos):
-##
-##   - metric_spec.py (MetricSpec, eval_points_for_interval,
-##     default_displacement_metrics, *Strategy) -- REMOVIDO daqui.
-##     Substituído por duas coisas INDEPENDENTES uma da outra:
-##       1. "formas de avaliar" -- funções genéricas, registadas por
-##          decorator (register_eval_form), que operam sobre um array
-##          NUMPY simples (mais x_nodes/x quando precisam de um
-##          ponto) -- nunca sabem de que variável (M, v, ...) o array
-##          veio.
-##       2. "variável" -- só o NOME do campo em SubmodelResult
-##          (v_xz, M_xz, u, ...), usado com getattr() para ir buscar o
-##          array antes de chamar a forma de avaliar.
-##     O utilizador combina as duas em tuplos simples:
-##       ("M_xz", "max_minus_mean")              -- sem ponto
-##       ("v_xz", "at_point", "centroid")         -- com ponto
-##     (motivo de serem independentes: o problema de convergência de M
-##     na análise bearing-a-bearing NÃO era resolvido por avaliação
-##     pontual -- o pico de M(x) desloca-se ligeiramente entre grades
-##     -- e sim pelo desvio entre o máximo e a média de M sobre o
-##     intervalo inteiro. Essa mesma forma de avaliar, max_minus_mean,
-##     não tem nada de específico a M -- serve para qualquer variável.)
-##   - SubmodelSolver/SubmodelSolution (submodel_solver/lagrange_multipliers.py)
-##     -- REMOVIDO. O loop de grades sai para o dispatcher; este módulo
-##     recebe SubmodelResult já resolvidos via add_level().
-##   - SubmodelConvergencePostProcessing (submodel_solver/submodel_postprocessing.py)
-##     -- REMOVIDO (nunca existiu como tal -- ver nota acima -- e mesmo
-##     que existisse seria redundante: SubmodelResult que chega aqui já
-##     está pós-processado).
-##   - intervals_from_shaft_system() -- REMOVIDO daqui. Lia
-##     shaft_system.gears/.bearings/.distributed_radial_loads e
-##     axisforge.config.MIN_FACE_WIDTH_FOR_CONVERGENCE_MM -- nenhum dos
-##     dois é results/. Passa a ser trabalho do dispatcher (é ele quem
-##     já precisa de conhecer ShaftSystem para resolver os "pontos"
-##     nomeados e para correr o SubmodelSolver).
-##
-## O que fica exatamente igual: RichardsonGCI e _DummyGCI -- já eram
-## metric-agnostic (só recebem floats + listas de x_nodes), não tinham
-## nenhum dos três imports banidos, não precisaram de mudar uma linha.
-
-TODO(owner): as funções de "forma de avaliar" estão neste mesmo
-ficheiro (max/mean/max_minus_mean/at_point) em vez de num
-eval_forms.py à parte (ao estilo de contact_postprocessing.py separado
-de contact_solver.py no iso_16281/) -- ainda não confirmaste se
-preferes separado. Fácil de mover depois, mantido aqui por agora para
-não multiplicar ficheiros antes de estabilizar a forma.
-
-TODO(owner): peak_shifted (ConvergenceRecord, results/fem_results/convergence_results.py)
-fica sempre vazio aqui -- nenhuma forma de avaliar devolve hoje "onde
-está o extremo", só o valor. Se quiseres isto de volta, uma forma como
-"max_minus_mean" teria de devolver (valor, x_do_extremo) em vez de só
-valor, e add_level() teria de comparar esse x entre níveis -- não feito
-nesta passagem.
+convergence bookkeeping. 
 
 References
 ----------
@@ -85,7 +17,7 @@ from typing import Callable, TYPE_CHECKING
 
 import numpy as np
 
-from axisforge.results.fem_results.convergence_results import ConvergenceRecord, MeshRefinementResult
+from axisforge.results.convergence_results.convergence_results import ConvergenceRecord, MeshRefinementResult
 
 if TYPE_CHECKING:  # pragma: no cover
     from axisforge.results.fem_results.submodel_results import SubmodelResult

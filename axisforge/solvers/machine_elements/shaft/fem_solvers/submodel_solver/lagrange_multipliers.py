@@ -8,74 +8,6 @@ injected as prescribed displacement BCs at the two cut nodes via
 Lagrange multipliers. Used exclusively by MeshConvergenceStudy -- not
 part of the production solve pipeline.
 
-MOVED (this pass): out of fem_solvers/constraints/sub_models/ into its
-own submodel_solver/ folder, sibling to global_solver/ (rigid_support.py
-+ torsion.py) -- same reasoning: this is a solver, at the same
-conceptual level as RigidSupportFEMSolver (raw DOFs in, from a
-ShaftSystem/subdomain), just nested three folders deeper than it for no
-real reason.
-
-CHANGED (this pass): SubmodelSolution now carries kGA_override -- it was
-received by solve() and used to build K_sub, but previously discarded
-rather than published. submodel_solver/postprocessing.py needs it to
-recover V through TimoshenkoPostProcessing.shear_force() the same way
-the global pipeline does (element_postprocessing.py's ElementTheoryPostProcessor
-reads it off the object it's given via getattr(solver, "_kGA_override", None)).
-
-CHANGED (this pass, second decision): solve() now calls
-SubmodelPostProcessor().process(...) itself at the end and returns a
-SubmodelResult directly, instead of returning the raw SubmodelSolution
-and leaving it to a caller to chain the two steps. Deliberate deviation
-from the global pipeline's shape (RigidSupportFEMSolver.solve() does
-NOT call ShaftResultsReader itself -- that stays a separate step for
-the caller) -- decided specifically for this solver because, unlike
-RigidSupportFEMSolver, SubmodelSolver has no known consumer that ever
-wants the raw DOFs without the postprocessed result, so the separate
-"caller" step was just a pass-through file with nothing of its own to
-decide. SubmodelSolution still exists as an internal intermediate (built
-and consumed inside solve(), never returned) -- kept because
-SubmodelPostProcessor.process() needs it and because it's the natural
-place for elements/kGA_override to live, not because anything outside
-this module still needs to see it. If a future caller does need the raw
-DOFs (e.g. for debugging a specific grade's solve before trusting the
-postprocessed numbers), that would be the moment to add back a way to
-get at SubmodelSolution directly -- not done pre-emptively here.
-
-## CHANGED (previous pass), per solvers/README.md's own design contract
-## ("No solver imports another solver... they meet only at the
-## dispatcher and at the result containers"):
-##
-##   - solve() now takes `shaft_results: ShaftResults` instead of
-##     `global_solver: RigidSupportFEMSolver`. RigidSupportFEMSolver is
-##     no longer imported here at all -- BC data comes from
-##     ShaftResults' own d_total_xz/d_total_xy/f_xz_total/f_xy_total
-##     fields, via the free function extract_submodel_values()
-##     (constraints/submodel_extraction.py), not a solver method.
-##   - solve() also takes `settings: BeamModelSettings` explicitly
-##     (was: reached through global_solver._settings) -- Elem.from_x_nodes()
-##     needs it to build submodel elements with the right beam theory.
-##   - `_build_submodel_stiffness` (manual element-by-element loop using
-##     StiffnessMatrixBuilder._element_stiffness_6x6, which does not
-##     exist in the current assembly API) is REPLACED by
-##     StiffnessMatrixBuilder(mesh_sub, elements, frame=True).build(),
-##     the same builder rigid_support.py itself uses. No manual
-##     "skip elements outside [x_lo,x_hi]" check needed anymore --
-##     elements are already built only from x_nodes_sub, so there are
-##     no out-of-range elements to skip.
-##   - `_assemble_load_vector`/`_assemble_distributed_load_vector`
-##     (custom inline Gauss-quadrature code, duplicating logic that now
-##     lives in assembly/load_assembly/) are REPLACED by
-##     assemble_point_load_vector()/assemble_distributed_load_vector()
-##     + QuadratureOrderEstimator, the same calls rigid_support.py's
-##     own solve() makes.
-##   - `_build_submodel_load_cases` is KEPT, not replaced by
-##     build_load_cases() (assembly/load_assembly/vector_external_forces.py)
-##     -- that function has no concept of a subdomain; filtering loads
-##     to [x_lo, x_hi] and clamping distributed-load spans to it is
-##     genuinely submodel-specific restriction logic, not a duplicate
-##     of anything in assembly/. It already returns cases in the exact
-##     shape assemble_point_load_vector()/assemble_distributed_load_vector()
-##     expect, unchanged.
 """
 
 from __future__ import annotations
@@ -233,62 +165,8 @@ class SubmodelSolver:
             if x_lo - SOLVER_TOLERANCE <= x <= x_hi + SOLVER_TOLERANCE
         ]
 
-        # ## CHANGED (was: x_lo/x_hi only): force-keep every HARD point
-        # this solve actually needs as an exact node, regardless of what
-        # Mesh1D's dedupe (MESH_MIN_NODE_DIST_MM merge in _create_mesh)
-        # did to it. At deep grades a Grader-bisection candidate can
-        # land closer than MESH_MIN_NODE_DIST_MM to one of these; Mesh1D's
-        # merge then silently drops whichever point sorted second. First
-        # caught this for x_lo/x_hi themselves (_build_constraint_matrix's
-        # Lagrange-multiplier BC attachment needs them); this run
-        # surfaced the SAME class of bug for a point load position
-        # (assemble_point_load_vector's Elem.find_node_index -- e.g. a
-        # gear-mesh radial load sitting exactly at the gear's own
-        # position). Both come from the same root cause, so both are
-        # fixed the same way here: gather every position
-        # _build_submodel_load_cases()/assemble_point_load_vector()/
-        # _build_constraint_matrix() will look up by exact coordinate
-        # (x_lo, x_hi, and every radial/axial/moment load position and
-        # clamped distributed-load edge within [x_lo, x_hi]) and force
-        # each one to survive the filter above. Not fixing this in
-        # Mesh1D itself: that dedupe is shared by the whole codebase,
-        # and it has no way to know which of its inputs are "hard"
-        # points a downstream lookup will require exactly vs soft
-        # refinement candidates -- only this caller does.
-        #
-        # STILL OPEN (flagged, not fixed this pass): the metric evaluation
-        # points that submodel_solver/postprocessing.py's caller (the
-        # convergence study) will sample are NOT in this hard_points set --
-        # only load positions and x_lo/x_hi are. See the conversation note
-        # this pass is part of: if a caller samples a field at an x that
-        # doesn't survive Mesh1D's dedupe, find_node_index-style lookups
-        # downstream will either raise or silently match the wrong node.
-        # Left as-is here because it belongs to whoever calls this solver
-        # with a set of evaluation points in mind, not to this solve() itself.
-        load_cases = self._build_submodel_load_cases(shaft_system)
-        hard_points: set[float] = {x_lo, x_hi}
-        for lc in load_cases:
-            for x, _ in lc.get("radial_xz", []):
-                hard_points.add(x)
-            for x, _ in lc.get("radial_xy", []):
-                hard_points.add(x)
-            for x, _ in lc.get("axial", []):
-                hard_points.add(x)
-            for x, _ in lc.get("moments_xz", []):
-                hard_points.add(x)
-            for x, _ in lc.get("moments_xy", []):
-                hard_points.add(x)
-            for dl in lc.get("distributed_xz", []):
-                hard_points.add(dl["x_lo"])
-                hard_points.add(dl["x_hi"])
-            for dl in lc.get("distributed_xy", []):
-                hard_points.add(dl["x_lo"])
-                hard_points.add(dl["x_hi"])
-
-        for x_hard in hard_points:
-            if not any(abs(x - x_hard) <= SOLVER_TOLERANCE for x in x_nodes_sub):
-                x_nodes_sub.append(x_hard)
         x_nodes_sub = sorted(set(x_nodes_sub))
+        load_cases = self._build_submodel_load_cases(shaft_system)
 
         # 6. synthetic subdomain mesh + its own elements (settings passed
         #    explicitly now -- no more global_solver._settings reach-through)
@@ -303,8 +181,7 @@ class SubmodelSolver:
         )
 
         # --- force vectors, via the real assembly primitives ---
-        # load_cases already built above (step 5) to determine hard
-        # points -- reused here as-is, not rebuilt.
+        # load_cases already built above -- reused here as-is, not rebuilt.
         estimator  = QuadratureOrderEstimator(settings.beam_theory)
 
         n_dofs = 3 * len(x_nodes)

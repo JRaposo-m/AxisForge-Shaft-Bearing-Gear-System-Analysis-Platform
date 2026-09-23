@@ -1,19 +1,6 @@
 """
 axisforge/solvers/machine_elements/shaft/fem_solvers/__init__.py
 
-Ponto único de import para o subsistema fem_solvers/ -- estilo slippy,
-tudo eager (mesmo padrão de
-core/machine_elements/bearings/load_distribution/iso_16281/__init__.py
-e de core/machine_elements/bearings/__init__.py): element_theories
-(base ABC + as duas implementações de teoria), assembly (stiffness
-matrix, load assembly, numerics), constraints (boundary conditions,
-extração para submodelo), global_solver (RigidSupportFEMSolver +
-postprocessing + torção) e submodel_solver (SubmodelSolver +
-postprocessing), todos importados aqui e listados em __all__.
-
-REPLACES a versão anterior deste ficheiro, que era lazy (PEP 562
-module __getattr__) e ficou desatualizada da reorganização de pastas já
-feita -- apontava para módulos/nomes que já não existem:
 
     RigidBearingFEMSolver  -> ".rigid_bearing"   (nunca existiu com este
                                                     nome; a classe real é
@@ -26,19 +13,6 @@ feita -- apontava para módulos/nomes que já não existem:
                                                     não é definido aqui,
                                                     ver nota abaixo)
 
-Quem fizesse `from axisforge...fem_solvers import RigidBearingFEMSolver`
-contra o ficheiro antigo tinha um ModuleNotFoundError assim que
-__getattr__ tentasse `importlib.import_module(".rigid_bearing", ...)`
--- não um erro que apontasse para o problema real. Esta reescrita troca
-o lazy import pelo padrão eager já usado no resto do projeto, e corrige
-os caminhos/nomes.
-
-NÃO reexportado aqui (deliberado, avisa se preferires diferente):
-SubmodelResult e ShaftResults são dataclasses de RESULTADO, não
-solvers -- vivem em axisforge.results.fem_results, um pacote diferente.
-O ficheiro antigo misturava essa fronteira (expondo SubmodelResult como
-se fosse um cidadão de fem_solvers/). Esta versão só expõe o que
-fem_solvers/ define de facto.
 """
 from __future__ import annotations
 

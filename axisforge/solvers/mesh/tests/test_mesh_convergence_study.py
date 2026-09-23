@@ -10,7 +10,7 @@ import pytest
 from axisforge.solvers.mesh.convergence_solver import (
     MeshConvergenceStudy, build_mesh_refinement_result,
 )
-from axisforge.results.fem_results.convergence_results import ConvergenceRecord
+from axisforge.results.convergence_results.convergence_results import ConvergenceRecord
 
 from axisforge.solvers.mesh.tests.conftest import make_result, array_with_exact_max_minus_mean
 

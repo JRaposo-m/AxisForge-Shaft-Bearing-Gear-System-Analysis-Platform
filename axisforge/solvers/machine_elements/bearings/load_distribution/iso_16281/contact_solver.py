@@ -4,19 +4,29 @@ axisforge/solvers/machine_elements/bearings/load_distribution/single_row/iso_162
 Single-row ISO/TS 16281 contact solvers -- abstract contract on top,
 concrete point-contact (ball) and line-contact (roller) solvers below.
 Everything that RUNS the iterative solve lives here; result shapes live
-in results/bearings/load_distribution/single_row/*.
+in results/bearings/load_distribution/load_distribution_results.py.
+
+Result shape: every solver produces a *BearingResult (frozen) holding the
+shared-displacement state ONCE (delta_r, delta_a, psi, phi_Fr, applied
+Fr_xz/Fr_xy/Fa, n_iter/residual/ok) plus one *LoadDistributionResult per
+row with only the per-row data (phi_j, delta_j, alpha_j, Q_j, Fr_row,
+Fa_row, Mz [+ lamina data for roller]). Single-row = 1 row.
+
+solve() returns dict[label, BearingAnalysisResult]:
+    .load_distribution  the *BearingResult (always)
+    .basic_life         BasicReferenceRatingLifeResult (postprocess=True only)
 
 Postprocessing (contact_postprocessing.py) is imported here on purpose --
 this was a one-directional dependency (contact_solver.py never imported
 contact_postprocessing.py) until the `postprocess` flag below was added.
 The rule was deliberately relaxed: a solver constructed with
-postprocess=True now runs contact_postprocessing.py's functions itself
-and attaches the results directly onto the *LoadDistributionResult row
-(Q_j, stiffness, L10r, Pref_r, Pref_a -- all optional fields, default
-None), so an external orchestrator only ever has to call solve() once to
-get everything. contact_postprocessing.py itself still never imports this
-module -- only the *Result shapes it produces -- so that half of the
-one-directional rule stands.
+postprocess=True now runs contact_postprocessing.py's functions itself --
+stiffness is attached to the *BearingResult (with_stiffness()), L10r/Pref
+go into BearingAnalysisResult.basic_life -- so an external orchestrator
+only ever has to call solve() once to get everything.
+contact_postprocessing.py itself still never imports this module -- only
+the *Result shapes it produces -- so that half of the one-directional
+rule stands.
 
 Multi-row (shared-displacement) solvers now live here too, immediately
 after their single-row sibling, following the same abstract-on-top /
@@ -26,11 +36,16 @@ single-row counterpart). They are NOT reviewed for bearing-to-bearing
 coupling -- the shared-displacement formulation assumes co-located rows
 (zero axial offset) and superposes each row's own reaction; it is a
 step beyond what ISO/TS 16281 itself states (the standard gives
-per-raceway equations, not row combination), valid as-is only for
-thrust bearings. That physics is explicitly NOT touched by this pass --
-only paths, decorator style and code shape were aligned with the
-single-row classes. Postprocessing is likewise NOT wired up for
+per-raceway equations, not row combination). That physics is explicitly
+NOT touched by this pass. Postprocessing is likewise NOT wired up for
 multi-row solvers -- see MultiRowSolverBase._extra_ready_checks().
+NOTE (to review): the earlier claim "valid as-is only for thrust
+bearings" is questionable -- thrust bearings carry no radial load, yet
+the ball multi-row solve includes Fr.
+
+NOTE (to review): the roller solvers are RADIAL only (Fa, delta_a, Fa_row
+= 0.0 by definition). Thrust roller is the mirror case (Fa only, no Fr)
+and is not covered here.
 
 References
 ----------
@@ -58,12 +73,13 @@ from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281.dis
 from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281 import (
     contact_postprocessing as pp,
 )
-from axisforge.results.bearings.load_distribution.single_row.ball_bearing_results import (
+from axisforge.results.bearings.load_distribution.load_distribution_results import (
+    BearingResult,
     BallLoadDistributionResult, BallBearingResult,
-)
-from axisforge.results.bearings.load_distribution.single_row.roller_bearing_results import (
     RollerLoadDistributionResult, RollerBearingResult,
 )
+from axisforge.results.bearings.life.basic_life_results import BasicReferenceRatingLifeResult
+from axisforge.results.bearings.bearing_analysis_result import BearingAnalysisResult
 from axisforge.config import SOLVER_TOLERANCE
 
 
@@ -85,18 +101,17 @@ class SolverBase(ABC):
 
     CAPABILITY/REQUIRED_ATTRS are written onto concrete subclasses by
     register_contact_solver(), not declared in the class body -- see
-    dispatch.py. _result_cls (the *BearingResult wrapper) and
+    dispatch.py. _result_cls (the *BearingResult class) and
     _solve_one_bearing() are set/implemented directly by each concrete
     subclass. _wrap_result() is a hook so that a solver whose
-    _solve_one_bearing() doesn't return a single *LoadDistributionResult
-    (e.g. a multi-row solver, which returns a whole row set + fractions)
-    can still go through this same loop without solve() knowing about it.
+    _solve_one_bearing() doesn't return a complete *BearingResult (e.g. a
+    multi-row solver, which returns a row set + shared state) can still go
+    through this same loop without solve() knowing about it.
 
-    postprocess : when True, each concrete single-row solver attaches
-    Q_j/stiffness/L10r/Pref_r/Pref_a onto its *LoadDistributionResult row
-    via _attach_postprocessing() (see ISO16281BallSolver/ISO16281RollerSolver
-    below). False by default -- solve_contact()'s own return value is
-    unchanged either way, this only adds fields that default to None.
+    postprocess : when True, each concrete single-row solver's
+    _attach_postprocessing() attaches bearing-level stiffness to the
+    *BearingResult and computes L10r/Pref into BearingAnalysisResult.basic_life.
+    False by default -- basic_life is then None.
     """
 
     CAPABILITY: str = ""
@@ -115,21 +130,21 @@ class SolverBase(ABC):
               bearings: dict[str, Bearing],
               shaft_results: ShaftResults,
               psi_override: dict[str, float] | None = None,
-              ) -> dict[str, object]:
+              ) -> dict[str, BearingAnalysisResult]:
         """
         Solve the internal load distribution for every bearing in
         `bearings` this solver applies to.
 
-        For a single-row solver, returns one *BearingResult per label,
-        each wrapping exactly 1 row. A multi-row solver (MultiRowSolverBase
-        subclass) returns one *BearingResult per label wrapping N rows --
-        the batch loop itself (grouping, psi, readiness, warnings) is
-        identical either way, only _wrap_result() differs.
+        Returns one BearingAnalysisResult per label. Its .load_distribution
+        is a *BearingResult wrapping 1 row (single-row solver) or N rows
+        (MultiRowSolverBase subclass) -- the batch loop itself (grouping,
+        psi, readiness, warnings) is identical either way, only
+        _wrap_result() differs. .basic_life is set only with postprocess=True.
         """
         if self._result_cls is None:
             raise NotImplementedError(
                 f"{type(self).__name__} must set _result_cls to its "
-                f"*BearingResult wrapper class."
+                f"*BearingResult class."
             )
 
         if self.psi_input and psi_override:
@@ -142,7 +157,7 @@ class SolverBase(ABC):
 
         node_by_label = {n.label: n for n in shaft_results.bearing_nodes}
 
-        results: dict[str, object] = {}
+        results: dict[str, BearingAnalysisResult] = {}
         for label, b in bearings.items():
             check_bearing_ready(b, label, self.REQUIRED_ATTRS)
             self._extra_ready_checks(b, label)
@@ -161,8 +176,13 @@ class SolverBase(ABC):
             else:
                 psi = node.psi_xz * np.cos(phi_Fr) + node.psi_xy * np.sin(phi_Fr)
 
-            row = self._solve_one_bearing(b, node, phi_Fr, psi)
-            results[label] = self._wrap_result(row)
+            result = self._wrap_result(self._solve_one_bearing(b, node, phi_Fr, psi))
+
+            if self.postprocess:
+                results[label] = self._attach_postprocessing(b, result)
+            else:
+                results[label] = BearingAnalysisResult(label=result.label,
+                                                       load_distribution=result)
 
         return results
 
@@ -172,19 +192,28 @@ class SolverBase(ABC):
         return None
 
     def _wrap_result(self, row):
-        """Hook: wraps whatever _solve_one_bearing() returns into this
-        solver's *BearingResult. Default = single-row (row is ONE
-        *LoadDistributionResult). MultiRowSolverBase overrides this --
-        its _solve_one_bearing() returns a row set + f_r/f_a instead."""
-        return self._result_cls.single(row)
+        """Hook: turns whatever _solve_one_bearing() returns into this
+        solver's *BearingResult. Default = single-row: solve_contact()
+        already returns a complete *BearingResult, so nothing to do.
+        MultiRowSolverBase overrides this -- its _solve_one_bearing()
+        returns a row set + shared state instead."""
+        return row
+
+    def _attach_postprocessing(self, bearing: Bearing, result: BearingResult
+                               ) -> BearingAnalysisResult:
+        """Overridden by each concrete single-row solver. Multi-row refuses
+        postprocess=True before reaching here (see MultiRowSolverBase)."""
+        raise NotImplementedError(
+            f"{type(self).__name__}: postprocessing not implemented."
+        )
 
     @abstractmethod
     def _solve_one_bearing(self, bearing: Bearing, node, phi_Fr: float, psi: float):
         """Solve ONE bearing given its FEM node data, phi_Fr and psi.
         Must call self.solve_contact(...) with whatever arguments this
-        solver's own physics needs and return the resulting
-        *LoadDistributionResult row (or, for a multi-row solver, whatever
-        _wrap_result() on that solver expects)."""
+        solver's own physics needs and return the resulting *BearingResult
+        (or, for a multi-row solver, whatever _wrap_result() on that
+        solver expects)."""
         ...
 
     @staticmethod
@@ -237,9 +266,13 @@ class MultiRowSolverBase(SolverBase, ABC):
     This is deliberately NOT a generic n-row FE-style solve: rows are
     assumed co-located (zero axial offset), each row keeps its own
     geometry/stiffness (cp or cs/cL, phi_j, ...), and there is no
-    bearing-to-bearing coupling term. Valid as-is only for thrust
-    bearings -- see module docstring. Reviewing/extending this to real
+    bearing-to-bearing coupling term. Reviewing/extending this to real
     radial multi-row behavior is a separate, later task.
+
+    Output: ONE *BearingResult with N rows. Shared state (delta_r,
+    delta_a, psi, phi_Fr, applied load, n_iter/residual/ok) is stored once
+    on the bearing; each row carries its own reactions Fr_row/Fa_row, from
+    which the result derives f_r/f_a.
 
     postprocess=True is refused here (see _extra_ready_checks()) -- the
     Cr/Ca-per-row and L10r-row-combination semantics for postprocess were
@@ -292,50 +325,36 @@ class MultiRowSolverBase(SolverBase, ABC):
         ...
 
     def _wrap_result(self, row):
-        row_results, f_r, f_a, n_iter, residual_norm, ok = row
-        # NOTE: assumes *BearingResult.multirow(rows, f_r, f_a, n_iter,
-        # residual, ok) exists with this signature -- confirm/adjust
-        # against the actual classmethod on BallBearingResult /
-        # RollerBearingResult (I don't have that file verbatim here).
-        return self._result_cls.multirow(
-            rows=row_results, f_r=f_r, f_a=f_a,
-            n_iter=n_iter, residual=residual_norm, ok=ok,
-        )
-
-    @staticmethod
-    def _fractions(row_values: list[float], total: float) -> list[float]:
-        """Per-row f_r/f_a: fraction of the bearing's total Fr (or Fa)
-        absorbed by each row -- equal-split fallback when the total is
-        ~0 (e.g. all-radial case for f_a)."""
-        n = len(row_values)
-        if abs(total) < 1e-9:
-            return [1.0 / n] * n
-        return [v / total for v in row_values]
+        row_results, shared = row
+        return self._result_cls.multirow(row_results, **shared)
 
     def _solve_one_bearing(self, bearing: Bearing, node, phi_Fr: float, psi: float):
         row_views = self._row_views(bearing)
-        row_results, row_reactions, n_iter, residual_norm, ok = self._solve_rows(
+        row_results, delta_r, delta_a, Fa, n_iter, residual_norm, ok = self._solve_rows(
             row_views,
             Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy, Fa=getattr(node, "Fa", 0.0),
             psi=psi, phi_Fr=phi_Fr,
         )
-        Fr_total = float(np.hypot(node.Fr_xz, node.Fr_xy))
-        Fa_total = float(getattr(node, "Fa", 0.0))
-        f_r = self._fractions([r for r, _ in row_reactions], Fr_total)
-        f_a = self._fractions([a for _, a in row_reactions], Fa_total)
-        return row_results, f_r, f_a, n_iter, residual_norm, ok
+        shared = dict(
+            label=bearing.label,
+            delta_r=delta_r, delta_a=delta_a, psi=psi, phi_Fr=phi_Fr,
+            Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy, Fa=Fa,
+            n_iter=n_iter, residual=residual_norm, ok=ok,
+        )
+        return row_results, shared
 
     @abstractmethod
     def _solve_rows(self, row_views, Fr_xz: float, Fr_xy: float, Fa: float,
                      psi: float, phi_Fr: float):
         """Resolve the shared-displacement system over all rows.
 
-        Returns (row_results, row_reactions, n_iter, residual_norm, ok):
-        row_results is a list of *LoadDistributionResult, one per row;
-        row_reactions is a list of (Fr_row, Fa_row) floats, one per row
-        (used only to back out f_r/f_a -- Fa_row is 0.0 for roller rows).
-        Not forced into a common equation count on purpose -- ball solves
-        2 unknowns (delta_r, delta_a), roller solves 1 (delta_r only)."""
+        Returns (row_results, delta_r, delta_a, Fa, n_iter, residual_norm, ok):
+        row_results is a list of *LoadDistributionResult, one per row (each
+        with its own Fr_row/Fa_row reactions); delta_r/delta_a are the shared
+        solution; Fa is the axial load the bearing actually carries (0.0 for
+        radial roller rows, whatever the node says). Not forced into a
+        common equation count on purpose -- ball solves 2 unknowns
+        (delta_r, delta_a), roller solves 1 (delta_r only)."""
         ...
 
 
@@ -352,48 +371,48 @@ class ISO16281BallSolver(SolverBase):
     _result_cls = BallBearingResult
 
     def _solve_one_bearing(self, bearing: Bearing, node, phi_Fr: float, psi: float
-                            ) -> BallLoadDistributionResult:
-        row = self.solve_contact(
+                            ) -> BallBearingResult:
+        return self.solve_contact(
             bearing,
             Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy, Fa=node.Fa,
             delta_r_init=float(np.hypot(node.v_xz, node.v_xy)),
             delta_a_init=node.u,
             psi=psi, phi_Fr=phi_Fr,
         )
-        if self.postprocess:
-            self._attach_postprocessing(bearing, row, node.Fr_xz, node.Fr_xy, node.Fa)
-        return row
 
     @staticmethod
-    def _attach_postprocessing(bearing: Bearing, row: BallLoadDistributionResult,
-                               Fr_xz: float, Fr_xy: float, Fa: float) -> None:
-        """Runs everything contact_postprocessing.py offers for a ball row
-        and attaches it onto `row` in place -- Q_j, stiffness, L10r,
-        Pref_r/Pref_a. inner_rotating/outer_rotating are left at
-        DynamicEquivalentRollingElementLoad.from_distribution()'s own
-        defaults (True/False) -- Bearing has no such attribute to read
+    def _attach_postprocessing(bearing: Bearing, result: BallBearingResult
+                               ) -> BearingAnalysisResult:
+        """Runs everything contact_postprocessing.py offers for a ball
+        bearing -- stiffness (attached to the *BearingResult via
+        with_stiffness(), results are frozen) and L10r/Pref (into
+        BearingAnalysisResult.basic_life). inner_rotating/outer_rotating
+        are left at DynamicEquivalentRollingElementLoad.from_distribution()'s
+        own defaults (True/False) -- Bearing has no such attribute to read
         from, this mirrors the ISO/TS 16281 "usual case" (inner ring
         rotating) assumption baked into that default."""
-        wrapper = BallBearingResult.single(row)
-
-        row.Q_j       = pp.ball_Q_j(bearing, wrapper)
-        row.stiffness = pp.bearing_stiffness(bearing, wrapper, Fr_xz=Fr_xz, Fr_xy=Fr_xy, Fa=Fa)
+        stiffness = pp.bearing_stiffness(bearing, result,
+                                         Fr_xz=result.Fr_xz, Fr_xy=result.Fr_xy, Fa=result.Fa)
+        result = result.with_stiffness(stiffness)
 
         Q_ci, Q_ce = bearing.family.per_element_dynamic_capacity(bearing)
         equiv = pp.DynamicEquivalentRollingElementLoad.from_distribution(
-            bearing, row, label=bearing.label,
+            bearing, result.row, label=bearing.label,
         )
         life = pp.BallBasicReferenceRatingLife.from_loads(
             label=bearing.label, Q_ci=Q_ci, Q_ei=equiv.Q_ei, Q_ce=Q_ce, Q_ee=equiv.Q_ee,
         )
-        row.L10r = life.L10r
 
         Cr, Ca = SolverBase._Cr_Ca(bearing)
         pref = pp.BallDynamicEquivalentReferenceLoad.from_L10r(
             label=bearing.label, L10r=life.L10r, Cr=Cr, Ca=Ca,
         )
-        row.Pref_r = pref.Pref_r
-        row.Pref_a = pref.Pref_a
+
+        basic_life = BasicReferenceRatingLifeResult(
+            label=bearing.label, rows=(life,), L10r=life.L10r, pref=pref,
+        )
+        return BearingAnalysisResult(label=result.label, load_distribution=result,
+                                     basic_life=basic_life)
 
     @staticmethod
     def elements(bearing: Bearing, delta_r: float, delta_a: float, Vpsi: np.ndarray):
@@ -430,7 +449,7 @@ class ISO16281BallSolver(SolverBase):
                       bearing: Bearing,
                       Fr_xz: float, Fr_xy: float, Fa: float,
                       delta_r_init: float, delta_a_init: float,
-                      psi: float, phi_Fr: float) -> BallLoadDistributionResult:
+                      psi: float, phi_Fr: float) -> BallBearingResult:
         """Equilibrium, Sec 4.2.2.1:
             Fr = cp * sum(delta_j^1.5 * cos(alpha_j) * cos(phi_j))
             Fa = cp * sum(delta_j^1.5 * sin(alpha_j))
@@ -452,13 +471,22 @@ class ISO16281BallSolver(SolverBase):
         x, nfev, res, ok  = run_root(residual, [dr0, da0], self.tol)
         delta_r, delta_a  = float(x[0]), float(x[1])
 
-        delta_j, alpha_j, _, sa, cp_j, d32 = self.elements(bearing, delta_r, delta_a, Vpsi)
+        delta_j, alpha_j, ca, sa, cp_j, d32 = self.elements(bearing, delta_r, delta_a, Vpsi)
         Mz = (bearing.Dpw / 2.0) * cp * float(np.sum(d32 * sa * cp_j))
 
-        return BallLoadDistributionResult(
-            delta_r=delta_r, delta_a=delta_a, psi=psi, phi_Fr=phi_Fr,
+        row = BallLoadDistributionResult(
+            phi_j=np.asarray(bearing.phi_j, dtype=float),
             delta_j=delta_j, alpha_j=alpha_j,
-            Mz=Mz, n_iter=nfev, residual=res, ok=ok,
+            Q_j=cp * d32,
+            Fr_row=float(cp * np.sum(d32 * ca * cp_j)),
+            Fa_row=float(cp * np.sum(d32 * sa)),
+            Mz=Mz,
+        )
+        return BallBearingResult.single(
+            row, label=bearing.label,
+            delta_r=delta_r, delta_a=delta_a, psi=psi, phi_Fr=phi_Fr,
+            Fr_xz=Fr_xz, Fr_xy=Fr_xy, Fa=Fa,
+            n_iter=nfev, residual=res, ok=ok,
         )
 
     def minimum_axial_load(self,
@@ -468,7 +496,7 @@ class ISO16281BallSolver(SolverBase):
                             delta_r_init: float = 0.0,
                             delta_a_init: float = 0.0,
                             Fa_bracket: tuple[float, float] = (0.0, 5.0e4),
-                            xtol: float = 1e-6) -> tuple[float, BallLoadDistributionResult]:
+                            xtol: float = 1e-6) -> tuple[float, BallBearingResult]:
         """Minimum axial preload [N] such that delta_a >= 0 (contact closure)."""
         check_bearing_ready(bearing, bearing.label, self.REQUIRED_ATTRS)
         phi_Fr = float(np.arctan2(Fr_xy, Fr_xz))
@@ -544,20 +572,19 @@ class ISO16281MultiRowBallSolverSharedDisplacement(MultiRowSolverBase):
         x, nfev, res, ok = run_root(residual, [dr0, da0], self.tol)
         delta_r, delta_a = float(x[0]), float(x[1])
 
-        row_results, row_reactions = [], []
+        row_results = []
         for rv in row_views:
             Vpsi_rv = rv.Ri * np.sin(psi) * np.cos(rv.phi_j)
             delta_j, alpha_j, ca, sa, cp_j, d32 = elements(rv, delta_r, delta_a, Vpsi_rv)
-            Fr_row = float(rv.cp * np.sum(d32 * ca * cp_j))
-            Fa_row = float(rv.cp * np.sum(d32 * sa))
-            Mz_row = (rv.Dpw / 2.0) * rv.cp * float(np.sum(d32 * sa * cp_j))
             row_results.append(BallLoadDistributionResult(
-                delta_r=delta_r, delta_a=delta_a, psi=psi, phi_Fr=phi_Fr,
+                phi_j=np.asarray(rv.phi_j, dtype=float),
                 delta_j=delta_j, alpha_j=alpha_j,
-                Mz=Mz_row, n_iter=nfev, residual=res, ok=ok,
+                Q_j=rv.cp * d32,
+                Fr_row=float(rv.cp * np.sum(d32 * ca * cp_j)),
+                Fa_row=float(rv.cp * np.sum(d32 * sa)),
+                Mz=(rv.Dpw / 2.0) * rv.cp * float(np.sum(d32 * sa * cp_j)),
             ))
-            row_reactions.append((Fr_row, Fa_row))
-        return row_results, row_reactions, nfev, res, ok
+        return row_results, delta_r, delta_a, Fa, nfev, res, ok
 
 
 # =====================================================================
@@ -571,39 +598,36 @@ class ISO16281RollerSolver(LineContactSolverBase):
     """Line contact (radial cylindrical roller bearings, NU/N-type, zero
     nominal contact angle). Sec 5.2 lamina model. 1-equation root (delta_r)
     in the resultant-force plane, psi prescribed -- eq.(46) evaluated
-    afterwards as a diagnostic, not a solve constraint."""
+    afterwards as a diagnostic, not a solve constraint. No axial capacity:
+    Fa, delta_a and Fa_row are 0.0 in the result by definition."""
 
     _result_cls = RollerBearingResult
 
     def _solve_one_bearing(self, bearing: Bearing, node, phi_Fr: float, psi: float
-                            ) -> RollerLoadDistributionResult:
-        row = self.solve_contact(
+                            ) -> RollerBearingResult:
+        return self.solve_contact(
             bearing,
             Fr_xz=node.Fr_xz, Fr_xy=node.Fr_xy,
             delta_r_init=float(np.hypot(node.v_xz, node.v_xy)),
             psi=psi, phi_Fr=phi_Fr,
         )
-        if self.postprocess:
-            self._attach_postprocessing(bearing, row, node.Fr_xz, node.Fr_xy)
-        return row
 
     @staticmethod
-    def _attach_postprocessing(bearing: Bearing, row: RollerLoadDistributionResult,
-                               Fr_xz: float, Fr_xy: float) -> None:
+    def _attach_postprocessing(bearing: Bearing, result: RollerBearingResult
+                               ) -> BearingAnalysisResult:
         """Runs everything contact_postprocessing.py offers for a roller
-        row and attaches it onto `row` in place -- Q_j, stiffness, L10r,
-        Pref_r/Pref_a. Fa is always 0.0 -- radial roller bearings carry no
-        axial load. inner_rotating/outer_rotating left at
-        LaminaDynamicEquivalentLoad.from_distribution()'s own defaults
-        (True/False), same reasoning as the ball solver."""
-        wrapper = RollerBearingResult.single(row)
-
-        row.Q_j       = pp.roller_Q_j(bearing, wrapper)
-        row.stiffness = pp.bearing_stiffness(bearing, wrapper, Fr_xz=Fr_xz, Fr_xy=Fr_xy, Fa=0.0)
+        bearing -- stiffness (attached via with_stiffness()) and L10r/Pref
+        (into BearingAnalysisResult.basic_life). Fa is always 0.0 -- radial
+        roller bearings carry no axial load. inner_rotating/outer_rotating
+        left at LaminaDynamicEquivalentLoad.from_distribution()'s own
+        defaults (True/False), same reasoning as the ball solver."""
+        stiffness = pp.bearing_stiffness(bearing, result,
+                                         Fr_xz=result.Fr_xz, Fr_xy=result.Fr_xy, Fa=0.0)
+        result = result.with_stiffness(stiffness)
 
         q_kci, q_kce = bearing.family.per_lamina_dynamic_capacity(bearing)
         equiv = pp.LaminaDynamicEquivalentLoad.from_distribution(
-            bearing, row, label=bearing.label,
+            bearing, result.row, label=bearing.label,
         )
         q_kci_arr = np.full_like(equiv.q_kei, q_kci)
         q_kce_arr = np.full_like(equiv.q_kee, q_kce)
@@ -611,14 +635,17 @@ class ISO16281RollerSolver(LineContactSolverBase):
             label=bearing.label, q_kci=q_kci_arr, q_kei=equiv.q_kei,
             q_kce=q_kce_arr, q_kee=equiv.q_kee,
         )
-        row.L10r = life.L10r
 
         Cr, Ca = SolverBase._Cr_Ca(bearing)
         pref = pp.RollerDynamicEquivalentReferenceLoad.from_L10r(
             label=bearing.label, L10r=life.L10r, Cr=Cr, Ca=Ca,
         )
-        row.Pref_r = pref.Pref_r
-        row.Pref_a = pref.Pref_a
+
+        basic_life = BasicReferenceRatingLifeResult(
+            label=bearing.label, rows=(life,), L10r=life.L10r, pref=pref,
+        )
+        return BearingAnalysisResult(label=result.label, load_distribution=result,
+                                     basic_life=basic_life)
 
     @staticmethod
     def elements(bearing: Bearing, delta_r: float, psi: float):
@@ -653,7 +680,7 @@ class ISO16281RollerSolver(LineContactSolverBase):
                       bearing: Bearing,
                       Fr_xz: float, Fr_xy: float,
                       delta_r_init: float,
-                      psi: float, phi_Fr: float) -> RollerLoadDistributionResult:
+                      psi: float, phi_Fr: float) -> RollerBearingResult:
         """Equilibrium, Sec 5.2.4.1, eq.(45): Fr = sum_j cos(phi_j) * sum_k q_j,k"""
         Fr = float(np.hypot(Fr_xz, Fr_xy))
 
@@ -668,16 +695,26 @@ class ISO16281RollerSolver(LineContactSolverBase):
         delta_r          = float(x[0])
 
         delta_j, psi_j, delta_jk, q_jk, cp_j = self.elements(bearing, delta_r, psi)
-        x_k = bearing.x_k
+        x_k = np.asarray(bearing.x_k, dtype=float)
+        Q_j = np.sum(q_jk, axis=1)
 
         Mz = float(np.sum(cp_j * np.sum(x_k[None, :] * q_jk, axis=1)))  # eq.(46), diagnostic
         alpha_j = np.full(bearing.Z, bearing.alpha_0, dtype=float)
 
-        return RollerLoadDistributionResult(
-            delta_r=delta_r, delta_a=0.0, psi=psi, phi_Fr=phi_Fr,
+        row = RollerLoadDistributionResult(
+            phi_j=np.asarray(bearing.phi_j, dtype=float),
             delta_j=delta_j, alpha_j=alpha_j,
-            Mz=Mz, n_iter=nfev, residual=res, ok=ok,
+            Q_j=Q_j,
+            Fr_row=float(np.sum(cp_j * Q_j)),
+            Fa_row=0.0,
+            Mz=Mz,
             x_k=x_k, psi_j=psi_j, delta_jk=delta_jk, q_jk=q_jk,
+        )
+        return RollerBearingResult.single(
+            row, label=bearing.label,
+            delta_r=delta_r, delta_a=0.0, psi=psi, phi_Fr=phi_Fr,
+            Fr_xz=Fr_xz, Fr_xy=Fr_xy, Fa=0.0,
+            n_iter=nfev, residual=res, ok=ok,
         )
 
 
@@ -717,6 +754,7 @@ class ISO16281MultiRowRollerSolverSharedDisplacement(MultiRowSolverBase):
         return gap + line_hertz
 
     def _solve_rows(self, row_views, Fr_xz, Fr_xy, Fa, psi, phi_Fr):
+        # Fa ignored on purpose -- radial roller, no axial capacity (returned as 0.0).
         Fr       = float(np.hypot(Fr_xz, Fr_xy))
         elements = self.SINGLE_ROW_SOLVER.elements
 
@@ -732,20 +770,22 @@ class ISO16281MultiRowRollerSolverSharedDisplacement(MultiRowSolverBase):
         x, nfev, res, ok = run_root(residual, [dr0], self.tol)
         delta_r = float(x[0])
 
-        row_results, row_reactions = [], []
+        row_results = []
         for rv in row_views:
             delta_j, psi_j, delta_jk, q_jk, cp_j = elements(rv, delta_r, psi)
-            Fr_row  = float(np.sum(cp_j * np.sum(q_jk, axis=1)))
-            Mz_row  = float(np.sum(cp_j * np.sum(rv.x_k[None, :] * q_jk, axis=1)))
-            alpha_j = np.full(rv.Z, rv.alpha_0, dtype=float)
+            x_k = np.asarray(rv.x_k, dtype=float)
+            Q_j = np.sum(q_jk, axis=1)
             row_results.append(RollerLoadDistributionResult(
-                delta_r=delta_r, delta_a=0.0, psi=psi, phi_Fr=phi_Fr,
-                delta_j=delta_j, alpha_j=alpha_j,
-                Mz=Mz_row, n_iter=nfev, residual=res, ok=ok,
-                x_k=rv.x_k, psi_j=psi_j, delta_jk=delta_jk, q_jk=q_jk,
+                phi_j=np.asarray(rv.phi_j, dtype=float),
+                delta_j=delta_j,
+                alpha_j=np.full(rv.Z, rv.alpha_0, dtype=float),
+                Q_j=Q_j,
+                Fr_row=float(np.sum(cp_j * Q_j)),
+                Fa_row=0.0,
+                Mz=float(np.sum(cp_j * np.sum(x_k[None, :] * q_jk, axis=1))),
+                x_k=x_k, psi_j=psi_j, delta_jk=delta_jk, q_jk=q_jk,
             ))
-            row_reactions.append((Fr_row, 0.0))
-        return row_results, row_reactions, nfev, res, ok
+        return row_results, delta_r, 0.0, 0.0, nfev, res, ok
 
 
 # Ligação single-row -> multi-row (mesma convenção que já tinhas).

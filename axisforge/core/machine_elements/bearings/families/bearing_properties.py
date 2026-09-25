@@ -25,7 +25,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from axisforge.core.materials import Material, get_material
+from axisforge.core.materials.base import Material, get_material
 
 
 def _resolve(value: Material | str, name: str) -> Material:
@@ -37,28 +37,28 @@ def _resolve(value: Material | str, name: str) -> Material:
 
 
 # =====================================================================
-# ---- SurfacePair -------------------------------------------------------
+# ---- SurfacePair ----------------------------------------------------
 # =====================================================================
 
 @dataclass(frozen=True)
 class SurfacePair:
-    """Two surfaces in contact. ``a`` is the rolling element, ``b`` is the raceway."""
-    a: Material
-    b: Material
+    """Two surfaces in contact. ``rolling_elem`` is the rolling element, ``race_way`` is the raceway."""
+    rolling_elem: Material
+    race_way: Material
 
     @property
     def moduli(self) -> list[float]:
-        """``[E_a, E_b]`` [MPa] -- the format expected by ``hertz_full``."""
-        return [self.a.E, self.b.E]
+        """``[E_rolling, E_raceway]`` [MPa] -- the format expected by ``hertz_full``."""
+        return [self.rolling_elem.E, self.race_way.E]
 
     @property
     def poisson(self) -> list[float]:
-        """``[nu_a, nu_b]`` -- the format expected by ``hertz_full`` (its ``v`` argument)."""
-        return [self.a.poisson_ratio, self.b.poisson_ratio]
+        """``[nu_rolling, nu_raceway]`` -- the format expected by ``hertz_full``."""
+        return [self.rolling_elem.poisson_ratio, self.race_way.poisson_ratio]
 
     @property
     def same_material(self) -> bool:
-        return self.a == self.b
+        return self.rolling_elem == self.race_way
 
 
 # =====================================================================
@@ -83,41 +83,21 @@ class BearingSurfaces(ABC):
 @dataclass(frozen=True)
 class RadialSurfaces(BearingSurfaces):
     """
-    Radial bearings: rolling element in contact with the inner raceway
-    and, where present, the outer raceway. ``outer`` is ``None`` for
-    bearing types that have no outer raceway.
+    Radial bearings: rolling element vs. raceway. Inner and outer raceway
+    are always the SAME material (ADR-001) -- one SurfacePair per bearing.
+    Whether an outer raceway exists at all, and its curvature, is a
+    GEOMETRY question answered by BearingFamily.curvature_outer_raceway()
+    (which may return None) -- not a materials question, so there's no
+    inner/outer split at this level.
     """
-    inner: SurfacePair
-    outer: SurfacePair | None = None
+    surface: SurfacePair
 
     @classmethod
     def from_materials(cls, rolling_element: Material | str,
-                       inner_ring: Material | str,
-                       outer_ring: Material | str | None = None) -> "RadialSurfaces":
-        """
-        ``outer_ring=None`` means the bearing has NO outer raceway; it
-        does not mean "same material as the inner ring" -- for that,
-        pass the same material explicitly, or use ``uniform()``.
-        """
-        re = _resolve(rolling_element, "rolling_element")
-        ri = _resolve(inner_ring, "inner_ring")
-        outer = None if outer_ring is None else SurfacePair(re, _resolve(outer_ring, "outer_ring"))
-        return cls(inner=SurfacePair(re, ri), outer=outer)
-
-    @classmethod
-    def uniform(cls, material: Material | str) -> "RadialSurfaces":
-        """Same material for the rolling element and both raceways."""
-        return cls.from_materials(material, material, material)
-
-    def require_outer(self) -> SurfacePair:
-        """Return the outer surface pair, for families that require it."""
-        if self.outer is None:
-            raise ValueError("This bearing has no outer surface (outer_ring=None), "
-                             "but the family requires one.")
-        return self.outer
+                        raceway: Material | str) -> "RadialSurfaces":
+        rolling = _resolve(rolling_element, "rolling_element")
+        race = _resolve(raceway, "raceway")
+        return cls(surface=SurfacePair(rolling, race))
 
     def pairs(self) -> dict[str, SurfacePair]:
-        out = {"inner": self.inner}
-        if self.outer is not None:
-            out["outer"] = self.outer
-        return out
+        return {"surface": self.surface}

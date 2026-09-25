@@ -96,6 +96,10 @@ class DeepGrooveBallFamily(BearingFamily):
         # it gets collapsed to the scalar E/nu this formula needs, and
         # where the "must all be the same material" check lives.
         stiff = bc.PointContactStiffness.from_surfaces(surfaces, Dw, ri, re, alpha_0, Dpw)
+        pair = surfaces.surface
+        E1, E2 = pair.moduli
+        nu1, nu2 = pair.poisson
+        stiff = bc.PointContactStiffness(Dw, ri, re, E1, nu1, E2, nu2, alpha_0, Dpw)
         g = stiff.gamma
         Ri = stiff.raceway_contact_radius
         cp = stiff.cp
@@ -103,9 +107,9 @@ class DeepGrooveBallFamily(BearingFamily):
         phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
         return dict(bearing_type=self.BEARING_TYPE, ri=ri, re=re, Dw=Dw, Dpw=Dpw,
-                    Z=Z, s=s, E=stiff.E, nu=stiff.nu, surfaces=surfaces, A=A, alpha_0=alpha_0, Ri=Ri, phi_j=phi_j,
-                    gamma=g, cp=cp, raceway_radii_from_reference=True,
-                    i=i, reduction_factor=self.REDUCTION_FACTOR_BY_ROWS[i])
+                            Z=Z, s=s, surfaces=surfaces, A=A, alpha_0=alpha_0, Ri=Ri, phi_j=phi_j,
+                            gamma=g, cp=cp, raceway_radii_from_reference=True,
+                            i=i, reduction_factor=self.REDUCTION_FACTOR_BY_ROWS[i])
 
     @staticmethod
     def per_element_dynamic_capacity(bearing, Cr=None):
@@ -162,6 +166,10 @@ class AngularContactFamily(BearingFamily):
         alpha_0, s = bc.contact_angle_and_clearance(A, alpha_0_deg=alpha_0_deg)
 
         stiff = bc.PointContactStiffness.from_surfaces(surfaces, Dw, ri, re, alpha_0, Dpw)
+        pair = surfaces.surface
+        E1, E2 = pair.moduli
+        nu1, nu2 = pair.poisson
+        stiff = bc.PointContactStiffness(Dw, ri, re, E1, nu1, E2, nu2, alpha_0, Dpw)
         g = stiff.gamma
         Ri = stiff.raceway_contact_radius
         cp = stiff.cp
@@ -169,9 +177,9 @@ class AngularContactFamily(BearingFamily):
         phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
         return dict(bearing_type=self.BEARING_TYPE, ri=ri, re=re, Dw=Dw, Dpw=Dpw,
-                    Z=Z, s=s, E=stiff.E, nu=stiff.nu, surfaces=surfaces, A=A, alpha_0=alpha_0, Ri=Ri, phi_j=phi_j,
-                    gamma=g, cp=cp, raceway_radii_from_reference=True,
-                    i=i, reduction_factor=self.REDUCTION_FACTOR_BY_ROWS[i])
+                            Z=Z, s=s, surfaces=surfaces, A=A, alpha_0=alpha_0, Ri=Ri, phi_j=phi_j,
+                            gamma=g, cp=cp, raceway_radii_from_reference=True,
+                            i=i, reduction_factor=self.REDUCTION_FACTOR_BY_ROWS[i])
 
     @staticmethod
     def per_element_dynamic_capacity(bearing, Cr=None):

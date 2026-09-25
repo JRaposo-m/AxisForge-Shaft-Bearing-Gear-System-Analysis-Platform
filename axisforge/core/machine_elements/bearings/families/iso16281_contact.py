@@ -54,53 +54,22 @@ def _chi(F_rho: float) -> float:
 # ---------------------------------------------------------------------
 
 class PointContactStiffness:
-    """Hertzian point contact -- ISO/TS 16281 Sec 5 eq.(2)-(11). Works
-    for radial AND thrust duty: alpha_0 is just an input, and gamma
-    already handles the alpha_0=90deg (thrust) case explicitly. The
-    two duties differ only in which alpha_0/ri/re a family supplies,
-    never in this class's own math."""
+    """Hertzian point contact -- ISO/TS 16281 Sec 5 eq.(2)-(11). Works for
+    radial AND thrust duty (alpha_0 is just an input). Takes both contacting
+    materials directly (E1/nu1, E2/nu2) -- resolving Material/SurfacePair
+    objects into these scalars is the caller's job, not this class's."""
 
-    def __init__(self, Dw: float, ri: float, re: float, E: float, nu: float,
+    def __init__(self, Dw: float, ri: float, re: float,
+                 E1: float, nu1: float, E2: float, nu2: float,
                  alpha_0: float, Dpw: float):
         self.Dw, self.ri, self.re = Dw, ri, re
-        self.E, self.nu, self.alpha_0, self.Dpw = E, nu, alpha_0, Dpw
+        self.E1, self.nu1 = E1, nu1
+        self.E2, self.nu2 = E2, nu2
+        self.alpha_0, self.Dpw = alpha_0, Dpw
         self._cache: dict[str, float] = {}
-
-    @classmethod
-    def from_surfaces(cls, surfaces: RadialSurfaces, Dw: float, ri: float,
-                       re: float, alpha_0: float, Dpw: float) -> "PointContactStiffness":
-        """
-        Alternate constructor: takes the full ``RadialSurfaces`` (rolling
-        element, inner raceway, outer raceway -- each its own
-        ``Material``, never restricted) instead of a bare ``E``/``nu``.
-
-        This formula has no per-surface inputs -- ``E``/``nu`` are plain
-        scalars in ``__init__`` above -- so this is the one place that
-        collapses ``surfaces`` down to that scalar pair, and therefore
-        the one place that checks it is actually allowed to: the rolling
-        element, the inner raceway and the outer raceway must all be the
-        same material, since there is nowhere else in this formula for a
-        second modulus/Poisson's ratio to go. Raises ``NotImplementedError``
-        rather than silently picking one material and discarding the
-        rest. ``surfaces`` is not modified or narrowed by this check --
-        it is only read.
-        """
-        outer = surfaces.require_outer()
-        reference = surfaces.inner.a
-        if any(m != reference for m in (surfaces.inner.b, outer.a, outer.b)):
-            raise NotImplementedError(
-                "PointContactStiffness (ISO/TS 16281) takes a single scalar E/nu: "
-                "the rolling element, the inner raceway and the outer raceway "
-                "must all be the same material. Got rolling_element="
-                f"{surfaces.inner.a.material_id!r}, inner_raceway="
-                f"{surfaces.inner.b.material_id!r}, outer_raceway="
-                f"{outer.b.material_id!r}. Different materials are not "
-                "supported by this formula yet.")
-        return cls(Dw, ri, re, reference.E, reference.poisson_ratio, alpha_0, Dpw)
 
     @property
     def duty(self) -> str:
-        """Derived, not fixed -- varies per instance depending on alpha_0."""
         return "thrust" if np.pi/4 < self.alpha_0 <= np.pi/2 else "radial"
 
     @property
@@ -168,17 +137,12 @@ class PointContactStiffness:
 
     @property
     def cp(self) -> float:
-        """c_p [N/mm^(3/2)] -- the Hertzian point-contact load-deflection
-        constant, ISO/TS 16281 eq.(11). This is NOT the assembled contact
-        stiffness of the bearing: c_p only feeds the load-deflection
-        relation Q = c_p * delta^(3/2) that the load-distribution solver
-        (ISO 16281) -- or a full Hertz solve via slippy's ``hertz_full``,
-        see the module docstring -- actually uses to solve for the
-        rolling-element loads. That solving step, and the resulting
-        contact/system stiffness, happens there, not in this class."""
-        E_star = self.E / (1.0 - self.nu**2)
+        """c_p [N/mm^(3/2)] -- ISO/TS 16281 eq.(11), Hertz reduced modulus
+        generalized to two dissimilar materials. NOT the assembled bearing
+        stiffness -- only feeds Q = c_p * delta^(3/2) in the load-
+        distribution solver."""
+        E_star = 1.0 / ((1.0 - self.nu1**2) / self.E1 + (1.0 - self.nu2**2) / self.E2)
         return 1.48 * E_star * (self._inner_term + self._outer_term) ** (-3.0 / 2.0)
-
 
 class SelfAligningPointContactStiffness(PointContactStiffness):
     """Specialization of PointContactStiffnessRadial: the spherical

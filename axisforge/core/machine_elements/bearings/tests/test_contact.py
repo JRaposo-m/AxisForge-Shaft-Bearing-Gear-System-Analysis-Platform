@@ -16,7 +16,7 @@ import math
 import pytest
 import numpy as np
 
-from axisforge.core.machine_elements.bearings.families import iso16281_contact as bc
+from axisforge.core.machine_elements.bearings.types import iso16281_contact as bc
 
 
 class TestLineContactStiffness:

@@ -20,7 +20,7 @@ import numpy as np
 from scipy.special import ellipk, ellipe
 from scipy.optimize import brentq
 
-from axisforge.core.machine_elements.bearings.families.bearing_properties import RadialSurfaces
+from axisforge.core.machine_elements.bearings.bearing_properties import RadialSurfaces
 
 
 # ---------------------------------------------------------------------

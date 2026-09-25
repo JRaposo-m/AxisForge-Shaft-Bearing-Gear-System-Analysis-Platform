@@ -14,9 +14,9 @@ import math
 import pytest
 import numpy as np
 
-from axisforge.core.machine_elements.bearings.families.family import _FAMILY_REGISTRY
-from axisforge.core.machine_elements.bearings.families import capacity as bcap
-from axisforge.core.machine_elements.bearings.families.tests.conftest import (
+from axisforge.core.machine_elements.bearings.types.family import _FAMILY_REGISTRY
+from axisforge.core.machine_elements.bearings import capacity as bcap
+from axisforge.core.machine_elements.bearings.tests.conftest import (
     DEEP_GROOVE_KWARGS, ANGULAR_CONTACT_KWARGS, SELF_ALIGNING_KWARGS,
     THRUST_ROW_KWARGS, THRUST_ROW_KWARGS_NON_90,
     THRUST_CYL_ROLLER_KWARGS, THRUST_CYL_ROLLER_KWARGS_NON_90,
@@ -58,7 +58,7 @@ class TestDeepGrooveBallFamily:
             assert key in assembled_deep_groove
 
     def test_dynamic_capacity_positive(self, assembled_deep_groove):
-        from axisforge.core.machine_elements.bearings.families.family import DeepGrooveBallFamily
+        from axisforge.core.machine_elements.bearings.types.family import DeepGrooveBallFamily
         Ca = DeepGrooveBallFamily.dynamic_capacity(RowAsBearing(assembled_deep_groove))
         assert Ca > 0.0
 
@@ -122,12 +122,12 @@ class TestSelfAligningBallFamily:
 
 class TestThrustBallAssembleGeometry:
     def test_returns_all_required_fields(self, assembled_row_90deg):
-        from axisforge.core.machine_elements.bearings.families.family import ThrustBallSingleRowFamily
+        from axisforge.core.machine_elements.bearings.types.family import ThrustBallSingleRowFamily
         for key in ThrustBallSingleRowFamily.REQUIRED_FOR["point_contact"]:
             assert key in assembled_row_90deg
 
     def test_also_returns_eta_and_lam(self, assembled_row_90deg):
-        from axisforge.core.machine_elements.bearings.families.family import ThrustBallSingleRowFamily
+        from axisforge.core.machine_elements.bearings.types.family import ThrustBallSingleRowFamily
         assert assembled_row_90deg["lam"] == ThrustBallSingleRowFamily.LAM
         assert "eta" in assembled_row_90deg
 
@@ -148,19 +148,19 @@ class TestThrustBallAssembleGeometry:
 
 class TestThrustBallCapacityDispatch:
     def test_90deg_row_uses_90deg_capacity_class(self, assembled_row_90deg):
-        from axisforge.core.machine_elements.bearings.families.family import ThrustBallSingleRowFamily
+        from axisforge.core.machine_elements.bearings.types.family import ThrustBallSingleRowFamily
         assert ThrustBallSingleRowFamily._capacity_class(assembled_row_90deg["alpha_0"]) is bcap.PointContactCapacityThrust_90deg
 
     def test_non_90deg_row_uses_non_90deg_capacity_class(self, assembled_row_non_90deg):
-        from axisforge.core.machine_elements.bearings.families.family import ThrustBallSingleRowFamily
+        from axisforge.core.machine_elements.bearings.types.family import ThrustBallSingleRowFamily
         assert ThrustBallSingleRowFamily._capacity_class(assembled_row_non_90deg["alpha_0"]) is bcap.PointContactCapacityThrust_Non_90deg
 
     def test_dynamic_capacity_positive(self, assembled_row_90deg):
-        from axisforge.core.machine_elements.bearings.families.family import ThrustBallSingleRowFamily
+        from axisforge.core.machine_elements.bearings.types.family import ThrustBallSingleRowFamily
         assert ThrustBallSingleRowFamily.dynamic_capacity(RowAsBearing(assembled_row_90deg)) > 0.0
 
     def test_per_element_dynamic_capacity_returns_positive_pair(self, assembled_row_90deg):
-        from axisforge.core.machine_elements.bearings.families.family import ThrustBallSingleRowFamily
+        from axisforge.core.machine_elements.bearings.types.family import ThrustBallSingleRowFamily
         Q_ci, Q_ce = ThrustBallSingleRowFamily.per_element_dynamic_capacity(RowAsBearing(assembled_row_90deg))
         assert Q_ci > 0.0 and Q_ce > 0.0
 
@@ -182,7 +182,7 @@ class TestThrustBallMultiRow:
 
 class TestCylindricalRollerFamily:
     def test_returns_all_required_fields(self, assembled_cyl_roller):
-        from axisforge.core.machine_elements.bearings.families.family import CylindricalRollerFamily
+        from axisforge.core.machine_elements.bearings.types.family import CylindricalRollerFamily
         for key in CylindricalRollerFamily.REQUIRED_FOR["line_contact"]:
             assert key in assembled_cyl_roller
 
@@ -205,20 +205,20 @@ class TestCylindricalRollerFamily:
 
 class TestThrustCylindricalRollerFamily:
     def test_returns_all_required_fields(self, assembled_thrust_cyl_roller_90):
-        from axisforge.core.machine_elements.bearings.families.family import ThrustCylindricalRollerFamily
+        from axisforge.core.machine_elements.bearings.types.family import ThrustCylindricalRollerFamily
         for key in ThrustCylindricalRollerFamily.REQUIRED_FOR["line_contact"]:
             assert key in assembled_thrust_cyl_roller_90
 
     def test_90deg_row_uses_90deg_capacity_class(self, assembled_thrust_cyl_roller_90):
-        from axisforge.core.machine_elements.bearings.families.family import ThrustCylindricalRollerFamily
+        from axisforge.core.machine_elements.bearings.types.family import ThrustCylindricalRollerFamily
         assert ThrustCylindricalRollerFamily._capacity_class(assembled_thrust_cyl_roller_90["alpha_0"]) is bcap.LineContactCapacityThrust_90deg
 
     def test_non_90deg_row_uses_non_90deg_capacity_class(self, assembled_thrust_cyl_roller_non90):
-        from axisforge.core.machine_elements.bearings.families.family import ThrustCylindricalRollerFamily
+        from axisforge.core.machine_elements.bearings.types.family import ThrustCylindricalRollerFamily
         assert ThrustCylindricalRollerFamily._capacity_class(assembled_thrust_cyl_roller_non90["alpha_0"]) is bcap.LineContactCapacityThrust_Non_90deg
 
     def test_dynamic_capacity_positive(self, assembled_thrust_cyl_roller_90):
-        from axisforge.core.machine_elements.bearings.families.family import ThrustCylindricalRollerFamily
+        from axisforge.core.machine_elements.bearings.types.family import ThrustCylindricalRollerFamily
         assert ThrustCylindricalRollerFamily.dynamic_capacity(RowAsBearing(assembled_thrust_cyl_roller_90)) > 0.0
 
 

@@ -15,7 +15,7 @@ import pytest
 import numpy as np
 
 from axisforge.core.materials import Material, IsotropicElastic
-from axisforge.core.machine_elements.bearings.families.bearing_properties import RadialSurfaces
+from axisforge.core.machine_elements.bearings.bearing_properties import RadialSurfaces
 
 # ---------------------------------------------------------------------
 # geometrias de referência -- plausíveis, não de catálogo real, só para
@@ -90,42 +90,42 @@ def catalog_floating():
 
 @pytest.fixture
 def deep_groove_family():
-    from axisforge.core.machine_elements.bearings.families.family import DeepGrooveBallFamily
+    from axisforge.core.machine_elements.bearings.types.family import DeepGrooveBallFamily
     return DeepGrooveBallFamily()
 
 @pytest.fixture
 def angular_contact_family():
-    from axisforge.core.machine_elements.bearings.families.family import AngularContactFamily
+    from axisforge.core.machine_elements.bearings.types.family import AngularContactFamily
     return AngularContactFamily()
 
 @pytest.fixture
 def self_aligning_family():
-    from axisforge.core.machine_elements.bearings.families.family import SelfAligningBallFamily
+    from axisforge.core.machine_elements.bearings.types.family import SelfAligningBallFamily
     return SelfAligningBallFamily()
 
 @pytest.fixture
 def thrust_single_row_family():
-    from axisforge.core.machine_elements.bearings.families.family import ThrustBallSingleRowFamily
+    from axisforge.core.machine_elements.bearings.types.family import ThrustBallSingleRowFamily
     return ThrustBallSingleRowFamily()
 
 @pytest.fixture
 def thrust_multi_row_family():
-    from axisforge.core.machine_elements.bearings.families.family import ThrustBallMultiRowFamily
+    from axisforge.core.machine_elements.bearings.types.family import ThrustBallMultiRowFamily
     return ThrustBallMultiRowFamily()
 
 @pytest.fixture
 def cylindrical_roller_family():
-    from axisforge.core.machine_elements.bearings.families.family import CylindricalRollerFamily
+    from axisforge.core.machine_elements.bearings.types.family import CylindricalRollerFamily
     return CylindricalRollerFamily()
 
 @pytest.fixture
 def thrust_cyl_roller_family():
-    from axisforge.core.machine_elements.bearings.families.family import ThrustCylindricalRollerFamily
+    from axisforge.core.machine_elements.bearings.types.family import ThrustCylindricalRollerFamily
     return ThrustCylindricalRollerFamily()
 
 @pytest.fixture
 def thrust_cyl_roller_multi_row_family():
-    from axisforge.core.machine_elements.bearings.families.family import RollerThrustMultiRowFamily
+    from axisforge.core.machine_elements.bearings.types.family import RollerThrustMultiRowFamily
     return RollerThrustMultiRowFamily()
 
 

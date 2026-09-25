@@ -7,7 +7,7 @@ catálogo real para comparar."""
 import math
 import pytest
 
-from axisforge.core.machine_elements.bearings.families import capacity as bcap
+from axisforge.core.machine_elements.bearings import capacity as bcap
 
 POINT_RADIAL_KWARGS = dict(Z=12, Dw=8.0, ri=4.3, re=4.3, gamma=0.2, reduction_factor=0.95, i=1)
 POINT_THRUST_KWARGS = dict(Z=12, Dw=8.0, ri=4.3, re=4.3, gamma=0.2, lam=0.90, eta=0.9)

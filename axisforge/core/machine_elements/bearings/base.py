@@ -2,15 +2,19 @@
 """
 axisforge/core/machine_elements/bearings/base.py
 
-BearingType, BearingCatalog, BearingFamily -- os tres primitivos de base
-de que tudo em bearings/ depende. Vivem juntos porque sao pequenos,
-estaveis, e mutuamente acoplados (BearingFamily.assemble_geometry le
-BearingCatalog; BearingFamily.BEARING_TYPE e um BearingType) -- nao
-porque o pacote precise de um ficheiro so para eles por regra.
+Defines the three foundational primitives on which the rest of the
+``bearings`` package depends: ``BearingType``, ``BearingCatalog`` and
+``BearingFamily``. They are kept in a single module not because the
+package requires one file per concept, but because they are small,
+stable, and mutually coupled: ``BearingFamily.assemble_geometry`` reads
+a ``BearingCatalog``, and ``BearingFamily.BEARING_TYPE`` is itself a
+``BearingType``.
 
-bearings/__init__.py reexporta os tres diretamente daqui (import
-simples, sem __getattr__/lazy -- sao baratos, nao ha ganho em adiar).
-Bearing (bearing.py) continua lazy la, por ser mais pesado.
+``bearings/__init__.py`` re-exports all three directly from this module
+(a plain import, without ``__getattr__``-based lazy loading, since they
+are inexpensive to import and deferring them would offer no benefit).
+``Bearing`` (see ``bearing.py``) remains lazily imported there, as it is
+comparatively more expensive to load.
 """
 from __future__ import annotations
 
@@ -21,21 +25,25 @@ from typing import Any, ClassVar, Literal
 
 
 # =====================================================================
-# ---- BearingType -----------------------------------------------------
+# ---- BearingType ------------------------------------------------------
 # =====================================================================
 
 class BearingType(str, Enum):
-    """Informational label + fonte única de verdade sobre a duty
-    (radial/thrust) de cada tipo -- ver `.duty` abaixo. Herdar de `str`
-    em vez de usar `auto()`: o projeto persiste em SQLite, e um inteiro
-    de `auto()` desloca-se silenciosamente se algum dia inseres um
-    membro no meio da lista; uma string é estável para sempre.
+    """
+    Informational label and the single source of truth for a bearing
+    type's duty (radial/thrust) — see the ``duty`` property below.
 
-    Dispatch no lado core/ já não é feito por este enum (ver
-    BearingFamily) -- sobrevive como label para relatórios/GUI
-    agruparem por família sem importar cada classe, e para as tabelas de
-    dispatch do lado dos solvers (ISO_16281/rolling_bearing_solver.py)
-    continuarem a funcionar sem alteração.
+    Inherits from ``str`` rather than relying on ``enum.auto()``: values
+    are persisted to SQLite, and an ``auto()``-assigned integer would
+    silently shift if a member were ever inserted mid-list, whereas a
+    string value remains stable indefinitely.
+
+    Dispatch on the core side is no longer performed through this enum
+    (see ``BearingFamily``); it is retained purely as a label so that
+    reporting and GUI code can group bearings by type without importing
+    each family class, and so that the solver-side dispatch tables
+    (``ISO_16281/rolling_bearing_solver.py``) continue to function
+    without modification.
     """
     DEEP_GROOVE_BALL          = "deep_groove_ball"
     ANGULAR_CONTACT           = "angular_contact"
@@ -49,18 +57,23 @@ class BearingType(str, Enum):
 
     @property
     def duty(self) -> str:
-        """'radial' | 'thrust'. Levanta NotImplementedError para
-        TAPERED_ROLLER/SPHERICAL_ROLLER de propósito -- rolamentos
-        cónicos e autocompensadores de rolos tipicamente levam carga
-        combinada radial+axial, não é um dos dois de forma limpa; a tua
-        chamada quando os implementares, não uma que eu deva adivinhar
-        aqui."""
+        """
+        Return ``'radial'`` or ``'thrust'``.
+
+        Deliberately raises ``NotImplementedError`` for
+        ``TAPERED_ROLLER`` and ``SPHERICAL_ROLLER``: tapered and
+        spherical roller bearings typically carry combined radial and
+        axial load, which does not reduce cleanly to either duty. The
+        mapping for these types is left for the implementer to decide
+        explicitly when they are supported, rather than being guessed
+        here.
+        """
         try:
             return _DUTY_BY_TYPE[self]
         except KeyError:
             raise NotImplementedError(
-                f"BearingType.{self.name}: duty not yet decided -- este "
-                f"tipo pode levar carga combinada, ver docstring."
+                f"BearingType.{self.name}: duty has not been decided yet -- "
+                f"this type may carry combined load, see the class docstring."
             ) from None
 
 
@@ -72,35 +85,44 @@ _DUTY_BY_TYPE: dict[BearingType, str] = {
     BearingType.CYLINDRICAL_ROLLER: "radial",
     BearingType.THRUST_CYLINDRICAL_ROLLER: "thrust",
     BearingType.THRUST_NEEDLE_ROLLER: "thrust",
-    # TAPERED_ROLLER, SPHERICAL_ROLLER -- de propósito não mapeados
+    # TAPERED_ROLLER and SPHERICAL_ROLLER are deliberately left unmapped.
 }
 
 
 # =====================================================================
-# ---- BearingCatalog -----------------------------------------------
+# ---- BearingCatalog ---------------------------------------------------
 # =====================================================================
 
 @dataclass(frozen=True)
 class BearingCatalog:
-    """Generic, family-agnostic catalogue data. Valida-se sozinho no
-    momento da construção (__post_init__ chama validate_or_raise()) --
-    antes, validate()/validate_or_raise() existiam mas eram opt-in,
-    dava para construir um catalog fisicamente impossível (D < d, b
-    negativo) e ele circular pelo resto do código sem nada reparar até
-    alguém se lembrar de chamar .validate_or_raise() manualmente.
+    """
+    Generic, family-agnostic catalogue data for a bearing.
 
-    d, D, b       : bore / outer diameter / width [mm]
-    C, C0         : dynamic (ISO 281) / static (ISO 76) load rating [N]
-    designation   : manufacturer designation, e.g. "6208"
-    label         : identifier for reporting/traceability
-    position      : axial coordinate along the shaft [mm]
-    arrangement   : "locating" | "floating" | "non-locating"
+    Validates itself at construction time: ``__post_init__`` calls
+    ``validate_or_raise()``. Previously, ``validate()``/
+    ``validate_or_raise()`` existed but were opt-in, which allowed a
+    physically impossible catalogue (``D < d``, negative ``b``) to be
+    constructed and to circulate through the rest of the code
+    unchecked until something happened to call
+    ``validate_or_raise()`` explicitly.
+
+    Attributes
+    ----------
+    d, D, b     : bore diameter, outer diameter, width [mm].
+    designation : manufacturer designation, e.g. ``"6208"``.
+    label       : identifier used for reporting and traceability.
+    position    : axial coordinate along the shaft [mm].
+    arrangement : ``"locating"`` | ``"floating"`` | ``"non-locating"``.
+
+    Notes
+    -----
+    ``C`` and ``C0`` are intentionally not catalogue data: the dynamic
+    load rating is computed by the family from the assembled geometry
+    (see ``BearingFamily.dynamic_capacity``).
     """
     d: float
     D: float
     b: float = 0.0
-    C: float = 0.0
-    C0: float = 0.0
     designation: str = ""
     label: str = ""
     position: float = 0.0
@@ -123,10 +145,6 @@ class BearingCatalog:
             errors.append(f"{tag}: b must be >= 0, got {self.b}")
         if self.position < 0:
             errors.append(f"{tag}: position must be >= 0, got {self.position}")
-        if self.C < 0:
-            errors.append(f"{tag}: C must be >= 0, got {self.C}")
-        if self.C0 < 0:
-            errors.append(f"{tag}: C0 must be >= 0, got {self.C0}")
         if self.arrangement not in ("locating", "floating", "non-locating"):
             errors.append(
                 f"{tag}: arrangement must be 'locating', 'floating', or "
@@ -141,32 +159,45 @@ class BearingCatalog:
 
 
 # =====================================================================
-# ---- BearingFamily -----------------------------------------------
+# ---- BearingFamily -----------------------------------------------------
 # =====================================================================
 
 class BearingFamily(ABC):
-    """Contrato que cada família/subtipo tem de implementar para ser
-    pluggable em Bearing.assemble(). Instância simples, sem registo
-    obrigatório a este nível (families/family.py mantém o seu próprio
-    @register_family, mas esse mecanismo é à parte deste contrato).
+    """
+    Contract that every bearing family/subtype must implement in order
+    to be pluggable into ``Bearing.assemble()``. This is a plain
+    instance contract; it does not itself require registration
+    (``families/family.py`` maintains its own ``@register_family``
+    decorator, which is a separate concern from this contract).
 
-    __init_subclass__ (abaixo) impõe em tempo de definição da classe --
-    não só em teste -- duas consistências que antes só um teste
-    apanhava: DUTY tem de bater com BEARING_TYPE.duty, e as chaves de
-    REQUIRED_FOR têm de ser exatamente CAPABILITIES. Uma família mal
-    declarada agora nem importa.
+    ``__init_subclass__`` (below) enforces, at class-definition time
+    rather than only in tests, two consistency requirements that were
+    previously caught only by a test suite: ``DUTY`` must agree with
+    ``BEARING_TYPE.duty``, and the keys of ``REQUIRED_FOR`` must match
+    ``CAPABILITIES`` exactly. A misdeclared family therefore fails at
+    import time rather than at first use.
     """
 
     CAPABILITIES: ClassVar[frozenset[str]] = frozenset()
     REQUIRED_FOR: ClassVar[dict[str, frozenset[str]]] = {}
     BEARING_TYPE: ClassVar[BearingType | None] = None
 
-    #: "radial" | "thrust". Mantido como atributo explícito (não
-    #: derivado só de BEARING_TYPE.duty) de propósito -- é lido ao
-    #: nível da classe em vários sítios (testes, relatórios) sem
-    #: instanciar a família; __init_subclass__ garante que nunca
-    #: diverge do que BEARING_TYPE.duty diria.
+    #: ``"radial"`` | ``"thrust"``. Kept as an explicit class attribute
+    #: (rather than being derived solely from ``BEARING_TYPE.duty``) by
+    #: design: it is read at the class level in several places (tests,
+    #: reporting) without instantiating the family, and
+    #: ``__init_subclass__`` guarantees it can never diverge from what
+    #: ``BEARING_TYPE.duty`` would return.
     DUTY: ClassVar[Literal["radial", "thrust"] | None] = None
+
+    #: The surface-pair container class (a ``BearingSurfaces`` subclass,
+    #: e.g. ``RadialSurfaces``) that this family expects. Left as
+    #: ``None`` for families that do not yet have one (thrust families;
+    #: multi-row families, whose individual rows carry their own).
+    #: Validated in ``register_family()`` (``families/family.py``),
+    #: since ``base.py`` must not import from ``families/``, which in
+    #: turn depends on this module.
+    SURFACES: ClassVar[type | None] = None
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -188,16 +219,40 @@ class BearingFamily(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
-        """Short identifier, e.g. 'deep_groove_ball'."""
+        """Short identifier, e.g. ``'deep_groove_ball'``."""
 
     @abstractmethod
     def assemble_geometry(self, catalog: BearingCatalog, **geometry_kwargs: Any) -> dict[str, Any]:
         """
-        Pure function: raw geometry inputs -> flat attribute dict mirrored
-        onto the Bearing. No side effects, no cached state on self.
+        Pure function mapping raw geometry inputs to a flat attribute
+        dictionary that is mirrored onto the ``Bearing``. Must have no
+        side effects and must not cache state on ``self``.
 
-        catalog : read-only, for families that need to cross-check
-                  catalogue fields (e.g. reject arrangement="locating")
-        Returns : must include every field referenced in this family's
-                  own REQUIRED_FOR.
+        Parameters
+        ----------
+        catalog : read-only; provided so that families that need to
+            cross-check catalogue fields can do so (e.g. rejecting
+            ``arrangement="locating"`` where it is not physically
+            meaningful).
+
+        Returns
+        -------
+        dict
+            Must include every field referenced by this family's own
+            ``REQUIRED_FOR``.
         """
+
+    @staticmethod
+    @abstractmethod
+    def dynamic_capacity(bearing) -> float:
+        """
+        Basic dynamic load rating (``Cr`` for radial duty, ``Ca`` for
+        thrust duty) [N], computed from the assembled geometry. This
+        replaces the ``C`` value that previously came from the
+        catalogue.
+        """
+
+    @staticmethod
+    @abstractmethod
+    def per_element_dynamic_capacity(bearing, capacity: float | None = None) -> tuple[float, float]:
+        """Per-rolling-element dynamic capacity (``Q_ci``, ``Q_ce``)."""

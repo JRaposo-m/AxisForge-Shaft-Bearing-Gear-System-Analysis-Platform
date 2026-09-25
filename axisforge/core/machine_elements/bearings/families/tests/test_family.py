@@ -2,7 +2,14 @@
 """Testes de families/family.py -- contrato genérico (via
 _FAMILY_REGISTRY, para cobrir qualquer família nova automaticamente sem
 tocar neste ficheiro) mais testes específicos por família onde o
-comportamento diverge (multi-row, branch 90/não-90, validações)."""
+comportamento diverge (multi-row, branch 90/não-90, validações).
+
+Nota sobre `surfaces`: DeepGrooveBallFamily, AngularContactFamily,
+SelfAligningBallFamily e CylindricalRollerFamily deixaram de receber
+E/nu diretamente -- agora recebem `surfaces` (um RadialSurfaces
+construído a partir de core.materials.Material). Os testes que chamam
+assemble_geometry() diretamente nestas famílias (em vez de usarem um
+fixture assembled_*) por isso passam `steel_surfaces` explicitamente."""
 import math
 import pytest
 import numpy as np
@@ -10,7 +17,7 @@ import numpy as np
 from axisforge.core.machine_elements.bearings.families.family import _FAMILY_REGISTRY
 from axisforge.core.machine_elements.bearings.families import capacity as bcap
 from axisforge.core.machine_elements.bearings.families.tests.conftest import (
-    DEEP_GROOVE_KWARGS, ANGULAR_CONTACT_KWARGS,
+    DEEP_GROOVE_KWARGS, ANGULAR_CONTACT_KWARGS, SELF_ALIGNING_KWARGS,
     THRUST_ROW_KWARGS, THRUST_ROW_KWARGS_NON_90,
     THRUST_CYL_ROLLER_KWARGS, THRUST_CYL_ROLLER_KWARGS_NON_90,
     RowAsBearing,
@@ -46,7 +53,8 @@ class TestBearingFamilyContract:
 
 class TestDeepGrooveBallFamily:
     def test_returns_all_required_fields(self, assembled_deep_groove):
-        for key in ("ri", "re", "Dw", "Dpw", "Z", "E", "nu", "A", "alpha_0", "Ri", "phi_j", "gamma", "cp"):
+        for key in ("ri", "re", "Dw", "Dpw", "Z", "E", "nu", "surfaces",
+                    "A", "alpha_0", "Ri", "phi_j", "gamma", "cp"):
             assert key in assembled_deep_groove
 
     def test_dynamic_capacity_positive(self, assembled_deep_groove):
@@ -55,32 +63,57 @@ class TestDeepGrooveBallFamily:
         assert Ca > 0.0
 
     @pytest.mark.parametrize("i", [0, 3])
-    def test_rejects_unsupported_row_count(self, deep_groove_family, catalog, i):
+    def test_rejects_unsupported_row_count(self, deep_groove_family, catalog, steel_surfaces, i):
         with pytest.raises(ValueError, match="i must be one of"):
-            deep_groove_family.assemble_geometry(catalog, **{**DEEP_GROOVE_KWARGS, "i": i})
+            deep_groove_family.assemble_geometry(
+                catalog, surfaces=steel_surfaces, **{**DEEP_GROOVE_KWARGS, "i": i})
 
 
 class TestAngularContactFamily:
     def test_returns_all_required_fields(self, assembled_angular_contact):
-        for key in ("ri", "re", "Dw", "Dpw", "Z", "E", "nu", "A", "alpha_0", "Ri", "phi_j", "gamma", "cp"):
+        for key in ("ri", "re", "Dw", "Dpw", "Z", "E", "nu", "surfaces",
+                    "A", "alpha_0", "Ri", "phi_j", "gamma", "cp"):
             assert key in assembled_angular_contact
 
     @pytest.mark.parametrize("alpha_0_deg", [0.0, 45.1, -5.0])
-    def test_rejects_alpha_0_deg_out_of_range(self, angular_contact_family, catalog, alpha_0_deg):
+    def test_rejects_alpha_0_deg_out_of_range(self, angular_contact_family, catalog, steel_surfaces, alpha_0_deg):
         with pytest.raises(ValueError, match="alpha_0_deg must be in"):
-            angular_contact_family.assemble_geometry(catalog, **{**ANGULAR_CONTACT_KWARGS, "alpha_0_deg": alpha_0_deg})
+            angular_contact_family.assemble_geometry(
+                catalog, surfaces=steel_surfaces,
+                **{**ANGULAR_CONTACT_KWARGS, "alpha_0_deg": alpha_0_deg})
 
 
 class TestSelfAligningBallFamily:
-    def test_KNOWN_BUG_assemble_geometry_missing_gamma_arg(self, self_aligning_family, catalog):
-        """reference_raceway_radii(cls, Dw, gamma) exige gamma, mas
-        assemble_geometry chama self.reference_raceway_radii(Dw) sem ele
-        -- e é circular mesmo que o passasses (gamma só existe depois de
-        re/PointContactStiffness). Ver review -- não corrigido aqui.
-        Substitui este teste por asserts reais quando resolveres."""
-        with pytest.raises(TypeError):
+    """The `reference_raceway_radii(cls, Dw, gamma)` bug (assemble_geometry
+    used to call it as `self.reference_raceway_radii(Dw)`, missing the
+    required `gamma` argument, which always raised TypeError before any
+    physics ran) has been fixed in family.py: assemble_geometry now
+    derives a reference gamma from `Dw`, `Dpw` and `alpha_0_deg` before
+    calling it.
+
+    That fix moves the failure boundary further downstream, to a
+    separate, already-documented gap: `SelfAligningPointContactStiffness
+    ._outer_term` has no closed-form solution yet for circular contact
+    (chi_e=1) and always raises NotImplementedError (see
+    iso16281_contact.py and the SelfAligningBallFamily class docstring in
+    family.py). The test below asserts that specific, documented
+    NotImplementedError -- not the old TypeError from the missing
+    `gamma` argument -- which is exactly the signal that the gamma bug
+    is fixed and the remaining gap is the known, separate one. Replace
+    this test with real value assertions once `_outer_term` is derived."""
+
+    def test_gamma_bug_fixed_fails_only_on_documented_outer_term_gap(
+            self, self_aligning_family, catalog, steel_surfaces):
+        with pytest.raises(NotImplementedError, match="outer-race term"):
             self_aligning_family.assemble_geometry(
-                catalog, Dw=8.0, Dpw=40.0, Z=12, E=210_000.0, alpha_0_deg=25.0)
+                catalog, surfaces=steel_surfaces, **SELF_ALIGNING_KWARGS)
+
+    @pytest.mark.parametrize("alpha_0_deg", [0.0, 45.1, -5.0])
+    def test_rejects_alpha_0_deg_out_of_range(self, self_aligning_family, catalog, steel_surfaces, alpha_0_deg):
+        with pytest.raises(ValueError, match="alpha_0_deg must be in"):
+            self_aligning_family.assemble_geometry(
+                catalog, surfaces=steel_surfaces,
+                **{**SELF_ALIGNING_KWARGS, "alpha_0_deg": alpha_0_deg})
 
 
 # =====================================================================
@@ -153,16 +186,16 @@ class TestCylindricalRollerFamily:
         for key in CylindricalRollerFamily.REQUIRED_FOR["line_contact"]:
             assert key in assembled_cyl_roller
 
-    def test_rejects_locating_arrangement(self, cylindrical_roller_family, catalog):
+    def test_rejects_locating_arrangement(self, cylindrical_roller_family, catalog, steel_surfaces):
         class _Locating:
             arrangement, label, designation = "locating", None, "TEST"
         with pytest.raises(ValueError, match="cannot be 'locating'"):
-            cylindrical_roller_family.assemble_geometry(_Locating(), **{
+            cylindrical_roller_family.assemble_geometry(_Locating(), surfaces=steel_surfaces, **{
                 "Dwe": 8.0, "Lwe": 8.0, "Dpw": 72.5, "Z": 18, "s": 0.01, "n_s": 40, "alpha_0_deg": 0.0})
 
-    def test_rejects_n_s_below_30(self, cylindrical_roller_family, catalog_floating):
+    def test_rejects_n_s_below_30(self, cylindrical_roller_family, catalog_floating, steel_surfaces):
         with pytest.raises(ValueError, match="n_s must be"):
-            cylindrical_roller_family.assemble_geometry(catalog_floating, **{
+            cylindrical_roller_family.assemble_geometry(catalog_floating, surfaces=steel_surfaces, **{
                 "Dwe": 8.0, "Lwe": 8.0, "Dpw": 72.5, "Z": 18, "s": 0.01, "n_s": 20, "alpha_0_deg": 0.0})
 
 

@@ -1,21 +1,26 @@
-# =====================================================================
-# families/iso16281_contact.py
-# =====================================================================
 """
 core/machine_elements/bearings/families/contact.py
+
+
+Precisa de revisao, mas foi mudado porque como agora vou implementar slipPY
+no repositorio que faz a bridge estes calculos exclusivos de iso16281 que sao 
+simplificações passam a viver aqui de modo a nao serem atributos dos rolamentos 
+que nao faz sentido uma vez que forçavam uma construção mais limitada 
 
 Every contact-stiffness calculation, tagged by physical contact type
 (point/line) AND duty (radial/thrust) -- both dimensions matter here,
 Hertz math genuinely differs across both, not just across subtypes.
 
-This contact follows the ISO 16281 formulations, for future it may be obtained 
-in the AxisForge-Design-Studies this is because there slippy will be used 
+This contact follows the ISO 16281 formulations, for future it may be obtained
+in the AxisForge-Design-Studies this is because there slippy will be used
 and different approaches for contact may be used
 """
 from __future__ import annotations
 import numpy as np
 from scipy.special import ellipk, ellipe
 from scipy.optimize import brentq
+
+from axisforge.core.machine_elements.bearings.families.bearing_properties import RadialSurfaces
 
 
 # ---------------------------------------------------------------------
@@ -60,6 +65,38 @@ class PointContactStiffness:
         self.Dw, self.ri, self.re = Dw, ri, re
         self.E, self.nu, self.alpha_0, self.Dpw = E, nu, alpha_0, Dpw
         self._cache: dict[str, float] = {}
+
+    @classmethod
+    def from_surfaces(cls, surfaces: RadialSurfaces, Dw: float, ri: float,
+                       re: float, alpha_0: float, Dpw: float) -> "PointContactStiffness":
+        """
+        Alternate constructor: takes the full ``RadialSurfaces`` (rolling
+        element, inner raceway, outer raceway -- each its own
+        ``Material``, never restricted) instead of a bare ``E``/``nu``.
+
+        This formula has no per-surface inputs -- ``E``/``nu`` are plain
+        scalars in ``__init__`` above -- so this is the one place that
+        collapses ``surfaces`` down to that scalar pair, and therefore
+        the one place that checks it is actually allowed to: the rolling
+        element, the inner raceway and the outer raceway must all be the
+        same material, since there is nowhere else in this formula for a
+        second modulus/Poisson's ratio to go. Raises ``NotImplementedError``
+        rather than silently picking one material and discarding the
+        rest. ``surfaces`` is not modified or narrowed by this check --
+        it is only read.
+        """
+        outer = surfaces.require_outer()
+        reference = surfaces.inner.a
+        if any(m != reference for m in (surfaces.inner.b, outer.a, outer.b)):
+            raise NotImplementedError(
+                "PointContactStiffness (ISO/TS 16281) takes a single scalar E/nu: "
+                "the rolling element, the inner raceway and the outer raceway "
+                "must all be the same material. Got rolling_element="
+                f"{surfaces.inner.a.material_id!r}, inner_raceway="
+                f"{surfaces.inner.b.material_id!r}, outer_raceway="
+                f"{outer.b.material_id!r}. Different materials are not "
+                "supported by this formula yet.")
+        return cls(Dw, ri, re, reference.E, reference.poisson_ratio, alpha_0, Dpw)
 
     @property
     def duty(self) -> str:
@@ -130,8 +167,15 @@ class PointContactStiffness:
         return Ke * np.cbrt(self.curvature_sum_outer / (xe**2 * Ee))
 
     @property
-    def stiffness(self) -> float:
-        """c_p [N/mm^(3/2)] -- the value everything above exists to produce."""
+    def cp(self) -> float:
+        """c_p [N/mm^(3/2)] -- the Hertzian point-contact load-deflection
+        constant, ISO/TS 16281 eq.(11). This is NOT the assembled contact
+        stiffness of the bearing: c_p only feeds the load-deflection
+        relation Q = c_p * delta^(3/2) that the load-distribution solver
+        (ISO 16281) -- or a full Hertz solve via slippy's ``hertz_full``,
+        see the module docstring -- actually uses to solve for the
+        rolling-element loads. That solving step, and the resulting
+        contact/system stiffness, happens there, not in this class."""
         E_star = self.E / (1.0 - self.nu**2)
         return 1.48 * E_star * (self._inner_term + self._outer_term) ** (-3.0 / 2.0)
 
@@ -149,8 +193,8 @@ class SelfAligningPointContactStiffness(PointContactStiffness):
             "Closed-form circular-contact (chi_e=1) outer-race term not "
             "provided yet -- see class docstring."
         )
-    # .stiffness is inherited unchanged -- it calls _outer_term, which is
-    # the only piece this subtype actually overrides.
+    # .cp is inherited unchanged -- it calls _outer_term, which is the
+    # only piece this subtype actually overrides.
 
 
 # ---------------------------------------------------------------------
@@ -163,7 +207,7 @@ class LineContactStiffness:
 
     def __init__(self, Dwe: float, Dpw: float, alpha_0: float,
                  Lwe: float, n_s: int):
-        
+
         self.Dwe, self.Dpw, self.alpha_0 = Dwe, Dpw, alpha_0
         self.Lwe, self.n_s = Lwe, n_s
         self._cache: dict[str, float] = {}
@@ -184,13 +228,19 @@ class LineContactStiffness:
         return self._cache["gamma"]
 
     @property
-    def stiffness(self) -> float:
-        """(c_L) [N/mm^(10/9)] --  eq.(35)."""
+    def cl(self) -> float:
+        """c_L [N/mm^(10/9)] -- the line-contact load-deflection constant,
+        eq.(35). Like ``PointContactStiffness.cp``, this is not itself a
+        stiffness: it feeds the load-deflection relation the load-
+        distribution solver (or a Hertz-based approach) actually solves
+        with -- that step happens outside this class."""
         c_L = 35948.0 * self.Lwe ** (8.0 / 9.0)
         return c_L
 
     @property
-    def lamina_stiffness(self) -> float:
-        """(c_s) [N/mm^(10/9)] --  eq.(35)."""
-        c_s = self.stiffness / self.n_s
-        return c_s 
+    def cs(self) -> float:
+        """c_s [N/mm^(10/9)] -- ``cl`` split evenly across the ``n_s``
+        laminae, eq.(35). Same caveat as ``cl``: a load-deflection
+        constant, not an assembled stiffness."""
+        c_s = self.cl / self.n_s
+        return c_s

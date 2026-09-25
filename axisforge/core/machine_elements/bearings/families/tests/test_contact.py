@@ -4,7 +4,14 @@ fundo, tenho o código-fonte. PointContactStiffness,
 SelfAligningPointContactStiffness, contact_angle_and_clearance --
 só testes de contrato (assinatura, sinais plausíveis), nunca vi o corpo
 destas três nesta conversa, por isso não valido a fórmula, só que não
-rebentam e devolvem algo fisicamente plausível."""
+rebentam e devolvem algo fisicamente plausível.
+
+Nota: `PointContactStiffness.stiffness`/`LineContactStiffness.stiffness`/
+`.lamina_stiffness` foram renomeados para `.cp`/`.cl`/`.cs` -- não são a
+stiffness montada do rolamento (isso é o solver ISO 16281 ou o Hertz via
+slippy que calcula), mas a constante de carga-deformação Hertziana que
+alimenta esse cálculo. Só o nome mudou; os testes abaixo continuam a
+verificar exactamente o mesmo comportamento."""
 import math
 import pytest
 import numpy as np
@@ -30,14 +37,14 @@ class TestLineContactStiffness:
         stiff = bc.LineContactStiffness(Dwe=8.0, Dpw=72.5, alpha_0=alpha_0, Lwe=8.0, n_s=40)
         assert math.isclose(stiff.gamma, 8.0 * np.cos(alpha_0) / 72.5)
 
-    def test_lamina_stiffness_splits_stiffness_by_n_s(self):
+    def test_cs_splits_cl_by_n_s(self):
         stiff = bc.LineContactStiffness(Dwe=8.0, Dpw=72.5, alpha_0=0.0, Lwe=8.0, n_s=40)
-        assert math.isclose(stiff.lamina_stiffness, stiff.stiffness / 40)
+        assert math.isclose(stiff.cs, stiff.cl / 40)
 
-    def test_stiffness_scales_with_Lwe(self):
+    def test_cl_scales_with_Lwe(self):
         short = bc.LineContactStiffness(Dwe=8.0, Dpw=72.5, alpha_0=0.0, Lwe=4.0, n_s=40)
         long_ = bc.LineContactStiffness(Dwe=8.0, Dpw=72.5, alpha_0=0.0, Lwe=8.0, n_s=40)
-        assert long_.stiffness > short.stiffness
+        assert long_.cl > short.cl
 
 
 # =====================================================================
@@ -48,27 +55,26 @@ class TestLineContactStiffness:
 # =====================================================================
 
 class TestPointContactStiffnessContract:
-    def test_returns_plausible_gamma_Ri_stiffness(self):
+    def test_returns_plausible_gamma_Ri_cp(self):
         stiff = bc.PointContactStiffness(Dw=8.0, ri=4.3, re=4.3, E=210_000.0, nu=0.3,
                                           alpha_0=0.0, Dpw=40.0)
         assert 0.0 < stiff.gamma < 1.0
         assert stiff.raceway_contact_radius > 0.0
-        assert stiff.stiffness > 0.0
+        assert stiff.cp > 0.0
 
 
 class TestSelfAligningPointContactStiffnessContract:
     def test_KNOWN_GAP_outer_term_not_implemented(self):
-        """SelfAligningPointContactStiffness.stiffness depende de
-        _outer_term, que ainda não tem forma fechada para contacto
-        circular (chi_e=1) -- ver docstring da classe e a nota em
-        SelfAligningBallFamily. Substitui este teste por asserts reais
-        quando isso for derivado."""
+        """SelfAligningPointContactStiffness.cp depende de _outer_term,
+        que ainda não tem forma fechada para contacto circular (chi_e=1)
+        -- ver docstring da classe e a nota em SelfAligningBallFamily.
+        Substitui este teste por asserts reais quando isso for derivado."""
         stiff = bc.SelfAligningPointContactStiffness(Dw=8.0, ri=4.24, re=15.0, E=210_000.0,
                                                        nu=0.3, alpha_0=0.0, Dpw=40.0)
         assert 0.0 < stiff.gamma < 1.0
         assert stiff.raceway_contact_radius > 0.0
         with pytest.raises(NotImplementedError):
-            _ = stiff.stiffness
+            _ = stiff.cp
 
 
 class TestContactAngleAndClearanceContract:

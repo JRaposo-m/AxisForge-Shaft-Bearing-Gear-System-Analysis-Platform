@@ -1,12 +1,20 @@
 """
 core/machine_elements/bearings/bearing.py
 
-Bearing -- the orchestrator. Catalogue data + family-derived geometry,
-assembled ONCE via Bearing.assemble() and immutable from then on. Never
-learns about load cases, X/Y, life, or any analysis result -- those live
-in solvers/, each with its own result object.
+``Bearing`` is the orchestrator: catalogue data combined with
+family-derived geometry, assembled exactly once via ``Bearing.assemble()``
+and immutable thereafter. It has no knowledge of load cases, X/Y factors,
+service life, or any other analysis result; those belong in ``solvers/``,
+each with its own dedicated result object.
 
-Do not instantiate directly -- always go through Bearing.assemble().
+Do not instantiate ``Bearing`` directly; always go through
+``Bearing.assemble()``.
+
+``C`` (the basic dynamic load rating) is computed by the family from the
+assembled geometry (see the ``C`` property below); it is no longer
+catalogue data. If the family supplies ``surfaces`` (a ``BearingSurfaces``
+instance), it is exposed as ``bearing.surfaces`` in the same way as every
+other attribute returned by ``assemble_geometry``.
 """
 from __future__ import annotations
 from typing import Any
@@ -21,17 +29,16 @@ class Bearing:
         self.d = catalog.d
         self.D = catalog.D
         self.b = catalog.b
-        self.C = catalog.C
-        self.C0 = catalog.C0
         self.designation = catalog.designation
         self.label = catalog.label
         self.position = catalog.position
         self.arrangement = catalog.arrangement
         self.dm = 0.5 * (catalog.d + catalog.D)
+        self.surfaces = None   # BearingSurfaces; set by assemble() if the family provides it
 
         self._family = family
         self._enabled_analyses: frozenset[str] = frozenset()
-        self._assembled = False   # __setattr__ refuses writes once True
+        self._assembled = False   # __setattr__ refuses further writes once True
 
     @classmethod
     def assemble(cls,
@@ -40,11 +47,15 @@ class Bearing:
                  geometry: dict[str, Any],
                  analyses: dict[str, bool] | None = None) -> "Bearing":
         """
-        family   : BearingFamily instance, passed directly
-        catalog  : BearingCatalog
-        geometry : raw kwargs -> family.assemble_geometry(catalog, **geometry)
-        analyses : {name: True/False} -- validated against
-                   family.CAPABILITIES / REQUIRED_FOR, never dispatched
+        Parameters
+        ----------
+        family   : a ``BearingFamily`` instance, passed directly.
+        catalog  : a ``BearingCatalog`` instance.
+        geometry : raw keyword arguments forwarded to
+            ``family.assemble_geometry(catalog, **geometry)``.
+        analyses : ``{name: True/False}``; validated against
+            ``family.CAPABILITIES`` / ``REQUIRED_FOR`` but never
+            dispatched from here.
         """
         catalog.validate_or_raise()
         bearing = cls(catalog, family)
@@ -102,32 +113,51 @@ class Bearing:
     @property
     def family(self) -> BearingFamily:
         """
-        The BearingFamily instance this Bearing was assembled with. Public
-        so callers (scripts, solvers) can dispatch family-specific methods
-        (e.g. per_element_dynamic_capacity()) off the bearing itself,
-        without re-importing/tracking the concrete subtype class --
-        bearing.family.per_element_dynamic_capacity(bearing) instead of
-        DeepGrooveBallFamily.per_element_dynamic_capacity(bearing).
+        The ``BearingFamily`` instance this ``Bearing`` was assembled
+        with. Exposed publicly so that callers (scripts, solvers) can
+        dispatch family-specific methods (e.g.
+        ``per_element_dynamic_capacity()``) off the bearing itself,
+        without having to re-import or track the concrete subtype
+        class: ``bearing.family.per_element_dynamic_capacity(bearing)``
+        rather than
+        ``DeepGrooveBallFamily.per_element_dynamic_capacity(bearing)``.
         """
         return self._family
 
+    @property
+    def C(self) -> float:
+        """
+        Basic dynamic load rating (``Cr`` for radial duty, ``Ca`` for
+        thrust duty) [N], computed by the family from the assembled
+        geometry. Read by the solvers' ``_Cr_Ca()``. Requires
+        ``assemble()`` to have completed.
+        """
+        if not self._assembled:
+            raise RuntimeError(
+                f"Bearing '{self.label or self.designation}': C requires "
+                f"Bearing.assemble() to have completed.")
+        return self._family.dynamic_capacity(self)
+
     def validate(self) -> list[str]:
         """
-        Call-site compatibility with ShaftSystem.validate() (which does
-        `errors.extend(f"{tag}.bearing: {e}" for e in b.validate())` for
-        every bearing on the shaft) -- the old pre-rewrite bearing classes
-        exposed this as a post-hoc check.
+        Provided for call-site compatibility with
+        ``ShaftSystem.validate()``, which does
+        ``errors.extend(f"{tag}.bearing: {e}" for e in b.validate())``
+        for every bearing on the shaft — the pre-rewrite bearing
+        classes exposed this as a post-hoc check.
 
-        In normal use this can never actually find anything:
-        catalog.validate_or_raise() already ran inside assemble(), and the
-        instance is immutable from that point on (__setattr__ refuses
-        further writes), so a Bearing that exists has already been proven
-        valid and cannot have drifted since. Re-checked here anyway,
-        against this instance's own copied attributes (the original
-        BearingCatalog is discarded after assemble(), only its fields
-        survive on self) -- genuine defense-in-depth (e.g. against
-        __setattr__ being bypassed via object.__setattr__), not an
-        unconditional [].
+        In normal use this method cannot actually surface anything new:
+        ``catalog.validate_or_raise()`` has already run inside
+        ``assemble()``, and the instance is immutable from that point
+        on (``__setattr__`` refuses further writes), so any ``Bearing``
+        that exists has already been proven valid and cannot have
+        drifted since. The checks are repeated here regardless, against
+        this instance's own copied attributes (the original
+        ``BearingCatalog`` is discarded after ``assemble()``; only its
+        field values survive on ``self``) as genuine defense-in-depth
+        — for example against ``__setattr__`` being bypassed via
+        ``object.__setattr__`` — rather than as an unconditional empty
+        list.
         """
         errors: list[str] = []
         tag = self.label or self.designation or self.__class__.__name__
@@ -137,10 +167,6 @@ class Bearing:
 
         if self.position < 0:
             errors.append(f"{tag}: position must be >= 0, got {self.position}")
-        if self.C < 0:
-            errors.append(f"{tag}: C must be >= 0, got {self.C}")
-        if self.C0 < 0:
-            errors.append(f"{tag}: C0 must be >= 0, got {self.C0}")
         if self.arrangement not in ("locating", "floating", "non-locating"):
             errors.append(
                 f"{tag}: arrangement must be 'locating', 'floating', or "
@@ -166,6 +192,7 @@ class Bearing:
     def summary(self) -> str:
         tag = self.label or self.designation or "Bearing"
         header = f"-- {tag} "
+        c_txt = f"{self.C:.0f} N" if self._assembled else "n/a"
         lines = [
             header + "-" * max(0, 44 - len(header)),
             f"  family      : {self._family.name}",
@@ -175,7 +202,7 @@ class Bearing:
             f"  arrangement : {self.arrangement}",
             f"  d / D       : {self.d:.1f} mm / {self.D:.1f} mm",
             f"  b           : {self.b:.1f} mm",
-            f"  C / C0      : {self.C:.0f} N / {self.C0:.0f} N",
+            f"  C (computed): {c_txt}",
             f"  geometry    : {'assembled' if self._assembled else 'not assembled'}",
             f"  analyses    : {sorted(self._enabled_analyses) or '(none enabled)'}",
             "-" * 44,

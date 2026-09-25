@@ -4,12 +4,14 @@
 """
 core/machine_elements/bearings/families/family.py
 
-The contract (BearingFamily), the auto-registration mechanism, and
-every concrete family. Math lives in the sibling files ./contact.py
-and ./capacity.py, imported below.
+ficheiro vai sofrer bastantes mudanças em termos de que atributos guarda 
+isto porque de momento ja sei que atributos hertz precisa
+
+The auto-registration mechanism and every concrete family. The contract
+(BearingFamily) lives in ../base.py. Math lives in the sibling files
+./iso16281_contact.py and ./capacity.py, imported below.
 """
 from __future__ import annotations
-from abc import ABC, abstractmethod
 from typing import Any, TYPE_CHECKING
 
 import numpy as np
@@ -17,7 +19,10 @@ import numpy as np
 if TYPE_CHECKING:
     from axisforge.core.machine_elements.bearings.base import BearingCatalog
 
-from axisforge.core.machine_elements.bearings.base import BearingType
+from axisforge.core.machine_elements.bearings.base import BearingType, BearingFamily
+from axisforge.core.machine_elements.bearings.families.bearing_properties import (
+    BearingSurfaces, RadialSurfaces,
+)
 import axisforge.core.machine_elements.bearings.families.iso16281_contact as bc
 import axisforge.core.machine_elements.bearings.families.capacity as bcap
 
@@ -29,49 +34,36 @@ import axisforge.core.machine_elements.bearings.families.capacity as bcap
 _FAMILY_REGISTRY: dict[str, type["BearingFamily"]] = {}
 
 def register_family(cls: type["BearingFamily"]) -> type["BearingFamily"]:
+    if cls.SURFACES is not None and not (
+            isinstance(cls.SURFACES, type) and issubclass(cls.SURFACES, BearingSurfaces)):
+        raise TypeError(f"{cls.__name__}: SURFACES must be a BearingSurfaces subclass, "
+                        f"got {cls.SURFACES!r}")
     _FAMILY_REGISTRY[cls.__name__] = cls
     return cls
 
 
 # =====================================================================
-# ---- contract -----------------------------------------------------
-# =====================================================================
-
-class BearingFamily(ABC):
-    CAPABILITIES: frozenset[str] = frozenset()
-    REQUIRED_FOR: dict[str, frozenset[str]] = {}
-    BEARING_TYPE: Any = None
-    DUTY: str | None = None
-
-    @property
-    @abstractmethod
-    def name(self) -> str: ...
-
-    @abstractmethod
-    def assemble_geometry(self, catalog: "BearingCatalog", **geometry_kwargs: Any) -> dict[str, Any]: ...
-
-    @staticmethod
-    @abstractmethod
-    def dynamic_capacity(bearing) -> float: ...
-
-    @staticmethod
-    @abstractmethod
-    def per_element_dynamic_capacity(bearing, capacity: float | None = None) -> tuple[float, float]: ...
-
-
-
-# =====================================================================
 # ---- ball bearing / radial, point contact --------------------------
+#
+# Note on `surfaces`: RadialSurfaces is never restricted here -- each
+# family below hands the whole object straight to
+# `PointContactStiffness.from_surfaces()` (see iso16281_contact.py) and
+# stores it unchanged on the returned geometry dict (`surfaces=surfaces`),
+# which `Bearing.assemble()` mirrors onto the bearing as `bearing.surfaces`.
+# The one place that actually needs a scalar E/nu -- because that ISO/TS
+# 16281 formula has no per-surface inputs -- is `from_surfaces()` itself,
+# which is also where the "must all be the same material" check lives.
 # =====================================================================
 
 @register_family
 class DeepGrooveBallFamily(BearingFamily):
     BEARING_TYPE = BearingType.DEEP_GROOVE_BALL
     DUTY = "radial"
+    SURFACES = RadialSurfaces
     CAPABILITIES = frozenset({"point_contact"})
     REQUIRED_FOR = {
         "point_contact": frozenset({
-            "ri", "re", "Dw", "Dpw", "Z", "E", "nu",
+            "ri", "re", "Dw", "Dpw", "Z", "E", "nu", "surfaces",
             "A", "alpha_0", "Ri", "phi_j", "gamma", "cp",
         }),
     }
@@ -87,7 +79,7 @@ class DeepGrooveBallFamily(BearingFamily):
     def reference_raceway_radii(cls, Dw: float) -> tuple[float, float]:
         return cls.RI_OVER_DW * Dw, cls.RE_OVER_DW * Dw
 
-    def assemble_geometry(self, catalog, Dw, Dpw, Z, E, s, nu=0.3, i=1) -> dict[str, Any]:
+    def assemble_geometry(self, catalog, Dw, Dpw, Z, s, surfaces, i=1) -> dict[str, Any]:
         if i not in self.REDUCTION_FACTOR_BY_ROWS:
             raise ValueError(f"DeepGrooveBallFamily: i must be one of "
                               f"{sorted(self.REDUCTION_FACTOR_BY_ROWS)}, got {i}")
@@ -100,15 +92,18 @@ class DeepGrooveBallFamily(BearingFamily):
         A = ri + re - Dw
         alpha_0, s = bc.contact_angle_and_clearance(A, s=s)
 
-        stiff = bc.PointContactStiffness(Dw, ri, re, E, nu, alpha_0, Dpw)
+        # surfaces is passed through untouched; from_surfaces() is where
+        # it gets collapsed to the scalar E/nu this formula needs, and
+        # where the "must all be the same material" check lives.
+        stiff = bc.PointContactStiffness.from_surfaces(surfaces, Dw, ri, re, alpha_0, Dpw)
         g = stiff.gamma
         Ri = stiff.raceway_contact_radius
-        cp = stiff.stiffness
+        cp = stiff.cp
 
         phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
         return dict(bearing_type=self.BEARING_TYPE, ri=ri, re=re, Dw=Dw, Dpw=Dpw,
-                    Z=Z, s=s, E=E, nu=nu, A=A, alpha_0=alpha_0, Ri=Ri, phi_j=phi_j,
+                    Z=Z, s=s, E=stiff.E, nu=stiff.nu, surfaces=surfaces, A=A, alpha_0=alpha_0, Ri=Ri, phi_j=phi_j,
                     gamma=g, cp=cp, raceway_radii_from_reference=True,
                     i=i, reduction_factor=self.REDUCTION_FACTOR_BY_ROWS[i])
 
@@ -132,10 +127,11 @@ class DeepGrooveBallFamily(BearingFamily):
 class AngularContactFamily(BearingFamily):
     BEARING_TYPE = BearingType.ANGULAR_CONTACT
     DUTY = "radial"
+    SURFACES = RadialSurfaces
     CAPABILITIES = frozenset({"point_contact"})
     REQUIRED_FOR = {
         "point_contact": frozenset({
-            "ri", "re", "Dw", "Dpw", "Z", "E", "nu",
+            "ri", "re", "Dw", "Dpw", "Z", "E", "nu", "surfaces",
             "A", "alpha_0", "Ri", "phi_j", "gamma", "cp",
         }),
     }
@@ -151,7 +147,7 @@ class AngularContactFamily(BearingFamily):
     def reference_raceway_radii(cls, Dw: float) -> tuple[float, float]:
         return cls.RI_OVER_DW * Dw, cls.RE_OVER_DW * Dw
 
-    def assemble_geometry(self, catalog, Dw, Dpw, Z, E, alpha_0_deg, nu=0.3, i=1) -> dict[str, Any]:
+    def assemble_geometry(self, catalog, Dw, Dpw, Z, alpha_0_deg, surfaces, i=1) -> dict[str, Any]:
         if i not in self.REDUCTION_FACTOR_BY_ROWS:
             raise ValueError(f"AngularContactFamily: i must be one of "
                               f"{sorted(self.REDUCTION_FACTOR_BY_ROWS)}, got {i}")
@@ -161,19 +157,19 @@ class AngularContactFamily(BearingFamily):
         if not (0.0 < alpha_0_deg <= 45.0):
             raise ValueError(
                 f"AngularContactFamily: alpha_0_deg must be in (0, 45], got {alpha_0_deg}")
-         
+
         A = ri + re - Dw
         alpha_0, s = bc.contact_angle_and_clearance(A, alpha_0_deg=alpha_0_deg)
 
-        stiff = bc.PointContactStiffness(Dw, ri, re, E, nu, alpha_0, Dpw)
+        stiff = bc.PointContactStiffness.from_surfaces(surfaces, Dw, ri, re, alpha_0, Dpw)
         g = stiff.gamma
         Ri = stiff.raceway_contact_radius
-        cp = stiff.stiffness
+        cp = stiff.cp
 
         phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
         return dict(bearing_type=self.BEARING_TYPE, ri=ri, re=re, Dw=Dw, Dpw=Dpw,
-                    Z=Z, s=s, E=E, nu=nu, A=A, alpha_0=alpha_0, Ri=Ri, phi_j=phi_j,
+                    Z=Z, s=s, E=stiff.E, nu=stiff.nu, surfaces=surfaces, A=A, alpha_0=alpha_0, Ri=Ri, phi_j=phi_j,
                     gamma=g, cp=cp, raceway_radii_from_reference=True,
                     i=i, reduction_factor=self.REDUCTION_FACTOR_BY_ROWS[i])
 
@@ -196,16 +192,18 @@ class AngularContactFamily(BearingFamily):
 @register_family
 class SelfAligningBallFamily(BearingFamily):
     """
-    NOTE: This type of bearing does not have the right contact module
-    elaborated in iso16281_contact for this contact model the value will
-    be either be done taken into account slippy or elaborated outside the norm
+    Note: ``iso16281_contact`` does not yet provide the correct contact
+    model for this bearing type. The outer-race stiffness term
+    (``SelfAligningPointContactStiffness._outer_term``) will be either
+    computed via slippy or derived separately, outside ISO/TS 16281.
     """
     BEARING_TYPE = BearingType.SELF_ALIGNING_BALL
     DUTY = "radial"
+    SURFACES = RadialSurfaces
     CAPABILITIES = frozenset({"point_contact"})
     REQUIRED_FOR = {
         "point_contact": frozenset({
-            "ri", "re", "Dw", "Dpw", "Z", "E", "nu",
+            "ri", "re", "Dw", "Dpw", "Z", "E", "nu", "surfaces",
             "A", "alpha_0", "Ri", "phi_j", "gamma", "cp",
         }),
     }
@@ -224,29 +222,30 @@ class SelfAligningBallFamily(BearingFamily):
         re = 0.5 * (1.0 / gamma + 1.0) * Dw
         return ri, re
 
-    def assemble_geometry(self, catalog, Dw, Dpw, Z, E, alpha_0_deg, nu=0.3, i=1) -> dict[str, Any]:
+    def assemble_geometry(self, catalog, Dw, Dpw, Z, alpha_0_deg, surfaces, i=1) -> dict[str, Any]:
         if i not in self.REDUCTION_FACTOR_BY_ROWS:
-            raise ValueError(f"AngularContactFamily: i must be one of "
+            raise ValueError(f"SelfAligningBallFamily: i must be one of "
                               f"{sorted(self.REDUCTION_FACTOR_BY_ROWS)}, got {i}")
-        ri, re = self.reference_raceway_radii(Dw)
+        gamma_ref = Dw * np.cos(np.radians(alpha_0_deg)) / Dpw   # reference_raceway_radii needs gamma
+        ri, re = self.reference_raceway_radii(Dw, gamma_ref)
         if ri <= Dw / 2.0 or re <= Dw / 2.0:
-            raise ValueError(f"AngularContactFamily: invalid groove geometry for Dw={Dw}")
+            raise ValueError(f"SelfAligningBallFamily: invalid groove geometry for Dw={Dw}")
         if not (0.0 < alpha_0_deg <= 45.0):
             raise ValueError(
-                f"AngularContactFamily: alpha_0_deg must be in (0, 45], got {alpha_0_deg}")
-         
+                f"SelfAligningBallFamily: alpha_0_deg must be in (0, 45], got {alpha_0_deg}")
+
         A = ri + re - Dw
         alpha_0, s = bc.contact_angle_and_clearance(A, alpha_0_deg=alpha_0_deg)
 
-        stiff = bc.SelfAligningPointContactStiffness(Dw, ri, re, E, nu, alpha_0, Dpw)
+        stiff = bc.SelfAligningPointContactStiffness.from_surfaces(surfaces, Dw, ri, re, alpha_0, Dpw)
         g = stiff.gamma
         Ri = stiff.raceway_contact_radius
-        cp = stiff.stiffness
+        cp = stiff.cp
 
         phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
         return dict(bearing_type=self.BEARING_TYPE, ri=ri, re=re, Dw=Dw, Dpw=Dpw,
-                    Z=Z, s=s, E=E, nu=nu, A=A, alpha_0=alpha_0, Ri=Ri, phi_j=phi_j,
+                    Z=Z, s=s, E=stiff.E, nu=stiff.nu, surfaces=surfaces, A=A, alpha_0=alpha_0, Ri=Ri, phi_j=phi_j,
                     gamma=g, cp=cp, raceway_radii_from_reference=True,
                     i=i, reduction_factor=self.REDUCTION_FACTOR_BY_ROWS[i])
 
@@ -319,7 +318,7 @@ class ThrustBallSingleRowFamily(BearingFamily):
         eta = self.eta(alpha_0)
         g = stiff.gamma
         Ri = stiff.raceway_contact_radius
-        cp = stiff.stiffness
+        cp = stiff.cp
 
         phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
@@ -336,9 +335,13 @@ class ThrustBallSingleRowFamily(BearingFamily):
 
     @staticmethod
     def _capacity_calculator(row_or_bearing, i: int = 1) -> bcap.ThrustCapacityCalculator:
-        """row_or_bearing: um dict de assemble_geometry() OU um Bearing
-        já montado. i não vem da geometria (não afeta ri/re/alpha_0/...),
-        por isso entra aqui como argumento próprio, não lido do row/bearing."""
+        """
+        ``row_or_bearing`` may be either a dict returned by
+        ``assemble_geometry()`` or an already-assembled ``Bearing``.
+        ``i`` is not part of the geometry (it has no effect on
+        ``ri``/``re``/``alpha_0``/...), so it is passed as its own
+        argument here rather than being read off the row or bearing.
+        """
         get = row_or_bearing.__getitem__ if isinstance(row_or_bearing, dict) else \
               (lambda k: getattr(row_or_bearing, k))
         cls_ = ThrustBallSingleRowFamily._capacity_class(get("alpha_0"))
@@ -357,12 +360,17 @@ class ThrustBallSingleRowFamily(BearingFamily):
 
 @register_family
 class ThrustBallMultiRowFamily(BearingFamily):
-    """Thrust multi-row onde as filas podem ser genuinely diferentes
-    entre si (Dw, alpha_0, Z próprios por fila) -- reutiliza
-    ThrustBallFamily.assemble_geometry() fila a fila (composição, não
-    reimplementa a física) e combina via combine_multirow() (Formula 29,
-    Sec 6.4). É esta a classe a usar quando as filas NÃO são idênticas;
-    quando são, ThrustBallFamily sozinha (chamada N vezes) já chega."""
+    """
+    Multi-row thrust family for the case where the rows are genuinely
+    different from one another (each row has its own ``Dw``,
+    ``alpha_0``, ``Z``). Reuses
+    ``ThrustBallSingleRowFamily.assemble_geometry()`` row by row
+    (composition, rather than re-implementing the underlying physics)
+    and combines the rows via ``combine_multirow()`` (Formula 29,
+    Sec. 6.4). Use this class when the rows are NOT identical; when
+    they are, calling ``ThrustBallSingleRowFamily`` on its own (N times)
+    is sufficient.
+    """
 
     BEARING_TYPE = BearingType.THRUST_BALL
     DUTY = "thrust"
@@ -376,8 +384,10 @@ class ThrustBallMultiRowFamily(BearingFamily):
         return "thrust_ball_multirow"
 
     def assemble_geometry(self, catalog, rows: list[dict]) -> dict[str, Any]:
-        """rows = [{"Dw":.., "Dpw":.., "Z":.., "E":.., "alpha_0_deg":.., "nu":..}, ...],
-        um dict de kwargs por fila -- livre de variar entre filas."""
+        """
+        ``rows = [{"Dw":.., "Dpw":.., "Z":.., "E":.., "alpha_0_deg":.., "nu":..}, ...]``:
+        one keyword-argument dict per row, free to vary from row to row.
+        """
         assembled_rows = [
             self._single_row_family.assemble_geometry(catalog, **row_kwargs)
             for row_kwargs in rows
@@ -419,16 +429,17 @@ class ThrustBallMultiRowFamily(BearingFamily):
 class CylindricalRollerFamily(BearingFamily):
     BEARING_TYPE = BearingType.CYLINDRICAL_ROLLER
     DUTY = "radial"
+    SURFACES = RadialSurfaces
     CAPABILITIES = frozenset({"line_contact"})
     REQUIRED_FOR = {
         "line_contact": frozenset({
             "Dwe", "Lwe", "Dpw", "Z", "s", "n_s", "alpha_0",
-            "x_k", "phi_j", "gamma", "cL", "cs", "P_xk", "i",
+            "x_k", "phi_j", "gamma", "cL", "cs", "P_xk", "i", "surfaces",
         }),
     }
     LAMBDA_V = 0.83
     _LOG_ARG_EPS = 1e-12  # floor for the log() argument in the profile function
-    # in te future this shall be passed to config.py
+    # TODO: move this to config.py once a central tolerance module exists.
 
     @property
     def name(self) -> str:
@@ -452,7 +463,13 @@ class CylindricalRollerFamily(BearingFamily):
                 P[edge] = 0.000500 * Dwe * np.log(1.0 / arg)
         return P
 
-    def assemble_geometry(self, catalog, Dwe, Lwe, Dpw, Z, s, n_s, alpha_0_deg, i=1) -> dict[str, Any]:
+    def assemble_geometry(self, catalog, Dwe, Lwe, Dpw, Z, s, n_s, alpha_0_deg, surfaces, i=1) -> dict[str, Any]:
+        if not isinstance(surfaces, RadialSurfaces):
+            raise TypeError(f"CylindricalRollerFamily: surfaces must be RadialSurfaces, "
+                            f"got {type(surfaces).__name__}")
+        # NOTE: cL = 35948*Lwe**(8/9) (LineContactStiffness) assumes steel. A check that
+        # `surfaces` is compatible with that assumption is still pending; for now the
+        # value is only stored, not validated against the stiffness formula.
 
         if catalog.arrangement not in ("floating", "non-locating"):
             raise ValueError(
@@ -474,15 +491,16 @@ class CylindricalRollerFamily(BearingFamily):
 
         g   = stiff.gamma
         x_k = stiff.lamina_positions
-        cL  = stiff.stiffness
-        cs  = stiff.lamina_stiffness
+        cL  = stiff.cl
+        cs  = stiff.cs
         P_xk = self._reference_roller_profile(x_k, Dwe, Lwe)
 
         phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
         return dict(bearing_type=self.BEARING_TYPE, Dwe=Dwe, Lwe=Lwe, Dpw=Dpw, 
                     Z=Z, s=s, n_s=n_s, alpha_0=alpha_0, x_k=x_k, phi_j=phi_j, 
-                    gamma=g, cL=cL, lambda_v = self.LAMBDA_V, cs=cs, P_xk=P_xk, i=i)
+                    gamma=g, cL=cL, lambda_v = self.LAMBDA_V, cs=cs, P_xk=P_xk, i=i,
+                    surfaces=surfaces)
 
     @staticmethod
     def per_element_dynamic_capacity(bearing, Cr=None):
@@ -568,8 +586,8 @@ class ThrustCylindricalRollerFamily(BearingFamily):
 
         g    = stiff.gamma
         x_k  = stiff.lamina_positions
-        cL   = stiff.stiffness
-        cs   = stiff.lamina_stiffness
+        cL   = stiff.cl
+        cs   = stiff.cs
         P_xk = self._reference_roller_profile(x_k, Dwe, Lwe)
 
         phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
@@ -608,12 +626,15 @@ class ThrustCylindricalRollerFamily(BearingFamily):
 
 @register_family
 class RollerThrustMultiRowFamily(BearingFamily):
-    """Espelha ThrustBallMultiRowFamily: filas podem diferir entre si
-    (Dwe, alpha_0, Z, eta próprios por fila); reutiliza
-    RollerThrustSingleRowFamily.assemble_geometry() fila a fila e combina
-    via combine_multirow() herdado de _MultirowCombinableLineContact --
-    cuja fórmula, note-se, ainda precisa de ser derivada/confirmada (ver
-    nota acima sobre os expoentes 9/2 e 2/9 por analogia)."""
+    """
+    Mirrors ``ThrustBallMultiRowFamily``: rows may differ from one
+    another (each row has its own ``Dwe``, ``alpha_0``, ``Z``, ``eta``).
+    Reuses ``ThrustCylindricalRollerFamily.assemble_geometry()`` row by
+    row and combines the rows via ``combine_multirow()``, inherited from
+    ``_MultirowCombinableLineContact``. Note that this combination
+    formula still needs to be derived and confirmed (see the note above
+    regarding the 9/2 and 2/9 exponents used by analogy).
+    """
 
     BEARING_TYPE = BearingType.THRUST_CYLINDRICAL_ROLLER
     DUTY = "thrust"
@@ -649,7 +670,7 @@ class RollerThrustMultiRowFamily(BearingFamily):
                  gamma=row["gamma"], lambda_v=row["lambda_v"], eta=row["eta"])
             for row in assembled_rows
         ]
-        Ca_total = cls_.combine_multirow(capacity_kwargs_rows)  # depende do fix pendente
+        Ca_total = cls_.combine_multirow(capacity_kwargs_rows)  # pending the fix noted above
 
         return dict(bearing_type=self.BEARING_TYPE, rows=assembled_rows,
                     Ca=Ca_total, Q_elements=[c.Q_elements for c in calculators])

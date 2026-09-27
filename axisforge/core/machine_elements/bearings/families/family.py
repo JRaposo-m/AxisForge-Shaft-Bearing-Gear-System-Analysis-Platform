@@ -50,6 +50,17 @@ def thrust(cls: type["BearingFamily"]) -> type["BearingFamily"]:
     _THRUST_BEARING[cls.__name__] = cls
     return cls
 
+
+# ====================================================================
+# ---- helpers -------------------------------------------------------
+# ====================================================================
+
+def is_point_contact_family(family: "BearingFamily") -> bool:
+    return type(family).__name__ in _POINT_CONTACT
+
+def is_line_contact_family(family: "BearingFamily") -> bool:
+    return type(family).__name__ in _LINE_CONTACT
+
 def is_thrust_family(family: "BearingFamily") -> bool:
     return type(family).__name__ in _THRUST_BEARING
 
@@ -499,7 +510,7 @@ class CylindricalRollerFamily(BearingFamily):
         phi_j        = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
         result = dict(bearing_type=self.BEARING_TYPE, Dwe=Dwe, Lwe=Lwe, Dpw=Dpw,
-                    Z=Z, s=s, n_s=n_s, x_k=x_k, phi_j=phi_j, r_rolling_el=r_rolling_el,
+                    Z=Z, s=s, n_s=n_s, x_k=x_k, phi_j=phi_j, r_rolling_el=r_rolling_el, alpha_0=0.0,
                     r_inner=r_inner, r_outer=r_outer, gamma=gamma, lambda_v=self.LAMBDA_V, i=i)
 
         if contact is ContactAnalysis.NONE:
@@ -511,10 +522,10 @@ class CylindricalRollerFamily(BearingFamily):
 
         if contact in (ContactAnalysis.ISO16281):
             line_stiff = iso.LineContactStiffness(Lwe=Lwe, n_s=n_s, Dwe=Dwe, x_k=x_k, _LOG_ARG_EPS=self._LOG_ARG_EPS)
-            cl = line_stiff.cl
+            cL = line_stiff.cl
             cs = line_stiff.cs
             P_xk = line_stiff.reference_roller_profile
-            result.update(iso16281_analysis=True, cl=cl, cs=cs, P_xk=P_xk)
+            result.update(iso16281_analysis=True, cl=cL, cs=cs, P_xk=P_xk)
 
         return result
     

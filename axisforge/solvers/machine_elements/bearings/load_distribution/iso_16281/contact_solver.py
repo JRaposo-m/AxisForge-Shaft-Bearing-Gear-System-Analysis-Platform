@@ -47,6 +47,29 @@ NOTE (to review): the roller solvers are RADIAL only (Fa, delta_a, Fa_row
 = 0.0 by definition). Thrust roller is the mirror case (Fa only, no Fr)
 and is not covered here.
 
+REQUIRED_ATTRS is gone -- deliberately. Readiness is decided entirely by
+Bearing.iso16281_analysis (set by the family, atomically with every
+attribute the solver needs) plus the capability check in
+check_bearing_ready(). No solver here enumerates attribute names anymore.
+Single-row vs multi-row dispatch (see dispatch.py's resolve_solver_cls)
+now goes through MULTIROW_SOLVER + hasattr(bearing, "rows") instead of
+attribute-set matching, for the same reason.
+
+NOTE (open, not resolved yet): warn_if_floating_loaded() is no longer
+called here (not imported either) -- the "floating bearing carrying a
+non-zero axial load" diagnostic is currently not wired into solve() at
+all. Confirm whether that's intentional or should come back.
+
+NOTE (open, not resolved yet): MultiRowSolverBase._extra_ready_checks()
+below only calls _check_row_ready() per row (cp > 0 / lamina count) --
+it does NOT call check_bearing_ready() per row anymore, since that
+function reads bearing.family unconditionally and a row (SimpleNamespace
+from a per-row assemble_geometry dict) has no .family. Row-level
+capability/iso16281_analysis checking is currently just absent, not
+delegated elsewhere. Left as-is pending your call on whether it should
+be restored (would need check_bearing_ready to grow back a `family=`
+override, checked against the PARENT bearing's family).
+
 References
 ----------
 ISO/TS 16281:2008 Sec 4.2, eq.(12)-(15); Sec 4.3.1, eq.(19)-(28) -- point contact
@@ -63,11 +86,12 @@ import numpy as np
 from scipy.optimize import brentq
 
 from axisforge.core.machine_elements.bearings.bearing import Bearing
+from axisforge.core.machine_elements.bearings.families.family import is_thrust_family
 from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
 from axisforge.results.fem_results.shaft_results import ShaftResults
 from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281.numerics import run_root
 from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281.validation import (
-    check_bearing_ready, warn_if_floating_loaded,
+    check_bearing_ready
 )
 from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281.dispatch import register_contact_solver
 from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281 import (
@@ -92,14 +116,13 @@ class SolverBase(ABC):
     Contract for a single-row ISO/TS 16281 contact solver. The batch loop
     over a shaft's bearing set (solve()) is identical between point and
     line contact -- grouping by label, projecting psi, checking readiness,
-    warning on a floating-but-loaded bearing, wrapping the result -- so it
-    is concrete here, once. What genuinely differs (solve_contact's own
-    signature and equilibrium equations) stays on each concrete solver,
-    reached through _solve_one_bearing() rather than forced into a
-    uniform signature here (point contact needs Fa/delta_a_init; line
-    contact has no axial capacity at all).
+    wrapping the result -- so it is concrete here, once. What genuinely
+    differs (solve_contact's own signature and equilibrium equations)
+    stays on each concrete solver, reached through _solve_one_bearing()
+    rather than forced into a uniform signature here (point contact needs
+    Fa/delta_a_init; line contact has no axial capacity at all).
 
-    CAPABILITY/REQUIRED_ATTRS are written onto concrete subclasses by
+    CAPABILITY is written onto concrete subclasses by
     register_contact_solver(), not declared in the class body -- see
     dispatch.py. _result_cls (the *BearingResult class) and
     _solve_one_bearing() are set/implemented directly by each concrete
@@ -115,7 +138,6 @@ class SolverBase(ABC):
     """
 
     CAPABILITY: str = ""
-    REQUIRED_ATTRS: tuple[str, ...] = ()
     MULTIROW_SOLVER: type | None = None
     _result_cls: type | None = None
 
@@ -138,8 +160,8 @@ class SolverBase(ABC):
         Returns one BearingAnalysisResult per label. Its .load_distribution
         is a *BearingResult wrapping 1 row (single-row solver) or N rows
         (MultiRowSolverBase subclass) -- the batch loop itself (grouping,
-        psi, readiness, warnings) is identical either way, only
-        _wrap_result() differs. .basic_life is set only with postprocess=True.
+        psi, readiness) is identical either way, only _wrap_result()
+        differs. .basic_life is set only with postprocess=True.
         """
         if self._result_cls is None:
             raise NotImplementedError(
@@ -159,15 +181,13 @@ class SolverBase(ABC):
 
         results: dict[str, BearingAnalysisResult] = {}
         for label, b in bearings.items():
-            check_bearing_ready(b, label, self.REQUIRED_ATTRS)
+            check_bearing_ready(b, label, self.CAPABILITY)
             self._extra_ready_checks(b, label)
 
             node   = node_by_label[label]
             Fr_xz  = node.Fr_xz
             Fr_xy  = node.Fr_xy
             phi_Fr = float(np.arctan2(Fr_xy, Fr_xz))
-
-            warn_if_floating_loaded(b, label, node.Fa)
 
             if (self.psi_input
                     and psi_override is not None
@@ -187,8 +207,9 @@ class SolverBase(ABC):
         return results
 
     def _extra_ready_checks(self, bearing: Bearing, label: str) -> None:
-        """Hook for readiness checks beyond REQUIRED_ATTRS. No-op by
-        default; overridden by LineContactSolverBase and MultiRowSolverBase."""
+        """Hook for readiness checks beyond check_bearing_ready(). No-op
+        by default; overridden by LineContactSolverBase and
+        MultiRowSolverBase."""
         return None
 
     def _wrap_result(self, row):
@@ -218,23 +239,21 @@ class SolverBase(ABC):
 
     @staticmethod
     def _Cr_Ca(bearing: Bearing) -> tuple[float | None, float | None]:
-        """(Cr, Ca) for Pref, dispatched off bearing.duty -- bearing.C is
-        the single catalog dynamic rating field, serving as Cr for a
-        radial-duty family or Ca for a thrust-duty family (see
-        BearingCatalog/Bearing -- there is no separate Cr/Ca field)."""
-        if bearing.duty == "radial":
-            return bearing.C, None
-        if bearing.duty == "thrust":
+        """(Cr, Ca) for Pref -- bearing.C is the single catalog dynamic
+        rating field, serving as Cr for a radial family or Ca for a
+        thrust family (there is no separate Cr/Ca field). Dispatched off
+        the family's own @thrust registration (is_thrust_family) rather
+        than a bearing.duty attribute -- the registry in family.py is
+        the single source of truth for radial/thrust, no need to
+        duplicate it as a string attribute on the assembled Bearing."""
+        if is_thrust_family(bearing.family):
             return None, bearing.C
-        raise NotImplementedError(
-            f"Bearing '{bearing.label}': duty={bearing.duty!r} not radial/thrust -- "
-            f"Cr/Ca dispatch for Pref is undefined."
-        )
+        return bearing.C, None
 
 
 class LineContactSolverBase(SolverBase):
     """Specialization for line-contact (lamina-model) solvers -- adds the
-    Sec 5.2.2 minimum-lamina-count check on top of REQUIRED_ATTRS."""
+    Sec 5.2.2 minimum-lamina-count check on top of check_bearing_ready()."""
 
     MIN_LAMINAE = 30  # Sec 5.2.2 -- "the number of laminae shall be at least n_s = 30"
 
@@ -281,8 +300,8 @@ class MultiRowSolverBase(SolverBase, ABC):
 
     SINGLE_ROW_SOLVER: the sibling single-row solver class (e.g.
     ISO16281BallSolver) this reuses for elements() (its static kinematics
-    primitive) and for its REQUIRED_ATTRS / MIN_LAMINAE where relevant --
-    set by each concrete subclass.
+    primitive) and for MIN_LAMINAE where relevant -- set by each concrete
+    subclass.
     """
 
     #: Sibling single-row solver class, reused for elements() + per-row
@@ -315,13 +334,13 @@ class MultiRowSolverBase(SolverBase, ABC):
             )
         for j, row in enumerate(self._row_views(bearing)):
             row_label = f"{label}[row{j}]"
-            check_bearing_ready(row, row_label, self.SINGLE_ROW_SOLVER.REQUIRED_ATTRS)
             self._check_row_ready(row, row_label)
 
     @abstractmethod
     def _check_row_ready(self, row, row_label: str) -> None:
-        """Row-specific readiness check beyond REQUIRED_ATTRS (e.g. cp > 0
-        for ball rows, lamina count for roller rows)."""
+        """Row-specific readiness check (e.g. cp > 0 for ball rows, lamina
+        count for roller rows). Row-level capability/iso16281_analysis
+        checking is not done here -- see module docstring NOTE."""
         ...
 
     def _wrap_result(self, row):
@@ -362,8 +381,7 @@ class MultiRowSolverBase(SolverBase, ABC):
 # ---- ISO16281BallSolver -- point contact -----------------------------
 # =====================================================================
 
-@register_contact_solver(capability="point_contact",
-                          required_attrs=("A", "alpha_0", "phi_j", "Ri", "cp", "Dpw", "Z"))
+@register_contact_solver(capability="point_contact")
 class ISO16281BallSolver(SolverBase):
     """Point contact (deep groove / angular contact ball bearings).
     2-equation root (delta_r, delta_a) in the resultant-force plane."""
@@ -498,7 +516,7 @@ class ISO16281BallSolver(SolverBase):
                             Fa_bracket: tuple[float, float] = (0.0, 5.0e4),
                             xtol: float = 1e-6) -> tuple[float, BallBearingResult]:
         """Minimum axial preload [N] such that delta_a >= 0 (contact closure)."""
-        check_bearing_ready(bearing, bearing.label, self.REQUIRED_ATTRS)
+        check_bearing_ready(bearing, bearing.label, self.CAPABILITY)
         phi_Fr = float(np.arctan2(Fr_xy, Fr_xz))
 
         res0 = self.solve_contact(bearing, Fr_xz, Fr_xy, 0.0,
@@ -524,7 +542,7 @@ class ISO16281BallSolver(SolverBase):
         return Fa_min, result
 
 
-@register_contact_solver(capability="point_contact", required_attrs=("rows",))
+@register_contact_solver(capability="point_contact")
 class ISO16281MultiRowBallSolverSharedDisplacement(MultiRowSolverBase):
     """Multi-row ball, shared delta_r/delta_a across all rows -- see
     MultiRowSolverBase and module docstring for the co-located-rows /
@@ -591,9 +609,7 @@ class ISO16281MultiRowBallSolverSharedDisplacement(MultiRowSolverBase):
 # ---- ISO16281RollerSolver -- line contact -----------------------------
 # =====================================================================
 
-@register_contact_solver(capability="line_contact",
-                          required_attrs=("Z", "Dwe", "Lwe", "Dpw", "phi_j", "s", "n_s",
-                                          "x_k", "cL", "cs", "alpha_0", "P_xk"))
+@register_contact_solver(capability="line_contact")
 class ISO16281RollerSolver(LineContactSolverBase):
     """Line contact (radial cylindrical roller bearings, NU/N-type, zero
     nominal contact angle). Sec 5.2 lamina model. 1-equation root (delta_r)
@@ -718,7 +734,7 @@ class ISO16281RollerSolver(LineContactSolverBase):
         )
 
 
-@register_contact_solver(capability="line_contact", required_attrs=("rows",))
+@register_contact_solver(capability="line_contact")
 class ISO16281MultiRowRollerSolverSharedDisplacement(MultiRowSolverBase):
     """Multi-row roller, shared delta_r across all rows -- radial roller
     carries no axial load, so unlike the ball case there is only ONE

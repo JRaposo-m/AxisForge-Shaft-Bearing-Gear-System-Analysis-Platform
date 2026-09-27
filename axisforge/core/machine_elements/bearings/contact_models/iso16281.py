@@ -121,11 +121,9 @@ class SelfAligningPointContactStiffness(PointContactStiffness):
 class LineContactStiffness:
     Lwe: float
     n_s: float
-
-    @property
-    def lamina_positions(self) -> np.ndarray:
-        lamina_length = self.Lwe / self.n_s
-        return lamina_length * (np.arange(self.n_s) + 0.5) - self.Lwe / 2.0
+    Dwe: float
+    x_k: np.ndarray
+    _LOG_ARG_EPS: float
 
     @property
     def cl(self) -> float:
@@ -134,3 +132,20 @@ class LineContactStiffness:
     @property
     def cs(self) -> float:
         return self.cl / self.n_s
+
+    @property
+    def reference_roller_profile(self) -> np.ndarray:
+        P = np.zeros_like(self.x_k)
+        if self.Lwe <= 2.5 * self.Dwe:
+            arg = 1.0 - (2.0 * self.x_k / self.Lwe) ** 2
+            arg = np.maximum(arg, self._LOG_ARG_EPS)
+            P = 0.000350 * self.Dwe * np.log(1.0 / arg)
+        else:
+            half_flat = (self.Lwe - 2.5 * self.Dwe) / 2.0
+            edge = np.abs(self.x_k) > half_flat
+            if np.any(edge):
+                xe = self.x_k[edge]
+                arg = 1.0 - ((2.0 * np.abs(xe) - (self.Lwe - 2.5 * self.Dwe)) / (2.5 * self.Dwe)) ** 2
+                arg = np.maximum(arg, self._LOG_ARG_EPS)
+                P[edge] = 0.000500 * self.Dwe * np.log(1.0 / arg)
+        return P    

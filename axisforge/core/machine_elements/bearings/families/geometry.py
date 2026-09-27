@@ -149,14 +149,64 @@ class BallBearingGeometry(Geometry):
 # ---------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class RollerBearingGeometry(Geometry):
+class CylindricalRollerBearingGeometry(Geometry):
 
     Dwe: float
     Dpw: float
-    alpha_0: float
 
     @property
     def gamma(self) -> float:
-        if np.isclose(self.alpha_0, np.pi / 2, atol=1e-9):
-            return self.Dwe / self.Dpw
-        return self.Dwe * np.cos(self.alpha_0) / self.Dpw
+        return self.Dwe / self.Dpw
+
+    @property
+    def lamina_positions(self) -> np.ndarray:
+        """x_k -- lamina midpoints, strictly inside (-Lwe/2, Lwe/2). Sec 5.2.2."""
+        lamina_length = self.Lwe / self.n_s
+        return lamina_length * (np.arange(self.n_s) + 0.5) - self.Lwe / 2.0
+    
+    @property
+    def free_end_play(self) -> float:
+        raise NotImplementedError(
+            "CylindricalRollerGeometry.free_end_play not implemented yet -- "
+            "cylindrical roller bearings don't have a groove-conformity clearance "
+            "the same way ball bearings do; radial clearance is given directly "
+            "by tolerance class (C0-C5), not derived here."
+        )
+
+    @property
+    def f_i(self) -> float:
+        raise NotImplementedError(
+            "CylindricalRollerGeometry.f_i not implemented yet"
+        )
+
+
+    @property
+    @abstractmethod
+    def f_o(self) -> float: 
+        raise NotImplementedError(
+            "CylindricalRollerGeometry.f_o not implemented yet"
+        )
+
+    @property
+    def r_ax(self):
+        return self.Dwe/2
+
+    @property
+    def r_ay(self):
+        return float("inf")
+
+    @property
+    def r_bx_inner(self) -> float:
+        return (self.Dpw - self.Dwe) / 2
+
+    @property
+    def r_by_inner(self) -> float:
+        return float("inf")
+
+    @property
+    def r_bx_outer(self) -> float:
+        return (self.Dpw + self.Dwe) / 2
+
+    @property
+    def r_by_outer(self) -> float:
+        return float("inf")

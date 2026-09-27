@@ -476,24 +476,17 @@ class CylindricalRollerFamily(BearingFamily):
     def name(self) -> str:
         return "cylindrical_roller"
 
-    @classmethod
-    def _reference_roller_profile(cls, x_k: np.ndarray, Dwe: float, Lwe: float) -> np.ndarray:
-        P = np.zeros_like(x_k)
-        if Lwe <= 2.5 * Dwe:
-            arg = 1.0 - (2.0 * x_k / Lwe) ** 2
-            arg = np.maximum(arg, cls._LOG_ARG_EPS)
-            P = 0.000350 * Dwe * np.log(1.0 / arg)
-        else:
-            half_flat = (Lwe - 2.5 * Dwe) / 2.0
-            edge = np.abs(x_k) > half_flat
-            if np.any(edge):
-                xe = x_k[edge]
-                arg = 1.0 - ((2.0 * np.abs(xe) - (Lwe - 2.5 * Dwe)) / (2.5 * Dwe)) ** 2
-                arg = np.maximum(arg, cls._LOG_ARG_EPS)
-                P[edge] = 0.000500 * Dwe * np.log(1.0 / arg)
-        return P
+    def assemble_geometry(self, catalog, Dwe, Lwe, Dpw, Z, s, n_s, i=1, *,
+                           contact: ContactAnalysis = ContactAnalysis.NONE,
+                           e1=None, e2=None, nu1=None, nu2=None,) -> dict[str, Any]:
+        """
+        Cylindrical roller bearings have a contact angle of zero 
 
-    def assemble_geometry(self, catalog, Dwe, Lwe, Dpw, Z, s, n_s, alpha_0_deg, i=1) -> dict[str, Any]:
+        there is the input for the material properties, however, if those are not 
+        both steel then iso 16281 is not applicable.
+            It will be implemented other load distribution solver in the future
+            and verifications here will be done after improving materials/ as well
+        """
         if catalog.arrangement not in ("floating", "non-locating"):
             raise ValueError(
                 f"CylindricalRollerFamily(label={catalog.label or catalog.designation!r}): "
@@ -506,19 +499,34 @@ class CylindricalRollerFamily(BearingFamily):
         if i < 1:
             raise ValueError(f"CylindricalRollerFamily: i (number of rows) must be >= 1, got {i}")
 
-        alpha_0 = np.radians(alpha_0_deg)
-        stiff = iso.LineContactStiffness(Dwe, Dpw, alpha_0, Lwe, n_s)
-        g = stiff.gamma
-        x_k = stiff.lamina_positions
-        cL = stiff.cl
-        cs = stiff.cs
-        P_xk = self._reference_roller_profile(x_k, Dwe, Lwe)
-        phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
+        roller_geo   = _geo.CylindricalRollerBearingGeometry(Dwe=Dwe, Dpw=Dpw)
+        gamma        = roller_geo.gamma
+        x_k          = roller_geo.lamina_positions
+        r_rolling_el = [roller_geo.r_ax, roller_geo.r_ay]
+        r_inner      = [roller_geo.r_bx_inner, roller_geo.r_by_inner]
+        r_outer      = [roller_geo.r_bx_outer, roller_geo.r_by_outer]
+        phi_j        = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
-        return dict(bearing_type=self.BEARING_TYPE, Dwe=Dwe, Lwe=Lwe, Dpw=Dpw,
-                    Z=Z, s=s, n_s=n_s, alpha_0=alpha_0, x_k=x_k, phi_j=phi_j,
-                    gamma=g, cL=cL, lambda_v=self.LAMBDA_V, cs=cs, P_xk=P_xk, i=i)
+        result = dict(bearing_type=self.BEARING_TYPE, Dwe=Dwe, Lwe=Lwe, Dpw=Dpw,
+                    Z=Z, s=s, n_s=n_s, x_k=x_k, phi_j=phi_j, r_rolling_el=r_rolling_el,
+                    r_inner=r_inner, r_outer=r_outer, gamma=gamma, lambda_v=self.LAMBDA_V, i=i)
 
+        if contact is ContactAnalysis.NONE:
+            return result
+
+        e1, e2 = _resolve_pair(e1, e2, "e1", "e2")
+        nu1, nu2 = _resolve_pair(nu1, nu2, "nu1", "nu2")
+        result.update(e1=e1, e2=e2, nu1=nu1, nu2=nu2)
+
+        if contact in (ContactAnalysis.ISO16281):
+            line_stiff = iso.LineContactStiffness(Lwe=Lwe, n_s=n_s, Dwe=Dwe, x_k=x_k, _LOG_ARG_EPS=self._LOG_ARG_EPS)
+            cl = line_stiff.cl
+            cs = line_stiff.cs
+            P_k = line_stiff.reference_roller_profile
+            result.update(iso16281_analysis=True, cl=cl, cs=cs, P_k=P_k)
+
+        return result
+    
     @staticmethod
     def per_element_dynamic_capacity(bearing, Cr=None):
         calc = bcap.LineContactCapacityRadial(

@@ -23,9 +23,6 @@ _CONTACT_ANALYSIS_REQUIRES = {
     ContactAnalysis.ISO16281: MATERIAL_FIELDS,
 }
 
-def wants_iso16281(contact: ContactAnalysis) -> bool:
-    return contact is ContactAnalysis.ISO16281
-
 def _resolve_pair(a: float | None, b: float | None,
                    name_a: str, name_b: str) -> tuple[float, float]:
     """If exactly one of a/b is given, broadcast it to the other. If

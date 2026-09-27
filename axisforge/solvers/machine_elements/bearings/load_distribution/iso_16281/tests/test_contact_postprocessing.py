@@ -34,8 +34,19 @@ def make_roller_row(q_jk, phi_Fr=0.0, delta_r=0.0, delta_a=0.0, x_k=None):
     return SimpleNamespace(q_jk=q_jk, phi_Fr=phi_Fr, delta_r=delta_r, delta_a=delta_a, x_k=x_k)
 
 
-def make_result(*rows):
-    return SimpleNamespace(rows=list(rows))
+def make_result(*rows, phi_Fr=0.0, delta_r=0.0, delta_a=0.0):
+    """Fake de *BearingResult -- phi_Fr/delta_r/delta_a vivem AQUI, no
+    objeto de topo (estado partilhado, uma vez por bearing), não em cada
+    row -- é o que bearing_stiffness()/ball_phi_j_global()/
+    ball_contact_distribution()/roller_contact_distribution() leem
+    (result.phi_Fr, nunca result.rows[i].phi_Fr). make_ball_row/
+    make_roller_row continuam a aceitar phi_Fr/delta_r/delta_a só para o
+    outro uso que este ficheiro faz deles: TestContactBearingStiffness
+    passa uma row "nua" diretamente como `result` a
+    ContactBearingStiffness.from_result(), sem a envolver em
+    make_result() -- aí phi_Fr/delta_r/delta_a têm mesmo de estar na
+    própria row."""
+    return SimpleNamespace(rows=list(rows), phi_Fr=phi_Fr, delta_r=delta_r, delta_a=delta_a)
 
 
 # =====================================================================
@@ -78,10 +89,16 @@ class TestContactBearingStiffness:
 
 
 class TestBearingStiffnessFunction:
-    def test_uses_row_zero_of_the_result(self):
+    def test_uses_shared_state_of_the_result_not_the_row(self):
+        """delta_r/delta_a/phi_Fr sao estado partilhado da bearing (uma
+        vez por bearing_result, nao por row) -- bearing_stiffness() le-os
+        de result diretamente, nunca de result.rows[i]. Por isso a row
+        em si nao precisa de delta_r/delta_a -- so serve para dar
+        forma a rows -- e o valor usado no calculo vem do que se passa a
+        make_result()."""
         bearing = SimpleNamespace(label="b1")
-        row0 = make_ball_row([1.0], delta_r=0.2, delta_a=0.0)
-        result = make_result(row0)
+        row0 = make_ball_row([1.0])
+        result = make_result(row0, delta_r=0.2, delta_a=0.0, phi_Fr=0.0)
         stiff = pp.bearing_stiffness(bearing, result, Fr_xz=100.0, Fr_xy=0.0, Fa=0.0)
         assert stiff.label == "b1"
         assert stiff.Kr_xz == pytest.approx(500.0)
@@ -201,7 +218,7 @@ class TestBallQJ:
 class TestBallPhiJGlobal:
     def test_adds_phi_Fr_and_wraps_to_2pi(self):
         bearing = SimpleNamespace(label="b1", phi_j=np.array([0.0, np.pi]))
-        result = make_result(make_ball_row([1.0, 1.0], phi_Fr=3.0 * np.pi / 2.0))
+        result = make_result(make_ball_row([1.0, 1.0]), phi_Fr=3.0 * np.pi / 2.0)
         phi = pp.ball_phi_j_global(bearing, result)
         assert (phi >= 0.0).all() and (phi < 2.0 * np.pi).all()
         assert phi[0] == pytest.approx(3.0 * np.pi / 2.0)
@@ -210,13 +227,13 @@ class TestBallPhiJGlobal:
 class TestBallContactDistribution:
     def test_shape_is_Z_by_2(self):
         bearing = SimpleNamespace(label="b1", cp=100.0, phi_j=np.array([0.0, np.pi]))
-        result = make_result(make_ball_row([1.0, 2.0]))
+        result = make_result(make_ball_row([1.0, 2.0]), phi_Fr=0.0)
         dist = pp.ball_contact_distribution(bearing, result)
         assert dist.shape == (2, 2)
 
     def test_local_frame_ignores_phi_Fr(self):
         bearing = SimpleNamespace(label="b1", cp=100.0, phi_j=np.array([0.5]))
-        result = make_result(make_ball_row([1.0], phi_Fr=1.0))
+        result = make_result(make_ball_row([1.0]), phi_Fr=1.0)
         dist_local = pp.ball_contact_distribution(bearing, result, frame="local")
         assert dist_local[0, 0] == pytest.approx(0.5)
 
@@ -314,7 +331,7 @@ class TestRollerQJ:
 class TestRollerContactDistribution:
     def test_shape_is_Z_by_2(self):
         bearing = SimpleNamespace(label="b1", phi_j=np.array([0.0, 1.0]))
-        result = make_result(make_roller_row([[1.0, 1.0], [2.0, 2.0]]))
+        result = make_result(make_roller_row([[1.0, 1.0], [2.0, 2.0]]), phi_Fr=0.0)
         dist = pp.roller_contact_distribution(bearing, result)
         assert dist.shape == (2, 2)
 

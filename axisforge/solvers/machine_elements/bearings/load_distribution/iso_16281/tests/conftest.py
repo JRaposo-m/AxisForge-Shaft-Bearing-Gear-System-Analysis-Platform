@@ -5,11 +5,27 @@ solvers/machine_elements/bearings/load_distribution/iso_16281/.
 Usa SimpleNamespace como "Bearing"/"node"/"ShaftResults" fake em vez de
 montar a hierarquia real (Bearing, ShaftSystem, ShaftResults) -- os
 solvers e o postprocessing aqui só fazem duck typing sobre estes
-objetos (getattr, nunca isinstance), tal como o resto do projeto."""
+objetos (getattr, nunca isinstance), tal como o resto do projeto.
+
+`family` e `iso16281_analysis=True` foram adicionados às KWARGS -- o
+check_bearing_ready() atual (validation.py) exige os dois em qualquer
+bearing que passe por SolverBase.solve() ou por
+ISO16281BallSolver.minimum_axial_load() (ambos chamam
+check_bearing_ready(bearing, label, self.CAPABILITY), que verifica a
+family via is_point_contact_family/is_line_contact_family e depois
+bearing.iso16281_analysis). Usa-se aqui uma família REAL e já registada
+(DeepGrooveBallFamily / CylindricalRollerFamily) em vez de fabricar uma
+fake, porque is_point_contact_family/is_line_contact_family fazem
+lookup em _POINT_CONTACT/_LINE_CONTACT, registos que só existem para
+classes decoradas de verdade em family.py."""
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
+
+from axisforge.core.machine_elements.bearings.families.family import (
+    DeepGrooveBallFamily, CylindricalRollerFamily,
+)
 
 # ---------------------------------------------------------------------
 # geometrias de referência -- plausíveis, não de catálogo real, só para
@@ -27,6 +43,8 @@ BALL_BEARING_KWARGS = dict(
     phi_j=np.arange(8) * (2.0 * np.pi / 8),
     label="B1",
     arrangement=None,
+    family=DeepGrooveBallFamily(),
+    iso16281_analysis=True,
 )
 
 ROLLER_BEARING_KWARGS = dict(
@@ -44,6 +62,8 @@ ROLLER_BEARING_KWARGS = dict(
     P_xk=np.zeros(30),
     label="B2",
     arrangement=None,
+    family=CylindricalRollerFamily(),
+    iso16281_analysis=True,
 )
 
 

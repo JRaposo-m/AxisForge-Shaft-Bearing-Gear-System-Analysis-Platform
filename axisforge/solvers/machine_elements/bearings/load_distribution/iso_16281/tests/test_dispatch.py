@@ -1,16 +1,29 @@
 # test_dispatch.py
 """Testes de dispatch.py -- register_contact_solver (decorator factory),
-_most_specific, resolve_solver_cls_for_attrs e resolve_solver_cls.
+family_matches_capability e resolve_solver_cls.
 
 Usa um _REGISTRY isolado (monkeypatch) em vez do global: dispatch.py é
 populado a import-time por contact_solver.py (ISO16281BallSolver,
 ISO16281RollerSolver, ...); registar classes de teste diretamente no
 _REGISTRY partilhado poluiria esse registo para o resto da sessão de
-testes."""
+testes.
+
+REQUIRED_ATTRS / _most_specific / resolve_solver_cls_for_attrs foram
+removidos do dispatch.py atual -- o dispatch já não é por conjunto de
+atributos exigidos, é por capability (point_contact/line_contact via
+is_point_contact_family/is_line_contact_family) + iso16281_analysis +
+presença de bearing.rows. Usam-se aqui famílias REAIS e já registadas
+(DeepGrooveBallFamily / CylindricalRollerFamily), porque
+family_matches_capability faz lookup nos registos reais de family.py
+(_POINT_CONTACT/_LINE_CONTACT), não em atributos fabricados numa
+SimpleNamespace fake."""
 from types import SimpleNamespace
 
 import pytest
 
+from axisforge.core.machine_elements.bearings.families.family import (
+    CylindricalRollerFamily, DeepGrooveBallFamily,
+)
 from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281 import dispatch as dp
 
 
@@ -21,161 +34,142 @@ def isolated_registry(monkeypatch):
     return fresh
 
 
+class TestFamilyMatchesCapability:
+    def test_point_contact_family_matches_point_contact(self):
+        assert dp.family_matches_capability(DeepGrooveBallFamily(), "point_contact") is True
+
+    def test_point_contact_family_does_not_match_line_contact(self):
+        assert dp.family_matches_capability(DeepGrooveBallFamily(), "line_contact") is False
+
+    def test_line_contact_family_matches_line_contact(self):
+        assert dp.family_matches_capability(CylindricalRollerFamily(), "line_contact") is True
+
+    def test_line_contact_family_does_not_match_point_contact(self):
+        assert dp.family_matches_capability(CylindricalRollerFamily(), "point_contact") is False
+
+    def test_unknown_capability_returns_false_instead_of_raising(self):
+        """Uma capability desconhecida (typo, ou nova capability registada
+        sem entrada em _CAPABILITY_CHECK) falha como 'nenhum solver
+        corresponde', não como KeyError -- ver docstring da própria
+        função em dispatch.py."""
+        assert dp.family_matches_capability(DeepGrooveBallFamily(), "torque_contact") is False
+
+
 class TestRegisterContactSolver:
     def test_rejects_empty_capability(self, isolated_registry):
         with pytest.raises(TypeError, match="capability must be non-empty"):
-            dp.register_contact_solver(capability="", required_attrs=("a",))
+            dp.register_contact_solver(capability="")
 
-    def test_rejects_empty_required_attrs(self, isolated_registry):
-        with pytest.raises(TypeError, match="required_attrs must be non-empty"):
-            dp.register_contact_solver(capability="point_contact", required_attrs=())
+    def test_rejects_unknown_capability(self, isolated_registry):
+        with pytest.raises(TypeError, match="unknown capability"):
+            dp.register_contact_solver(capability="torque_contact")
 
-    def test_decorator_sets_class_attrs_and_registers(self, isolated_registry):
-        @dp.register_contact_solver(capability="point_contact", required_attrs=("a", "b"))
+    def test_decorator_sets_class_attr_and_registers(self, isolated_registry):
+        @dp.register_contact_solver(capability="point_contact")
         class _Solver:
-            pass
+            MULTIROW_SOLVER = None
 
         assert _Solver.CAPABILITY == "point_contact"
-        assert _Solver.REQUIRED_ATTRS == ("a", "b")
         assert _Solver in isolated_registry
 
     def test_decorator_returns_the_same_class(self, isolated_registry):
-        @dp.register_contact_solver(capability="c", required_attrs=("a",))
+        @dp.register_contact_solver(capability="point_contact")
         class _Solver:
             """docstring preservada"""
+            MULTIROW_SOLVER = None
 
         assert _Solver.__doc__ == "docstring preservada"
 
 
-class TestMostSpecific:
-    def test_single_match_returned_as_is(self, isolated_registry):
-        @dp.register_contact_solver(capability="c", required_attrs=("a",))
-        class _A:
-            pass
-
-        assert dp._most_specific([_A]) == [_A]
-
-    def test_subset_requirement_is_filtered_out(self, isolated_registry):
-        @dp.register_contact_solver(capability="c", required_attrs=("a",))
-        class _Narrow:
-            pass
-
-        @dp.register_contact_solver(capability="c", required_attrs=("a", "b"))
-        class _Wide:
-            pass
-
-        assert dp._most_specific([_Narrow, _Wide]) == [_Wide]
-
-    def test_disjoint_requirements_both_kept(self, isolated_registry):
-        @dp.register_contact_solver(capability="c", required_attrs=("a",))
-        class _A:
-            pass
-
-        @dp.register_contact_solver(capability="c", required_attrs=("b",))
-        class _B:
-            pass
-
-        assert set(dp._most_specific([_A, _B])) == {_A, _B}
-
-    def test_empty_list_returns_empty(self, isolated_registry):
-        assert dp._most_specific([]) == []
-
-
-class TestResolveSolverClsForAttrs:
-    def test_resolves_unique_match(self, isolated_registry):
-        @dp.register_contact_solver(capability="c", required_attrs=("a", "b"))
-        class _Solver:
-            pass
-
-        assert dp.resolve_solver_cls_for_attrs({"a", "b", "c"}) is _Solver
-
-    def test_raises_when_no_match(self, isolated_registry):
-        @dp.register_contact_solver(capability="c", required_attrs=("a",))
-        class _Solver:
-            pass
-
-        with pytest.raises(dp.SolverDispatchError, match="nenhum solver cobre"):
-            dp.resolve_solver_cls_for_attrs({"z"}, label="bearing-1")
-
-    def test_raises_when_ambiguous(self, isolated_registry):
-        @dp.register_contact_solver(capability="c1", required_attrs=("a",))
-        class _A:
-            pass
-
-        @dp.register_contact_solver(capability="c2", required_attrs=("b",))
-        class _B:
-            pass
-
-        with pytest.raises(dp.SolverDispatchError, match="ambiguo"):
-            dp.resolve_solver_cls_for_attrs({"a", "b"})
-
-    def test_prefers_most_specific_match(self, isolated_registry):
-        @dp.register_contact_solver(capability="c", required_attrs=("a",))
-        class _Narrow:
-            pass
-
-        @dp.register_contact_solver(capability="c", required_attrs=("a", "b"))
-        class _Wide:
-            pass
-
-        assert dp.resolve_solver_cls_for_attrs({"a", "b"}) is _Wide
-
-
 class TestResolveSolverCls:
-    def test_resolves_by_capability_and_family_required_for(self, isolated_registry):
-        @dp.register_contact_solver(capability="point_contact", required_attrs=("a",))
-        class _Solver:
+    """resolve_solver_cls() faz 3 verificações em sequência: capability
+    (family da bearing registada no capability do candidato) ->
+    iso16281_analysis (truthy na bearing) -> exactamente 1 candidato com
+    MULTIROW_SOLVER wired (não None) para essa capability. O candidato
+    registado em _REGISTRY é sempre o solver SINGLE-ROW; MULTIROW_SOLVER
+    é o atributo nele que aponta para o sibling multi-row -- resolve
+    devolve esse sibling só quando a bearing tem `.rows`, senão devolve
+    o próprio single-row."""
+
+    def test_resolves_single_row_by_capability(self, isolated_registry):
+        class _MultiRow:
             pass
 
-        family = SimpleNamespace(name="fake",
-                                  REQUIRED_FOR={"point_contact": frozenset({"a", "b"})},
-                                  CAPABILITIES=frozenset({"point_contact"}))
-        bearing = SimpleNamespace(family=family, is_enabled=lambda cap: cap == "point_contact")
+        @dp.register_contact_solver(capability="point_contact")
+        class _Solver:
+            MULTIROW_SOLVER = _MultiRow
 
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily(), iso16281_analysis=True)
         assert dp.resolve_solver_cls(bearing) is _Solver
 
-    def test_ignores_disabled_capability(self, isolated_registry):
-        @dp.register_contact_solver(capability="point_contact", required_attrs=("a",))
-        class _Solver:
+    def test_resolves_multirow_when_bearing_has_rows(self, isolated_registry):
+        class _MultiRow:
             pass
 
-        family = SimpleNamespace(name="fake",
-                                  REQUIRED_FOR={"point_contact": frozenset({"a"})},
-                                  CAPABILITIES=frozenset())
-        bearing = SimpleNamespace(family=family, is_enabled=lambda cap: False)
+        @dp.register_contact_solver(capability="point_contact")
+        class _Solver:
+            MULTIROW_SOLVER = _MultiRow
 
-        with pytest.raises(dp.SolverDispatchError, match="nenhum solver registado cobre"):
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily(), iso16281_analysis=True, rows=())
+        assert dp.resolve_solver_cls(bearing) is _MultiRow
+
+    def test_raises_when_no_capability_matches(self, isolated_registry):
+        class _MultiRow:
+            pass
+
+        @dp.register_contact_solver(capability="line_contact")
+        class _Solver:
+            MULTIROW_SOLVER = _MultiRow
+
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily(), iso16281_analysis=True)
+        with pytest.raises(dp.SolverDispatchError, match="nenhuma capability registada"):
             dp.resolve_solver_cls(bearing, label="b1")
 
-    def test_ignores_solver_whose_required_attrs_exceed_family_required_for(self, isolated_registry):
-        """O solver está habilitado (is_enabled=True) mas a family não
-        promete, para essa capability, os atributos que ele exige --
-        não deve ser escolhido."""
-        @dp.register_contact_solver(capability="point_contact", required_attrs=("a", "b"))
-        class _Solver:
+    def test_raises_when_iso16281_analysis_not_true(self, isolated_registry):
+        class _MultiRow:
             pass
 
-        family = SimpleNamespace(name="fake",
-                                  REQUIRED_FOR={"point_contact": frozenset({"a"})},
-                                  CAPABILITIES=frozenset({"point_contact"}))
-        bearing = SimpleNamespace(family=family, is_enabled=lambda cap: True)
+        @dp.register_contact_solver(capability="point_contact")
+        class _Solver:
+            MULTIROW_SOLVER = _MultiRow
 
-        with pytest.raises(dp.SolverDispatchError, match="nenhum solver registado cobre"):
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily(), iso16281_analysis=False)
+        with pytest.raises(dp.SolverDispatchError, match="iso16281_analysis"):
+            dp.resolve_solver_cls(bearing, label="b1")
+
+    def test_raises_when_iso16281_analysis_attribute_absent(self, isolated_registry):
+        class _MultiRow:
+            pass
+
+        @dp.register_contact_solver(capability="point_contact")
+        class _Solver:
+            MULTIROW_SOLVER = _MultiRow
+
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily())
+        with pytest.raises(dp.SolverDispatchError, match="iso16281_analysis"):
             dp.resolve_solver_cls(bearing)
 
-    def test_raises_when_ambiguous(self, isolated_registry):
-        @dp.register_contact_solver(capability="point_contact", required_attrs=("a",))
+    def test_raises_when_two_single_row_solvers_registered_for_capability(self, isolated_registry):
+        @dp.register_contact_solver(capability="point_contact")
         class _A:
-            pass
+            MULTIROW_SOLVER = object()
 
-        @dp.register_contact_solver(capability="point_contact", required_attrs=("b",))
+        @dp.register_contact_solver(capability="point_contact")
         class _B:
-            pass
+            MULTIROW_SOLVER = object()
 
-        family = SimpleNamespace(name="fake",
-                                  REQUIRED_FOR={"point_contact": frozenset({"a", "b"})},
-                                  CAPABILITIES=frozenset({"point_contact"}))
-        bearing = SimpleNamespace(family=family, is_enabled=lambda cap: True)
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily(), iso16281_analysis=True)
+        with pytest.raises(dp.SolverDispatchError, match="exactamente 1"):
+            dp.resolve_solver_cls(bearing, label="b1")
 
-        with pytest.raises(dp.SolverDispatchError, match="ambiguo"):
+    def test_raises_when_matching_candidate_has_no_multirow_solver_wired(self, isolated_registry):
+        """Único candidato registado, mas com MULTIROW_SOLVER=None (nunca
+        ligado ao sibling multi-row) -- conta como 0 single_row
+        (o filtro exige MULTIROW_SOLVER is not None), não como 1."""
+        @dp.register_contact_solver(capability="point_contact")
+        class _Solver:
+            MULTIROW_SOLVER = None
+
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily(), iso16281_analysis=True)
+        with pytest.raises(dp.SolverDispatchError, match="exactamente 1"):
             dp.resolve_solver_cls(bearing, label="b1")

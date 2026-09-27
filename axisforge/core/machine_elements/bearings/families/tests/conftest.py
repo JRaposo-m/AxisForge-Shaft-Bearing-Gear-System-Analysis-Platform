@@ -15,7 +15,7 @@ import pytest
 import numpy as np
 
 from axisforge.core.materials import Material, IsotropicElastic
-from axisforge.core.machine_elements.bearings.families.bearing_properties import RadialSurfaces
+from axisforge.core.machine_elements.bearings.families._bearing_properties import RadialSurfaces
 
 # ---------------------------------------------------------------------
 # geometrias de referência -- plausíveis, não de catálogo real, só para

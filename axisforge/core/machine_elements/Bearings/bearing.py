@@ -44,8 +44,7 @@ class Bearing:
     def assemble(cls,
                  family: BearingFamily,
                  catalog: BearingCatalog,
-                 geometry: dict[str, Any],
-                 analyses: dict[str, bool] | None = None) -> "Bearing":
+                 geometry: dict[str, Any]) -> "Bearing":
         """
         Parameters
         ----------
@@ -59,15 +58,6 @@ class Bearing:
         """
         catalog.validate_or_raise()
         bearing = cls(catalog, family)
-
-        enabled = {name for name, on in (analyses or {}).items() if on}
-        unsupported = enabled - family.CAPABILITIES
-        if unsupported:
-            raise NotImplementedError(
-                f"{catalog.label or catalog.designation}: family "
-                f"'{family.name}' does not support: {sorted(unsupported)}. "
-                f"Supported: {sorted(family.CAPABILITIES)}"
-            )
 
         computed = family.assemble_geometry(catalog, **geometry)
         for attr, value in computed.items():

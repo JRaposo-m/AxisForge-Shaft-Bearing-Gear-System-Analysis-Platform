@@ -4,18 +4,6 @@
 """
 core/machine_elements/bearings/families/family.py
 
-Experimental branch: assemble_geometry() now takes an explicit
-`analysis: ContactAnalysis` gate. Basic kinematic/capacity geometry
-(ri, re, A, alpha_0, gamma, Ri, phi_j, reduction_factor) is always
-computed -- capacity.py needs it regardless of contact analysis. The
-Hertz/materials block (e1/e2/v1/v2, cp, r_rolling_el/r_inner/r_outer)
-only appears on the assembled Bearing when analysis != NONE, and only
-the subset relevant to the chosen mode.
-
-Note: bearing_properties.py's RadialSurfaces/SurfacePair/Material layer
-is NOT wired into this branch -- e1/e2/v1/v2 are passed directly.
-Parked, not deleted; reintegrating it (surfaces= alongside e1/e2/v1/v2)
-is an open question, not resolved here.
 """
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING
@@ -522,8 +510,8 @@ class CylindricalRollerFamily(BearingFamily):
             line_stiff = iso.LineContactStiffness(Lwe=Lwe, n_s=n_s, Dwe=Dwe, x_k=x_k, _LOG_ARG_EPS=self._LOG_ARG_EPS)
             cl = line_stiff.cl
             cs = line_stiff.cs
-            P_k = line_stiff.reference_roller_profile
-            result.update(iso16281_analysis=True, cl=cl, cs=cs, P_k=P_k)
+            P_xk = line_stiff.reference_roller_profile
+            result.update(iso16281_analysis=True, cl=cl, cs=cs, P_xk=P_xk)
 
         return result
     

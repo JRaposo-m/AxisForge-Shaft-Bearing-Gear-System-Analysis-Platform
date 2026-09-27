@@ -153,6 +153,8 @@ class CylindricalRollerBearingGeometry(Geometry):
 
     Dwe: float
     Dpw: float
+    Lwe: float
+    n_s: int
 
     @property
     def gamma(self) -> float:
@@ -181,7 +183,6 @@ class CylindricalRollerBearingGeometry(Geometry):
 
 
     @property
-    @abstractmethod
     def f_o(self) -> float: 
         raise NotImplementedError(
             "CylindricalRollerGeometry.f_o not implemented yet"

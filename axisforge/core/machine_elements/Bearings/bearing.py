@@ -17,11 +17,29 @@ instance), it is exposed as ``bearing.surfaces`` in the same way as every
 other attribute returned by ``assemble_geometry``.
 """
 from __future__ import annotations
-from typing import Any
+from typing import Any, Iterable
 
 from axisforge.core.machine_elements.bearings.base import BearingCatalog
 from axisforge.core.machine_elements.bearings.base import BearingFamily
+from axisforge.core.machine_elements.bearings.families.family import is_thrust_family
 
+
+def _validate_thrust_arrangement(family: BearingFamily, catalog: BearingCatalog) -> None:
+    """A family registered as @thrust must be assembled with
+    arrangement='thrust', and vice versa -- a non-thrust family should
+    not claim a thrust arrangement either."""
+    thrust_family = is_thrust_family(family)
+    thrust_arrangement = catalog.arrangement == "thrust"
+    if thrust_family and not thrust_arrangement:
+        raise ValueError(
+            f"{catalog.label or catalog.designation}: family {family.name!r} is a "
+            f"thrust family but arrangement={catalog.arrangement!r} -- expected 'thrust'.")
+    if thrust_arrangement and not thrust_family:
+        raise ValueError(
+            f"{catalog.label or catalog.designation}: arrangement='thrust' but family "
+            f"{family.name!r} is not registered as a thrust family.")
+
+# depois este validate deve passar para family.py tal como verifico os cylindrical roller
 
 class Bearing:
 
@@ -52,31 +70,14 @@ class Bearing:
         catalog  : a ``BearingCatalog`` instance.
         geometry : raw keyword arguments forwarded to
             ``family.assemble_geometry(catalog, **geometry)``.
-        analyses : ``{name: True/False}``; validated against
-            ``family.CAPABILITIES`` / ``REQUIRED_FOR`` but never
-            dispatched from here.
         """
         catalog.validate_or_raise()
+        _validate_thrust_arrangement(family, catalog)
         bearing = cls(catalog, family)
 
         computed = family.assemble_geometry(catalog, **geometry)
         for attr, value in computed.items():
             setattr(bearing, attr, value)
-        bearing.duty = family.DUTY
-        bearing.bearing_type = family.BEARING_TYPE
-
-        missing_by_analysis: dict[str, list[str]] = {}
-        for analysis in enabled:
-            required = family.REQUIRED_FOR.get(analysis, frozenset())
-            missing = [f for f in required if getattr(bearing, f, None) is None]
-            if missing:
-                missing_by_analysis[analysis] = missing
-        if missing_by_analysis:
-            details = "; ".join(f"{a}: missing {m}" for a, m in missing_by_analysis.items())
-            raise RuntimeError(
-                f"{catalog.label or catalog.designation}: geometry insufficient "
-                f"for the requested analyses -- {details}"
-            )
 
         bearing._enabled_analyses = frozenset(enabled)
         bearing._assembled = True
@@ -90,9 +91,6 @@ class Bearing:
                 f"belong in the solver's own result object, not on the Bearing."
             )
         super().__setattr__(name, value)
-
-    def is_enabled(self, analysis: str) -> bool:
-        return analysis in self._enabled_analyses
 
     def has_internal_geometry(self) -> bool:
         return self._assembled
@@ -157,10 +155,10 @@ class Bearing:
 
         if self.position < 0:
             errors.append(f"{tag}: position must be >= 0, got {self.position}")
-        if self.arrangement not in ("locating", "floating", "non-locating"):
+        if self.arrangement not in ("locating", "floating", "non-locating", "thrust"):
             errors.append(
-                f"{tag}: arrangement must be 'locating', 'floating', or "
-                f"'non-locating', got '{self.arrangement}'"
+                f"{tag}: arrangement must be 'locating', 'floating', "
+                f"'non-locating', or 'thrust', got '{self.arrangement}'"
             )
         if self.d <= 0:
             errors.append(f"{tag}: d must be > 0, got {self.d}")
@@ -170,12 +168,6 @@ class Bearing:
             errors.append(f"{tag}: D must be > d, got D={self.D}, d={self.d}")
         if self.b < 0:
             errors.append(f"{tag}: b must be >= 0, got {self.b}")
-
-        for analysis in self._enabled_analyses:
-            required = self._family.REQUIRED_FOR.get(analysis, frozenset())
-            missing = [f for f in required if getattr(self, f, None) is None]
-            if missing:
-                errors.append(f"{tag}: enabled analysis '{analysis}' missing {missing}")
 
         return errors
 

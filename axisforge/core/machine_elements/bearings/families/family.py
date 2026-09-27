@@ -50,6 +50,9 @@ def thrust(cls: type["BearingFamily"]) -> type["BearingFamily"]:
     _THRUST_BEARING[cls.__name__] = cls
     return cls
 
+def is_thrust_family(family: "BearingFamily") -> bool:
+    return type(family).__name__ in _THRUST_BEARING
+
 
 # =====================================================================
 # ---- ball bearing / radial, point contact --------------------------
@@ -487,7 +490,7 @@ class CylindricalRollerFamily(BearingFamily):
         if i < 1:
             raise ValueError(f"CylindricalRollerFamily: i (number of rows) must be >= 1, got {i}")
 
-        roller_geo   = _geo.CylindricalRollerBearingGeometry(Dwe=Dwe, Dpw=Dpw)
+        roller_geo   = _geo.CylindricalRollerBearingGeometry(Dwe=Dwe, Dpw=Dpw, Lwe=Lwe, n_s=n_s)
         gamma        = roller_geo.gamma
         x_k          = roller_geo.lamina_positions
         r_rolling_el = [roller_geo.r_ax, roller_geo.r_ay]

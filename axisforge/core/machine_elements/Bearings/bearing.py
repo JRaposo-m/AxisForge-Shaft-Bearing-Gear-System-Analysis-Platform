@@ -79,7 +79,6 @@ class Bearing:
         for attr, value in computed.items():
             setattr(bearing, attr, value)
 
-        bearing._enabled_analyses = frozenset(enabled)
         bearing._assembled = True
         return bearing
 

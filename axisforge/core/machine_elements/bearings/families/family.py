@@ -182,7 +182,7 @@ class AngularContactFamily(BearingFamily):
             raise ValueError(f"AngularContactFamily: alpha_0_deg must be in (0, 45], got {alpha_0_deg}")
 
         A            = ri + re - Dw
-        alpha_0, s   = iso.contact_angle_and_clearance(A, alpha_0_deg=alpha_0_deg)
+        alpha_0, s   = _geo.contact_angle_and_clearance(A, alpha_0_deg=alpha_0_deg)
         ball_geo     = _geo.BallBearingGeometry(Dw=Dw, Dpw=Dpw, A=A, s=s, ri=ri, re=re, alpha_0=alpha_0)
         gamma        = ball_geo.gamma
         P_e          = ball_geo.free_end_play

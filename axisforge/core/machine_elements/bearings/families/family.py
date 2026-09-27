@@ -450,7 +450,7 @@ class ThrustBallMultiRowFamily(BearingFamily):
             for row in assembled_rows
         ]
         Ca_total = cls_.combine_multirow(capacity_kwargs_rows)
-        return dict(bearing_type=self.BEARING_TYPE, rows=assembled_rows,
+        return dict(rows=assembled_rows,
                     Ca=Ca_total, Q_elements=[c.Q_elements for c in calculators])
 
     @staticmethod
@@ -509,7 +509,7 @@ class CylindricalRollerFamily(BearingFamily):
         r_outer      = [roller_geo.r_bx_outer, roller_geo.r_by_outer]
         phi_j        = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
-        result = dict(bearing_type=self.BEARING_TYPE, Dwe=Dwe, Lwe=Lwe, Dpw=Dpw,
+        result = dict(Dwe=Dwe, Lwe=Lwe, Dpw=Dpw,
                     Z=Z, s=s, n_s=n_s, x_k=x_k, phi_j=phi_j, r_rolling_el=r_rolling_el, alpha_0=0.0,
                     r_inner=r_inner, r_outer=r_outer, gamma=gamma, lambda_v=self.LAMBDA_V, i=i)
 
@@ -608,7 +608,7 @@ class ThrustCylindricalRollerFamily(BearingFamily):
         P_xk = self._reference_roller_profile(x_k, Dwe, Lwe)
         phi_j = np.linspace(0, 2 * np.pi, Z, endpoint=False)
 
-        return dict(bearing_type=self.BEARING_TYPE, Dwe=Dwe, Lwe=Lwe, Dpw=Dpw,
+        return dict(Dwe=Dwe, Lwe=Lwe, Dpw=Dpw,
                     Z=Z, s=s, n_s=n_s, alpha_0=alpha_0, x_k=x_k, phi_j=phi_j,
                     gamma=g, cL=cL, cs=cs, P_xk=P_xk, eta=eta,
                     lambda_v=self.LAMBDA_V, i=i)
@@ -668,7 +668,7 @@ class RollerThrustMultiRowFamily(BearingFamily):
             for row in assembled_rows
         ]
         Ca_total = cls_.combine_multirow(capacity_kwargs_rows)
-        return dict(bearing_type=self.BEARING_TYPE, rows=assembled_rows,
+        return dict(rows=assembled_rows,
                     Ca=Ca_total, Q_elements=[c.Q_elements for c in calculators])
 
     @staticmethod

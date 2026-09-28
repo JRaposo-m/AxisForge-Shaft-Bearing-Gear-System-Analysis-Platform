@@ -39,36 +39,7 @@ step beyond what ISO/TS 16281 itself states (the standard gives
 per-raceway equations, not row combination). That physics is explicitly
 NOT touched by this pass. Postprocessing is likewise NOT wired up for
 multi-row solvers -- see MultiRowSolverBase._extra_ready_checks().
-NOTE (to review): the earlier claim "valid as-is only for thrust
-bearings" is questionable -- thrust bearings carry no radial load, yet
-the ball multi-row solve includes Fr.
 
-NOTE (to review): the roller solvers are RADIAL only (Fa, delta_a, Fa_row
-= 0.0 by definition). Thrust roller is the mirror case (Fa only, no Fr)
-and is not covered here.
-
-REQUIRED_ATTRS is gone -- deliberately. Readiness is decided entirely by
-Bearing.iso16281_analysis (set by the family, atomically with every
-attribute the solver needs) plus the capability check in
-check_bearing_ready(). No solver here enumerates attribute names anymore.
-Single-row vs multi-row dispatch (see dispatch.py's resolve_solver_cls)
-now goes through MULTIROW_SOLVER + hasattr(bearing, "rows") instead of
-attribute-set matching, for the same reason.
-
-NOTE (open, not resolved yet): warn_if_floating_loaded() is no longer
-called here (not imported either) -- the "floating bearing carrying a
-non-zero axial load" diagnostic is currently not wired into solve() at
-all. Confirm whether that's intentional or should come back.
-
-NOTE (open, not resolved yet): MultiRowSolverBase._extra_ready_checks()
-below only calls _check_row_ready() per row (cp > 0 / lamina count) --
-it does NOT call check_bearing_ready() per row anymore, since that
-function reads bearing.family unconditionally and a row (SimpleNamespace
-from a per-row assemble_geometry dict) has no .family. Row-level
-capability/iso16281_analysis checking is currently just absent, not
-delegated elsewhere. Left as-is pending your call on whether it should
-be restored (would need check_bearing_ready to grow back a `family=`
-override, checked against the PARENT bearing's family).
 
 References
 ----------

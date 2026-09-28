@@ -525,7 +525,7 @@ class CylindricalRollerFamily(BearingFamily):
             cL = line_stiff.cl
             cs = line_stiff.cs
             P_xk = line_stiff.reference_roller_profile
-            result.update(iso16281_analysis=True, cl=cL, cs=cs, P_xk=P_xk)
+            result.update(iso16281_analysis=True, cL=cL, cs=cs, P_xk=P_xk)
 
         return result
     

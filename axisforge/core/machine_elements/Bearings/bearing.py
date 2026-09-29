@@ -18,11 +18,26 @@ other attribute returned by ``assemble_geometry``.
 """
 from __future__ import annotations
 from typing import Any, Iterable
+import numpy as np
 
 from axisforge.core.machine_elements.bearings.base import BearingCatalog
 from axisforge.core.machine_elements.bearings.base import BearingFamily
-from axisforge.core.machine_elements.bearings.families.family import is_thrust_family
+from axisforge.core.machine_elements.bearings.families.family import (
+    is_thrust_family, is_point_contact_family, is_line_contact_family,
+)
 
+_ISO16281_MATERIAL = ("e1", "e2", "nu1", "nu2")
+_ISO16281_POINT    = ("cp", "Ri")
+_ISO16281_LINE     = ("cL", "cs", "P_xk")
+
+def _fmt_value(value) -> str:
+    """Escalar -> número; vetor curto -> lista; vetor longo -> shape/min/max."""
+    arr = np.asarray(value, dtype=float)
+    if arr.ndim == 0:
+        return f"{float(arr):.4g}"
+    if arr.size <= 4:
+        return "[" + ", ".join(f"{v:.4g}" for v in arr.ravel()) + "]"
+    return f"array{arr.shape} min={arr.min():.4g} max={arr.max():.4g}"
 
 def _validate_thrust_arrangement(family: BearingFamily, catalog: BearingCatalog) -> None:
     """A family registered as @thrust must be assembled with
@@ -78,6 +93,11 @@ class Bearing:
         computed = family.assemble_geometry(catalog, **geometry)
         for attr, value in computed.items():
             setattr(bearing, attr, value)
+
+        enabled = set()
+        if computed.get("iso16281_analysis", False):
+            enabled.add("iso16281")
+        bearing._enabled_analyses = frozenset(enabled)
 
         bearing._assembled = True
         return bearing
@@ -170,6 +190,21 @@ class Bearing:
 
         return errors
 
+    def has_iso16281_analysis(self) -> bool:
+        return bool(getattr(self, "iso16281_analysis", False))
+
+    def iso16281_attributes(self) -> dict[str, Any]:
+        """Atributos associados à análise ISO 16281 ({} se não estiver ativa)."""
+        if not self.has_iso16281_analysis():
+            return {}
+        if is_point_contact_family(self._family):
+            keys = _ISO16281_MATERIAL + _ISO16281_POINT
+        elif is_line_contact_family(self._family):
+            keys = _ISO16281_MATERIAL + _ISO16281_LINE
+        else:
+            keys = _ISO16281_MATERIAL
+        return {k: getattr(self, k) for k in keys if hasattr(self, k)}
+
     def summary(self) -> str:
         tag = self.label or self.designation or "Bearing"
         header = f"-- {tag} "
@@ -177,17 +212,20 @@ class Bearing:
         lines = [
             header + "-" * max(0, 44 - len(header)),
             f"  family      : {self._family.name}",
-            f"  bearing_type: {getattr(self, 'bearing_type', None)}",
-            f"  duty        : {getattr(self, 'duty', None)}",
             f"  position    : {self.position:.2f} mm",
             f"  arrangement : {self.arrangement}",
             f"  d / D       : {self.d:.1f} mm / {self.D:.1f} mm",
             f"  b           : {self.b:.1f} mm",
             f"  C (computed): {c_txt}",
             f"  geometry    : {'assembled' if self._assembled else 'not assembled'}",
-            f"  analyses    : {sorted(self._enabled_analyses) or '(none enabled)'}",
-            "-" * 44,
         ]
+        if self.has_iso16281_analysis():
+            lines.append("  ISO 16281   : on")
+            lines += [f"    {k:<4}      : {_fmt_value(v)}"
+                      for k, v in self.iso16281_attributes().items()]
+        else:
+            lines.append("  ISO 16281   : off")
+        lines.append("-" * 44)
         return "\n".join(lines)
 
     def __repr__(self) -> str:

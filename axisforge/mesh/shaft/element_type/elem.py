@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from axisforge.core.materials import get_material
-from axisforge.config import MESH_MIN_NODE_DIST_MM
+from axisforge.config import NODE_LOOKUP_TOL_MM
 from axisforge.mesh.shaft.beam_model_settings import (
     BeamModelSettings, VALID_BEAM_THEORIES, VALID_SHEAR_THEORIES,
     VALID_INTEGRATION_METHODS,
@@ -452,15 +452,44 @@ class Elem(ElemBase):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def find_node_index(x_nodes: list[float], x: float, tol: float = MESH_MIN_NODE_DIST_MM) -> int:
-        for i, xn in enumerate(x_nodes):
-            if abs(xn - x) <= tol:
-                return i
-        raise ValueError(f"No node found at x={x:.4f} mm within tolerance {tol} mm")
+    def find_node_index(x_nodes: list[float], x: float, tol: float = NODE_LOOKUP_TOL_MM) -> int:
+        """Index of the node nearest to ``x``, if within ``tol``.
+
+        Parameters
+        ----------
+        x_nodes : list of float
+            Node positions [mm].
+        x : float
+            Requested position [mm].
+        tol : float, optional
+            Maximum accepted distance [mm]. Defaults to
+            ``NODE_LOOKUP_TOL_MM`` (same point), not to the merge distance
+            ``MESH_MIN_NODE_DIST_MM``: every load, support and section
+            boundary is a mandatory node, so it must exist exactly.
+
+        Returns
+        -------
+        int
+            Index of the nearest node.
+
+        Raises
+        ------
+        ValueError
+            If no node lies within ``tol`` of ``x``.
+        """
+        if not x_nodes:
+            raise ValueError(f"No node found at x={x:.6g} mm: empty node list")
+        i = min(range(len(x_nodes)), key=lambda k: abs(x_nodes[k] - x))
+        if abs(x_nodes[i] - x) > tol:
+            raise ValueError(
+                f"No node found at x={x:.6g} mm within tolerance {tol} mm "
+                f"(nearest node at {x_nodes[i]:.6g} mm)"
+            )
+        return i
 
     @classmethod
     def from_mesh(cls, mesh: "Mesh1D", settings: BeamModelSettings,
-                  node_tol: float = MESH_MIN_NODE_DIST_MM) -> list["Elem"]:
+                  node_tol: float = NODE_LOOKUP_TOL_MM) -> list["Elem"]:
         """
         Build the full element list from a Mesh1D -- reads
         mesh.shaft_system and mesh.x_nodes directly. Mesh1D itself

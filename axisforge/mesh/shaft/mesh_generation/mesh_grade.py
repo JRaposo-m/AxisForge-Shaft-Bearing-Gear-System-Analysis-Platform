@@ -3,7 +3,42 @@ axisforge/mesh/shaft/mesh_generation/mesh_grade.py
 """
 import numpy as np
 
-from axisforge.config import SOLVER_TOLERANCE
+from axisforge.config import SOLVER_TOLERANCE, MESH_MIN_NODE_DIST_MM
+
+
+class RefinementFloorReached(ValueError):
+    """Requested grade would create elements shorter than the mesh floor.
+
+    Raised by :meth:`Grader.get_grade` before a bisection that would
+    produce an interval of length <= ``MESH_MIN_NODE_DIST_MM``. Such
+    midpoints would be merged away by :class:`Mesh1D`, so the grade would
+    silently not be the mesh it claims to be (the refinement ratio r = 2
+    assumed by Richardson extrapolation would be false).
+
+    Subclasses ``ValueError`` so existing ``except ValueError`` handlers
+    still catch it. The convergence dispatcher should catch it, stop the
+    grade loop and report the interval as not converged at the floor.
+
+    Attributes
+    ----------
+    grade : str
+        Grade that was requested.
+    h_min : float
+        Shortest interval before the failing bisection [mm].
+    floor : float
+        ``MESH_MIN_NODE_DIST_MM`` [mm].
+    """
+
+    def __init__(self, grade: str, h_min: float, floor: float):
+        self.grade = grade
+        self.h_min = h_min
+        self.floor = floor
+        super().__init__(
+            f"Grader: {grade!r} needs bisecting an interval of {h_min:.6g} mm, "
+            f"which would give elements of {h_min / 2:.6g} mm <= "
+            f"MESH_MIN_NODE_DIST_MM = {floor} mm. Refinement floor reached: "
+            f"stop the grade loop at the previous grade."
+        )
 
 
 # ===========================================================================
@@ -58,10 +93,16 @@ class Grader:
         Raises
         ------
         ValueError if grade string is malformed or N is negative.
+        RefinementFloorReached (subclass of ValueError) if a bisection
+        would create an interval <= MESH_MIN_NODE_DIST_MM.
         """
         n = self._parse_grade(grade)
         nodes = self._base_nodes()
         for _ in range(n):
+            if len(nodes) >= 2:
+                h_min = min(b - a for a, b in zip(nodes, nodes[1:]))
+                if h_min / 2.0 <= MESH_MIN_NODE_DIST_MM:
+                    raise RefinementFloorReached(grade, h_min, MESH_MIN_NODE_DIST_MM)
             nodes = self._bisect_once(nodes)
         return nodes
 

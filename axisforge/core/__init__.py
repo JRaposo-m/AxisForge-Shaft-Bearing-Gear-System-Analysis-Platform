@@ -3,7 +3,7 @@
 axisforge/core/__init__.py
 
 Ponto único de import para core -- eager, sem lazy loading, mesmo
-padrão do resto da árvore. Agrega materials.py, loads.py e as
+padrão do resto da árvore. Agrega o pacote materials/, loads.py e as
 subpastas mechanical_system/ e machine_elements/; cada família nova
 ganha a sua própria linha aqui.
 """

@@ -239,6 +239,14 @@ class RichardsonGCI:
                 f"metric/interval."
             )
         self.p = float(np.log(ratio) / np.log(self.r))
+        
+        if self.p <= 0.0:
+            raise ValueError(
+                f"Non-positive observed order p={self.p:.6g} "
+                f"(ratio={ratio:.6g} <= 1: differences between levels are not "
+                f"decreasing) -- not in the asymptotic range, GCI undefined "
+                f"for this metric/interval."
+            )
 
         if min_p is not None:
             self.p = max(self.p, min_p)
@@ -265,7 +273,7 @@ class RichardsonGCI:
             )
         self.e_f_m = (self.f_fine - self.f_medium) / self.f_medium
 
-        self.f_h0 = self.f_coarse + (self.f_coarse - self.f_medium) / (self.r**self.p - 1)
+        self.f_h0 = self.f_fine + (self.f_fine - self.f_medium) / (self.r**self.p - 1)
 
         self.GCI_m_c = (self.safety_factor * abs(self.e_m_c) / (self.r_m_c**self.p - 1))
         self.GCI_f_m = (self.safety_factor * abs(self.e_f_m) / (self.r_f_m**self.p - 1))

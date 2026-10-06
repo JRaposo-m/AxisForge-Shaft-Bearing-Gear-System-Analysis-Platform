@@ -3,62 +3,46 @@
 
 Bearing-side geometry parameters (Dw, Dpw, Z, ...) are kept in the
 KWARGS dictionaries below, plausible but not real catalogue values --
-they only need to exercise the code. Material/contact-surface data is
-no longer part of these dictionaries: since base.py/family.py were
-updated to receive materials as a ``surfaces`` argument (a
-``RadialSurfaces`` built from ``core.materials.Material``) instead of
-raw ``E``/``nu`` floats, a single reusable steel surface set is
-provided below via the ``steel_material``/``steel_surfaces`` fixtures
-and merged into each assembled-geometry fixture that needs it.
+they only need to exercise the code. Material inputs are the raw
+e1/e2/nu1/nu2 floats that assemble_geometry() actually accepts today --
+an earlier draft of this conftest assumed a `surfaces`/`RadialSurfaces`
+object (built from `core.materials.Material`) that was never merged
+into the source; that version is gone, this one matches what's here.
 """
 import pytest
 import numpy as np
 
-from axisforge.core.materials import Material, IsotropicElastic
-from axisforge.core.machine_elements.bearings.families.bearing_properties import RadialSurfaces
+from axisforge.core.machine_elements.bearings.contact_models.analysis import ContactAnalysis
 
 # ---------------------------------------------------------------------
 # geometrias de referência -- plausíveis, não de catálogo real, só para
-# exercitar o código. E/nu deixaram de viver aqui: entram via
-# `surfaces` (ver steel_surfaces, abaixo) para as famílias radiais que
-# já foram migradas (DeepGroove, AngularContact, SelfAligning,
-# CylindricalRoller). As famílias de thrust ainda recebem E/nu
-# diretamente -- não foram tocadas nesta mudança.
+# exercitar o código.
 # ---------------------------------------------------------------------
 
 DEEP_GROOVE_KWARGS = dict(Dw=8.0, Dpw=40.0, Z=12, s=0.02, i=1)
 ANGULAR_CONTACT_KWARGS = dict(Dw=8.0, Dpw=40.0, Z=12, alpha_0_deg=25.0, i=1)
 SELF_ALIGNING_KWARGS = dict(Dw=8.0, Dpw=40.0, Z=12, alpha_0_deg=25.0, i=1)
 
-THRUST_ROW_KWARGS = dict(Dw=8.0, Dpw=40.0, Z=12, E=210_000.0, alpha_0_deg=90.0, nu=0.3)
-THRUST_ROW_KWARGS_NON_90 = dict(Dw=8.0, Dpw=40.0, Z=12, E=210_000.0, alpha_0_deg=60.0, nu=0.3)
+THRUST_ROW_KWARGS = dict(Dw=8.0, Dpw=40.0, Z=12, alpha_0_deg=90.0)
+THRUST_ROW_KWARGS_NON_90 = dict(Dw=8.0, Dpw=40.0, Z=12, alpha_0_deg=60.0)
 
-CYL_ROLLER_KWARGS = dict(Dwe=8.0, Lwe=8.0, Dpw=72.5, Z=18, s=0.01, n_s=40, alpha_0_deg=0.0, i=1)
+CYL_ROLLER_KWARGS = dict(Dwe=8.0, Lwe=8.0, Dpw=72.5, Z=18, s=0.01, n_s=40, i=1)
 
+# ThrustCylindricalRollerFamily is known-stale (see review) -- these two
+# dicts are kept only for the xfail tests in test_family.py that document
+# the current, broken call shape. Do not build new fixtures on them until
+# the family is migrated to the contact=/e1..nu2 pattern.
 THRUST_CYL_ROLLER_KWARGS = dict(Dwe=8.0, Lwe=8.0, Dpw=72.5, Z=18, s=0.01, n_s=40, alpha_0_deg=90.0, i=1)
 THRUST_CYL_ROLLER_KWARGS_NON_90 = dict(Dwe=8.0, Lwe=8.0, Dpw=72.5, Z=18, s=0.01, n_s=40, alpha_0_deg=70.0, i=1)
 
 
 # ---------------------------------------------------------------------
-# materials / surfaces
+# materiais -- e1/e2/nu1/nu2 crus (aço em ambos os lados do contacto),
+# só para exercitar o ramo contact=ContactAnalysis.ISO16281.
 # ---------------------------------------------------------------------
 
-@pytest.fixture
-def steel_material():
-    """Plain isotropic steel, only E/nu are exercised by contact code."""
-    return Material(
-        material_id="test_steel",
-        density=7850.0,
-        elastic=IsotropicElastic(E=210_000.0, poisson_ratio=0.3),
-    )
-
-
-@pytest.fixture
-def steel_surfaces(steel_material):
-    """Uniform RadialSurfaces (rolling element == inner == outer == steel),
-    the same material on every surface, matching what the old flat
-    E=210_000.0/nu=0.3 kwargs implied before the surfaces-based rewrite."""
-    return RadialSurfaces.uniform(steel_material)
+STEEL_CONTACT_KWARGS = dict(contact=ContactAnalysis.ISO16281,
+                             e1=210_000.0, e2=210_000.0, nu1=0.3, nu2=0.3)
 
 
 # ---------------------------------------------------------------------
@@ -130,16 +114,29 @@ def thrust_cyl_roller_multi_row_family():
 
 
 # ---------------------------------------------------------------------
-# geometrias já montadas -- atalhos usados em vários testes
+# geometrias já montadas -- atalhos usados em vários testes.
+#
+# Cada família com contact=ISO16281 suportado ganha duas variantes: a
+# "base" (contact=NONE, o default) para testes de geometria/capacidade
+# que não precisam de materiais, e a "_contact" (contact=ISO16281 +
+# STEEL_CONTACT_KWARGS) para testes que verificam cp/Ri/cl/cs.
 # ---------------------------------------------------------------------
 
 @pytest.fixture
-def assembled_deep_groove(deep_groove_family, catalog, steel_surfaces):
-    return deep_groove_family.assemble_geometry(catalog, surfaces=steel_surfaces, **DEEP_GROOVE_KWARGS)
+def assembled_deep_groove(deep_groove_family, catalog):
+    return deep_groove_family.assemble_geometry(catalog, **DEEP_GROOVE_KWARGS)
 
 @pytest.fixture
-def assembled_angular_contact(angular_contact_family, catalog, steel_surfaces):
-    return angular_contact_family.assemble_geometry(catalog, surfaces=steel_surfaces, **ANGULAR_CONTACT_KWARGS)
+def assembled_deep_groove_contact(deep_groove_family, catalog):
+    return deep_groove_family.assemble_geometry(catalog, **DEEP_GROOVE_KWARGS, **STEEL_CONTACT_KWARGS)
+
+@pytest.fixture
+def assembled_angular_contact(angular_contact_family, catalog):
+    return angular_contact_family.assemble_geometry(catalog, **ANGULAR_CONTACT_KWARGS)
+
+@pytest.fixture
+def assembled_angular_contact_contact(angular_contact_family, catalog):
+    return angular_contact_family.assemble_geometry(catalog, **ANGULAR_CONTACT_KWARGS, **STEEL_CONTACT_KWARGS)
 
 @pytest.fixture
 def assembled_row_90deg(thrust_single_row_family, catalog):
@@ -150,16 +147,18 @@ def assembled_row_non_90deg(thrust_single_row_family, catalog):
     return thrust_single_row_family.assemble_geometry(catalog, **THRUST_ROW_KWARGS_NON_90)
 
 @pytest.fixture
-def assembled_cyl_roller(cylindrical_roller_family, catalog_floating, steel_surfaces):
-    return cylindrical_roller_family.assemble_geometry(catalog_floating, surfaces=steel_surfaces, **CYL_ROLLER_KWARGS)
+def assembled_cyl_roller(cylindrical_roller_family, catalog_floating):
+    return cylindrical_roller_family.assemble_geometry(catalog_floating, **CYL_ROLLER_KWARGS)
 
 @pytest.fixture
-def assembled_thrust_cyl_roller_90(thrust_cyl_roller_family, catalog):
-    return thrust_cyl_roller_family.assemble_geometry(catalog, **THRUST_CYL_ROLLER_KWARGS)
+def assembled_cyl_roller_contact(cylindrical_roller_family, catalog_floating):
+    return cylindrical_roller_family.assemble_geometry(catalog_floating, **CYL_ROLLER_KWARGS, **STEEL_CONTACT_KWARGS)
 
-@pytest.fixture
-def assembled_thrust_cyl_roller_non90(thrust_cyl_roller_family, catalog):
-    return thrust_cyl_roller_family.assemble_geometry(catalog, **THRUST_CYL_ROLLER_KWARGS_NON_90)
+# Sem fixtures "assembled_thrust_cyl_roller_*" -- ThrustCylindricalRollerFamily
+# está sabidamente desatualizada (chama LineContactStiffness com a
+# assinatura antiga) e rebenta sempre; os testes que documentam isso em
+# test_family.py chamam assemble_geometry() diretamente para poder
+# marcar xfail no corpo do teste, não numa fixture.
 
 
 class RowAsBearing:

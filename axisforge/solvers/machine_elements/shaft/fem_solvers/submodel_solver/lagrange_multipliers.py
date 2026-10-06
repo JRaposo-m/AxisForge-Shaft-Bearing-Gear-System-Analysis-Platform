@@ -156,8 +156,11 @@ class SubmodelSolver:
         grader     = Grader(x_lo, x_hi, shaft_results.x_nodes)
         candidates = grader.get_grade(grade)
 
-        # 4. global mesh with the extra candidates (ensures they land on the mesh)
-        mesh_full = Mesh1D(shaft_system, extra_mandatory=candidates)
+        # 4. global mesh with the extra candidates (ensures they land on the
+        #    mesh). The cut nodes are protected: they carry the prescribed
+        #    BCs, so a nearby candidate may never merge them away.
+        mesh_full = Mesh1D(shaft_system, extra_mandatory=candidates,
+                           protected=[x_lo, x_hi])
 
         # 5. filter to the subdomain's own nodes
         x_nodes_sub = [

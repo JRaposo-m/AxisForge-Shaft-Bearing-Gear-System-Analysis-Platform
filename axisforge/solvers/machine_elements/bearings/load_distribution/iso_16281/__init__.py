@@ -15,11 +15,10 @@ from __future__ import annotations
 from .dispatch import (
     SolverDispatchError,
     register_contact_solver,
-    resolve_solver_cls_for_attrs,
     resolve_solver_cls,
 )
 from .numerics import run_root
-from .validation import FA_FLOATING_EPS, check_bearing_ready, warn_if_floating_loaded
+from .validation import check_bearing_ready
 from .contact_postprocessing import (
     ContactBearingStiffness,
     bearing_stiffness,
@@ -55,11 +54,11 @@ from .contact_solver import (
 __all__ = [
     # dispatch.py
     "SolverDispatchError", "register_contact_solver",
-    "resolve_solver_cls_for_attrs", "resolve_solver_cls",
+    "resolve_solver_cls",
     # numerics.py
     "run_root",
     # validation.py
-    "FA_FLOATING_EPS", "check_bearing_ready", "warn_if_floating_loaded",
+    "check_bearing_ready",
     # contact_postprocessing.py
     "ContactBearingStiffness", "bearing_stiffness", "combine_row_L10r",
     "DynamicEquivalentReferenceLoadBase",

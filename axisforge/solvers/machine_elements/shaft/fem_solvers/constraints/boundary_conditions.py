@@ -47,46 +47,53 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system im
 
 def boundary_dofs(x_nodes: list[float], shaft_system: ShaftSystem) -> tuple[list[int], list[int]]:
     """
-    Rigid by construction -- v=0 always; u=0 additionally only for the
-    "locating" bearing (see rigid_support.py's own docstring on why
-    there is not, and should not become, a constraint_bearing switch).
+    Rigid by construction:
+      - v=0 at every bearing EXCEPT "thrust" (a thrust bearing provides
+        no radial support in this model -- axial only).
+      - u=0 at "locating" (in addition to v=0) and at "thrust" (instead
+        of v=0) -- both are axial fixed points; "floating"/"non-locating"
+        get v=0 only.
 
-    Raises ValueError if shaft_system.bearings has no bearing with
-    arrangement == "locating" (axial rigid-body mode never removed),
-    or fewer than two bearings at distinct node positions (bending
-    rigid-body rotation never removed in either plane) -- regardless
-    of how K was assembled.
+    Raises ValueError if no bearing is "locating" or "thrust" (axial
+    rigid-body mode never removed), or if fewer than two bearings
+    provide v=0 at distinct node positions (bending rigid-body rotation
+    never removed in either plane) -- regardless of how K was assembled.
     """
     constrained: list[int] = []
-    has_locating = False
-    bearing_node_indices: set[int] = set()
+    has_axial_constraint = False
+    radial_constrained_node_indices: set[int] = set()
 
     for b in shaft_system.bearings:
         i = Elem.find_node_index(x_nodes, b.position)
-        bearing_node_indices.add(i)
-        constrained.append(3 * i + 1)          # v = 0, always
-        if b.arrangement == "locating":
-            constrained.append(3 * i)          # u = 0, locating only
-            has_locating = True
 
-    if not has_locating:
+        if b.arrangement == "thrust":
+            constrained.append(3 * i)          # u = 0 only -- no radial support
+            has_axial_constraint = True
+            continue
+
+        constrained.append(3 * i + 1)          # v = 0
+        radial_constrained_node_indices.add(i)
+        if b.arrangement == "locating":
+            constrained.append(3 * i)          # u = 0, in addition to v = 0
+            has_axial_constraint = True
+
+    if not has_axial_constraint:
         raise ValueError(
-            "boundary_dofs: shaft_system has no bearing with "
-            "arrangement == 'locating' -- the axial rigid-body mode is "
+            "boundary_dofs: shaft_system has no bearing with arrangement "
+            "== 'locating' or 'thrust' -- the axial rigid-body mode is "
             "never constrained, so the system is singular in the axial "
             "DOFs regardless of how the stiffness matrix was assembled. "
-            "Mark exactly one bearing as the locating bearing."
+            "Mark exactly one bearing as locating (or thrust)."
         )
 
-    if len(bearing_node_indices) < 2:
+    if len(radial_constrained_node_indices) < 2:
         raise ValueError(
-            f"boundary_dofs: shaft_system has bearings at only "
-            f"{len(bearing_node_indices)} distinct node position(s) -- "
-            "at least two are required, otherwise nothing constrains "
-            "rigid-body rotation about the single constrained node in "
-            "either bending plane (no bearing constrains theta). The "
-            "system would be singular in bending regardless of how K "
-            "was assembled."
+            f"boundary_dofs: only {len(radial_constrained_node_indices)} "
+            "bearing(s) provide radial (v=0) support at distinct node "
+            "positions -- at least two are required, otherwise nothing "
+            "constrains rigid-body rotation about the single constrained "
+            "node in either bending plane. A 'thrust' bearing does not "
+            "count here -- it provides no radial support in this model."
         )
 
     n_dofs = 3 * len(x_nodes)

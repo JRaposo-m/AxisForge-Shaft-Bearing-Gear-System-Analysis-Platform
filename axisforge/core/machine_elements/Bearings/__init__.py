@@ -8,9 +8,9 @@ eager. As famílias concretas vêm do rollup em families/__init__.py
 """
 from __future__ import annotations
 
-from .base import BearingType, BearingCatalog, BearingFamily
+from .base import BearingCatalog, BearingFamily
 from .bearing import Bearing
 from .families import *  # noqa: F401,F403 -- __all__ de families/ já vem do registo
 from .families import __all__ as _family_names
 
-__all__ = ["Bearing", "BearingCatalog", "BearingFamily", "BearingType"] + list(_family_names)
+__all__ = ["Bearing", "BearingCatalog", "BearingFamily"] + list(_family_names)

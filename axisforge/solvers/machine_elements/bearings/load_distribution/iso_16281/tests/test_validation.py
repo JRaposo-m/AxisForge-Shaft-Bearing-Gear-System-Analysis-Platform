@@ -1,89 +1,74 @@
 # test_validation.py
-"""Testes de validation.py -- check_bearing_ready e
-warn_if_floating_loaded, os dois checks contact-agnosticos corridos
-antes/à volta de um solve ISO/TS 16281."""
-import warnings
+"""Testes de validation.py -- check_bearing_ready, o único check
+contact-agnostico corrido antes de um solve ISO/TS 16281.
+
+FA_FLOATING_EPS/warn_if_floating_loaded foram removidos do
+validation.py atual -- essa validação (bearing floating mas com Fa
+aplicado) não existe mais aqui. O gap correspondente (o solver não
+avisa nem rejeita esse caso hoje) está documentado como xfail em
+test_contact_solver.py::TestSolverBaseSolve::
+test_warns_when_floating_bearing_is_axially_loaded -- por indicação
+explícita, o fix correto é do lado do solver de FEM (não deveria ser
+possível chegar aqui nesse estado), não um warning aqui."""
 from types import SimpleNamespace
 
 import pytest
 
+from axisforge.core.machine_elements.bearings.families.family import (
+    CylindricalRollerFamily, DeepGrooveBallFamily,
+)
 from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281.validation import (
-    FA_FLOATING_EPS, check_bearing_ready, warn_if_floating_loaded,
+    check_bearing_ready,
 )
 
 
 class TestCheckBearingReady:
-    def test_passes_when_all_attrs_present_and_not_none(self):
-        bearing = SimpleNamespace(A=1.0, alpha_0=0.2)
-        check_bearing_ready(bearing, "b1", ("A", "alpha_0"))  # não deve levantar
+    def test_passes_when_family_matches_capability_and_analysis_done(self):
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily(), iso16281_analysis=True)
+        check_bearing_ready(bearing, "b1", "point_contact")  # não deve levantar
 
-    def test_passes_with_empty_required_attrs(self):
-        bearing = SimpleNamespace()
-        check_bearing_ready(bearing, "b1", ())  # não deve levantar
+    def test_line_contact_family_passes_line_contact_capability(self):
+        bearing = SimpleNamespace(family=CylindricalRollerFamily(), iso16281_analysis=True)
+        check_bearing_ready(bearing, "b2", "line_contact")  # não deve levantar
 
-    def test_raises_when_attr_missing(self):
-        bearing = SimpleNamespace(A=1.0)
-        with pytest.raises(RuntimeError, match=r"missing \['alpha_0'\]"):
-            check_bearing_ready(bearing, "b1", ("A", "alpha_0"))
+    def test_raises_when_family_does_not_match_capability(self):
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily(), iso16281_analysis=True)
+        with pytest.raises(RuntimeError, match="is not a line_contact family"):
+            check_bearing_ready(bearing, "b1", "line_contact")
 
-    def test_raises_when_attr_present_but_none(self):
-        """Um atributo presente mas None conta como 'setup não correu',
-        igual a estar ausente."""
-        bearing = SimpleNamespace(A=1.0, alpha_0=None)
-        with pytest.raises(RuntimeError, match="alpha_0"):
-            check_bearing_ready(bearing, "b1", ("A", "alpha_0"))
+    def test_raises_when_iso16281_analysis_is_false(self):
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily(), iso16281_analysis=False)
+        with pytest.raises(RuntimeError, match="iso16281_analysis is not True"):
+            check_bearing_ready(bearing, "b1", "point_contact")
 
-    def test_lists_every_missing_attribute_at_once(self):
-        bearing = SimpleNamespace()
-        with pytest.raises(RuntimeError) as excinfo:
-            check_bearing_ready(bearing, "b1", ("A", "alpha_0", "cp"))
-        message = str(excinfo.value)
-        assert "A" in message and "alpha_0" in message and "cp" in message
+    def test_raises_when_iso16281_analysis_attribute_absent(self):
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily())
+        with pytest.raises(RuntimeError, match="iso16281_analysis is not True"):
+            check_bearing_ready(bearing, "b1", "point_contact")
+
+    def test_family_check_takes_priority_over_analysis_check(self):
+        """Family errada E iso16281_analysis em falta ao mesmo tempo --
+        deve reportar o erro de family, não o de analysis (é a primeira
+        verificação no código)."""
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily())
+        with pytest.raises(RuntimeError, match="is not a line_contact family"):
+            check_bearing_ready(bearing, "b1", "line_contact")
 
     def test_error_message_includes_label(self):
-        bearing = SimpleNamespace()
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily(), iso16281_analysis=False)
         with pytest.raises(RuntimeError, match="b1"):
-            check_bearing_ready(bearing, "b1", ("A",))
+            check_bearing_ready(bearing, "b1", "point_contact")
 
+    def test_unknown_capability_skips_family_check_but_still_checks_analysis(self):
+        """capability desconhecida (typo, ou nova capability sem entrada em
+        _CAPABILITY_CHECK) -- check_bearing_ready não recusa a capability
+        em si (isso é papel de register_contact_solver, chamado no
+        registo do solver, não aqui); mas iso16281_analysis continua a
+        ser exigido."""
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily(), iso16281_analysis=False)
+        with pytest.raises(RuntimeError, match="iso16281_analysis is not True"):
+            check_bearing_ready(bearing, "b1", "torque_contact")
 
-class TestWarnIfFloatingLoaded:
-    def test_warns_when_floating_and_loaded(self):
-        bearing = SimpleNamespace(arrangement="floating")
-        with pytest.warns(UserWarning, match="floating but Fa"):
-            warn_if_floating_loaded(bearing, "b1", Fa=10.0)
-
-    def test_no_warning_when_floating_and_unloaded(self):
-        bearing = SimpleNamespace(arrangement="floating")
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            warn_if_floating_loaded(bearing, "b1", Fa=0.0)
-
-    def test_no_warning_when_not_floating(self):
-        bearing = SimpleNamespace(arrangement="locating")
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            warn_if_floating_loaded(bearing, "b1", Fa=1000.0)
-
-    def test_no_warning_when_arrangement_attribute_absent(self):
-        bearing = SimpleNamespace()
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            warn_if_floating_loaded(bearing, "b1", Fa=1000.0)
-
-    def test_eps_boundary_is_exclusive(self):
-        """Fa exatamente igual a eps não avisa -- a condição é
-        abs(Fa) > eps, não >=."""
-        bearing = SimpleNamespace(arrangement="floating")
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            warn_if_floating_loaded(bearing, "b1", Fa=FA_FLOATING_EPS)
-
-    def test_custom_eps_is_honoured(self):
-        bearing = SimpleNamespace(arrangement="floating")
-        with pytest.warns(UserWarning):
-            warn_if_floating_loaded(bearing, "b1", Fa=0.5, eps=0.1)
-
-    def test_negative_fa_also_warns(self):
-        bearing = SimpleNamespace(arrangement="floating")
-        with pytest.warns(UserWarning):
-            warn_if_floating_loaded(bearing, "b1", Fa=-10.0)
+    def test_unknown_capability_with_analysis_done_does_not_raise(self):
+        bearing = SimpleNamespace(family=DeepGrooveBallFamily(), iso16281_analysis=True)
+        check_bearing_ready(bearing, "b1", "torque_contact")  # não deve levantar

@@ -286,10 +286,21 @@ class TestElemFindNodeIndex:
         with pytest.raises(ValueError, match="No node found"):
             Elem.find_node_index([0.0, 10.0, 20.0], 15.0, tol=0.01)
 
-    def test_returns_first_match_when_ambiguous(self):
-        """Nós a 0.0 e 0.05 mm, tol=1.0 -- ambos batem; find_node_index
-        devolve o primeiro na ordem de iteração, não o mais próximo."""
-        assert Elem.find_node_index([0.0, 0.05, 20.0], 0.02, tol=1.0) == 0
+    def test_returns_nearest_match_when_several_within_tolerance(self):
+        """Nodes at 0.0 and 0.05 mm, tol=1.0 -- both within tolerance;
+        find_node_index returns the NEAREST (index 1), not the first."""
+        assert Elem.find_node_index([0.0, 0.05, 20.0], 0.04, tol=1.0) == 1
+
+    def test_default_tolerance_is_lookup_not_merge_distance(self):
+        """Default tol is NODE_LOOKUP_TOL_MM: a position 0.05 mm off a
+        node is NOT that node (with the old default, the merge distance
+        0.1 mm, it was silently accepted)."""
+        with pytest.raises(ValueError, match="nearest node at 10"):
+            Elem.find_node_index([0.0, 10.0, 20.0], 10.05)
+
+    def test_empty_node_list_raises(self):
+        with pytest.raises(ValueError, match="empty node list"):
+            Elem.find_node_index([], 0.0)
 
 
 # =====================================================================

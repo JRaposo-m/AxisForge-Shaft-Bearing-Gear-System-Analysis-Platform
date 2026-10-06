@@ -17,11 +17,44 @@ instance), it is exposed as ``bearing.surfaces`` in the same way as every
 other attribute returned by ``assemble_geometry``.
 """
 from __future__ import annotations
-from typing import Any
+from typing import Any, Iterable
+import numpy as np
 
 from axisforge.core.machine_elements.bearings.base import BearingCatalog
 from axisforge.core.machine_elements.bearings.base import BearingFamily
+from axisforge.core.machine_elements.bearings.families.family import (
+    is_thrust_family, is_point_contact_family, is_line_contact_family,
+)
 
+_ISO16281_MATERIAL = ("e1", "e2", "nu1", "nu2")
+_ISO16281_POINT    = ("cp", "Ri")
+_ISO16281_LINE     = ("cL", "cs", "P_xk")
+
+def _fmt_value(value) -> str:
+    """Escalar -> número; vetor curto -> lista; vetor longo -> shape/min/max."""
+    arr = np.asarray(value, dtype=float)
+    if arr.ndim == 0:
+        return f"{float(arr):.4g}"
+    if arr.size <= 4:
+        return "[" + ", ".join(f"{v:.4g}" for v in arr.ravel()) + "]"
+    return f"array{arr.shape} min={arr.min():.4g} max={arr.max():.4g}"
+
+def _validate_thrust_arrangement(family: BearingFamily, catalog: BearingCatalog) -> None:
+    """A family registered as @thrust must be assembled with
+    arrangement='thrust', and vice versa -- a non-thrust family should
+    not claim a thrust arrangement either."""
+    thrust_family = is_thrust_family(family)
+    thrust_arrangement = catalog.arrangement == "thrust"
+    if thrust_family and not thrust_arrangement:
+        raise ValueError(
+            f"{catalog.label or catalog.designation}: family {family.name!r} is a "
+            f"thrust family but arrangement={catalog.arrangement!r} -- expected 'thrust'.")
+    if thrust_arrangement and not thrust_family:
+        raise ValueError(
+            f"{catalog.label or catalog.designation}: arrangement='thrust' but family "
+            f"{family.name!r} is not registered as a thrust family.")
+
+# depois este validate deve passar para family.py tal como verifico os cylindrical roller
 
 class Bearing:
 
@@ -44,8 +77,7 @@ class Bearing:
     def assemble(cls,
                  family: BearingFamily,
                  catalog: BearingCatalog,
-                 geometry: dict[str, Any],
-                 analyses: dict[str, bool] | None = None) -> "Bearing":
+                 geometry: dict[str, Any]) -> "Bearing":
         """
         Parameters
         ----------
@@ -53,42 +85,20 @@ class Bearing:
         catalog  : a ``BearingCatalog`` instance.
         geometry : raw keyword arguments forwarded to
             ``family.assemble_geometry(catalog, **geometry)``.
-        analyses : ``{name: True/False}``; validated against
-            ``family.CAPABILITIES`` / ``REQUIRED_FOR`` but never
-            dispatched from here.
         """
         catalog.validate_or_raise()
+        _validate_thrust_arrangement(family, catalog)
         bearing = cls(catalog, family)
-
-        enabled = {name for name, on in (analyses or {}).items() if on}
-        unsupported = enabled - family.CAPABILITIES
-        if unsupported:
-            raise NotImplementedError(
-                f"{catalog.label or catalog.designation}: family "
-                f"'{family.name}' does not support: {sorted(unsupported)}. "
-                f"Supported: {sorted(family.CAPABILITIES)}"
-            )
 
         computed = family.assemble_geometry(catalog, **geometry)
         for attr, value in computed.items():
             setattr(bearing, attr, value)
-        bearing.duty = family.DUTY
-        bearing.bearing_type = family.BEARING_TYPE
 
-        missing_by_analysis: dict[str, list[str]] = {}
-        for analysis in enabled:
-            required = family.REQUIRED_FOR.get(analysis, frozenset())
-            missing = [f for f in required if getattr(bearing, f, None) is None]
-            if missing:
-                missing_by_analysis[analysis] = missing
-        if missing_by_analysis:
-            details = "; ".join(f"{a}: missing {m}" for a, m in missing_by_analysis.items())
-            raise RuntimeError(
-                f"{catalog.label or catalog.designation}: geometry insufficient "
-                f"for the requested analyses -- {details}"
-            )
-
+        enabled = set()
+        if computed.get("iso16281_analysis", False):
+            enabled.add("iso16281")
         bearing._enabled_analyses = frozenset(enabled)
+
         bearing._assembled = True
         return bearing
 
@@ -100,9 +110,6 @@ class Bearing:
                 f"belong in the solver's own result object, not on the Bearing."
             )
         super().__setattr__(name, value)
-
-    def is_enabled(self, analysis: str) -> bool:
-        return analysis in self._enabled_analyses
 
     def has_internal_geometry(self) -> bool:
         return self._assembled
@@ -167,10 +174,10 @@ class Bearing:
 
         if self.position < 0:
             errors.append(f"{tag}: position must be >= 0, got {self.position}")
-        if self.arrangement not in ("locating", "floating", "non-locating"):
+        if self.arrangement not in ("locating", "floating", "non-locating", "thrust"):
             errors.append(
-                f"{tag}: arrangement must be 'locating', 'floating', or "
-                f"'non-locating', got '{self.arrangement}'"
+                f"{tag}: arrangement must be 'locating', 'floating', "
+                f"'non-locating', or 'thrust', got '{self.arrangement}'"
             )
         if self.d <= 0:
             errors.append(f"{tag}: d must be > 0, got {self.d}")
@@ -181,13 +188,22 @@ class Bearing:
         if self.b < 0:
             errors.append(f"{tag}: b must be >= 0, got {self.b}")
 
-        for analysis in self._enabled_analyses:
-            required = self._family.REQUIRED_FOR.get(analysis, frozenset())
-            missing = [f for f in required if getattr(self, f, None) is None]
-            if missing:
-                errors.append(f"{tag}: enabled analysis '{analysis}' missing {missing}")
-
         return errors
+
+    def has_iso16281_analysis(self) -> bool:
+        return bool(getattr(self, "iso16281_analysis", False))
+
+    def iso16281_attributes(self) -> dict[str, Any]:
+        """Atributos associados à análise ISO 16281 ({} se não estiver ativa)."""
+        if not self.has_iso16281_analysis():
+            return {}
+        if is_point_contact_family(self._family):
+            keys = _ISO16281_MATERIAL + _ISO16281_POINT
+        elif is_line_contact_family(self._family):
+            keys = _ISO16281_MATERIAL + _ISO16281_LINE
+        else:
+            keys = _ISO16281_MATERIAL
+        return {k: getattr(self, k) for k in keys if hasattr(self, k)}
 
     def summary(self) -> str:
         tag = self.label or self.designation or "Bearing"
@@ -196,17 +212,20 @@ class Bearing:
         lines = [
             header + "-" * max(0, 44 - len(header)),
             f"  family      : {self._family.name}",
-            f"  bearing_type: {getattr(self, 'bearing_type', None)}",
-            f"  duty        : {getattr(self, 'duty', None)}",
             f"  position    : {self.position:.2f} mm",
             f"  arrangement : {self.arrangement}",
             f"  d / D       : {self.d:.1f} mm / {self.D:.1f} mm",
             f"  b           : {self.b:.1f} mm",
             f"  C (computed): {c_txt}",
             f"  geometry    : {'assembled' if self._assembled else 'not assembled'}",
-            f"  analyses    : {sorted(self._enabled_analyses) or '(none enabled)'}",
-            "-" * 44,
         ]
+        if self.has_iso16281_analysis():
+            lines.append("  ISO 16281   : on")
+            lines += [f"    {k:<4}      : {_fmt_value(v)}"
+                      for k, v in self.iso16281_attributes().items()]
+        else:
+            lines.append("  ISO 16281   : off")
+        lines.append("-" * 44)
         return "\n".join(lines)
 
     def __repr__(self) -> str:

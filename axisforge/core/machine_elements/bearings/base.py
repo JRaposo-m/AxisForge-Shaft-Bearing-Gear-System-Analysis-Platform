@@ -20,74 +20,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, ClassVar, Literal
-
-
-# =====================================================================
-# ---- BearingType ------------------------------------------------------
-# =====================================================================
-
-class BearingType(str, Enum):
-    """
-    Informational label and the single source of truth for a bearing
-    type's duty (radial/thrust) — see the ``duty`` property below.
-
-    Inherits from ``str`` rather than relying on ``enum.auto()``: values
-    are persisted to SQLite, and an ``auto()``-assigned integer would
-    silently shift if a member were ever inserted mid-list, whereas a
-    string value remains stable indefinitely.
-
-    Dispatch on the core side is no longer performed through this enum
-    (see ``BearingFamily``); it is retained purely as a label so that
-    reporting and GUI code can group bearings by type without importing
-    each family class, and so that the solver-side dispatch tables
-    (``ISO_16281/rolling_bearing_solver.py``) continue to function
-    without modification.
-    """
-    DEEP_GROOVE_BALL          = "deep_groove_ball"
-    ANGULAR_CONTACT           = "angular_contact"
-    SELF_ALIGNING_BALL        = "self_aligning_ball"
-    THRUST_BALL               = "thrust_ball"
-    CYLINDRICAL_ROLLER        = "cylindrical_roller"
-    TAPERED_ROLLER            = "tapered_roller"
-    SPHERICAL_ROLLER          = "spherical_roller"
-    THRUST_CYLINDRICAL_ROLLER = "thrust_cylindrical_roller"
-    THRUST_NEEDLE_ROLLER      = "thrust_needle_roller"
-
-    @property
-    def duty(self) -> str:
-        """
-        Return ``'radial'`` or ``'thrust'``.
-
-        Deliberately raises ``NotImplementedError`` for
-        ``TAPERED_ROLLER`` and ``SPHERICAL_ROLLER``: tapered and
-        spherical roller bearings typically carry combined radial and
-        axial load, which does not reduce cleanly to either duty. The
-        mapping for these types is left for the implementer to decide
-        explicitly when they are supported, rather than being guessed
-        here.
-        """
-        try:
-            return _DUTY_BY_TYPE[self]
-        except KeyError:
-            raise NotImplementedError(
-                f"BearingType.{self.name}: duty has not been decided yet -- "
-                f"this type may carry combined load, see the class docstring."
-            ) from None
-
-
-_DUTY_BY_TYPE: dict[BearingType, str] = {
-    BearingType.DEEP_GROOVE_BALL: "radial",
-    BearingType.ANGULAR_CONTACT: "radial",
-    BearingType.SELF_ALIGNING_BALL: "radial",
-    BearingType.THRUST_BALL: "thrust",
-    BearingType.CYLINDRICAL_ROLLER: "radial",
-    BearingType.THRUST_CYLINDRICAL_ROLLER: "thrust",
-    BearingType.THRUST_NEEDLE_ROLLER: "thrust",
-    # TAPERED_ROLLER and SPHERICAL_ROLLER are deliberately left unmapped.
-}
-
+from typing import Any, Literal
 
 # =====================================================================
 # ---- BearingCatalog ---------------------------------------------------
@@ -126,7 +59,7 @@ class BearingCatalog:
     designation: str = ""
     label: str = ""
     position: float = 0.0
-    arrangement: Literal["locating", "floating", "non-locating"] = "locating"
+    arrangement: Literal["locating", "floating", "non-locating", "thrust"] = "locating"
 
     def __post_init__(self) -> None:
         self.validate_or_raise()
@@ -145,10 +78,10 @@ class BearingCatalog:
             errors.append(f"{tag}: b must be >= 0, got {self.b}")
         if self.position < 0:
             errors.append(f"{tag}: position must be >= 0, got {self.position}")
-        if self.arrangement not in ("locating", "floating", "non-locating"):
+        if self.arrangement not in ("locating", "floating", "non-locating", "thrust"):
             errors.append(
-                f"{tag}: arrangement must be 'locating', 'floating', or "
-                f"'non-locating', got '{self.arrangement}'"
+                f"{tag}: arrangement must be 'locating', 'floating', "
+                f"'non-locating', or 'thrust' got '{self.arrangement}'"
             )
         return errors
 
@@ -178,43 +111,8 @@ class BearingFamily(ABC):
     import time rather than at first use.
     """
 
-    CAPABILITIES: ClassVar[frozenset[str]] = frozenset()
-    REQUIRED_FOR: ClassVar[dict[str, frozenset[str]]] = {}
-    BEARING_TYPE: ClassVar[BearingType | None] = None
-
-    #: ``"radial"`` | ``"thrust"``. Kept as an explicit class attribute
-    #: (rather than being derived solely from ``BEARING_TYPE.duty``) by
-    #: design: it is read at the class level in several places (tests,
-    #: reporting) without instantiating the family, and
-    #: ``__init_subclass__`` guarantees it can never diverge from what
-    #: ``BEARING_TYPE.duty`` would return.
-    DUTY: ClassVar[Literal["radial", "thrust"] | None] = None
-
-    #: The surface-pair container class (a ``BearingSurfaces`` subclass,
-    #: e.g. ``RadialSurfaces``) that this family expects. Left as
-    #: ``None`` for families that do not yet have one (thrust families;
-    #: multi-row families, whose individual rows carry their own).
-    #: Validated in ``register_family()`` (``families/family.py``),
-    #: since ``base.py`` must not import from ``families/``, which in
-    #: turn depends on this module.
-    SURFACES: ClassVar[type | None] = None
-
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-
-        if set(cls.REQUIRED_FOR) != set(cls.CAPABILITIES):
-            raise TypeError(
-                f"{cls.__name__}: REQUIRED_FOR keys {set(cls.REQUIRED_FOR)} "
-                f"must exactly match CAPABILITIES {set(cls.CAPABILITIES)}"
-            )
-
-        if cls.BEARING_TYPE is not None and cls.DUTY is not None:
-            expected = cls.BEARING_TYPE.duty
-            if cls.DUTY != expected:
-                raise TypeError(
-                    f"{cls.__name__}: DUTY={cls.DUTY!r} does not match "
-                    f"BEARING_TYPE.duty={expected!r} for {cls.BEARING_TYPE!r}"
-                )
 
     @property
     @abstractmethod

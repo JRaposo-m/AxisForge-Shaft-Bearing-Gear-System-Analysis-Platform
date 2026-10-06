@@ -88,3 +88,30 @@ class TestBisection:
         grade_2 duas vezes não deve acumular bisecções."""
         grader = Grader(x_lo=0.0, x_hi=20.0, x_nodes=BASE_NODES)
         assert grader.get_grade("grade_2") == grader.get_grade("grade_2")
+
+class TestRefinementFloor:
+    def test_raises_before_bisecting_below_the_floor(self):
+        from axisforge.config import MESH_MIN_NODE_DIST_MM
+        from axisforge.mesh.shaft.mesh_generation.mesh_grade import RefinementFloorReached
+        h0 = 1.0
+        grader = Grader(x_lo=0.0, x_hi=h0, x_nodes=[0.0, h0])
+        # h after N bisections = h0 / 2**N; last allowed N keeps h > floor
+        n_ok = 0
+        while h0 / 2 ** (n_ok + 1) > MESH_MIN_NODE_DIST_MM:
+            n_ok += 1
+        assert len(grader.get_grade(f"grade_{n_ok}")) == 2 ** n_ok + 1
+        with pytest.raises(RefinementFloorReached) as exc:
+            grader.get_grade(f"grade_{n_ok + 1}")
+        assert exc.value.grade == f"grade_{n_ok + 1}"
+        assert exc.value.floor == MESH_MIN_NODE_DIST_MM
+        assert exc.value.h_min == pytest.approx(h0 / 2 ** n_ok)
+
+    def test_is_a_value_error(self):
+        from axisforge.mesh.shaft.mesh_generation.mesh_grade import RefinementFloorReached
+        grader = Grader(x_lo=0.0, x_hi=0.15, x_nodes=[0.0, 0.15])
+        with pytest.raises(ValueError):
+            grader.get_grade("grade_1")
+
+    def test_grade_0_never_raises(self):
+        grader = Grader(x_lo=0.0, x_hi=0.05, x_nodes=[0.0, 0.05])
+        assert grader.get_grade("grade_0") == [0.0, 0.05]

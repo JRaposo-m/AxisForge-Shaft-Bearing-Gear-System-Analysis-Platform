@@ -128,7 +128,7 @@ class DeepGrooveBallFamily(BearingFamily):
         nu1, nu2 = _resolve_pair(nu1, nu2, "nu1", "nu2")
         result.update(e1=e1, e2=e2, nu1=nu1, nu2=nu2)
 
-        if contact in (ContactAnalysis.ISO16281):
+        if contact is ContactAnalysis.ISO16281:
             point_stiff = iso.PointContactStiffness(Dw, Dpw, gamma, ri, re, alpha_0, e1, e2, nu1, nu2)
             cp = point_stiff.cp
             Ri = point_stiff.raceway_contact_radius

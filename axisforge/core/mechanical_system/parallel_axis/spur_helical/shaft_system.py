@@ -116,6 +116,11 @@ class ShaftSystem:
     Retains ALL bearings / gears / loads placed on the shaft, persistently,
     for downstream per-shaft consumption by StaticsSolver, StressSolver and
     BearingLifeSolver. Nothing is summarised or discarded.
+
+    Bearing arrangement (BearingCatalog.arrangement): "locating" | "floating" |
+    "non-locating" | "thrust". The axial reaction of the shaft goes to the "locating"
+    bearing, so a shaft that receives a gear-mesh AxialLoad (helical gears) needs one
+    (validate()). The other arrangements carry radial load only.
     """
 
     def __init__(self, shaft: "Shaft", name: str = "System_1",
@@ -448,22 +453,18 @@ class ShaftSystem:
         # gear/bearing footprint must not coincide with a shaft shoulder
         errors.extend(self._shoulder_coincidence_errors())
 
-        # helical thrust needs an axial reaction path
+        # helical thrust needs an axial reaction path: the locating bearing (the one that
+        # takes axial load, see BearingCatalog.arrangement); floating / non-locating
+        # bearings carry none, so without a locating bearing the thrust has nowhere to go
         has_axial_mesh = any(
             isinstance(ld, AxialLoad) and ld.source == "gear_mesh"
             for ld in self._loads
         )
-        if has_axial_mesh:
-            has_fixed = any(
-                b.arrangement == "fixed" and b.Ka is not None
-                for b in self._bearings
+        if has_axial_mesh and not any(b.arrangement == "locating" for b in self._bearings):
+            errors.append(
+                f"{tag}: a gear-mesh axial load is present but no bearing has "
+                f"arrangement=='locating' — the helical thrust has no axial reaction path"
             )
-            if not has_fixed:
-                errors.append(
-                    f"{tag}: a gear-mesh axial load is present but no bearing has "
-                    f"arrangement=='fixed' with Ka defined — the helical thrust "
-                    f"has no axial reaction path"
-                )
 
         return errors
 

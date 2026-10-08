@@ -100,8 +100,8 @@ class PointContactStiffness:
 
     @property
     def cp(self) -> float:
-        e_star = 1.0 / ((1.0 - self.nu1**2) / self.e1 + (1.0 - self.nu2**2) / self.e2)
-        return 1.48 * e_star * (self._inner_term + self._outer_term) ** (-3.0 / 2.0)
+        e_prime = 2.0 / ((1.0 - self.nu1**2)/self.e1 + (1.0 - self.nu2**2)/self.e2)   # = E/(1-nu^2) se iguais
+        return 1.48 * e_prime * (self._inner_term + self._outer_term) ** (-3.0 / 2.0)
 
 
 class SelfAligningPointContactStiffness(PointContactStiffness):

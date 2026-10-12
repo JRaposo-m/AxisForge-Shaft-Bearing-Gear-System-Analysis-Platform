@@ -1,8 +1,4 @@
-"""
-axisforge/outputs/construction
-
-Records and text of what was built: shaft system, gear system, bearings and loads.
-"""
+"""Records and text of what was built: shaft system, gear system, bearings and loads."""
 from __future__ import annotations
 
 from axisforge.outputs.construction import bearings

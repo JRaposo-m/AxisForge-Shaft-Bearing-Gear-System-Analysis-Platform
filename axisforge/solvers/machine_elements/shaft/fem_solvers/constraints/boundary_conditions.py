@@ -1,42 +1,7 @@
-"""
-axisforge/solvers/machine_elements/shaft/fem_solvers/constraints/boundary_conditions.py
-
-Rigid-support boundary conditions: v=0 always at every bearing
-position; u=0 additionally at the "locating" bearing. Beam-theory-
-agnostic -- depends only on bearing positions and each bearing's
-`arrangement` attribute, never on beam_theory/shear_theory/
-integration_method.
-
-This module only classifies DOFs as free/constrained. It does NOT
-reduce K or f, and does NOT know or care how the caller assembled K
-(in particular, whether StiffnessMatrixBuilder was built with
-frame=True or frame=False) -- that pairing lives in the solver's
-orchestration (rigid_support.py::RigidSupportFEMSolver.solve()), which
-is the only place that has both the `frame` choice and this function's
-output at once. See the note in build_stiffness_matrix.py's own
-docstring on what frame=False leaves unconstrained -- if the solver
-uses frame=False, the axial DOFs constrained here are NOT enough by
-themselves to make K solvable, and the solver -- not this module --
-is responsible for catching that.
-
-What IS checked here, because it needs nothing beyond shaft_system
-itself:
-
-  - at least one bearing must be "locating", or every axial DOF in the
-    model is left without a single fixed reference point (an
-    unconstrained axial rigid-body mode);
-  - at least two bearings at distinct node positions, or bending in
-    each plane is left with an unconstrained rigid-body rotation --
-    a single v=0 constraint pins translation at that node but nothing
-    restrains rotation about it (no bearing ever constrains theta).
-
-Both are properties of shaft_system.bearings alone, independent of
-anything else in the assembly (frame, beam_theory, load cases).
-Silently returning DOF lists that guarantee a singular system later --
-surfacing only as an opaque conditioning warning/error far downstream,
-with no indication that the real cause is "not enough bearings" -- is
-exactly what "flag, don't silently fix" warns against, so this raises
-immediately instead, with a message that says what is actually wrong.
+"""Rigid-support boundary conditions of the shaft FEM: v = 0 at every bearing except thrust bearings,
+u = 0 at locating and thrust bearings, rotation never constrained. The module only classifies DOFs
+as free or constrained; it does not reduce K or f and does not depend on the beam theory or on
+how K was assembled.
 """
 
 from __future__ import annotations
@@ -46,18 +11,43 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system im
 
 
 def boundary_dofs(x_nodes: list[float], shaft_system: ShaftSystem) -> tuple[list[int], list[int]]:
-    """
-    Rigid by construction:
-      - v=0 at every bearing EXCEPT "thrust" (a thrust bearing provides
-        no radial support in this model -- axial only).
-      - u=0 at "locating" (in addition to v=0) and at "thrust" (instead
-        of v=0) -- both are axial fixed points; "floating"/"non-locating"
-        get v=0 only.
+    """Free and constrained DOFs of the shaft for rigid bearing supports, by elimination.
 
-    Raises ValueError if no bearing is "locating" or "thrust" (axial
-    rigid-body mode never removed), or if fewer than two bearings
-    provide v=0 at distinct node positions (bending rigid-body rotation
-    never removed in either plane) -- regardless of how K was assembled.
+    Parameters
+    ----------
+    x_nodes : list of float
+        Node positions [mm].
+    shaft_system : ShaftSystem
+        Provides ``bearings`` (each with ``position`` [mm] and ``arrangement``).
+
+    Returns
+    -------
+    free : list of int
+        Global DOF indices that remain in the solve (DOF order ``[u, v, theta]`` per node, index
+        ``3*i, 3*i+1, 3*i+2``).
+    constrained : list of int
+        Global DOF indices set to zero displacement (an index appears twice if two bearings share a
+        node).
+
+    Raises
+    ------
+    ValueError
+        If no bearing is ``"locating"`` or ``"thrust"`` (the axial rigid-body mode would remain), or
+        if fewer than two bearings give v = 0 at distinct nodes (the bending rigid-body rotation would
+        remain in both planes). Also if a bearing position has no node (``Elem.find_node_index``).
+
+    Warnings
+    --------
+    A thrust bearing is also accepted as the axial fixed point (the check names both ``"locating"``
+    and ``"thrust"``). Bearing stiffness is not used here; Cao2004 couples bearings as two-node 10x10
+    tangent matrices, which this solver does not do.
+
+    Notes
+    -----
+    - ``"thrust"``: u = 0 only (no radial support in this model).
+    - ``"locating"``: v = 0 and u = 0.
+    - Any other arrangement (floating, non-locating): v = 0 only.
+    - Rotation theta is never constrained by a bearing.
     """
     constrained: list[int] = []
     has_axial_constraint = False
@@ -104,28 +94,32 @@ def boundary_dofs_explicit(
     x_nodes: list[float],
     constrained_dofs: list[int],
 ) -> tuple[list[int], list[int]]:
-    """
-    Direct DOF-index boundary condition, bypassing ShaftSystem/bearing
-    inference entirely. For verification/test rigs only (e.g. a pure
-    cantilever fixed-free case to check element-level convergence
-    against closed-form beam theory) where there is no ShaftSystem, or
-    where the rigid-bearing rules in boundary_dofs() above don't apply
-    (a single "wall" node with u=v=theta=0 has no bearing at all --
-    no bearing arrangement ever constrains theta).
+    """Free and constrained DOFs from a list of DOF indices given directly.
 
-    `constrained_dofs` are raw global DOF indices, 3 per node in the
-    same [u, v, theta] order boundary_dofs() uses (3*i, 3*i+1, 3*i+2
-    for node i). Caller is responsible for choosing indices that leave
-    K non-singular -- this function does not replicate boundary_dofs()'s
-    locating-bearing / two-bearing sanity checks, since those are
-    specific to the bearing-based rigid support model and don't
-    generalize to an arbitrary DOF list.
+    For verification rigs only (for example a fixed-free cantilever checked against closed-form beam
+    theory) where there is no ``ShaftSystem`` or the bearing rules of ``boundary_dofs`` do not apply
+    (a clamped node with u = v = theta = 0 is not a bearing). Not used by any production solve path.
 
-    NOT used by RigidSupportFEMSolver or any production solve path --
-    boundary_dofs() (bearing-driven) remains the only BC source there.
-    This exists purely so ad-hoc verification scripts can drive the
-    same assembly with a boundary condition that isn't expressible as
-    a bearing arrangement.
+    Parameters
+    ----------
+    x_nodes : list of float
+        Node positions [mm].
+    constrained_dofs : list of int
+        Global DOF indices to constrain, 3 per node in the order ``[u, v, theta]``
+        (``3*i, 3*i+1, 3*i+2``). The caller must choose indices that leave K non-singular: the
+        locating-bearing and two-bearing checks of ``boundary_dofs`` are not repeated.
+
+    Returns
+    -------
+    free : list of int
+        Global DOF indices that remain in the solve.
+    constrained : list of int
+        Sorted, de-duplicated ``constrained_dofs``.
+
+    Raises
+    ------
+    ValueError
+        If an index is outside ``0 .. 3*len(x_nodes) - 1``.
     """
     n_dofs = 3 * len(x_nodes)
     constrained = sorted(set(constrained_dofs))

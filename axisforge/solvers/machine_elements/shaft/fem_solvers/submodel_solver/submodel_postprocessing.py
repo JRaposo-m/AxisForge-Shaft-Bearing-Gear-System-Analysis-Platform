@@ -1,49 +1,8 @@
-"""
-axisforge/solvers/machine_elements/shaft/fem_solvers/submodel_solver/postprocessing.py
-
-Turns a SubmodelSolution (raw DOFs from SubmodelSolver.solve(), see
-lagrange_multipliers.py in this same folder) into a SubmodelResult
-(results/fem_results/submodel_results.py) -- the same kind of
-displacement/internal-force data ShaftResultsReader produces for the
-whole shaft, just restricted to [solution.x_lo, solution.x_hi]. No
-torsion, no stress concentration -- SubmodelSolver never modelled
-torsion, and stress-concentration is a separate layer on top
-(static_solvers/postprocessing.py) that this does not replicate.
-
-CHANGED (this pass): replaces the previous generic SubmodelPostProcessor
-+ standalone _SubmodelSolverView. Instead of one class taking a "solver"
-shaped like anything, this folder now defines its own subclasses of
-EulerBernoulliPostProcessing/TimoshenkoPostProcessing
-(element_postprocessing.py), specialized to read a SubmodelSolution
-directly:
-
-    SubmodelEulerBernoulliPostProcessing(EulerBernoulliPostProcessing)
-    SubmodelTimoshenkoPostProcessing(TimoshenkoPostProcessing)
-
-Each inherits bending_moment()/shear_force() unchanged -- the beam-
-theory math never duplicates -- and only overrides
-recover_internal_forces() to translate a SubmodelSolution's own
-attribute names (d_xz/d_xy/kGA_override) into the (.elements,
-.d_total_xz, .d_total_xy, ._kGA_override) shape the inherited
-_sweep_plane()/_element_nodal_displacements() expect, via the small
-_SubmodelSolverView adapter (kept private to this module -- it's
-plumbing, not part of the public shape).
-
-postprocessor_for_submodel(solution) is the factory: checks
-solution.elements[0].beam_theory once and returns the matching
-subclass instance. This is the "check which subclass feeds it, then
-create" step -- deliberately a plain if/elif here, not a
-decorator/registry (same call made for the theory dispatch in
-element_postprocessing.py and results_reader.py: not the goal of this
-pass). global_solver/postprocessing.py will define the mirror pair
-(GlobalEulerBernoulliPostProcessing/GlobalTimoshenkoPostProcessing) for
-RigidSupportSolution when that folder is done -- those won't need a
-view adapter, since rigid_support.py's own attribute names already
-match what element_postprocessing.py expects.
-
-element_postprocessing.py itself imports neither this module nor
-lagrange_multipliers.py, in either direction -- it doesn't know
-SubmodelSolution exists. This module is where that knowledge lives.
+"""Post-processing of the sub-model solve: turns a ``SubmodelSolution`` (raw DOFs from
+``SubmodelSolver.solve``) into a ``SubmodelResult`` with the same displacement and internal-force
+data as the global result, restricted to [x_lo, x_hi]. No torsion and no stress concentration. The
+moment and shear recovery reuses the element post-processors through a small adapter that renames
+the attributes of ``SubmodelSolution``.
 """
 
 from __future__ import annotations
@@ -66,17 +25,22 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 class _SubmodelSolverView:
-    """
-    Adapts a SubmodelSolution to the (.elements, .d_total_xz,
-    .d_total_xy, ._kGA_override) shape the inherited
-    _sweep_plane()/_element_nodal_displacements() expect. Private to
-    this module -- only the two subclasses below construct one, and
-    only for the duration of a single recover_internal_forces() call.
+    """Adapter that gives a ``SubmodelSolution`` the attribute names read by the element post-processor.
+
+    Maps ``elements``, ``d_xz``, ``d_xy`` and ``kGA_override`` to ``elements``, ``d_total_xz``,
+    ``d_total_xy`` and ``_kGA_override``. Private to this module; built for one
+    ``recover_internal_forces`` call.
+
+    Parameters
+    ----------
+    solution : SubmodelSolution
+        Raw sub-model solution (displacements [mm, rad], ``kGA_override`` [N]).
     """
 
     __slots__ = ("elements", "d_total_xz", "d_total_xy", "_kGA_override")
 
     def __init__(self, solution: "SubmodelSolution"):
+        """Store the arguments; see the class docstring."""
         self.elements = solution.elements
         self.d_total_xz = solution.d_xz
         self.d_total_xy = solution.d_xy
@@ -84,24 +48,58 @@ class _SubmodelSolverView:
 
 
 class SubmodelEulerBernoulliPostProcessing(EulerBernoulliPostProcessing):
-    """
-    Euler-Bernoulli M/V recovery, specialized to a SubmodelSolution.
-    bending_moment()/shear_force() are inherited unchanged from
-    EulerBernoulliPostProcessing -- only the entry point that used to
-    take an untyped `solver` now takes the real SubmodelSolution type
-    and does the view translation itself.
+    """Euler-Bernoulli moment and shear recovery, typed for a ``SubmodelSolution``.
+
+    ``bending_moment`` and ``shear_force`` are inherited unchanged; only the entry point translates
+    the solution through the adapter.
     """
 
     def recover_internal_forces(self, solution: "SubmodelSolution", x_nodes: list[float], n: int):
+        """Moment and shear force at every sub-model node (see ``ElementTheoryPostProcessor.recover_internal_forces``).
+
+        Parameters
+        ----------
+        solution : SubmodelSolution
+            Raw sub-model solution.
+        x_nodes : list of float
+            Sub-model node positions [mm].
+        n : int
+            Number of nodes.
+
+        Returns
+        -------
+        M_xz, M_xy : ndarray, shape (n,)
+            Bending moments [N mm].
+        V_xz, V_xy : ndarray, shape (n,)
+            Shear forces [N].
+        """
         view = _SubmodelSolverView(solution)
         return super().recover_internal_forces(view, x_nodes, n)
 
 
 class SubmodelTimoshenkoPostProcessing(TimoshenkoPostProcessing):
-    """Timoshenko counterpart of SubmodelEulerBernoulliPostProcessing --
-    same relationship, see that class's docstring."""
+    """Timoshenko counterpart of ``SubmodelEulerBernoulliPostProcessing``.
+    """
 
     def recover_internal_forces(self, solution: "SubmodelSolution", x_nodes: list[float], n: int):
+        """Moment and shear force at every sub-model node (see ``ElementTheoryPostProcessor.recover_internal_forces``).
+
+        Parameters
+        ----------
+        solution : SubmodelSolution
+            Raw sub-model solution.
+        x_nodes : list of float
+            Sub-model node positions [mm].
+        n : int
+            Number of nodes.
+
+        Returns
+        -------
+        M_xz, M_xy : ndarray, shape (n,)
+            Bending moments [N mm].
+        V_xz, V_xy : ndarray, shape (n,)
+            Shear forces [N].
+        """
         view = _SubmodelSolverView(solution)
         return super().recover_internal_forces(view, x_nodes, n)
 
@@ -109,12 +107,22 @@ class SubmodelTimoshenkoPostProcessing(TimoshenkoPostProcessing):
 def postprocessor_for_submodel(
     solution: "SubmodelSolution",
 ) -> "SubmodelEulerBernoulliPostProcessing | SubmodelTimoshenkoPostProcessing":
-    """
-    Picks the right subclass by reading solution.elements[0].beam_theory
-    -- every Elem in one submodel solve shares the same beam_theory (set
-    once from the BeamModelSettings passed into SubmodelSolver.solve()),
-    same assumption ShaftResultsReader._recover_internal_forces() already
-    makes for the global case.
+    """Select the moment/shear post-processor that matches the beam theory of the sub-model.
+
+    Parameters
+    ----------
+    solution : SubmodelSolution
+        Raw solution; ``solution.elements[0].beam_theory`` decides (all elements of one solve share
+        the theory).
+
+    Returns
+    -------
+    SubmodelEulerBernoulliPostProcessing or SubmodelTimoshenkoPostProcessing
+
+    Raises
+    ------
+    ValueError
+        If the beam theory is neither ``"timoshenko"`` nor ``"euler_bernoulli"``.
     """
     beam_theory = solution.elements[0].beam_theory
     if beam_theory == "timoshenko":
@@ -125,20 +133,33 @@ def postprocessor_for_submodel(
 
 
 def build_submodel_result(solution: "SubmodelSolution") -> SubmodelResult:
-    """
-    The actual entry point lagrange_multipliers.py's SubmodelSolver.solve()
-    calls. Picks the right postprocessor via postprocessor_for_submodel(),
-    recovers M/V through it, reads u/v/theta straight off the DOFs (no
-    theory-dependent math needed for those), and assembles the
-    SubmodelResult.
+    """Assemble the ``SubmodelResult`` from the raw sub-model solution.
+
+    Parameters
+    ----------
+    solution : SubmodelSolution
+        Raw output of ``SubmodelSolver.solve`` (displacements [mm, rad], multipliers [N, N mm]).
+
+    Returns
+    -------
+    SubmodelResult
+        Nodal ``u``, ``v``, ``theta`` per plane [mm, rad], moments [N mm], shear forces [N] and the
+        multipliers ``lam_xz``, ``lam_xy``.
+
+    Notes
+    -----
+    Moment and shear force come from the post-processor selected by ``postprocessor_for_submodel``;
+    the displacements are read straight from the DOFs. ``u`` is read from the XZ solution only: only
+    the XZ load vector receives the axial load, so the axial slot of ``d_xy`` is undriven inside the
+    interval.
     """
     n = len(solution.x_nodes)
     postproc = postprocessor_for_submodel(solution)
 
     M_xz, M_xy, V_xz, V_xy = postproc.recover_internal_forces(solution, solution.x_nodes, n)
 
-    # u is read only from d_xz, never d_xy -- same convention
-    # ShaftResultsReader._recover_axial_and_rotation() already uses, for
+    # u is read only from d_xz, never d_xy -- same convention as
+    # _recover_axial_and_rotation() in global_postprocessing.py uses, for
     # the same reason: the axial DOF is shared between planes, but only
     # the xz system's force vector ever receives the axial load (see
     # lagrange_multipliers.py's solve(), f_xy never gets lc["axial"]) --

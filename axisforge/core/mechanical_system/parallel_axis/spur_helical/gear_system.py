@@ -1,36 +1,21 @@
 """
-mechanical_system/systems/gear_system.py
+Multi-shaft parallel-axis transmission: power flow through a tree of gear meshes and the resulting shaft loads.
 
-Multi-shaft parallel-axis transmission assembler.
+SpurHelicalMeshLink is one directed mesh (driver shaft -> driven shaft) with a meshing model and the
+angle of the line of centres. SpurHelicalGearSystem is a single-source acyclic graph of such links;
+resolve() walks it in topological order, propagating torque, sense of rotation and shaft position,
+and injects the tooth forces, the axial thrust and the torques as loads on each ShaftSystem.
 
-Two classes:
-  - SpurHelicalMeshLink : one directed mesh, shaft_a(driver) -> shaft_b(driven),
-                   carrying a meshing model and the global line-of-centres
-                   angle phi_deg. Optional torque_split selects fan-out mode.
-  - GearSystem   : a single-source DAG of shafts joined by SpurHelicalMeshLink.
-                   resolve() walks the DAG in topological order, propagating
-                   torque / rotation sense / shaft position, and injects the
-                   resulting mesh loads onto each ShaftSystem.
+Scope: parallel axes only (spur, helical, internal). No bevel or worm gears, no convergent torque
+merge, no multi-source graph.
 
-Scope: parallel-axis only (spur / helical / internal). No bevel/worm, no
-convergent torque merge, no multi-source graph — see the context pack §5.
+Fan-out is detected by GearElement IDENTITY, not equality: a shared driver (one pinion meshing with
+two wheels) is recognised only if the SAME GearElement object is passed as gear_a to every link
+sharing it; see SpurHelicalMeshLink.torque_split.
 
-IMPORTANT — fan-out is detected by GearElement IDENTITY, not equality:
-A shared driver (e.g. one pinion meshing simultaneously with two wheels)
-is recognised ONLY if the SAME GearElement Python object is passed as
-gear_a to every link sharing that driver. Two GearElement instances that
-describe the identical physical gear (same SpurHelicalGear, same z, same
-position) but are DIFFERENT objects are treated as two unrelated drivers.
-_topology_errors() raises no error in that case; each link silently falls
-back to mode B (100% of available torque each) instead of mode A
-(torque_split share). See SpurHelicalMeshLink.torque_split and
-SpurHelicalGearSystem._driver_groups() below.
-
-Units: torque PROPAGATES and is STORED in N·m end-to-end (that is what
-meshing.forces() consumes and returns, and what TorqueLoad now stores).
-Force loads are in N and positions in mm; torque/moment is the one
-quantity kept in SI (N·m) rather than shop units, since it never needs to
-combine directly with a mm-scale lever arm inside this module.
+Units: forces [N], positions [mm], angles [deg] at the interface, power [W], speed [rpm]. Torque
+propagates and is stored in N m end to end (what meshing.forces() consumes and returns and what
+the TorqueLoad objects created here carry); see the Warnings of core/loads.py (open review item U1).
 """
 
 from __future__ import annotations
@@ -42,7 +27,6 @@ from axisforge.core.loads import RadialLoad, AxialLoad, TorqueLoad, DistributedR
 from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import GearElement, ShaftSystem
 from axisforge.config import TOL_GEOMETRY_mm
 
-# torque agora propaga e é armazenado em N·m de ponta a ponta
 
 
 # ===========================================================================
@@ -55,36 +39,42 @@ class SpurHelicalMeshLink  :
 
     Parameters
     ----------
-    shaft_a, shaft_b : ShaftSystem   — driver / driven shaft containers.
-    gear_a, gear_b   : GearElement   — the meshing gears on each shaft.
-    meshing          : a *GearMeshing object exposing `.al`, `.u` and
-                       `.forces(T_in, phi_deg, rotation_dir_in) -> dict`.
-    phi_deg          : angular position of the line of centres (a -> b) in the
-                       GLOBAL frame [deg], +Y toward +Z. USER INPUT, not
-                       derived. Combined with meshing.al to place shaft_b
-                       relative to shaft_a.
-    torque_split     : None       -> mode B (this driver takes 100% of T).
-                       (0, 1]     -> mode A (simultaneous fan-out share).
-                       See GearSystem §4.2.
+    shaft_a, shaft_b : ShaftSystem
+        Driver / driven shaft containers.
+    gear_a, gear_b : GearElement
+        The meshing gears on each shaft.
+    meshing : object
+        A *GearMeshing object exposing ``.al`` (centre distance [mm]) and
+        ``.forces(T_in [N m], phi_deg [deg], rotation_dir_in) -> dict``. ``gear_a`` must wrap the
+        gear on which ``forces()`` takes the torque: ``meshing.gear1`` for SpurHelicalGearMeshing
+        (whatever ``driver`` says), the gear named by ``meshing.driver`` for InternalGearMeshing.
+        Not checked.
+    phi_deg : float
+        Angular position of the line of centres (a -> b) in the GLOBAL frame [deg], +Y toward +Z.
+        USER INPUT, not derived; stored modulo 360. Combined with meshing.al to place shaft_b
+        relative to shaft_a.
+    torque_split : float or None
+        None -> mode B (this driver takes 100% of T). (0, 1] -> mode A (simultaneous fan-out
+        share [-]). Choice of this code (source to find).
 
-                       CAUTION: mode A only activates when two or more
-                       links share the SAME gear_a object (checked by
-                       id(), not by gear geometry). To fan out one
-                       physical pinion to several wheels, build ONE
-                       GearElement for that pinion and pass it as gear_a
-                       to every link:
+        CAUTION: mode A only activates when two or more links share the SAME gear_a object
+        (checked by id(), not by gear geometry). To fan out one physical pinion to several
+        wheels, build ONE GearElement for that pinion and pass it as gear_a to every link::
 
-                           ge_z1  = GearElement(z1, role="driver", ...)
-                           link_a = SpurHelicalMeshLink(sys1, ge_z1, ..., torque_split=0.7)
-                           link_b = SpurHelicalMeshLink(sys1, ge_z1, ..., torque_split=0.3)
+            ge_z1  = GearElement(z1, role="driver", ...)
+            link_a = SpurHelicalMeshLink(sys1, ge_z1, ..., torque_split=0.7)
+            link_b = SpurHelicalMeshLink(sys1, ge_z1, ..., torque_split=0.3)
 
-                       Passing two separately-constructed GearElement
-                       instances for the same physical z1 (even with
-                       identical parameters) is NOT detected as fan-out:
-                       validate() raises nothing, and each link quietly
-                       resolves in mode B, delivering 100% of the
-                       available torque through EACH mesh independently
-                       — a silent double-counting of torque.
+        Passing two separately-constructed GearElement instances for the same physical z1 (even
+        with identical parameters) is NOT detected as fan-out: validate() raises nothing, and
+        each link quietly resolves in mode B, delivering 100% of the available torque through
+        EACH mesh independently, a silent double-counting of torque.
+    distribute_loads : bool
+        False: Ft and Fr are point loads at gear.position. True: they are uniform
+        DistributedRadialLoad over the face width [mm] of each gear (falls back to point loads
+        where the face width is 0).
+    label : str
+        Reporting tag.
     """
 
     def __init__(self, shaft_a: ShaftSystem, gear_a: GearElement,
@@ -93,7 +83,8 @@ class SpurHelicalMeshLink  :
                  torque_split: float | None = None,
                  distribute_loads: bool = False,
                  label: str = ""):
-        
+        """Store the arguments; see the class docstring."""
+
         self.shaft_a             = shaft_a
         self.gear_a              = gear_a
         self.shaft_b             = shaft_b
@@ -102,10 +93,13 @@ class SpurHelicalMeshLink  :
         self.phi_deg             = phi_deg % 360.0
         self.torque_split        = torque_split
         self.distribute_loads    = distribute_loads
-        self.meshing_load_factor = 1.0    # in this code, there is only 1 load path so it is always equal to 1.0
+        # K_gamma [-]: always 1.0, there is only one load path in this code. Read by the
+        # Kv method B/C modules under database/, whose imports are broken.
+        self.meshing_load_factor = 1.0
         self.label               = label
 
     def validate(self) -> list[str]:
+        """Return the error messages (distinct shafts, torque_split in (0, 1], meshing interface); empty if valid."""
         errors: list[str] = []
         tag = self.label or "SpurHelicalMeshLink"
         if self.shaft_a is self.shaft_b:
@@ -121,6 +115,14 @@ class SpurHelicalMeshLink  :
         return errors
 
     def __repr__(self) -> str:
+        """
+        Text of the link.
+
+        Returns
+        -------
+        str
+            Names of the driver and driven shafts, phi [deg], torque_split [-] and label.
+        """
         return (f"SpurHelicalMeshLink({self.shaft_a.name} -> {self.shaft_b.name}, "
                 f"phi={self.phi_deg:.1f}°, "
                 f"torque_split={self.torque_split!r}, label={self.label!r})")
@@ -134,6 +136,15 @@ class SpurHelicalGearSystem:
     """
     A single-source DAG of shafts connected by SpurHelicalMeshLink.
 
+    Parameters
+    ----------
+    shafts : list of ShaftSystem
+        Every shaft of the transmission.
+    links : list of SpurHelicalMeshLink
+        The meshes, each directed driver -> driven.
+    label : str
+        Reporting tag.
+
     Enforced topology:
       - exactly one source shaft (zero incoming links),
       - no shaft with >1 incoming link (no convergent merge),
@@ -144,6 +155,7 @@ class SpurHelicalGearSystem:
 
     def __init__(self, shafts: list[ShaftSystem], links: list[SpurHelicalMeshLink],
                  label: str = ""):
+        """Store the arguments; see the class docstring."""
         self.shafts = shafts
         self.links = links
         self.label = label
@@ -155,12 +167,14 @@ class SpurHelicalGearSystem:
     # ------------------------------------------------------------------
 
     def _incoming_count(self) -> dict[int, int]:
+        """Number of incoming links [-] of each shaft, keyed by ``id(shaft)``."""
         indeg = {id(s): 0 for s in self.shafts}
         for link in self.links:
             indeg[id(link.shaft_b)] = indeg.get(id(link.shaft_b), 0) + 1
         return indeg
 
     def _sources(self) -> list[ShaftSystem]:
+        """Shafts with no incoming link (the candidates for the power source)."""
         indeg = self._incoming_count()
         return [s for s in self.shafts if indeg.get(id(s), 0) == 0]
 
@@ -216,18 +230,25 @@ class SpurHelicalGearSystem:
         Verify gear_a and gear_b of every SpurHelicalMeshLink occupy the same
         global axial (X) position: shaft.shaft_origin_x + gear.position.
 
-        tol : max allowed centre-to-centre offset [mm].
-              - explicit value  -> used as-is
-              - None + both face widths (b) known (>0) -> half the smaller
-                face width (symmetric overlap requirement)
-              - None + either b == 0.0 (not yet defined) -> falls back to
-                MIN_BEARING_SEPARATION_mm as a purely numerical tolerance,
-                NOT an engineering guarantee of real overlap.
+        Parameters
+        ----------
+        tol : float or None
+            Maximum allowed offset between the two gear centres [mm]. An explicit value is used as
+            given; None uses TOL_GEOMETRY_mm (1e-9 mm) whatever the face widths are.
 
-        NOTE: shaft_origin_x is NOT propagated automatically by resolve()
-        (see SpurHelicalGearSystem module docstring / session notes) — the caller is
-        responsible for setting it consistently on every ShaftSystem
-        before validate() is meaningful for multi-shaft systems.
+        Returns
+        -------
+        list of str
+            One message per link whose offset ``|xa - xb|`` exceeds the tolerance.
+
+        Notes
+        -----
+        The face widths of both gears are read but not used by the code, so the tolerance does
+        not depend on the overlap of the two face widths.
+
+        shaft_origin_x is NOT propagated automatically by resolve(): the caller is responsible for
+        setting it consistently on every ShaftSystem before this check is meaningful for
+        multi-shaft systems.
         """
         errors: list[str] = []
         tag = self.label or "SpurHelicalGearSystem"
@@ -256,6 +277,7 @@ class SpurHelicalGearSystem:
         return errors
 
     def _topology_errors(self) -> list[str]:
+        """Return the topology error messages: links valid, one source, no merge, no cycle, fan-out splits sum to 1 (+-1e-6), axial alignment."""
         errors: list[str] = []
         tag = self.label or "SpurHelicalGearSystem"
 
@@ -318,12 +340,14 @@ class SpurHelicalGearSystem:
         return errors
 
     def validate(self) -> list[str]:
+        """Return the topology messages plus those of every ShaftSystem; empty if valid."""
         errors = list(self._topology_errors())
         for s in self.shafts:
             errors.extend(s.validate())
         return errors
 
     def validate_or_raise(self) -> None:
+        """Raise ValueError listing all messages of validate() if there are any."""
         errors = self.validate()
         if errors:
             raise ValueError(
@@ -337,12 +361,12 @@ class SpurHelicalGearSystem:
 
     def _resolve_link_mode_B(self, link: SpurHelicalMeshLink, T_in: float,
                              rotation_dir_in: int) -> dict:
-        """Sequential / reuse: the driver delivers the FULL available torque."""
+        """Mode B (sequential / reuse): the driver delivers the FULL available torque T_in [N m]; returns the forces() dict."""
         return link.meshing.forces(T_in, link.phi_deg, rotation_dir_in)
 
     def _resolve_link_mode_A(self, link: SpurHelicalMeshLink, T_total: float,
                              rotation_dir_in: int) -> dict:
-        """Simultaneous fan-out: this mesh takes torque_split of the total."""
+        """Mode A (simultaneous fan-out): this mesh takes torque_split of the total torque T_total [N m]; returns the forces() dict."""
         T_in = T_total * link.torque_split
         return link.meshing.forces(T_in, link.phi_deg, rotation_dir_in)
 
@@ -353,7 +377,7 @@ class SpurHelicalGearSystem:
     def _forces_to_loads(self, F: dict, gear: GearElement, side: str,
                         T_in_nm: float, distribute: bool = False) -> list:
         """
-        Build the mesh loads for one side of a mesh.
+        Build the mesh loads (tooth forces, axial thrust, torque) for one side of a mesh.
 
         distribute=False (default): Ft and Fr as RadialLoad at gear.position.
         distribute=True           : Ft and Fr as DistributedRadialLoad over
@@ -361,6 +385,49 @@ class SpurHelicalGearSystem:
                                     b from the gear geometry. Falls back to
                                     RadialLoad when b == 0.0 (face width not set).
         Fa (axial thrust) and TorqueLoad are always point loads.
+
+        Parameters
+        ----------
+        F : dict
+            Result of meshing.forces(): Ft, Fr, Fa [N], T_out [N m] and the angles theta_* [deg].
+        gear : GearElement
+            Gear of this side; its position [mm] and face width b [mm] place the loads.
+        side : str
+            "driver" or "driven".
+        T_in_nm : float
+            Torque entering the mesh on the driver gear [N m].
+        distribute : bool
+            See above.
+
+        Returns
+        -------
+        list
+            RadialLoad / DistributedRadialLoad for Fr and Ft [N], an AxialLoad for Fa if Fa != 0
+            [N], and one TorqueLoad (+T_in on the driver, -T_out on the driven gear) [N m].
+
+        Notes
+        -----
+        Angles come from meshing.forces(): the radial force of the driver acts at phi, the radial
+        force of the driven gear at phi + 180 deg; the tangential forces at 90 deg to them,
+        signed by the sense of rotation (choice of this code, source to find).
+
+        Warnings
+        --------
+        With SpurHelicalGearMeshing (external pair), as coded, Fr of each gear points from its own
+        centre toward the mesh point (driver at phi, driven at phi + 180 deg), i.e. opposite to the
+        separating force on that gear (Harris2007_vol1, sec. 4.2.2, Fig. 4.4, PDF p. 95), and Ft
+        has the same direction on the driver and on the driven gear (phi + 90 deg x rotation_dir of
+        the driver shaft of the link, for both), so the two are not an action-reaction pair. With
+        InternalGearMeshing the same angle formulas give opposed Ft on the two gears, and the mesh
+        point lies at phi + 180 deg from both centres (centre distance = r2 - r1), so only the Fr
+        of the gear on shaft_b points toward it. Whether the stored loads are meant as the forces
+        of the mesh on each shaft is a question for the owner (open review item).
+
+        The axial force is applied as an AxialLoad on the shaft axis only: +Fa on the driver, -Fa on
+        the driven gear, with no dependence on the hand of the helix. No tilting moment Fa x r
+        (r = pitch radius) is created, although Harris2007_vol1, sec. 4.3, states that thrust loads
+        "create concentrated moments that act on the shaft" (Eq. (4.28)-(4.29); sec. 4.3.2 writes it
+        as T = r_p P_a).
         """
         suffix   = "_driver" if side == "driver" else "_driven"
         pos      = gear.position
@@ -390,7 +457,7 @@ class SpurHelicalGearSystem:
 
     def _radial_as_point(self, F: dict, gear: GearElement,
                         suffix: str, pos: float) -> list:
-        """RadialLoad for Ft and Fr (original behaviour)."""
+        """Ft and Fr as RadialLoad [N] at the gear position [mm], with the angles of forces()."""
         return [
             RadialLoad(pos, F["Fr"], F[f"theta_Fr{suffix}"],
                     label=f"{gear.label or 'mesh'}:Fr",
@@ -407,9 +474,10 @@ class SpurHelicalGearSystem:
         DistributedRadialLoad for Ft and Fr over [pos - b/2, pos + b/2].
 
         magnitude is the signed scalar from forces() — constant over the
-        face width (uniform distribution). theta is the constant angle from
-        forces() for this side. Both can be overridden by the caller by
-        constructing DistributedRadialLoad directly with a Callable.
+        face width (uniform distribution), as a total force [N]. theta is the
+        constant angle from forces() for this side [deg]. Both can be overridden
+        by the caller by constructing DistributedRadialLoad directly with a Callable.
+        Uniform distribution over the face width: choice of this code (source to find).
         """
         x_lo = pos - b / 2.0
         x_hi = pos + b / 2.0
@@ -438,40 +506,87 @@ class SpurHelicalGearSystem:
                 source_position: tuple[float, float] = (0.0, 0.0),
                 source_torque_x: float = 0.0) -> None:
         """
-        Propagate power P [W] at speed rpm from the unique source shaft through
-        the DAG, injecting the resulting mesh loads onto every ShaftSystem.
+        Propagate power P at speed rpm from the unique source shaft through the graph and inject
+        the mesh loads on every ShaftSystem.
 
-        Torque propagates in N·m; positions in mm; loads land via
-        ShaftSystem.set_gear_loads (idempotent, so re-resolve is safe).
+        Parameters
+        ----------
+        P : float
+            Power entering the source shaft [W]. Not validated.
+        rpm : float
+            Speed of the source shaft [rpm], > 0.
+        rotation_dir_source : int
+            Sense of rotation of the source shaft about +X, +1 or -1 [-].
+        source_position : tuple of float
+            (y, z) global offset of the source shaft axis [mm] (written to its shaft_position);
+            the position of every other shaft follows from it. Unrelated to torque.
+        source_torque_x : float
+            Axial coordinate on the source shaft [mm] (0 = left end, as for gear.position) where
+            the external power input (motor, coupling) enters; the TorqueLoad -T_source is placed
+            there.
 
-        source_position vs source_torque_x — two different things that
-        happen to both be about "where the source shaft starts":
-          - source_position : tuple[float, float]  (y, z) mm — the source
-            shaft's GLOBAL cross-sectional layout offset (source_shaft.
-            shaft_position). Purely a drawing/positioning concern; every
-            other shaft's position is chased from this one via the mesh
-            centre distances. Unrelated to torque.
-          - source_torque_x : float  mm — the AXIAL position, along the
-            source shaft's OWN x-axis (0 = left end, same convention as
-            gear.position / bearing position), where the external power
-            input (motor/coupling) physically enters the shaft. Defaults
-            to 0.0 (the very start of the shaft).
+        Raises
+        ------
+        ValueError
+            If the topology is invalid, rpm <= 0, or rotation_dir_source is not +1 or -1.
 
-        Without source_torque_x, the source shaft never received a load
-        representing the external power input itself — only the reaction
-        of its first gear mesh (a TorqueLoad at that gear's own position).
-        That made the torsion diagram T(x) backwards for the source shaft:
-        T=0 up to the first gear, then jumping to T_source afterwards,
-        instead of carrying T_source from x=0 up to the gear (where it is
-        fully consumed) and 0 beyond it. This resolve() call now injects
-        that missing input load at source_torque_x, using T=-T_source —
-        the same sign convention _forces_to_loads() already uses for a
-        "driven"/entry side (T=-F["T_out"]), so it correctly cancels the
-        existing +T_source load already placed at the first gear (side=
-        "driver"). Tagged source="gear_mesh" like every other mesh-derived
-        load (not "user") so ShaftSystem.set_gear_loads()'s existing
-        idempotent clearing already covers it on every re-resolve — no
-        ShaftSystem/set_gear_loads() change needed for this.
+        Notes
+        -----
+        ``omega = rpm * 2 pi / 60`` [rad/s] and ``T_source = P / omega`` [N m]; no efficiency.
+        For each link in topological order of the driver shaft: the available torque is T_out of
+        the driver shaft (mode B, a driver gear used by one link) or the available torque times
+        torque_split (mode A, one GearElement shared by several links); meshing.forces() returns
+        the forces; shaft_b is placed at ``(y_a + al cos(phi), z_a + al sin(phi))`` [mm] with
+        al = meshing.al and phi = radians(link.phi_deg); the torque and the sense of rotation of
+        shaft_b are F["T_out"] and F["rotation_dir_out"]. Loads are tagged source="gear_mesh" and
+        go through ShaftSystem.set_gear_loads (idempotent, re-resolve is safe). The record
+        ``_resolved`` keeps T_out [N m], sense of rotation and position per shaft.
+
+        The input torque on the source shaft is a TorqueLoad of -T_source at source_torque_x; with
+        the +T_source TorqueLoad placed at the first gear it makes the torque diagram of the source
+        shaft equal to -T_source (magnitude T_source) from the input up to the gear and zero
+        beyond it.
+
+        Sign convention (SpurHelicalGearMeshing): driver gear +T_in, driven gear -T_out, power
+        input -T_source (net torque of the source shaft is zero; the driven shaft nets -T_out and is
+        closed by a user load). With InternalGearMeshing T_out = T_in u_eff is negative (u < 0), so
+        the TorqueLoad on the driven gear is +abs(T_out) and the T_out recorded in ``_resolved``
+        for that shaft, and passed on to the next mesh, is negative.
+
+        Assumptions: ideal mesh (T_out = T1 u, no losses), mesh forces independent of the shaft
+        and bearing deflections (uncoupled, unlike Mayeux2002, Eq. (1) and Eq. (5), where the
+        load distribution depends on the misalignment), forces applied on the shaft axis.
+
+        Warnings
+        --------
+        Per-shaft rpm is not computed: ShaftSystem.speed_rpm is not set and the ``rpm`` entry of
+        ``_resolved`` is None.
+
+        SpurHelicalGearMeshing.forces() takes the torque as acting on gear1 with the working pitch
+        diameter 2 al/(u+1), u = max(z)/min(z), and returns T_out = T1 u (spurhelical_meshing.py);
+        it does not read ``meshing.driver``. The results are a consistent power balance only when
+        gear_a is the gear on which ``forces()`` takes the torque (see ``gear_a``) AND, for
+        SpurHelicalGearMeshing, gear1 is the pinion; this is not checked. With
+        SpurHelicalGearMeshing the sense of rotation is reversed at each mesh; InternalGearMeshing
+        keeps it.
+
+        The signs of the TorqueLoad objects do not depend on the sense of rotation (power-flow
+        signs: + on a driver gear, - at an entry), whereas the Ft directions do. For an external
+        pair the moment about the shaft axis of the stored Ft, taken at the mesh point, has the
+        sign of the TorqueLoad of that gear only when the driver shaft of that link turns in the +1
+        sense; in a train the sense alternates, so no value of rotation_dir_source makes every
+        mesh consistent (open review item).
+
+        The axial force of a helical mesh creates no tilting moment (see _forces_to_loads).
+
+        References
+        ----------
+        .. [1] Harris2007_vol1, Eq. (4.13) and Eq. (10.35) (power = torque x speed;
+               ``H [W] = 0.001 M [N mm] omega [rad/s]``).
+
+        (source to find) for: the angles of Fr and Ft on driver and driven, the placement of
+        shaft_b from the centre distance, T_out = T1 u, the reversal of the sense of rotation and
+        the torque split between meshes.
         """
         topo_errors = self._topology_errors()
         if topo_errors:
@@ -487,7 +602,7 @@ class SpurHelicalGearSystem:
             )
 
         omega = rpm * 2.0 * math.pi / 60.0
-        T_source = P / omega  # N·m
+        T_source = P / omega  # [N m]; P in W, omega in rad/s
 
         (source_shaft,) = self._sources()
         source_shaft.shaft_position = source_position
@@ -502,10 +617,9 @@ class SpurHelicalGearSystem:
         rot_of: dict[int, int] = {id(source_shaft): rotation_dir_source}
         loads_by_shaft: dict[int, list] = defaultdict(list)
 
-        # external power input on the source shaft itself -- see resolve()'s
-        # own docstring for why this is T=-T_source (matches the "driven"/
-        # entry sign convention in _forces_to_loads) and why source_torque_x
-        # is a distinct concept from source_position.
+        # external power input on the source shaft itself: T = -T_source, the same sign as
+        # the entry side of a driven gear in _forces_to_loads, so it cancels the +T_source
+        # placed at the first gear.
         loads_by_shaft[id(source_shaft)].append(
             TorqueLoad(source_torque_x, -T_source,
                        label=f"{source_shaft.name}:T_in",
@@ -514,7 +628,7 @@ class SpurHelicalGearSystem:
 
         for link in link_order:
             a_id, b_id = id(link.shaft_a), id(link.shaft_b)
-            T_avail = T_out_of[a_id]            # N·m available at the driver
+            T_avail = T_out_of[a_id]            # [N m] available at the driver
             rot_in = rot_of[a_id]
 
             group = driver_groups[id(link.gear_a)]
@@ -525,7 +639,7 @@ class SpurHelicalGearSystem:
                 F = self._resolve_link_mode_A(link, T_avail, rot_in)
                 T_in_used = T_avail * link.torque_split
 
-            # place shaft_b relative to shaft_a along the line of centres
+            # place shaft_b relative to shaft_a along the line of centres [mm] (phi from +Y toward +Z)
             y_a, z_a = link.shaft_a.shaft_position
             al = link.meshing.al
             phi = math.radians(link.phi_deg)
@@ -555,7 +669,7 @@ class SpurHelicalGearSystem:
                 "T_out_Nm": T_out_of.get(id(s)),
                 "rotation_dir": rot_of.get(id(s)),
                 "shaft_position": s.shaft_position,
-                "rpm": None,  # per-shaft rpm is StaticsSolver's kinematics job
+                "rpm": None,  # per-shaft rpm is not computed anywhere
             }
             for s in self.shafts
         }
@@ -565,6 +679,7 @@ class SpurHelicalGearSystem:
     # ------------------------------------------------------------------
 
     def summary(self) -> str:
+        """Multi-line text summary: shafts, links, source and, once resolved, T_out [N m], rotation sense and position [mm] per shaft."""
         tag = self.label or "SpurHelicalGearSystem"
         lines = [f"── {tag} ──────────────────────────────────────────────"]
         sources = self._sources()
@@ -590,6 +705,15 @@ class SpurHelicalGearSystem:
         return "\n".join(lines)
 
     def __repr__(self) -> str:
+        """
+        Text of the system.
+
+        Returns
+        -------
+        str
+            Starts with the class label "GearSystem(" and gives label, number of shafts, number of
+            links and whether resolve() has been run.
+        """
         return (f"GearSystem(label={self.label!r}, shafts={len(self.shafts)}, "
                 f"links={len(self.links)}, "
                 f"resolved={self._resolved is not None})")

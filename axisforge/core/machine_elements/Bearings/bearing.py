@@ -1,20 +1,9 @@
-"""
-core/machine_elements/bearings/bearing.py
+"""Assembled rolling bearing: catalogue data plus the geometry and constants of its family.
 
-``Bearing`` is the orchestrator: catalogue data combined with
-family-derived geometry, assembled exactly once via ``Bearing.assemble()``
-and immutable thereafter. It has no knowledge of load cases, X/Y factors,
-service life, or any other analysis result; those belong in ``solvers/``,
-each with its own dedicated result object.
-
-Do not instantiate ``Bearing`` directly; always go through
-``Bearing.assemble()``.
-
-``C`` (the basic dynamic load rating) is computed by the family from the
-assembled geometry (see the ``C`` property below); it is no longer
-catalogue data. If the family supplies ``surfaces`` (a ``BearingSurfaces``
-instance), it is exposed as ``bearing.surfaces`` in the same way as every
-other attribute returned by ``assemble_geometry``.
+``Bearing`` combines the catalogue data with the attributes computed by a
+``BearingFamily`` and is immutable once assembled with ``Bearing.assemble()``.
+It holds no load case, life or other analysis result; those belong to the
+solvers.
 """
 from __future__ import annotations
 from typing import Any, Iterable
@@ -26,12 +15,13 @@ from axisforge.core.machine_elements.bearings.families.family import (
     is_thrust_family, is_point_contact_family, is_line_contact_family,
 )
 
+# attribute names of the ISO/TS 16281 constants a family stores on the bearing
 _ISO16281_MATERIAL = ("e1", "e2", "nu1", "nu2")
 _ISO16281_POINT    = ("cp", "Ri")
 _ISO16281_LINE     = ("cL", "cs", "P_xk")
 
 def _fmt_value(value) -> str:
-    """Escalar -> número; vetor curto -> lista; vetor longo -> shape/min/max."""
+    """Format a value for the summary: scalar as a number, short vector as a list, long vector as shape, min and max."""
     arr = np.asarray(value, dtype=float)
     if arr.ndim == 0:
         return f"{float(arr):.4g}"
@@ -40,9 +30,16 @@ def _fmt_value(value) -> str:
     return f"array{arr.shape} min={arr.min():.4g} max={arr.max():.4g}"
 
 def _validate_thrust_arrangement(family: BearingFamily, catalog: BearingCatalog) -> None:
-    """A family registered as @thrust must be assembled with
-    arrangement='thrust', and vice versa -- a non-thrust family should
-    not claim a thrust arrangement either."""
+    """Check that the family and the catalogue arrangement agree on thrust duty.
+
+    A family registered as ``@thrust`` must be assembled with
+    ``arrangement='thrust'``, and a non-thrust family must not be given it.
+
+    Raises
+    ------
+    ValueError
+        If exactly one of the two is thrust.
+    """
     thrust_family = is_thrust_family(family)
     thrust_arrangement = catalog.arrangement == "thrust"
     if thrust_family and not thrust_arrangement:
@@ -54,11 +51,51 @@ def _validate_thrust_arrangement(family: BearingFamily, catalog: BearingCatalog)
             f"{catalog.label or catalog.designation}: arrangement='thrust' but family "
             f"{family.name!r} is not registered as a thrust family.")
 
-# depois este validate deve passar para family.py tal como verifico os cylindrical roller
+# TODO: move this validation into family.py, as is done for the cylindrical roller
 
 class Bearing:
+    """Rolling bearing: catalogue data and family-derived geometry, immutable once assembled.
+
+    Build it with ``Bearing.assemble()``, not directly: the catalogue values
+    are copied, every key of the dictionary returned by
+    ``family.assemble_geometry`` is set as an attribute, and afterwards the
+    instance refuses attribute writes.
+
+    Parameters
+    ----------
+    catalog : BearingCatalog
+        Catalogue data; d, D, b, position [mm] and the identifying fields are
+        copied.
+    family : BearingFamily
+        Family that provides the geometry and the load ratings.
+
+    Attributes
+    ----------
+    d, D, b : float
+        Bore diameter, outer diameter and width [mm].
+    position : float
+        Axial coordinate along the shaft [mm].
+    designation, label : str
+        Designation and identifier of the bearing.
+    arrangement : str
+        ``"locating"``, ``"floating"``, ``"non-locating"`` or ``"thrust"``.
+    dm : float
+        Mean of bore and outer diameter, 0.5 (d + D) [mm].
+    surfaces : None
+        Placeholder for a ``BearingSurfaces`` object, set if the family
+        provides one; no AxisForge family does, so it stays None.
+
+    Notes
+    -----
+    ``dm = 0.5 (d + D)`` is the approximation to the pitch diameter of
+    Harris2007_vol1, 2.2, Eq. 2.1 (d_m ~ (1/2)(bore + O.D.)); the families
+    carry their own pitch diameter ``Dpw``. The family attributes (``Z``,
+    ``alpha_0`` [rad], ``gamma``, ...) are those returned by its
+    ``assemble_geometry``.
+    """
 
     def __init__(self, catalog: BearingCatalog, family: BearingFamily):
+        """Copy the catalogue data and set the family attributes; see the class docstring."""
         self.d = catalog.d
         self.D = catalog.D
         self.b = catalog.b
@@ -78,13 +115,30 @@ class Bearing:
                  family: BearingFamily,
                  catalog: BearingCatalog,
                  geometry: dict[str, Any]) -> "Bearing":
-        """
+        """Build an assembled, immutable bearing.
+
         Parameters
         ----------
-        family   : a ``BearingFamily`` instance, passed directly.
-        catalog  : a ``BearingCatalog`` instance.
-        geometry : raw keyword arguments forwarded to
+        family : BearingFamily
+            Family instance, passed directly.
+        catalog : BearingCatalog
+            Catalogue data.
+        geometry : dict[str, Any]
+            Raw keyword arguments forwarded to
             ``family.assemble_geometry(catalog, **geometry)``.
+
+        Returns
+        -------
+        Bearing
+            Bearing with the family attributes set, flagged as assembled. The
+            ISO/TS 16281 analysis is enabled if the family returned
+            ``iso16281_analysis = True``.
+
+        Raises
+        ------
+        ValueError
+            If the catalogue is invalid, if the family and the arrangement
+            disagree on thrust duty, or if the family rejects its inputs.
         """
         catalog.validate_or_raise()
         _validate_thrust_arrangement(family, catalog)
@@ -103,6 +157,13 @@ class Bearing:
         return bearing
 
     def __setattr__(self, name: str, value: Any) -> None:
+        """Set an attribute; refused once the bearing is assembled.
+
+        Raises
+        ------
+        AttributeError
+            If ``assemble()`` has completed.
+        """
         if getattr(self, "_assembled", False):
             raise AttributeError(
                 f"Bearing(label={getattr(self, 'label', '')!r}) is immutable "
@@ -112,9 +173,23 @@ class Bearing:
         super().__setattr__(name, value)
 
     def has_internal_geometry(self) -> bool:
+        """Tell whether ``assemble()`` has completed.
+
+        Returns
+        -------
+        bool
+            True once the family attributes are set.
+        """
         return self._assembled
 
     def is_locating(self) -> bool:
+        """Tell whether the bearing is the locating bearing of the arrangement.
+
+        Returns
+        -------
+        bool
+            True if ``arrangement == "locating"``.
+        """
         return self.arrangement == "locating"
 
     @property
@@ -146,25 +221,20 @@ class Bearing:
         return self._family.dynamic_capacity(self)
 
     def validate(self) -> list[str]:
-        """
-        Provided for call-site compatibility with
-        ``ShaftSystem.validate()``, which does
-        ``errors.extend(f"{tag}.bearing: {e}" for e in b.validate())``
-        for every bearing on the shaft — the pre-rewrite bearing
-        classes exposed this as a post-hoc check.
+        """Check the stored catalogue values and the assembled state.
 
-        In normal use this method cannot actually surface anything new:
-        ``catalog.validate_or_raise()`` has already run inside
-        ``assemble()``, and the instance is immutable from that point
-        on (``__setattr__`` refuses further writes), so any ``Bearing``
-        that exists has already been proven valid and cannot have
-        drifted since. The checks are repeated here regardless, against
-        this instance's own copied attributes (the original
-        ``BearingCatalog`` is discarded after ``assemble()``; only its
-        field values survive on ``self``) as genuine defense-in-depth
-        — for example against ``__setattr__`` being bypassed via
-        ``object.__setattr__`` — rather than as an unconditional empty
-        list.
+        Called by ``ShaftSystem.validate()`` for every bearing on the shaft.
+        The catalogue checks of ``BearingCatalog.validate`` are repeated on
+        the copied attributes as defence in depth: the catalogue has already
+        been validated by ``assemble()`` and the instance is immutable, so in
+        normal use only a bypass of ``__setattr__`` can make them fail.
+
+        Returns
+        -------
+        list[str]
+            One message per violated condition (not assembled, position < 0,
+            unknown arrangement, d <= 0, D <= 0, D <= d, b < 0); empty if
+            valid.
         """
         errors: list[str] = []
         tag = self.label or self.designation or self.__class__.__name__
@@ -191,10 +261,26 @@ class Bearing:
         return errors
 
     def has_iso16281_analysis(self) -> bool:
+        """Tell whether the family stored the ISO/TS 16281 contact constants.
+
+        Returns
+        -------
+        bool
+            True if the attribute ``iso16281_analysis`` is set and true.
+        """
         return bool(getattr(self, "iso16281_analysis", False))
 
     def iso16281_attributes(self) -> dict[str, Any]:
-        """Atributos associados à análise ISO 16281 ({} se não estiver ativa)."""
+        """Attributes associated with the ISO/TS 16281 analysis ({} if it is not active).
+
+        Returns
+        -------
+        dict[str, Any]
+            Materials ``e1``, ``e2``, ``nu1``, ``nu2`` plus, for a point-contact
+            family, ``cp`` [N/mm^1.5] and ``Ri`` [mm], or, for a line-contact
+            family, ``cL``, ``cs`` [N/mm^(10/9)] and ``P_xk`` [mm]; only those
+            present on the bearing. Empty if the analysis is not active.
+        """
         if not self.has_iso16281_analysis():
             return {}
         if is_point_contact_family(self._family):
@@ -206,7 +292,14 @@ class Bearing:
         return {k: getattr(self, k) for k in keys if hasattr(self, k)}
 
     def summary(self) -> str:
-        tag = self.label or self.designation or "Bearing"
+        """Text summary of the bearing: family, position [mm], arrangement, d, D, b [mm], computed C [N] and the ISO/TS 16281 constants.
+
+        Returns
+        -------
+        str
+            Multi-line text.
+        """
+        tag =self.label or self.designation or "Bearing"
         header = f"-- {tag} "
         c_txt = f"{self.C:.0f} N" if self._assembled else "n/a"
         lines = [
@@ -229,6 +322,7 @@ class Bearing:
         return "\n".join(lines)
 
     def __repr__(self) -> str:
+        """Short representation: class, family name, designation, position [mm] and arrangement."""
         return (
             f"{self.__class__.__name__}("
             f"family={self._family.name!r}, "

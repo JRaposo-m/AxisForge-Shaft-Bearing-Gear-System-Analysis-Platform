@@ -1,33 +1,6 @@
-"""
-axisforge/solvers/machine_elements/shaft/fem_solvers/global_solver/torsion.py
-
-No DOF, no stiffness matrix, no dependency on Timoshenko vs.
-Euler-Bernoulli -- it is pure statics over the same x_nodes: T(x) =
-cumulative sum of TorqueLoad up to x, tau(x) = T(x)/Wt(x) via
-Shaft.Wt_at(), and phi(x) = twist angle, integrated node-to-node from
-d(phi)/dx = T(x)/(G*J(x)).
-
-MOVED (this pass): out of static_solvers/ into global_solver/, sibling
-to rigid_support.py and postprocessing.py -- still genuinely
-independent of everything else here (doesn't even need the FEM
-elements), the move is only about physical location matching the rest
-of this pass's folder cleanup.
-
-Called from global_solver/postprocessing.py's build_shaft_result() --
-NOT from rigid_support.py's solve(), which stays bending+axial only
-(see that module's docstring). TorsionSolver.solve() is called
-independently there, the same way ShaftResultsReader.read() used to
-call it directly.
-
-MISSING PIECE -- flagging rather than guessing: _twist_angle() below
-calls shaft_system.shaft.J_at(x), a polar-second-moment-of-area accessor
-that does not exist yet alongside diameter_at()/W_at()/Wt_at() (as far
-as I've seen of the Shaft class). This file will raise AttributeError
-until that's added. If Wt_at() is already J/r_outer for your section
-definitions, J_at() could just be Wt_at(x) * (diameter_at(x) / 2) --
-but I don't have Shaft's source to confirm that relationship holds for
-both solid and hollow sections, so I'm not assuming it here. Still open
-from the previous pass -- unchanged.
+"""Torsion of the shaft by statics: torque, nominal torsional shear stress and twist angle at the
+mesh nodes. No DOF and no stiffness matrix are involved, so the result does not depend on the beam
+theory. Called by ``build_shaft_result`` (not by ``RigidSupportFEMSolver.solve`` directly).
 """
 
 from __future__ import annotations
@@ -40,26 +13,63 @@ from axisforge.config import SOLVER_TOLERANCE
 
 
 class TorsionSolver:
-    """
-    Pure statics over x_nodes -- see module docstring. solve() returns
-    everything build_shaft_result() needs for the torsional part of
-    ShaftResults: T(x), tau(x), phi(x), and the per-node load
-    contributions breakdown.
+    """Torque T(x), torsional shear stress tau(x) and twist angle phi(x) along the shaft.
+
+    Warnings
+    --------
+    Torque units: ``TorqueLoad.magnitude`` and the returned T are [N m]; the module docstring of
+    ``core/loads.py`` says N mm (open review item).
+
+    Notes
+    -----
+        T(x) = sum of T_k over the sources with pos <= x;  tau(x) = T(x) / W_t(x);
+        d(phi)/dx = T(x) / (G J(x))
+
+    with ``T_k`` = ``TorqueLoad.magnitude`` [N m], ``W_t`` = ``Shaft.Wt_at`` [mm^3], ``G`` [MPa] and
+    ``J`` = ``Shaft.J_at`` [mm^4]. The torque-twist relation ``torque = G J dtheta_x/dx`` is
+    Onate2013_vol2, 4.3, Eq. (4.27b), (4.34), (4.37a). ``tau = T / W_t`` with ``W_t = J / (d/2)`` is
+    the maximum shear stress of a circular section in free torsion: Onate2013_vol2, Fig. 4.11 (thick
+    cylinder, ``tau = 2 r_o M_x / (pi (r_o^4 - r_i^4))``; the full-circle entry of that figure is
+    misprinted). Nominal value: no stress concentration.
+
+    At the node of a torque source, T and tau are the values just to the right of the source (the
+    source is already included).
+
+    Sign: fixed upstream in ``GearSystem._forces_to_loads`` (driver mesh point +T_in, driven mesh
+    point -T_out); a shaft in equilibrium returns T -> 0 at the free end.
     """
 
     def solve(
         self, shaft_system: ShaftSystem, x_nodes: list[float]
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[list[dict]]]:
-        """
-        Returns (T_total, tau_total, phi_total, contributions), each of
-        T_total/tau_total/phi_total a length-n np.ndarray aligned with
-        x_nodes.
+        """Torque, shear stress and twist angle at every node.
+
+        Parameters
+        ----------
+        shaft_system : ShaftSystem
+            Provides ``torque_loads`` ([N m] at positions [mm]) and the shaft sections.
+        x_nodes : list of float
+            Node positions [mm].
+
+        Returns
+        -------
+        T_total : ndarray, shape (n,)
+            Torque transmitted at each node [N m].
+        tau_total : ndarray, shape (n,)
+            Nominal torsional shear stress ``T / W_t`` at each node [MPa].
+        phi_total : ndarray, shape (n,)
+            Twist angle relative to the first node [rad].
+        contributions : list of list of dict
+            Per node, one dict per torque source already applied (``"label"``, ``"T"`` [N m],
+            ``"tau"`` [MPa]).
         """
         T_total, tau_total, contributions = self._torque_and_stress(shaft_system, x_nodes)
         phi_total = self._twist_angle(shaft_system, x_nodes, T_total)
         return T_total, tau_total, phi_total, contributions
 
     def _torque_sources(self, shaft_system: ShaftSystem) -> list[tuple[float, float, str]]:
+        """Torque loads as ``(position [mm], magnitude [N m], label)`` tuples sorted by position.
+        """
         return sorted(
             (
                 (ld.position, ld.magnitude, ld.label or f"torque@{ld.position:.1f}")
@@ -69,16 +79,25 @@ class TorsionSolver:
         )
 
     def _torque_and_stress(self, shaft_system: ShaftSystem, x_nodes: list[float]):
-        """
-        T(x) = sum of TorqueLoad.magnitude for every source at position <= x.
+        """Torque, shear stress and per-source contributions at every node.
 
-        Sign convention fixed upstream in GearSystem._forces_to_loads:
-        driver mesh point -> +T_in ; driven mesh point -> -T_out. A shaft
-        in equilibrium (net torque ~0) should return T(x)->0 at the free
-        end -- see validate_equilibrium() for the explicit check.
+        ``T(x)`` is the sum of ``TorqueLoad.magnitude`` over the sources at ``pos <= x + SOLVER_TOLERANCE``.
+        Units: T [N m], ``W_t`` [mm^3], ``tau = T * 1000 / W_t`` [MPa] (the factor 1000 converts N m to
+        N mm).
 
-        Units: TorqueLoad.magnitude is N*m (per loads.py); Wt_at returns
-        mm^3 -> tau = T[N*m]*1000 / Wt[mm^3] = N/mm^2 = MPa.
+        Parameters
+        ----------
+        shaft_system : ShaftSystem
+            Torque loads and shaft sections.
+        x_nodes : list of float
+            Node positions [mm].
+
+        Returns
+        -------
+        T_total, tau_total : ndarray, shape (n,)
+            Torque [N m] and shear stress [MPa] at each node.
+        contributions : list of list of dict
+            Per node, the sources included in T.
         """
         torque_sources = self._torque_sources(shaft_system)
 
@@ -104,32 +123,27 @@ class TorsionSolver:
         return T_total, tau_total, contributions
 
     def _twist_angle(self, shaft_system: ShaftSystem, x_nodes: list[float], T_total: np.ndarray) -> np.ndarray:
-        """
-        phi(x_nodes[0]) = 0 -- reference at the first node. A
-        free-floating shaft in torsion has no absolute reference point
-        the way a cantilever's fixed end does, so this is arbitrary;
-        say if you want it referenced elsewhere (e.g. zeroed at a
-        specific bearing) instead.
+        """Twist angle at every node by node-to-node integration of ``d phi/dx = T / (G J)``.
 
-        Node-to-node cumulative integration, mirroring how T(x) is
-        already a cumulative sum: phi(x_i+1) = phi(x_i) + T_i * dx_i /
-        (G_i * J_i), with T_i = T_total[i] and G_i, J_i evaluated at the
-        segment's start node x_i (piecewise-constant across each
-        segment -- same assumption _torque_and_stress() already makes
-        for T(x) itself between torque application points).
+        ``phi(x_0) = 0`` (arbitrary reference: a free shaft has no fixed end). For each segment
+        ``phi_{i+1} = phi_i + T_i * dx_i / (G_i * J_i)`` with ``T_i = T_total[i]`` (the torque at the
+        segment start node) and ``G_i``, ``J_i`` evaluated at that node, so T, G and J are piecewise
+        constant over each segment (Onate2013_vol2, 4.3, Eq. (4.27b), (4.34), (4.37a)).
 
-        G_i = E/(2*(1+v)) at x_i -- same formula already used in
-        TimoshenkoBeam.stiffness_element() -- via the section's material
-        at x_i (shaft.section_at(x) already used elsewhere, e.g.
-        Elem.from_x_nodes()).
+        Parameters
+        ----------
+        shaft_system : ShaftSystem
+            Provides the sections (material) and ``shaft.J_at``.
+        x_nodes : list of float
+            Node positions [mm].
+        T_total : ndarray, shape (n,)
+            Torque at each node [N m]; converted internally to N mm (times 1000).
 
-        J_i = shaft.J_at(x_i) -- see the MISSING PIECE note in the
-        module docstring; this call does not exist yet.
-
-        Units: T_total is N*m -> *1000 = N*mm. x_nodes assumed mm
-        (consistent with E in MPa = N/mm^2, I/J in mm^4 elsewhere in
-        this codebase). phi_segment [rad] = T[N*mm] * dx[mm] /
-        (G[N/mm^2] * J[mm^4]).
+        Returns
+        -------
+        ndarray, shape (n,)
+            Twist angle [rad]; ``G = E / (2 (1 + nu))`` [MPa] of the section material at the start node,
+            ``J`` [mm^4].
         """
         n = len(x_nodes)
         phi = np.zeros(n)
@@ -149,12 +163,22 @@ class TorsionSolver:
         return phi
 
     def validate_equilibrium(self, shaft_system: ShaftSystem, tol: float = 1e-6) -> list[str]:
-        """
-        Checks that the net applied torque (sum of every
-        TorqueLoad.magnitude) is ~0 -- a non-zero net usually means a
-        missing or mis-signed load (e.g. the driven-side reaction torque
-        was never added, or GearSystem._forces_to_loads produced the
-        wrong sign for one of the sources).
+        """Check that the net applied torque is zero.
+
+        A non-zero net torque usually means a missing or mis-signed load (for example the driven-side
+        reaction torque was not added).
+
+        Parameters
+        ----------
+        shaft_system : ShaftSystem
+            Provides ``torque_loads`` ([N m]).
+        tol : float, optional
+            Accepted absolute net torque [N m]. Default 1e-6.
+
+        Returns
+        -------
+        list of str
+            Empty if ``abs(sum of magnitudes) <= tol``, otherwise one error message.
         """
         errors: list[str] = []
         net = sum(ld.magnitude for ld in shaft_system.torque_loads)

@@ -1,6 +1,5 @@
-"""
-axisforge/solvers/mesh/__init__.py
-
+"""Mesh-convergence solver of the shaft FEM: Richardson extrapolation and Grid Convergence Index
+(GCI) over successive mesh refinements.
 """
 from __future__ import annotations
 

@@ -1,11 +1,9 @@
-# axisforge/core/mechanical_system/__init__.py
 """
-axisforge/core/mechanical_system/__init__.py
+Mechanical systems: assemblies of shafts, bearings and gears.
 
-Ponto único de import para mechanical_system -- eager, sem lazy
-loading. Por agora só existe parallel_axis/; cada família nova (ex.
-perpendicular_axis/) ganha a sua própria subpasta com o mesmo padrão, e
-uma linha aqui a mais.
+Re-exports the parallel-axis (spur and helical) system classes. Planetary
+and perpendicular-axis systems do not exist (the
+``parallel_axis/planetary/`` folder is empty).
 """
 from __future__ import annotations
 

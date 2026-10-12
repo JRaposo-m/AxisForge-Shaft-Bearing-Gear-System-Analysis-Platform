@@ -1,18 +1,15 @@
-"""
-axisforge/outputs/_format.py
-
-Formatting and CSV helpers shared by every module of ``axisforge.outputs``.
+"""Formatting and CSV helpers shared by every module of ``axisforge.outputs``.
 
 Nothing here knows about bearings, shafts or gears: it turns lists of plain dicts ("records")
 into aligned text and CSV files, and back. Only the standard library is used.
 
 Record conventions
 ------------------
-* A record is a ``dict`` of scalars (``float``, ``int``, ``bool``, ``str``).
+* A record is a flat ``dict`` of scalars (``float``, ``int``, ``bool``, ``str``).
 * The unit of a number is part of its key (``Fr_N``, ``delta_r_mm``, ``psi_rad``). A key without
   a unit suffix is dimensionless or text.
 * NaN means "not available"; it is written as ``nan`` in CSV and as ``-`` in text. ``inf`` is
-  kept as ``inf``.
+  kept as ``inf`` in CSV. ``None`` is shown as ``-`` in text and written as an empty cell in CSV.
 * Descriptions of a built system use the four-key schema
   ``{"section", "parameter", "value", "unit"}`` (see ``kv_record``).
 """
@@ -34,16 +31,21 @@ def format_value(value, spec: str = ".6g") -> str:
 
     Parameters
     ----------
-    value: bool, int, float, str or None
-        The value. ``bool`` gives ``yes`` / ``no``; ``None`` and NaN give ``-``.
-    spec: str
+    value : bool, int, float, str or None
+        The value. ``bool`` gives ``yes`` / ``no``; ``None`` and NaN give ``-``. Any other
+        type (including ``str``) is returned through ``str()`` and ignores ``spec``.
+    spec : str
         ``format`` specification applied to ``float`` values (and to ``int`` values when it is
-        not empty).
+        not empty; an ``int`` for which the specification is invalid is shown with ``str()``).
 
     Returns
     -------
-    text: str
-        The formatted value.
+    text : str
+        The formatted value. ``inf`` is formatted by ``spec`` like any float.
+
+    Notes
+    -----
+    The ``bool`` test comes before the ``int`` test because ``bool`` is a subclass of ``int``.
     """
     if value is None:
         return "-"
@@ -64,21 +66,24 @@ def format_table(columns: Sequence[Column], records: Sequence[dict], indent: int
 
     Parameters
     ----------
-    columns: sequence of tuple
+    columns : sequence of tuple
         ``(key, header, format_spec)`` or ``(key, header, format_spec, scale)``. When ``scale``
-        is given, a float value is multiplied by it before formatting; this is how one record
-        key is shown in two units (for example ``psi_rad`` as ``psi [rad]`` and, with
-        ``scale=1e3``, as ``psi [mrad]``). A key missing from a record counts as NaN.
-    records: sequence of dict
+        is given, a ``float`` value is multiplied by it before formatting (``int`` values are
+        not scaled); this is how one record key is shown in two units (for example ``psi_rad``
+        as ``psi [rad]`` and, with ``scale=1e3``, as ``psi [mrad]``). A key missing from a
+        record counts as NaN and is shown as ``-``. Values are formatted by ``format_value``.
+    records : sequence of dict
         One table row per record.
-    indent: int
+    indent : int
         Number of leading spaces on every line.
 
     Returns
     -------
-    text: str
-        Header, a rule and one line per record, right-aligned. Empty ``records`` give the header
-        and the rule only.
+    text : str
+        Header line, a rule of ``-`` and one line per record, joined with ``"\\n"`` (no trailing
+        newline). Every column is as wide as its longest cell or header, right-aligned (headers
+        too), and columns are separated by two spaces. Empty ``records`` give the header and
+        the rule only.
     """
     cells = []
     for record in records:
@@ -104,18 +109,19 @@ def kv_record(section: str, parameter: str, value, unit: str = "") -> dict:
 
     Parameters
     ----------
-    section: str
+    section : str
         Group the row belongs to (for example ``"shaft shaft_1"``).
-    parameter: str
+    parameter : str
         Name of the parameter.
-    value: float, int, bool or str
+    value : float, int, bool or str
         The value.
-    unit: str
-        Unit text, empty when dimensionless.
+    unit : str
+        Unit text (as shown, for example ``"mm"``, ``"N m"``), empty when dimensionless or
+        not stated. It is a label: no conversion is done.
 
     Returns
     -------
-    record: dict
+    record : dict
         ``{"section", "parameter", "value", "unit"}``.
     """
     return dict(section=section, parameter=parameter, value=value, unit=unit)
@@ -127,20 +133,22 @@ def format_key_values(records: Iterable[dict], name_width: int = 34, value_width
 
     Parameters
     ----------
-    records: iterable of dict
-        Records with the keys of ``kv_record``, in display order. Consecutive records with the
-        same ``section`` form one block.
-    name_width: int
-        Width of the parameter column.
-    value_width: int
-        Width of the value column.
-    spec: str
-        Format specification for float values.
+    records : iterable of dict
+        Records with the keys of ``kv_record`` (``unit`` may be absent), in display order.
+        Consecutive records with the same ``section`` form one block.
+    name_width : int
+        Width of the parameter column (left-aligned, padded; longer names are not cut).
+    value_width : int
+        Width of the value column (right-aligned).
+    spec : str
+        Format specification for float values (see ``format_value``).
 
     Returns
     -------
-    text: str
-        The blocks separated by a blank line; each starts with ``<section>:``.
+    text : str
+        The blocks separated by a blank line; each starts with ``<section>:`` and has one line
+        per record, indented by four spaces, ``parameter  value  unit`` with trailing spaces
+        removed. Empty input gives an empty string.
     """
     lines: list[str] = []
     section = None
@@ -160,13 +168,14 @@ def union_fields(records: Iterable[dict]) -> list[str]:
 
     Parameters
     ----------
-    records: iterable of dict
+    records : iterable of dict
         The records.
 
     Returns
     -------
-    fields: list of str
-        Keys without repetition.
+    fields : list of str
+        Keys without repetition, ordered by first appearance (record by record, key by key in
+        each record's own order); it is not sorted. Used as the default CSV column order.
     """
     fields: dict[str, None] = {}
     for r in records:
@@ -179,12 +188,12 @@ def to_python(value):
 
     Parameters
     ----------
-    value: object
+    value : object
         Any value.
 
     Returns
     -------
-    value: object
+    value : object
         ``value.item()`` for a 0-d NumPy scalar or array, otherwise ``value`` itself.
     """
     if hasattr(value, "item") and getattr(value, "ndim", None) == 0:
@@ -197,21 +206,23 @@ def attribute_rows(obj, section: str, attributes, prefix: str = "") -> list[dict
 
     Parameters
     ----------
-    obj: object
+    obj : object
         Any object.
-    section: str
+    section : str
         Section of every row.
-    attributes: iterable of tuple
+    attributes : iterable of tuple
         ``(attribute name, unit)`` or ``(attribute name, unit, parameter label)``. The label
-        defaults to the attribute name.
-    prefix: str
+        defaults to the attribute name. The unit is a text label, not a conversion.
+    prefix : str
         Text put before every parameter label.
 
     Returns
     -------
-    rows: list of dict
-        One row per attribute that exists and holds a scalar; the others are skipped, so the
-        listing does not break when a class gains or loses an attribute.
+    rows : list of dict
+        One row per attribute that exists and holds a ``bool``, ``int``, ``float`` or ``str``
+        (NumPy scalars are converted with ``to_python``); the others (missing, ``None``,
+        arrays, objects) are skipped, so the listing does not break when a class gains or loses
+        an attribute.
     """
     rows = []
     for item in attributes:
@@ -230,12 +241,13 @@ def scalar_attributes(obj) -> dict:
 
     Parameters
     ----------
-    obj: object
-        A dataclass, an object with ``__dict__`` or an object with ``__slots__``.
+    obj : object
+        A dataclass, an object with ``__dict__`` or an object with ``__slots__``. Properties
+        are not listed (only fields, instance attributes or slots).
 
     Returns
     -------
-    attributes: dict
+    attributes : dict
         ``{name: value}`` for every public attribute that is a ``bool``, ``int``, ``float`` or
         ``str`` (NumPy scalars are converted to Python scalars); arrays, objects and names that
         start with an underscore are left out.
@@ -263,18 +275,20 @@ def write_records_csv(path, records: Sequence[dict], fields: Sequence[str] | Non
 
     Parameters
     ----------
-    path: str or Path
-        Output file; the parent folder must exist.
-    records: sequence of dict
+    path : str or Path
+        Output file; the parent folder must exist. An existing file is overwritten.
+    records : sequence of dict
         The records.
-    fields: sequence of str, optional (None)
-        Column order. None uses the union of the keys in order of first appearance. A key that
-        is in a record but not in ``fields`` is ignored; a missing key is written empty.
+    fields : sequence of str, optional (None)
+        Column order. None uses ``union_fields(records)``. A key that is in a record but not in
+        ``fields`` is ignored; a missing key and a ``None`` value are written as an empty cell.
 
     Notes
     -----
-    UTF-8, ``newline=""``. NaN is written as ``nan``, ``inf`` as ``inf``, booleans as ``True`` /
-    ``False``.
+    Format of the file: ``csv.DictWriter`` with the default ``excel`` dialect (comma
+    separator, ``\\r\\n`` line terminator, minimal quoting), one header line, UTF-8 without BOM,
+    opened with ``newline=""``. Numbers are written with ``str()`` (shortest round-trip
+    ``repr`` for floats): NaN as ``nan``, ``inf`` as ``inf``, booleans as ``True`` / ``False``.
     """
     columns = list(fields) if fields is not None else union_fields(records)
     with open(Path(path), "w", newline="", encoding="utf-8") as f:
@@ -289,22 +303,25 @@ def read_records_csv(path, text_fields: Iterable[str] = (),
 
     Parameters
     ----------
-    path: str or Path
-        The file.
-    text_fields: iterable of str
-        Columns kept as text.
-    bool_fields: iterable of str
-        Columns read as ``bool`` (``"True"`` is True, anything else False).
+    path : str or Path
+        The file (UTF-8, header line, ``excel`` dialect as written by ``write_records_csv``).
+    text_fields : iterable of str
+        Columns kept as text exactly as read (an empty cell stays ``""``).
+    bool_fields : iterable of str
+        Columns read as ``bool`` (``"True"`` is True, anything else False, including empty).
 
     Returns
     -------
-    records: list of dict
-        Numbers as ``float`` (``nan`` and ``inf`` included), an empty cell as NaN, and any other
-        non-numeric cell as text.
+    records : list of dict
+        One dict per data line, keyed by the header. Cell conversion for the other columns: an
+        empty cell becomes NaN, a cell that ``float()`` accepts (``nan``, ``inf``, integers
+        too) becomes ``float`` (so integer columns come back as ``float``), and any other
+        cell stays ``str``.
     """
     text_fields, bool_fields = set(text_fields), set(bool_fields)
 
     def parse(name: str, cell: str):
+        """Convert one CSV cell to str, bool, NaN or float as described in Returns."""
         if name in text_fields:
             return cell
         if name in bool_fields:

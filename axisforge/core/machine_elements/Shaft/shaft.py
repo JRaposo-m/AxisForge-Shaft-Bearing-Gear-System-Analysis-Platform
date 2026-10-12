@@ -1,30 +1,5 @@
 """
-AxisForge — Shaft Geometry Model
-
-Geometric primitives for shaft modelling, in (r, theta, z) convention.
-z is the absolute axial coordinate [mm]. theta [deg] is used only for
-localized features (Keyway) — the shaft body itself is a solid of revolution.
-
-Units: mm (lengths), mm^4 (area moments), degrees (angles).
-
-References:
-  Shigley §7-1 (shaft geometry conventions)
-  Peterson §1 (stress raisers at geometric discontinuities)
-
-Shoulder ownership (CHANGED)
------------------------------
-A Shoulder used to live on a ShaftSection (shoulder_left / shoulder_right),
-which forced an asymmetric convention for which side of a boundary "owned"
-it (validate() required diameter_large to match whichever section held the
-reference, diameter_small the other) -- confusing to build against, and
-Shaft.shoulders() only ever looked at shoulder_right, silently missing any
-shoulder attached as a shoulder_left.
-
-A Shoulder now belongs to the Shaft, keyed by the boundary it describes:
-Shaft.transitions: dict[int, Shoulder], where index i is the boundary
-between sections[i] and sections[i+1]. There is no "left" or "right" to
-get backwards -- a transition either has a Shoulder or it doesn't.
-ShaftSection no longer carries shoulder_left / shoulder_right at all.
+Geometry of a stepped shaft: sections, shoulders and keyways, with the section properties used by the beam model.
 """
 
 from __future__ import annotations
@@ -40,6 +15,7 @@ from axisforge.database.shaft.keyway.Woodruff_key.iso3912 import lookup_woodruff
 
 
 class KeywayType(Enum):
+    """Keyway family: parallel key, Woodruff key or spline (spline lookup is not implemented)."""
     PARALLEL = auto()
     WOODRUFF = auto()
     SPLINE = auto()
@@ -47,7 +23,41 @@ class KeywayType(Enum):
 
 @dataclass
 class Keyway:
-    """Localized stress raiser at absolute position (z_position, theta)."""
+    """Localized stress raiser (keyway) at an axial position and a circumferential angle.
+
+    The shaft body is a solid of revolution; only the keyway carries an angle.
+
+    Parameters
+    ----------
+    label : str
+        Identifier; must not be empty.
+    z_position : float
+        Axial position of the keyway [mm]; must be >= 0. The reference is
+        open (review item): this module does not use the value, and the only
+        consumer (``ShaftPostProcessor.process``) adds the start of the owning
+        section to it, i.e. reads it as measured from the left face of that
+        section, not from the left face of ``sections[0]``. Not checked
+        against the section or shaft length.
+    width : float
+        Keyway width ``b`` [mm]; must be > 0.
+    depth : float
+        Keyway depth in the shaft ``t_shaft`` [mm]; must be > 0 and, inside a
+        ShaftSection, < section radius.
+    length : float
+        Keyway length [mm] (for a Woodruff key, the key diameter ``D``);
+        must be > 0.
+    theta : float, optional
+        Circumferential angle of the keyway [deg], in [0, 360). Its
+        reference direction is not established in this module.
+    keyway_type : KeywayType, optional
+        Keyway family.
+    depth_min, depth_max : float or None, optional
+        Standard tolerance limits of ``depth`` [mm].
+    L_min, L_max : float or None, optional
+        Standard limits of ``length`` [mm]; checked in :meth:`validate`.
+    Kf_bending, Kf_torsion : float or None, optional
+        Fatigue notch factors in bending and torsion [-]; not computed here.
+    """
     label: str
     z_position: float
     width: float
@@ -65,6 +75,44 @@ class Keyway:
     @classmethod
     def from_standard(cls, label, shaft_diameter, z_position, theta=0.0,
                     keyway_type=KeywayType.PARALLEL, length=None, series=1):
+        """Build a keyway whose dimensions come from the standard-dimension tables.
+
+        Parameters
+        ----------
+        label : str
+            Identifier.
+        shaft_diameter : float
+            Shaft diameter at the keyway [mm], used to look up the table row.
+        z_position : float
+            Axial position of the keyway [mm]; see the class docstring for its reference.
+        theta : float, optional
+            Circumferential angle [deg].
+        keyway_type : KeywayType, optional
+            ``PARALLEL`` or ``WOODRUFF``.
+        length : float or None, optional
+            Keyway length [mm]; required for ``PARALLEL`` (a Woodruff key
+            takes its length from the table diameter ``D``).
+        series : int, optional
+            Woodruff series passed to the table lookup [-].
+
+        Returns
+        -------
+        Keyway
+            Keyway with ``b``, ``t_shaft`` and its limits taken from the
+            tables of ``axisforge.database.shaft.keyway``.
+
+        Raises
+        ------
+        ValueError
+            If ``length`` is None for a ``PARALLEL`` keyway.
+        NotImplementedError
+            For any other ``keyway_type``.
+
+        Notes
+        -----
+        The standard behind each table is named in the database modules, not
+        here (source to find).
+        """
         if keyway_type == KeywayType.PARALLEL:
             if length is None:
                 raise ValueError("length is required for PARALLEL keyways")
@@ -87,6 +135,7 @@ class Keyway:
         raise NotImplementedError(f"from_standard not implemented for {keyway_type}")
 
     def __post_init__(self) -> None:
+        """Raise ValueError if label is empty, z_position < 0, width/depth/length <= 0 or theta outside [0, 360) deg."""
         if not self.label:
             raise ValueError("Keyway label cannot be empty")
         if self.z_position < 0:
@@ -101,6 +150,14 @@ class Keyway:
             raise ValueError(f"theta must be in [0, 360), got {self.theta}")
 
     def validate(self) -> list[str]:
+        """Geometry errors of this keyway (empty list if none).
+
+        Returns
+        -------
+        list of str
+            Messages for width, depth or length <= 0, and for ``length``
+            outside ``[L_min, L_max]`` when those limits are set [mm].
+        """
         errors: list[str] = []
         if self.width <= 0:
             errors.append(f"width must be > 0 (got {self.width})")
@@ -117,22 +174,30 @@ class Keyway:
 
 @dataclass
 class Shoulder:
-    """
-    Fillet transition between two adjacent sections.
+    """Fillet shoulder between two adjacent sections of different diameter.
 
-    r_over_d and D_over_d feed Peterson interpolation for Kt.
-    Constraints: fillet_radius > 0, diameter_large > diameter_small,
-    fillet_radius <= (D - d) / 2.
+    ``r_over_d`` and ``D_over_d`` are the ratios r/d and D/d used to read a
+    theoretical stress-concentration factor Kt from a chart (named
+    "Peterson" in the code; source to find). The shoulder belongs to the
+    Shaft, attached with :meth:`Shaft.set_transition` and keyed by the
+    boundary index; a ShaftSection does not hold it.
 
-    Ownership: attached to the Shaft via Shaft.set_transition(index, ...),
-    keyed by boundary index -- NOT stored on a ShaftSection. See the
-    module docstring for why.
+    Parameters
+    ----------
+    fillet_radius : float
+        Fillet radius ``r`` [mm]; must be > 0 and <= (D - d) / 2 (plus
+        ``TOL_GEOMETRY_mm``).
+    diameter_large : float
+        Larger diameter ``D`` [mm]; must exceed ``diameter_small``.
+    diameter_small : float
+        Smaller diameter ``d`` [mm].
     """
     fillet_radius: float
     diameter_large: float
     diameter_small: float
 
     def __post_init__(self) -> None:
+        """Raise ValueError if r <= 0, D <= d or r exceeds the step height (D - d) / 2."""
         if self.fillet_radius <= 0:
             raise ValueError(f"fillet_radius must be > 0, got {self.fillet_radius}")
         if self.diameter_large <= self.diameter_small:
@@ -149,13 +214,23 @@ class Shoulder:
 
     @property
     def r_over_d(self) -> float:
+        """Ratio r/d of fillet radius to smaller diameter [-]."""
         return self.fillet_radius / self.diameter_small
 
     @property
     def D_over_d(self) -> float:
+        """Ratio D/d of larger to smaller diameter [-]."""
         return self.diameter_large / self.diameter_small
 
     def validate(self) -> list[str]:
+        """Geometry errors of this shoulder (empty list if none).
+
+        Returns
+        -------
+        list of str
+            Messages for ``fillet_radius`` <= 0 or ``diameter_large`` <=
+            ``diameter_small``.
+        """
         errors: list[str] = []
         if self.fillet_radius <= 0:
             errors.append(f"fillet_radius must be > 0, got {self.fillet_radius}")
@@ -169,9 +244,47 @@ class Shoulder:
 
 @dataclass
 class ShaftSection:
-    """Uniform cylindrical segment. No shoulder fields -- shoulders belong
-    to the Shaft (Shaft.transitions), keyed by boundary index, not to a
-    section. See the module docstring."""
+    """Uniform cylindrical (solid or hollow) shaft segment.
+
+    The section properties below feed the beam elements (``area`` and
+    ``second_moment_of_area``) and the stress evaluation (``section_modulus``,
+    ``polar_section_modulus``). Shoulders are held by the Shaft
+    (``Shaft.transitions``), not by the section.
+
+    Parameters
+    ----------
+    length : float
+        Axial length [mm]; must be > 0.
+    diameter : float
+        Outer diameter ``d`` [mm]; must be > 0.
+    inner_diameter : float, optional
+        Bore diameter ``di`` [mm]; 0 for a solid section; must be
+        < ``diameter``.
+    material_id : str, optional
+        Key of the material in ``axisforge.core.materials``.
+    surface_finish_ra : float, optional
+        Surface roughness Ra; must be > 0. No unit is enforced here; the
+        construction records label it [um] (``outputs/construction/shaft.py``).
+    keyways : list of Keyway, optional
+        Keyways on this section; each ``depth`` must be < ``radius``.
+    label : str, optional
+        Identifier.
+
+    Notes
+    -----
+    Section properties are those of a thick-walled circular ring:
+    ``A = pi/4 (d^2 - di^2)``, ``I = pi/64 (d^4 - di^4)``,
+    ``J = pi/32 (d^4 - di^4)``, ``W = I / (d/2)``, ``Wt = J / (d/2)``.
+    Keyways do not reduce them.
+
+    References
+    ----------
+    .. [1] Onate2013_vol2, Fig. 1.3 (solid circle A = pi R^2, I = pi R^4 / 4).
+    .. [2] Onate2013_vol2, Fig. 4.11 (J of the solid circle and of the thick
+       cylinder, 1/2 pi (ro^4 - ri^4)).
+
+    Thick-hollow A and I, and the moduli W and Wt: (source to find).
+    """
     length: float
     diameter: float
     inner_diameter: float = 0.0
@@ -181,6 +294,7 @@ class ShaftSection:
     label: str = ""
 
     def __post_init__(self) -> None:
+        """Raise ValueError for length or diameter <= 0, inner_diameter < 0 or >= diameter, Ra <= 0, or a keyway deeper than the radius."""
         if self.length <= 0:
             raise ValueError(f"ShaftSection length must be > 0, got {self.length}")
         if self.diameter <= 0:
@@ -203,37 +317,48 @@ class ShaftSection:
 
     @property
     def is_hollow(self) -> bool:
+        """True if the section has a bore (``inner_diameter`` > 0)."""
         return self.inner_diameter > 0.0
 
     @property
     def radius(self) -> float:
+        """Outer radius d/2 [mm]."""
         return self.diameter / 2.0
 
     @property
     def area(self) -> float:
+        """Cross-section area A = pi/4 (d^2 - di^2) [mm^2]."""
         return (math.pi / 4.0) * (self.diameter**2 - self.inner_diameter**2)
 
     @property
     def second_moment_of_area(self) -> float:
-        """I = pi/64 * (d^4 - di^4) [mm^4]"""
+        """Second moment of area I = pi/64 (d^4 - di^4) about a diameter [mm^4]."""
         return (math.pi / 64.0) * (self.diameter**4 - self.inner_diameter**4)
 
     @property
     def polar_moment(self) -> float:
-        """J = pi/32 * (d^4 - di^4) = 2I [mm^4]"""
+        """Polar second moment of area J = pi/32 (d^4 - di^4) = 2 I [mm^4]."""
         return (math.pi / 32.0) * (self.diameter**4 - self.inner_diameter**4)
 
     @property
     def section_modulus(self) -> float:
-        """W = I / (d/2) [mm^3]. sigma_b = M / W"""
+        """Bending section modulus W = I / (d/2) [mm^3], so that sigma_b = M / W."""
         return self.second_moment_of_area / (self.diameter / 2.0)
 
     @property
     def polar_section_modulus(self) -> float:
-        """Wt = J / (d/2) [mm^3]. tau = T / Wt"""
+        """Torsional section modulus Wt = J / (d/2) [mm^3], so that tau = T / Wt."""
         return self.polar_moment / (self.diameter / 2.0)
 
     def validate(self) -> list[str]:
+        """Geometry errors of this section and its keyways (empty list if none).
+
+        Returns
+        -------
+        list of str
+            Messages for length or diameter <= 0 [mm], bore out of range,
+            keyway errors and keyways deeper than the radius.
+        """
         errors: list[str] = []
         if self.length <= 0:
             errors.append(f"length must be > 0 (got {self.length})")
@@ -257,27 +382,62 @@ class ShaftSection:
 
 @dataclass
 class Shaft:
-    """
-    Ordered sequence of ShaftSection. z=0 is the left face of sections[0].
-    section_at(z): interior boundaries belong to the right section.
+    """Stepped shaft: ordered ShaftSections plus the shoulders between them.
 
-    transitions: dict[int, Shoulder] -- index i is the boundary between
-    sections[i] and sections[i+1]. Set via set_transition(), never by
-    writing to a section directly.
+    The axial coordinate (named ``z`` in the arguments of this module; the
+    same axis that the mesh and the README call ``x``, increasing left to
+    right) is measured from the left face of ``sections[0]`` [mm]. Radial and
+    angular conventions: see the README section Conventions.
+
+    Parameters
+    ----------
+    label : str
+        Identifier.
+    sections : list of ShaftSection, optional
+        Sections from left to right.
+    transitions : dict of int to Shoulder, optional
+        Key ``i`` is the boundary between ``sections[i]`` and
+        ``sections[i + 1]``. Set through :meth:`set_transition`, not by
+        writing to a section.
+
+    Notes
+    -----
+    In :meth:`section_at`, an interior boundary belongs to the right section.
     """
     label: str
     sections: list[ShaftSection] = field(default_factory=list)
     transitions: dict[int, Shoulder] = field(default_factory=dict)
 
     def add_section(self, section: ShaftSection) -> None:
+        """Append a section at the right end of the shaft.
+
+        Raises
+        ------
+        TypeError
+            If ``section`` is not a ShaftSection.
+        """
         if not isinstance(section, ShaftSection):
             raise TypeError(f"Expected ShaftSection, got {type(section)}")
         self.sections.append(section)
 
     def set_transition(self, index: int, shoulder: Shoulder) -> None:
-        """Attach a Shoulder to the boundary between sections[index] and
-        sections[index + 1]. Call after all sections involved have been
-        added -- index is checked against the CURRENT section count."""
+        """Attach a Shoulder to the boundary between sections[index] and sections[index + 1].
+
+        Parameters
+        ----------
+        index : int
+            Boundary index, checked against the current number of sections
+            (add the sections first).
+        shoulder : Shoulder
+            Fillet shoulder at that boundary.
+
+        Raises
+        ------
+        TypeError
+            If ``shoulder`` is not a Shoulder.
+        IndexError
+            If ``index`` is not a boundary of the current shaft.
+        """
         if not isinstance(shoulder, Shoulder):
             raise TypeError(f"Expected Shoulder, got {type(shoulder)}")
         n_boundaries = max(len(self.sections) - 1, 0)
@@ -291,13 +451,22 @@ class Shaft:
 
     @property
     def total_length(self) -> float:
+        """Sum of the section lengths [mm]."""
         return sum(s.length for s in self.sections)
 
     @property
     def n_sections(self) -> int:
+        """Number of sections [-]."""
         return len(self.sections)
 
     def axial_start(self, index: int) -> float:
+        """Axial coordinate of the left face of ``sections[index]`` [mm].
+
+        Raises
+        ------
+        IndexError
+            If ``index`` is out of range.
+        """
         if index < 0 or index >= len(self.sections):
             raise IndexError(
                 f"Section index {index} out of range "
@@ -306,6 +475,13 @@ class Shaft:
         return sum(self.sections[i].length for i in range(index))
 
     def axial_end(self, index: int) -> float:
+        """Axial coordinate of the right face of ``sections[index]`` [mm].
+
+        Raises
+        ------
+        IndexError
+            If ``index`` is out of range.
+        """
         if index < 0 or index >= len(self.sections):
             raise IndexError(
                 f"Section index {index} out of range "
@@ -314,6 +490,26 @@ class Shaft:
         return sum(self.sections[i].length for i in range(index + 1))
 
     def section_at(self, z: float) -> tuple[ShaftSection, int]:
+        """Section containing the axial coordinate ``z``.
+
+        Parameters
+        ----------
+        z : float
+            Axial coordinate [mm]; values within ``TOL_GEOMETRY_mm`` outside
+            [0, total_length] are clamped to the ends.
+
+        Returns
+        -------
+        section : ShaftSection
+        index : int
+            Index of ``section`` in ``sections`` [-]. A ``z`` on an interior
+            boundary returns the section to its right.
+
+        Raises
+        ------
+        ValueError
+            If ``z`` lies outside the shaft by more than ``TOL_GEOMETRY_mm``.
+        """
         L = self.total_length
         if z < -TOL_GEOMETRY_mm or z > L + TOL_GEOMETRY_mm:
             raise ValueError(f"z={z:.4f} mm is outside shaft extent [0, {L:.4f}] mm")
@@ -329,35 +525,54 @@ class Shaft:
         return self.sections[-1], len(self.sections) - 1
 
     def diameter_at(self, z: float) -> float:
+        """Outer diameter of the section at ``z`` [mm]."""
         section, _ = self.section_at(z)
         return section.diameter
 
     def I_at(self, z: float) -> float:
+        """Second moment of area I of the section at ``z`` [mm^4]."""
         section, _ = self.section_at(z)
         return section.second_moment_of_area
 
     def J_at(self, z: float) -> float:
+        """Polar second moment of area J of the section at ``z`` [mm^4]."""
         section, _ = self.section_at(z)
         return section.polar_moment
 
     def W_at(self, z: float) -> float:
+        """Bending section modulus W of the section at ``z`` [mm^3]."""
         section, _ = self.section_at(z)
         return section.section_modulus
 
     def Wt_at(self, z: float) -> float:
+        """Torsional section modulus Wt of the section at ``z`` [mm^3]."""
         section, _ = self.section_at(z)
         return section.polar_section_modulus
 
     def shoulders(self) -> list[tuple[float, Shoulder]]:
-        """List of (z_position, Shoulder), one per transition that has
-        one, in ascending boundary-index order. z is the boundary's own
-        axial position (= axial_end(i) = axial_start(i+1))."""
+        """Shoulders with their axial position, in ascending boundary-index order.
+
+        Returns
+        -------
+        list of (float, Shoulder)
+            ``(z, shoulder)`` with ``z = axial_end(i) = axial_start(i + 1)``
+            [mm], one per entry of ``transitions``.
+        """
         return [
             (self.axial_end(i), self.transitions[i])
             for i in sorted(self.transitions)
         ]
 
     def validate(self) -> list[str]:
+        """Geometry errors of the shaft (empty list if none).
+
+        Returns
+        -------
+        list of str
+            Errors of every section and shoulder, transitions on a boundary
+            that does not exist, and shoulder diameters that differ from the
+            two adjoining section diameters [mm].
+        """
         errors: list[str] = []
 
         if not self.sections:
@@ -393,14 +608,17 @@ class Shaft:
         return errors
 
     def validate_or_raise(self) -> None:
+        """Raise ValueError listing every error returned by :meth:`validate`."""
         errors = self.validate()
         if errors:
             raise ValueError("Shaft validation failed:\n" + "\n".join(f"  - {e}" for e in errors))
 
     def __len__(self) -> int:
+        """Number of sections."""
         return len(self.sections)
 
     def __repr__(self) -> str:
+        """Label, number of sections and total length [mm]."""
         return (
             f"Shaft(label={self.label!r}, "
             f"sections={len(self.sections)}, "

@@ -1,6 +1,4 @@
 """
-axisforge/outputs/solvers/bearings/bearing_analysis_result.py
-
 Records and text of ``axisforge.results.bearings.bearing_analysis_result``
 (``BearingAnalysisResult``: load distribution plus, optionally, life). Mirrors the module it
 reads, and like it is the only output module that joins ``load_distribution/`` and ``life/``.

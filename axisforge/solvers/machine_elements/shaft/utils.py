@@ -1,22 +1,11 @@
-"""
-solvers/shaft/utils.py
-Pure helper functions for shaft stress analysis.
+"""Pure helper functions for the fatigue assessment of shafts: Marin endurance-limit modifying
+factors, stress concentration factors of shoulders (Peterson charts, D/d fixed at 1.5), Neuber
+notch sensitivity and the fatigue stress concentration factor Kf.
 
-Extracted from stress.py to enable reuse in:
-  - stress.py  (StressSolver)
-  - static_failure.py  (future Phase 2 notch factors)
-  - strength.py  (Phase 2+)
-
-Groups:
-  1. Marin endurance limit modifying factors  (ka, kb, kc, kd, ke, Se')
-  2. Peterson stress concentration factors    (Kt shoulders, Phase 1 D/d=1.5)
-  3. Neuber notch sensitivity + Kf           (q, Kf, Kfs)
-
-All functions are pure — no side effects, no imports from core/models/GUI.
-
-References:
-  Shigley 10th ed.: §6-2, §6-6 (Marin), §6-10 (Neuber/Peterson)
-  Peterson 3rd ed.: Fig. A-15-9 (bending shoulder), A-15-10 (torsion shoulder)
+Units: strengths [MPa], lengths [mm]; factors dimensionless. The formulas and the table or figure
+numbers quoted in the functions (Shigley 10th ed., Peterson 3rd ed.) are named in the code and are
+not in the library; they have not been checked against the sources (source to find). The module is
+not re-exported by any package ``__init__``.
 """
 from __future__ import annotations
 
@@ -26,8 +15,8 @@ from scipy.interpolate import interp1d
 
 
 # ===========================================================================
-# Marin surface finish factor — ka
-# Shigley Tab. 6-2: ka = a × Sut^b  (Sut in MPa)
+# Marin surface finish factor -- ka
+# Shigley Tab. 6-2: ka = a x Sut^b  (Sut in MPa)
 # ===========================================================================
 
 _KA_COEFFICIENTS: dict[str, tuple[float, float]] = {
@@ -40,18 +29,34 @@ _KA_COEFFICIENTS: dict[str, tuple[float, float]] = {
 
 
 def ka_surface_finish(Sut_MPa: float, finish: str = "machined") -> float:
-    """
-    Marin surface finish factor ka.
+    """Marin surface finish factor ka.
 
-    ka = a × Sut^b  (Shigley Eq. 6-19, Tab. 6-2)
-    Clipped to 1.0 — ground finish on low-Sut material can nominally exceed 1.
+    Parameters
+    ----------
+    Sut_MPa : float
+        Ultimate tensile strength [MPa].
+    finish : str, optional
+        ``"ground"``, ``"machined"``, ``"cold_drawn"``, ``"hot_rolled"`` or ``"as_forged"``.
 
-    Args:
-        Sut_MPa: ultimate tensile strength [MPa].
-        finish: 'ground', 'machined', 'cold_drawn', 'hot_rolled', or 'as_forged'.
+    Returns
+    -------
+    float
+        ka [-], in (0, 1].
 
-    Returns:
-        ka in (0, 1].
+    Raises
+    ------
+    ValueError
+        If ``finish`` is unknown.
+
+    Notes
+    -----
+    ka = min(1, a * Sut^b) with Sut in MPa and (a, b) = ground (1.58, -0.085); machined and cold drawn
+    (4.51, -0.265); hot rolled (57.7, -0.718); as forged (272, -0.995). The cap at 1.0 is applied
+    because ground finish on low-Sut material can nominally exceed 1.
+
+    References
+    ----------
+    Shigley 10th ed., Eq. 6-19 and Tab. 6-2, as named in the code (source to find).
     """
     if finish not in _KA_COEFFICIENTS:
         available = ", ".join(_KA_COEFFICIENTS.keys())
@@ -61,29 +66,38 @@ def ka_surface_finish(Sut_MPa: float, finish: str = "machined") -> float:
 
 
 # ===========================================================================
-# Marin size factor — kb
+# Marin size factor -- kb
 # Shigley Eq. 6-20 (rotating round shaft in bending)
 # ===========================================================================
 
 def kb_size(diameter_mm: float) -> float:
-    """
-    Marin size factor kb for rotating round shafts in bending.
+    """Marin size factor kb for rotating round shafts in bending.
 
-    Shigley Eq. 6-20 (SI form):
-      2.79 ≤ d ≤ 51 mm:   kb = 1.24 × d^(−0.107)
-      51 < d ≤ 254 mm:    kb = 1.51 × d^(−0.157)
-      d > 254 mm:          kb = 0.70  (conservative, Shigley note)
+    Parameters
+    ----------
+    diameter_mm : float
+        Shaft diameter at the section [mm].
 
-    For d < 2.79 mm: kb = 1.0 (size effect negligible; Shigley correlation
-    does not extend below 2.79 mm).
+    Returns
+    -------
+    float
+        kb [-]. Not capped: 1.11 at d = 2.79 mm, above 1 up to d = 7.5 mm (kb = 1.24 d^-0.107 exceeds
+        1 for d below about 7.5 mm), 0.633 at d = 254 mm, then 0.70 (jump) above 254 mm.
 
-    For axial loading: kb = 1.0 per §6-6 — use kc_load('axial') instead.
+    Raises
+    ------
+    ValueError
+        If ``diameter_mm <= 0``.
 
-    Args:
-        diameter_mm: shaft diameter at the section [mm].
+    Notes
+    -----
+    d < 2.79 mm: kb = 1.0 (the correlation does not extend below 2.79 mm); 2.79 <= d <= 51 mm:
+    kb = 1.24 d^-0.107; 51 < d <= 254 mm: kb = 1.51 d^-0.157; d > 254 mm: kb = 0.70. The function does
+    not depend on the load type (no adjustment for axial loading).
 
-    Returns:
-        kb in [0.70, 1.0].
+    References
+    ----------
+    Shigley 10th ed., Eq. 6-20 (SI form), as named in the code (source to find).
     """
     if diameter_mm <= 0:
         raise ValueError(f"diameter_mm must be > 0, got {diameter_mm}")
@@ -98,25 +112,37 @@ def kb_size(diameter_mm: float) -> float:
 
 
 # ===========================================================================
-# Marin load factor — kc
+# Marin load factor -- kc
 # Shigley Tab. 6-3
 # ===========================================================================
 
 def kc_load(load_type: str = "bending") -> float:
-    """
-    Marin load type factor kc.
+    """Marin load type factor kc.
 
-    Shigley Eq. 6-26:
-      'bending':  kc = 1.0
-      'axial':    kc = 0.85
-      'torsion':  kc = 0.59
+    Parameters
+    ----------
+    load_type : str, optional
+        ``"bending"`` (kc = 1.0), ``"axial"`` (0.85) or ``"torsion"`` (0.59).
 
-    IMPORTANT: for combined bending + torsion (rotating shaft), set
-    load_type = 'bending' (kc = 1.0) and apply von Mises via combined
-    stress equations (Shigley §6-14).
+    Returns
+    -------
+    float
+        kc [-].
 
-    Args:
-        load_type: 'bending', 'axial', or 'torsion'.
+    Raises
+    ------
+    ValueError
+        If ``load_type`` is unknown.
+
+    Notes
+    -----
+    For combined bending and torsion of a rotating shaft use ``"bending"`` (kc = 1.0) and combine the
+    stresses with the von Mises equations (Shigley 10th ed., 6-14, as named in the code).
+
+    References
+    ----------
+    Shigley 10th ed., Eq. 6-26 (the section banner names Tab. 6-3), as named in the code (source to
+    find).
     """
     mapping = {"bending": 1.0, "axial": 0.85, "torsion": 0.59}
     if load_type not in mapping:
@@ -127,28 +153,32 @@ def kc_load(load_type: str = "bending") -> float:
 
 
 # ===========================================================================
-# Marin temperature factor — kd
-# Shigley §6-6
+# Marin temperature factor -- kd
+# Shigley sec. 6-6
 # ===========================================================================
 
 def kd_temperature(T_celsius: float = 20.0) -> float:
-    """
-    Marin temperature factor kd.
+    """Marin temperature factor kd.
 
-    Phase 1: returns 1.0 for T ≤ 70°C.
-    Degradation above 70°C not modelled in Phase 1.
+    Parameters
+    ----------
+    T_celsius : float, optional
+        Operating temperature [deg C]. Not used.
 
-    Args:
-        T_celsius: operating temperature [°C].
+    Returns
+    -------
+    float
+        Always 1.0 [-]: the temperature is not used (no temperature effect is modelled).
 
-    Returns:
-        kd = 1.0 (Phase 1).
+    References
+    ----------
+    Shigley 10th ed., 6-6, as named in the code (source to find).
     """
     return 1.0
 
 
 # ===========================================================================
-# Marin reliability factor — ke
+# Marin reliability factor -- ke
 # Shigley Tab. 6-6
 # ===========================================================================
 
@@ -165,17 +195,26 @@ _KE_TABLE: dict[float, float] = {
 
 
 def ke_reliability(reliability_percent: float = 99.0) -> float:
-    """
-    Marin reliability factor ke.
+    """Marin reliability factor ke from the tabulated values.
 
-    Shigley Tab. 6-6 / Eq. 6-29.
-    Supported values: 50, 90, 95, 99, 99.9, 99.99, 99.999, 99.9999 [%].
+    Parameters
+    ----------
+    reliability_percent : float, optional
+        Target reliability [%]; one of 50, 90, 95, 99, 99.9, 99.99, 99.999, 99.9999 (exact match).
 
-    Args:
-        reliability_percent: target reliability [%].
+    Returns
+    -------
+    float
+        ke [-], from 1.000 (50 %) to 0.620 (99.9999 %).
 
-    Returns:
-        ke ≤ 1.0.
+    Raises
+    ------
+    ValueError
+        If the value is not in the table; use ``ke_reliability_from_z`` for other values.
+
+    References
+    ----------
+    Shigley 10th ed., Tab. 6-6 and Eq. 6-29, as named in the code (source to find).
     """
     if reliability_percent not in _KE_TABLE:
         available = sorted(_KE_TABLE.keys())
@@ -188,20 +227,28 @@ def ke_reliability(reliability_percent: float = 99.0) -> float:
 
 
 def ke_reliability_from_z(z_score: float) -> float:
-    """
-    Reliability factor from standard normal deviate z.
+    """Marin reliability factor from the standard normal deviate z.
 
-    Shigley §6-6:  ke = 1 − 0.08 × z
+    Parameters
+    ----------
+    z_score : float
+        Standard normal deviate [-]; for example 1.288 for 90 %, 1.645 for 95 %, 2.326 for 99 %.
 
-    Args:
-        z_score: e.g. 1.288 → 90%, 1.645 → 95%, 2.326 → 99%.
+    Returns
+    -------
+    float
+        ke = 1 - 0.08 z [-].
+
+    References
+    ----------
+    Shigley 10th ed., 6-6, as named in the code (source to find).
     """
     return float(1.0 - 0.08 * z_score)
 
 
 # ===========================================================================
 # Corrected endurance limit Se'
-# Se' = Se × ka × kb × kc × kd × ke  [Shigley §6-7]
+# Se' = Se x ka x kb x kc x kd x ke  [Shigley sec. 6-7]
 # ===========================================================================
 
 def endurance_limit_corrected(
@@ -213,22 +260,37 @@ def endurance_limit_corrected(
     load_type: str = "bending",
     T_celsius: float = 20.0,
 ) -> dict[str, float]:
-    """
-    Corrected endurance limit Se' with all Marin factors.
+    """Corrected endurance limit Se' with all Marin factors.
 
-    Se' = Se × ka × kb × kc × kd × ke
+    Parameters
+    ----------
+    Se_base : float
+        Specimen endurance limit [MPa] (input; the function does not derive it from Sut).
+    Sut_MPa : float
+        Ultimate tensile strength [MPa].
+    diameter_mm : float
+        Section diameter [mm].
+    finish : str, optional
+        Surface finish key (see ``ka_surface_finish``).
+    reliability_percent : float, optional
+        Target reliability [%] (see ``ke_reliability``).
+    load_type : str, optional
+        ``"bending"``, ``"axial"`` or ``"torsion"``.
+    T_celsius : float, optional
+        Operating temperature [deg C] (does not change kd).
 
-    Args:
-        Se_base: specimen endurance limit [MPa] (typically 0.5 × Sut, cap 700 MPa).
-        Sut_MPa: ultimate tensile strength [MPa].
-        diameter_mm: section diameter [mm].
-        finish: surface finish key (see ka_surface_finish).
-        reliability_percent: target reliability [%].
-        load_type: 'bending', 'axial', or 'torsion'.
-        T_celsius: operating temperature [°C].
+    Returns
+    -------
+    dict
+        ``"ka"``, ``"kb"``, ``"kc"``, ``"kd"``, ``"ke"`` [-] and ``"Se_prime"`` [MPa].
 
-    Returns:
-        dict with keys: 'ka', 'kb', 'kc', 'kd', 'ke', 'Se_prime' [MPa].
+    Notes
+    -----
+    Se' = Se * ka * kb * kc * kd * ke.
+
+    References
+    ----------
+    Shigley 10th ed., 6-7, as named in the code (source to find).
     """
     ka = ka_surface_finish(Sut_MPa, finish)
     kb = kb_size(diameter_mm)
@@ -247,9 +309,9 @@ def endurance_limit_corrected(
 
 
 # ===========================================================================
-# Peterson stress concentration factors — Kt (shoulders)
+# Peterson stress concentration factors -- Kt (shoulders)
 # Peterson 3rd ed.: Fig. A-15-9 (bending), A-15-10 (torsion)
-# Phase 1: D/d ≈ 1.5 fixed (one-parameter interpolation on r/d)
+# Phase 1: D/d ~ 1.5 fixed (one-parameter interpolation on r/d)
 # Phase 2+: RegularGridInterpolator over (r/d, D/d) grid
 # ===========================================================================
 
@@ -277,66 +339,87 @@ _kt_shoulder_torsion_interp = interp1d(
 
 
 def kt_shoulder_bending(r_over_d: float, D_over_d: float = 1.5) -> float:
-    """
-    Theoretical Kt for a stepped shaft shoulder in bending.
+    """Theoretical stress concentration factor Kt of a stepped-shaft shoulder in bending.
 
-    Peterson Fig. A-15-9.
-    Phase 1: D/d = 1.5 approximation; D_over_d accepted but not used.
-    Phase 2+: replace with 2D RegularGridInterpolator over (r/d, D/d).
+    Parameters
+    ----------
+    r_over_d : float
+        Fillet radius divided by the small diameter [-].
+    D_over_d : float, optional
+        Large diameter divided by the small diameter [-]. Not used: the curve is for D/d = 1.5 only.
 
-    Args:
-        r_over_d: fillet radius / small diameter.
-        D_over_d: large / small diameter (ignored in Phase 1, documented for Phase 2).
+    Returns
+    -------
+    float
+        Kt [-]: linear interpolation of a 7-point table (r/d = 0.005 ... 0.20 gives Kt = 3.00 ... 1.40),
+        clamped to the end values outside that range.
 
-    Returns:
-        Kt ≥ 1.0.
+    References
+    ----------
+    Peterson 3rd ed., Fig. A-15-9, as named in the code (source to find; the table values were not
+    checked against the figure).
     """
     return float(_kt_shoulder_bending_interp(r_over_d))
 
 
 def kt_shoulder_torsion(r_over_d: float, D_over_d: float = 1.5) -> float:
-    """
-    Theoretical Kts for a stepped shaft shoulder in torsion.
+    """Theoretical stress concentration factor Kts of a stepped-shaft shoulder in torsion.
 
-    Peterson Fig. A-15-10.
-    Phase 1: D/d = 1.5 approximation; D_over_d accepted but not used.
+    Parameters
+    ----------
+    r_over_d : float
+        Fillet radius divided by the small diameter [-].
+    D_over_d : float, optional
+        Large diameter divided by the small diameter [-]. Not used: the curve is for D/d = 1.5 only.
 
-    Args:
-        r_over_d: fillet radius / small diameter.
-        D_over_d: large / small diameter (ignored in Phase 1).
+    Returns
+    -------
+    float
+        Kts [-]: linear interpolation of a 7-point table (r/d = 0.005 ... 0.20 gives Kts = 2.00 ...
+        1.15), clamped to the end values outside that range.
 
-    Returns:
-        Kts ≥ 1.0.
+    References
+    ----------
+    Peterson 3rd ed., Fig. A-15-10, as named in the code (source to find; the table values were not
+    checked against the figure).
     """
     return float(_kt_shoulder_torsion_interp(r_over_d))
 
 
 # ===========================================================================
 # Neuber notch sensitivity and fatigue stress concentration factor
-# Shigley §6-10, Eq. 6-33 to 6-35
+# Shigley sec. 6-10, Eq. 6-33 to 6-35
 # ===========================================================================
 
 def neuber_constant_sqrt_a(Sut_MPa: float, loading: str = "bending") -> float:
-    """
-    Neuber material constant sqrt(a) [mm^0.5] for steels.
+    """Neuber material constant sqrt(a) for steels.
 
-    Shigley Eq. 6-35a (bending/axial) and 6-35b (torsion).
-    Polynomial coefficients use Sut in kpsi; input is MPa.
+    Parameters
+    ----------
+    Sut_MPa : float
+        Ultimate tensile strength [MPa].
+    loading : str, optional
+        ``"torsion"`` selects the torsion polynomial; any other value uses the bending/axial one.
 
-    Eq. 6-35a (bending or axial):
-      sqrt(a) = 0.246 − 3.08e-3*Sut + 1.51e-5*Sut² − 2.67e-8*Sut³  [kpsi, sqrt(in)]
+    Returns
+    -------
+    float
+        sqrt(a) [mm^0.5]; decreases as Sut grows. The polynomial becomes negative above about
+        1750 MPa (bending) and 1600 MPa (torsion); its range of validity is not checked.
 
-    Eq. 6-35b (torsion):
-      sqrt(a) = 0.190 − 2.51e-3*Sut + 1.35e-5*Sut² − 2.67e-8*Sut³  [kpsi, sqrt(in)]
+    Notes
+    -----
+    The polynomials take Sut in kpsi (``Sut_kpsi = Sut_MPa / 6.895``) and give sqrt(a) in sqrt(in):
 
-    Converted to [mm^0.5] via × sqrt(25.4).
+    - bending or axial: 0.246 - 3.08e-3 S + 1.51e-5 S^2 - 2.67e-8 S^3
+    - torsion: 0.190 - 2.51e-3 S + 1.35e-5 S^2 - 2.67e-8 S^3
 
-    Args:
-        Sut_MPa: ultimate tensile strength [MPa].
-        loading: 'bending' (also valid for axial) or 'torsion'.
+    with S = Sut in kpsi. The result is multiplied by sqrt(25.4) to give mm^0.5.
 
-    Returns:
-        sqrt(a) [mm^0.5]. Higher Sut → smaller value → higher notch sensitivity.
+    References
+    ----------
+    Shigley 10th ed., Eq. 6-35a (bending/axial) and 6-35b (torsion), as named in the code (source to
+    find).
     """
     Sut_kpsi = Sut_MPa / 6.895
     if loading == "torsion":
@@ -357,18 +440,44 @@ def neuber_constant_sqrt_a(Sut_MPa: float, loading: str = "bending") -> float:
 
 
 def notch_sensitivity(r_mm: float, Sut_MPa: float, loading: str = "bending") -> float:
-    """
-    Notch sensitivity q (Shigley Eq. 6-34).
+    """Notch sensitivity q of a fillet.
 
-    q = 1 / (1 + sqrt(a) / sqrt(r))
+    Parameters
+    ----------
+    r_mm : float
+        Fillet radius [mm]; clamped below to ``MIN_FILLET_RADIUS_mm`` of the configuration.
+    Sut_MPa : float
+        Ultimate tensile strength [MPa].
+    loading : str, optional
+        ``"bending"`` or ``"torsion"`` (see ``neuber_constant_sqrt_a``).
 
-    Args:
-        r_mm: fillet radius [mm]. Clamped to MIN_FILLET_RADIUS_mm from config.
-        Sut_MPa: ultimate tensile strength [MPa].
-        loading: 'bending' or 'torsion'.
+    Returns
+    -------
+    float
+        q [-]; between 0 and 1 while sqrt(a) >= 0 (0 is notch-insensitive, 1 fully sensitive). The
+        polynomial of ``neuber_constant_sqrt_a`` becomes negative above about 1750 MPa (bending) and
+        1600 MPa (torsion), which gives q > 1; the range of validity of the polynomial is not checked
+        (source to find).
 
-    Returns:
-        q in [0, 1]. 0 → notch-insensitive; 1 → fully sensitive.
+    Raises
+    ------
+    ModuleNotFoundError
+        See Warnings.
+
+    Warnings
+    --------
+    The function imports ``MIN_FILLET_RADIUS_mm`` with ``from config import ...`` (a top-level
+    ``config`` module, not ``axisforge.config``). With ``axisforge`` imported as a package the call
+    raises ``ModuleNotFoundError``; it runs only if the ``axisforge`` folder
+    itself is on ``sys.path``.
+
+    Notes
+    -----
+    q = 1 / (1 + sqrt(a) / sqrt(r)), with sqrt(a) [mm^0.5] from ``neuber_constant_sqrt_a`` and r [mm].
+
+    References
+    ----------
+    Shigley 10th ed., Eq. 6-34, as named in the code (source to find).
     """
     from config import MIN_FILLET_RADIUS_mm
     r_mm = max(r_mm, MIN_FILLET_RADIUS_mm)
@@ -377,16 +486,22 @@ def notch_sensitivity(r_mm: float, Sut_MPa: float, loading: str = "bending") -> 
 
 
 def kf_from_kt(Kt: float, q: float) -> float:
-    """
-    Fatigue stress concentration factor Kf.
+    """Fatigue stress concentration factor Kf from the theoretical factor and the notch sensitivity.
 
-    Shigley Eq. 6-32:  Kf = 1 + q × (Kt − 1)
+    Parameters
+    ----------
+    Kt : float
+        Theoretical (geometric) stress concentration factor [-].
+    q : float
+        Notch sensitivity [-], in [0, 1].
 
-    Args:
-        Kt: theoretical (geometric) concentration factor.
-        q: notch sensitivity in [0, 1].
+    Returns
+    -------
+    float
+        Kf = 1 + q (Kt - 1) [-], in [1, Kt].
 
-    Returns:
-        Kf in [1.0, Kt].
+    References
+    ----------
+    Shigley 10th ed., Eq. 6-32, as named in the code (source to find).
     """
     return float(1.0 + q * (Kt - 1.0))

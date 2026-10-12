@@ -1,7 +1,4 @@
-"""
-axisforge/outputs/construction/loads.py
-
-Records and text of the loads of a ``ShaftSystem`` (``axisforge.core.loads``): the user loads
+"""Records and text of the loads of a ``ShaftSystem`` (``axisforge.core.loads``): the user loads
 and the loads injected by ``SpurHelicalGearSystem.resolve``.
 
 The text is the ``__repr__`` of each load, so it always matches what AxisForge prints for them.
@@ -27,16 +24,27 @@ def load_records(shaft_system) -> list[dict]:
 
     Parameters
     ----------
-    shaft_system: ShaftSystem
-        The shaft; its ``loads`` property is read (sorted by AxisForge as it stores them).
+    shaft_system : ShaftSystem
+        The shaft; its ``loads`` property is read, in the order AxisForge stores them.
 
     Returns
     -------
-    records: list of dict
-        Rows ``{section, parameter, value, unit}`` with section ``loads <shaft name>``. Every
-        load gives its type, source (``user`` or ``gear_mesh``), axial position (or ``x_lo`` /
-        ``x_hi`` for a distributed load), magnitude and, where the load has a constant one,
-        the angular position ``theta_deg`` [deg] from +Y toward +Z.
+    records : list of dict
+        Rows ``{section, parameter, value, unit}`` (``kv_record`` schema) with section
+        ``loads <shaft name>``. The parameter is ``"<i> <label or class name> <attribute>"``
+        with ``i`` counting from 1. Every load gives ``type`` (class name, no unit), then the
+        attributes it has among: ``source`` (``user`` or ``gear_mesh``, no unit), ``position``
+        [mm] (or ``x_lo`` / ``x_hi`` [mm] for a distributed load), ``magnitude`` (unit from
+        ``MAGNITUDE_UNIT``: N for forces, ``N m`` for ``TorqueLoad``, empty for
+        ``ExternalMoment``) and ``theta_deg`` [deg] from +Y toward +Z, where the load has a
+        constant one.
+
+    Warnings
+    --------
+    The unit shown for ``magnitude`` is a label from ``MAGNITUDE_UNIT``, not a conversion. For
+    ``TorqueLoad`` it is ``N m``, while the ``axisforge.core.loads`` module text speaks of N mm
+    for moments; for ``ExternalMoment`` the unit is left empty ("not stated") although the FEM
+    load vector consumes it as N mm (open review item U1; not decided here).
     """
     section = f"loads {shaft_system.name}"
     rows: list[dict] = []
@@ -56,13 +64,14 @@ def loads_text(shaft_system) -> str:
 
     Parameters
     ----------
-    shaft_system: ShaftSystem
+    shaft_system : ShaftSystem
         The shaft.
 
     Returns
     -------
-    text: str
-        A title and one ``repr`` line per load; ``(none)`` if the shaft has no loads.
+    text : str
+        The title ``Loads on <name>:`` and one ``repr`` line per load, indented by four spaces;
+        ``(none)`` if the shaft has no loads. The units are those printed by each ``__repr__``.
     """
     lines = [f"Loads on {shaft_system.name}:"]
     lines += [f"    {load!r}" for load in shaft_system.loads] or ["    (none)"]
@@ -74,7 +83,7 @@ def print_loads(shaft_system) -> None:
 
     Parameters
     ----------
-    shaft_system: ShaftSystem
+    shaft_system : ShaftSystem
         The shaft.
     """
     print(loads_text(shaft_system))

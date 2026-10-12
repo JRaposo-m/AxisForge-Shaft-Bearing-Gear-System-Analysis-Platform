@@ -1,28 +1,7 @@
-"""
-axisforge/results/fem_results/submodel_results.py
-
-Pure-data, POST-postprocessing result for one submodel solve (one grade,
-one interval). Built by SubmodelPostProcessor.process()
-(fem_solvers/submodel_solver/postprocessing.py) FROM a SubmodelSolution
-(fem_solvers/submodel_solver/lagrange_multipliers.py's raw solver
-output) -- never built directly by SubmodelSolver.solve() itself.
-Mirrors the split already used for the full-shaft pipeline:
-RigidSupportFEMSolver (solver) -> Timoshenko/EulerBernoulliPostProcessing
-(postprocessing) -> ShaftResults (results/); this is that same split one
-level down, for a single submodel grade instead of a whole shaft.
-
-CHANGED (this pass): this used to hold `metric_values: dict[str, float]`
--- a handful of named, pre-aggregated numbers (v_xz/v_xy/v_res, produced
-via the now-removed MetricSpec/eval_strategy machinery). It now holds
-the full per-node arrays instead (u, v_xz, v_xy, theta_xz, theta_xy,
-M_xz, M_xy, V_xz, V_xy, plus the Lagrange reactions at the cut nodes) --
-the same shape ShaftResults exposes for the whole shaft, just restricted
-to [x_lo, x_hi]. Whoever consumes this now (the convergence study) picks
-whatever field/point it needs directly from these arrays instead of the
-postprocessing step pre-deciding a fixed set of named metrics. No
-torsion, no stress concentration -- SubmodelSolver never modelled
-torsion, and stress-concentration is a layer on top of a full ShaftResults,
-not something this submodel path replicates.
+"""Result container of one sub-model solve (one mesh grade, one interval), after post-processing.
+Built by ``build_submodel_result`` from a ``SubmodelSolution``; it holds the per-node arrays of
+the sub-model, restricted to [x_lo, x_hi], so that the convergence study can pick any field or
+point from them. No torsion and no stress concentration.
 """
 
 from __future__ import annotations
@@ -35,30 +14,39 @@ __all__ = ["SubmodelResult"]
 
 
 def _empty() -> np.ndarray:
+    """Empty float array, the default of the per-node fields of ``SubmodelResult``."""
     return np.array([])
 
 
 @dataclass
 class SubmodelResult:
-    """
-    One grade's postprocessed FEM data for one interval.
+    """Post-processed FEM data of one mesh grade for one interval.
 
-    x_lo, x_hi, grade : identity, carried over from the SubmodelSolution
-        this was built from.
-    x_nodes : node positions of the submodel mesh at this grade -- kept
-        because RichardsonGCI needs node COUNT per grade
-        (x_nodes_coarse/medium/fine) to compute the refinement ratio r,
-        not just any single field value.
-    u, v_xz, v_xy, theta_xz, theta_xy : displacement/rotation per node,
-        read straight off the solved DOFs -- no recovery math involved.
-    M_xz, M_xy, V_xz, V_xy : internal-effort arrays, recovered via
-        element_postprocessing.py's EulerBernoulliPostProcessing/
-        TimoshenkoPostProcessing (same classes the global pipeline uses).
-    lam_xz, lam_xy : Lagrange-multiplier reactions at the two cut nodes
-        -- not physical shaft quantities, but useful for sanity-checking
-        the submodel BC coupling itself (e.g. should shrink toward the
-        cut-node reaction implied by the global solve as the submodel
-        widens).
+    Parameters
+    ----------
+    x_lo, x_hi : float
+        Interval bounds [mm].
+    grade : str
+        Mesh grade of this solve.
+    x_nodes : list of float
+        Node positions of the sub-model mesh at this grade [mm]; the number of nodes gives the
+        refinement ratio used by ``RichardsonGCI``.
+    u : ndarray
+        Axial displacement per node [mm] (from the XZ solution).
+    v_xz, v_xy : ndarray
+        Transverse deflection per node in the XZ and XY planes [mm].
+    theta_xz, theta_xy : ndarray
+        Nodal rotation DOF per node [rad].
+    M_xz, M_xy : ndarray
+        Bending moment per node [N mm], recovered by the element post-processor.
+    V_xz, V_xy : ndarray
+        Shear force per node [N], recovered by the element post-processor.
+    lam_xz, lam_xy : ndarray
+        Lagrange multipliers at the two cut nodes (``[u, v, theta]`` at ``x_lo``, then at ``x_hi``)
+        [N, N, N mm]; not physical shaft quantities, they check the coupling of the sub-model to the
+        global solution. Sign as stored by the solver (see ``SubmodelSolution``): the transverse and
+        rotation entries are ``[+V, +M]`` at ``x_lo`` and ``[-V, -M]`` at ``x_hi`` in the shear
+        force and bending moment convention of this package.
     """
     x_lo: float
     x_hi: float

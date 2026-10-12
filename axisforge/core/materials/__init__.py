@@ -1,14 +1,9 @@
-# axisforge/core/materials/__init__.py
 """
-axisforge/core/materials/__init__.py
+Materials: elastic, strength and thermal property blocks and a registry.
 
-Ponto único de import para o subsistema de materiais -- estilo slippy,
-eager. Por agora só existe base.py (Material, ElasticBehavior e os
-blocos opcionais); quando as bibliotecas de materiais concretos
-(steels.py, cast_iron.py, polymers.py, ...) existirem, importam-se aqui
-também -- cada uma regista as suas instâncias via register() só por
-serem importadas, por isso o import tem de ser eager, tal como
-families/__init__.py faz com @register_family.
+Re-exports the classes and functions of ``base.py``. No catalogue of concrete
+materials exists (there is no ``library/`` content), so
+``get_material`` finds only what the caller has registered with ``register``.
 """
 from __future__ import annotations
 

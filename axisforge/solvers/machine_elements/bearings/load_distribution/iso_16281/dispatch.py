@@ -1,34 +1,10 @@
-"""
-axisforge/solvers/machine_elements/bearings/load_distribution/iso_16281/dispatch.py
+"""Registry and selection of the ISO/TS 16281 contact solver for a bearing.
 
-Dispatch de solver ISO/TS 16281 por capability + required-attrs da
-BearingFamily -- sem tabela por BearingType. Ver rolling_bearing_solver.py.
-
-register_contact_solver() é uma decorator factory: CAPABILITY e
-REQUIRED_ATTRS não são declarados soltos no corpo da classe -- são
-argumentos do próprio decorator, que os escreve na classe. Isto torna
-impossível esquecer de os declarar (a assinatura do decorator exige-os)
-em vez de só validar depois com getattr(), e deixa tudo visível numa
-única linha no ponto de registo.
-
-family_matches_capability() vive aqui, não em family.py: "capability"
-(point_contact/line_contact como strings) é vocabulário deste módulo --
-nasce em register_contact_solver() -- e nunca deveria vazar para
-family.py, que só conhece factos de geometria sobre si própria
-(is_point_contact_family/is_line_contact_family). Este módulo é que
-traduz esse vocabulário solver-side para os factos family-side.
-validation.py importa family_matches_capability DAQUI, não de family.py
--- import lateral dentro do mesmo pacote iso_16281/, mesma direcção que
-este módulo já usa para chegar a family.py (solver -> core).
-
-resolve_solver_cls() faz três verificações em sequência, não uma só:
-  1. capability -- a family da bearing tem de estar registada no
-     registo (_POINT_CONTACT/_LINE_CONTACT em family.py) que corresponde
-     à CAPABILITY do solver candidato. Isto é sobre GEOMETRIA de
-     contacto, nunca muda por instância.
-  2. iso16281_analysis -- a bearing tem de ter completado a montagem de
-     rigidez Hertziana (setada pela family em assemble_geometry). Isto é
-     sobre esta instância específica ter os dados prontos.
+Solver classes register with a capability ("point_contact" or
+"line_contact") through ``register_contact_solver``. ``resolve_solver_cls``
+selects the solver class from the contact type of the bearing family, with
+no table per bearing type. The capability strings belong to this module;
+the families only state whether they are point-contact or line-contact.
 """
 from __future__ import annotations
 
@@ -38,6 +14,8 @@ from axisforge.core.machine_elements.bearings.families.family import (
 
 
 class SolverDispatchError(RuntimeError):
+    """No ISO/TS 16281 contact solver can be selected for a bearing."""
+
     pass
 
 
@@ -50,23 +28,43 @@ _CAPABILITY_CHECK = {
 
 
 def family_matches_capability(family, capability: str) -> bool:
-    """Traduz uma CAPABILITY string (ver register_contact_solver) para um
-    facto sobre a family -- single source of truth partilhada por
-    resolve_solver_cls() aqui e por check_bearing_ready() em
-    validation.py. Uma capability desconhecida (typo, ou nova capability
-    registada sem entrada aqui) devolve False em vez de KeyError -- falha
-    como 'nenhum solver corresponde', não como crash."""
+    """Tell whether a bearing family has the contact type of a capability.
+
+    Parameters
+    ----------
+    family : BearingFamily
+        Family of the bearing.
+    capability : str
+        "point_contact" or "line_contact".
+
+    Returns
+    -------
+    bool
+        True if the family is registered with that contact type. False for an
+        unknown capability (no KeyError).
+    """
     check = _CAPABILITY_CHECK.get(capability)
     return check is not None and check(family)
 
 
 def register_contact_solver(*, capability: str):
-    """
-    Class decorator factory: regista `cls` como solver ISO/TS 16281 para
-    `capability`, exigindo `required_attrs` na bearing/family que o
-    dispatch lhe encaminhar. Escreve CAPABILITY/REQUIRED_ATTRS na própria
-    classe -- quem lê `cls.CAPABILITY` depois (resolve_solver_cls() etc.)
-    continua a funcionar sem mudanças.
+    """Class decorator factory that registers an ISO/TS 16281 contact solver.
+
+    Parameters
+    ----------
+    capability : str
+        "point_contact" or "line_contact" (keyword only).
+
+    Returns
+    -------
+    callable
+        Decorator that writes ``CAPABILITY`` on the class, appends the class
+        to the registry and returns the same class.
+
+    Raises
+    ------
+    TypeError
+        If ``capability`` is empty or unknown.
     """
     if not capability:
         raise TypeError("register_contact_solver: capability must be non-empty")
@@ -76,6 +74,7 @@ def register_contact_solver(*, capability: str):
             f"expected one of {sorted(_CAPABILITY_CHECK)}."
         )
     def _decorator(cls: type) -> type:
+        """Set ``CAPABILITY`` on ``cls``, add it to the registry and return it."""
         cls.CAPABILITY     = capability
         _REGISTRY.append(cls)
         return cls
@@ -83,6 +82,37 @@ def register_contact_solver(*, capability: str):
 
 
 def resolve_solver_cls(bearing, *, label: str = "") -> type:
+    """Select the contact solver class for a bearing.
+
+    Three checks, in this order: (1) at least one registered solver has the
+    contact type of the bearing family; (2) ``bearing.iso16281_analysis`` is
+    true, i.e. the family stored the ISO/TS 16281 stiffness at assembly;
+    (3) exactly one of the matching solvers has a ``MULTIROW_SOLVER`` (the
+    single-row solver of that contact type).
+
+    Parameters
+    ----------
+    bearing : Bearing
+        Assembled bearing.
+    label : str, optional
+        Bearing label for the error messages (keyword only).
+
+    Returns
+    -------
+    type
+        The single-row solver class, or its ``MULTIROW_SOLVER`` when the
+        bearing has a ``rows`` attribute. A class, not an instance.
+
+    Raises
+    ------
+    SolverDispatchError
+        If any of the three checks fails.
+
+    Notes
+    -----
+    The multi-row solver classes are in the registry too; check (3) leaves
+    them out because their ``MULTIROW_SOLVER`` is None.
+    """
     family = bearing.family
 
     candidates = [c for c in _REGISTRY if family_matches_capability(family, c.CAPABILITY)]

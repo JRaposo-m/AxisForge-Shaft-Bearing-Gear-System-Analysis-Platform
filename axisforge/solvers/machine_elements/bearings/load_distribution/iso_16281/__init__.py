@@ -1,14 +1,11 @@
-# axisforge/solvers/machine_elements/bearings/load_distribution/iso_16281/__init__.py
-"""
-axisforge/solvers/machine_elements/bearings/load_distribution/iso_16281/__init__.py
+"""Public interface of the ISO/TS 16281 load-distribution solvers.
 
-Ponto único de import para o subsistema ISO/TS 16281 -- estilo slippy,
-tudo eager (mesmo padrão de core/machine_elements/bearings/__init__.py):
-dispatch (registo/resolução de solver), numerics (root-finding),
-validation (readiness checks), contact_postprocessing (Q_j, rigidez
-secante, L10r, Pref) e contact_solver (os solvers concretos -- que já
-importa contact_postprocessing por si, ver o próprio módulo, daí este
-__init__ importar contact_postprocessing primeiro).
+Re-exports, eagerly, the solver registry (``dispatch``), the root finder
+(``numerics``), the readiness checks (``validation``), the post-processing of
+the post-processing (``contact_postprocessing``: rolling-element loads and
+basic reference rating life of ISO_TS_16281_2008, 4.3 and 5.3, and a secant
+stiffness that is not in the standard) and the concrete ball and roller
+solvers (``contact_solver``, which imports ``contact_postprocessing``).
 """
 from __future__ import annotations
 

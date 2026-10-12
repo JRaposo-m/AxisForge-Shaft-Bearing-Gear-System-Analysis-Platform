@@ -1,6 +1,4 @@
 """
-axisforge/solvers/machine_elements/shaft/fem_solvers/assembly/load_assembly/distributed_loads.py
-
 Consistent nodal load vector for distributed TRANSVERSE loads.
 
 Assembles the element-level consistent load vector of a transverse
@@ -10,73 +8,6 @@ serves both beam theories: ``Elem`` dispatches its own
 ``shape_functions()`` / ``natural_coordenates()``, and
 ``QuadratureOrderEstimator`` selects a Gauss order sufficient for the
 shape-function degree of each theory (``assembly/numerics/gauss_quadrature.py``).
-
-Theory
-------
-The consistent load vector follows from equating the virtual work of the
-distributed load with that of the nodal forces,
-
-.. math::
-
-    \\delta W = \\int_{x_a}^{x_b} q(x)\\,\\delta v(x)\\,dx
-    \\quad\\Rightarrow\\quad
-    f_i = \\int_{x_a}^{x_b} q(x)\\,N_i^{v}(x)\\,dx ,
-
-where :math:`N_i^{v}` is the shape function that relates nodal DOF *i* to
-the transverse displacement v(x). Only DOFs that appear in the
-interpolation of v therefore receive a contribution. The local DOF
-layout is ``[v_a, th_a, v_b, th_b]``.
-
-* **Euler-Bernoulli** (cubic Hermite element). The rotation is not
-  independent (theta = dv/dx), and v is interpolated with the four
-  Hermite functions ``N[0..3]``, one per DOF. A distributed load thus
-  produces nodal forces *and* nodal moments; for uniform q over a whole
-  element these are q*le/2 and +/- q*le**2/12 (the classical fixed-end
-  forces and moments).
-* **Timoshenko** (two-node linear element, independent interpolation).
-  v and theta are interpolated separately with the same linear functions,
-  v(x) = N[0] v_a + N[1] v_b and theta(x) = N[0] th_a + N[1] th_b. The
-  rotations do not appear in v(x), so a transverse load does no work on
-  them: the theta slots are zero. For uniform q over a whole element the
-  nodal forces are q*le/2 and the nodal moments are 0.
-
-Assumptions
------------
-* Transverse loads only, in one bending plane per call (the caller
-  projects q onto the XY or XZ plane beforehand).
-* Small displacements and linear elasticity (the load vector is
-  independent of the solution).
-* The axial DOF is never loaded here.
-
-Limitations
------------
-Distributed COUPLES m(x) [N.mm/mm] are not supported. A distributed
-couple does work on the rotation, delta W = int m(x) delta theta(x) dx,
-and its consistent vector differs from the one above:
-
-* Timoshenko: m loads the theta slots through N[0], N[1]; the v slots are
-  zero (the mirror of the transverse case);
-* Euler-Bernoulli: since theta = dv/dx, m is integrated against the
-  DERIVATIVES dN_i/dx of the Hermite functions, which loads both v and
-  theta DOFs.
-
-A single slot-to-shape-function map, as used here, cannot represent the
-Euler-Bernoulli case. Distributed couples are rare in shaft analysis and
-no AxisForge load type produces them (``ExternalMoment`` is a point
-moment and is assembled by the point-load path). Supporting them would
-require a dedicated load type, its own entry in the load cases and a
-separate assembly routine; ``_SLOT_SHAPE_FUNCTION_INDEX`` must not be
-reused for that purpose.
-
-References
-----------
-.. [1] Reddy, J. N. (2019). *An Introduction to the Finite Element
-       Method*, 4th ed. McGraw-Hill. Euler-Bernoulli and Timoshenko beam
-       elements, consistent load vectors (chapter and equation numbers to
-       be confirmed).
-.. [2] Cook, R. D., Malkus, D. S., Plesha, M. E. & Witt, R. J. (2002).
-       *Concepts and Applications of Finite Element Analysis*, 4th ed.
-       Wiley. Consistent nodal loads (section to be confirmed).
 """
 
 from __future__ import annotations
@@ -92,7 +23,7 @@ from axisforge.solvers.machine_elements.shaft.fem_solvers.assembly.numerics.gaus
 
 # Local DOF slot [v_a, th_a, v_b, th_b] -> index into elem.shape_functions(),
 # or None when the slot receives no contribution. Valid for TRANSVERSE loads
-# only (see module docstring, "Limitations"):
+# only (see ``element_distributed_force_vector``, Warnings):
 #   euler_bernoulli: identity -- the Hermite functions couple v and theta,
 #                    hence the consistent nodal moments.
 #   timoshenko:      v and theta are interpolated independently; a transverse
@@ -139,17 +70,86 @@ def element_distributed_force_vector(
         elements ``M_a = M_b = 0``. None if the load does not overlap the
         element (the caller skips the scatter).
 
+    Warnings
+    --------
+    Distributed COUPLES m(x) [N.mm/mm] are not supported. A distributed
+    couple does work on the rotation, delta W = int m(x) delta theta(x) dx,
+    and its consistent vector differs from the one in Notes:
+
+    * Timoshenko: m loads the theta slots through N[0], N[1]; the v slots are
+      zero (the mirror of the transverse case);
+    * Euler-Bernoulli: since theta = dv/dx, m is integrated against the
+      DERIVATIVES dN_i/dx of the Hermite functions, which loads both v and
+      theta DOFs.
+
+    A single slot-to-shape-function map, as used here, cannot represent the
+    Euler-Bernoulli case. Distributed couples are rare in shaft analysis and
+    no AxisForge load type produces them (``ExternalMoment`` is a point
+    moment and is assembled by the point-load path). Supporting them would
+    require a dedicated load type, its own entry in the load cases and a
+    separate assembly routine; ``_SLOT_SHAPE_FUNCTION_INDEX`` must not be
+    reused for that purpose.
+
     Notes
     -----
-    f_i = int q(x) N_i^v(x) dx over the overlap. Transverse loads only;
-    distributed couples are not supported (module docstring,
-    "Limitations").
+    The consistent load vector follows from equating the virtual work of the
+    distributed load with that of the nodal forces,
+
+    .. math::
+
+        \\delta W = \\int_{x_a}^{x_b} q(x)\\,\\delta v(x)\\,dx
+        \\quad\\Rightarrow\\quad
+        f_i = \\int_{x_a}^{x_b} q(x)\\,N_i^{v}(x)\\,dx ,
+
+    where :math:`N_i^{v}` is the shape function that relates nodal DOF *i* to
+    the transverse displacement v(x). Only DOFs that appear in the
+    interpolation of v therefore receive a contribution. The local DOF
+    layout is ``[v_a, th_a, v_b, th_b]``.
+
+    * **Euler-Bernoulli** (cubic Hermite element). The rotation is not
+      independent (theta = dv/dx), and v is interpolated with the four
+      Hermite functions ``N[0..3]``, one per DOF. A distributed load thus
+      produces nodal forces *and* nodal moments; for uniform q over a whole
+      element these are q*le/2 and +/- q*le**2/12 (the classical fixed-end
+      forces and moments).
+    * **Timoshenko** (two-node linear element, independent interpolation).
+      v and theta are interpolated separately with the same linear functions,
+      v(x) = N[0] v_a + N[1] v_b and theta(x) = N[0] th_a + N[1] th_b. The
+      rotations do not appear in v(x), so a transverse load does no work on
+      them: the theta slots are zero. For uniform q over a whole element the
+      nodal forces are q*le/2 and the nodal moments are 0.
+
+    Assumptions:
+
+    * Transverse loads only, in one bending plane per call (the caller
+      projects q onto the XY or XZ plane beforehand).
+    * Small displacements and linear elasticity (the load vector is
+      independent of the solution).
+    * The axial DOF is never loaded here.
+
+    Units: q [N/mm], positions [mm], nodal forces [N], nodal moments [N mm]. The local DOF order is
+    ``[v_a, th_a, v_b, th_b]``; the global order is ``[u, v, theta]`` per node.
+
+    f_i = int q(x) N_i^v(x) dx over the overlap (Onate2013_vol2, Eq. (1.21a), (2.24a)); ``q`` is
+    ``q(x)``, ``N_i^v`` is ``elem.shape_functions(zeta)[k]`` with ``k`` from the slot map. Transverse
+    loads only; distributed couples are not supported (see Warnings).
+    For a Timoshenko element the theta slots are zero by construction.
 
     The Gauss points are mapped onto the overlap [a, b] itself
     (x = (a + b)/2 + (b - a)/2 * xi, Jacobian (b - a)/2), so a load that
     covers only part of the element is integrated over that part only.
     ``Mesh1D`` normally places nodes at x_lo and x_hi, in which case the
     overlap is always a whole element.
+
+    References
+    ----------
+    .. [1] Onate2013_vol2, Fig. 1.5, Eq. (1.21a) (Euler-Bernoulli) and Eq. (2.24a) (Timoshenko): consistent
+           nodal loads from the virtual work of the distributed load. Uniform load on an
+           Euler-Bernoulli element, ``[qL/2, qL^2/12, qL/2, -qL^2/12]``: Onate2013_vol2, Examples 1.2
+           and 1.4 (Eq. (1.21b) of the book prints l/2 where Fig. 1.5 and the examples have l/12). Linear
+           Timoshenko element, ``f_i = (l/2) {f_z, m}`` with forces and moments uncoupled:
+           Onate2013_vol2, Eq. (2.24b).
+    .. [2] Reddy 2019 and Cook 2002: named in the code, not in the library (source to find).
     """
     a = max(x_lo, elem.x_a)
     b = min(x_hi, elem.x_b)

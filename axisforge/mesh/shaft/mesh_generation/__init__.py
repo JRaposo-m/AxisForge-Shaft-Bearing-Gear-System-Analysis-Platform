@@ -1,12 +1,5 @@
 """
-axisforge/mesh/shaft/mesh_generation/__init__.py
-
-Eager rollup, sem lazy loading, sem __getattr__ -- mesma lógica do
-element_type/__init__.py: Mesh1D e Grader são Python/NumPy puro,
-importá-los directamente não tem custo que justifique lazy loading, e
-mantém `from axisforge.mesh.shaft.mesh_generation import Mesh1D` a
-funcionar sem quem importa precisar de saber a disposição interna dos
-módulos.
+Rollup of the 1D mesh generation package: Mesh1D (node grid of a shaft system) and Grader (refinement grades of a subdomain).
 """
 from __future__ import annotations
 

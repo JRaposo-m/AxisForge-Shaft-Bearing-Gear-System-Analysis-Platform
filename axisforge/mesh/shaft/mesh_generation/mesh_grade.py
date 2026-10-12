@@ -1,5 +1,5 @@
 """
-axisforge/mesh/shaft/mesh_generation/mesh_grade.py
+Refinement grades of a shaft subdomain by repeated bisection of the base mesh, for mesh-convergence studies.
 """
 import numpy as np
 
@@ -13,7 +13,8 @@ class RefinementFloorReached(ValueError):
     produce an interval of length <= ``MESH_MIN_NODE_DIST_MM``. Such
     midpoints would be merged away by :class:`Mesh1D`, so the grade would
     silently not be the mesh it claims to be (the refinement ratio r = 2
-    assumed by Richardson extrapolation would be false).
+    assumed by Richardson extrapolation would be false; Richardson
+    extrapolation: source to find).
 
     Subclasses ``ValueError`` so existing ``except ValueError`` handlers
     still catch it. The convergence dispatcher should catch it, stop the
@@ -30,6 +31,7 @@ class RefinementFloorReached(ValueError):
     """
 
     def __init__(self, grade: str, h_min: float, floor: float):
+        """Store the arguments; see the class docstring."""
         self.grade = grade
         self.h_min = h_min
         self.floor = floor
@@ -63,9 +65,22 @@ class Grader:
 
     Parameters
     ----------
-    x_lo    : lower bound of the subdomain
-    x_hi    : upper bound of the subdomain
-    x_nodes : full mesh node positions (from Mesh1D.x_nodes)
+    x_lo : float
+        Lower bound of the subdomain [mm].
+    x_hi : float
+        Upper bound of the subdomain [mm].
+    x_nodes : list of float
+        Full mesh node positions [mm] (from ``Mesh1D.x_nodes``).
+
+    Notes
+    -----
+    Every bisection halves each element (refinement ratio 2), which is the
+    ratio that a Richardson-type convergence estimate assumes (source to
+    find). A bisection is refused when it would create an interval of
+    ``MESH_MIN_NODE_DIST_MM`` (0.1 mm) or less. The subdomain bounds are
+    matched to the nodes with ``SOLVER_TOLERANCE`` (1e-6), used here as a
+    length tolerance [mm]; Mesh1D uses ``NODE_LOOKUP_TOL_MM`` (also 1e-6 mm)
+    for the same purpose. Both are values of this code, not from a source.
     """
 
     def __init__(
@@ -74,6 +89,7 @@ class Grader:
         x_hi: float,
         x_nodes: list[float],
     ):
+        """Store the arguments; see the class docstring."""
         self._x_lo    = x_lo
         self._x_hi    = x_hi
         self._x_nodes = x_nodes
@@ -84,17 +100,21 @@ class Grader:
 
         Parameters
         ----------
-        grade : "grade_0" | "grade_1" | ... | "grade_N"
+        grade : str
+            ``"grade_0"``, ``"grade_1"``, ..., ``"grade_N"`` [-].
 
         Returns
         -------
-        Sorted list of node positions within [x_lo, x_hi].
+        list of float
+            Ascending node positions within [x_lo, x_hi] [mm].
 
         Raises
         ------
-        ValueError if grade string is malformed or N is negative.
-        RefinementFloorReached (subclass of ValueError) if a bisection
-        would create an interval <= MESH_MIN_NODE_DIST_MM.
+        ValueError
+            If the grade string is malformed or N is negative.
+        RefinementFloorReached
+            (subclass of ValueError) if a bisection would create an interval
+            <= ``MESH_MIN_NODE_DIST_MM`` [mm].
         """
         n = self._parse_grade(grade)
         nodes = self._base_nodes()
@@ -110,11 +130,12 @@ class Grader:
         """
         Parse grade string into refinement level integer.
 
-        "grade_0" -> 0, "grade_1" -> 1, etc.
+        ``"grade_0"`` -> 0, ``"grade_1"`` -> 1, etc.
 
         Raises
         ------
-        ValueError if string does not match expected format.
+        ValueError
+            If the string does not match the expected format.
         """
         prefix = "grade_"
         if not grade.startswith(prefix):
@@ -132,9 +153,10 @@ class Grader:
 
     def _base_nodes(self) -> list[float]:
         """
-        Extract nodes from x_nodes that fall within [x_lo, x_hi].
-        
-        These are grade_0 — the natural mesh nodes in the subdomain,
+        Extract nodes from x_nodes that fall within [x_lo, x_hi] [mm].
+
+        The bounds are widened by ``SOLVER_TOLERANCE`` (used as a length
+        tolerance [mm]). These are grade_0, the natural mesh nodes in the subdomain,
         one per existing element boundary.
         """
         nodes = [
@@ -145,7 +167,7 @@ class Grader:
 
     def _bisect_once(self, nodes: list[float]) -> list[float]:
         """
-        Insert the midpoint of every interval between consecutive nodes.
+        Insert the midpoint of every interval between consecutive nodes [mm].
 
         Applied iteratively to produce grade_1, grade_2, ... grade_N.
         """

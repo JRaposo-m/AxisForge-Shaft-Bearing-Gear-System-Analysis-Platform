@@ -1,11 +1,10 @@
 """
-axisforge/outputs/solvers/fem_results/shaft_results.py
-
 Records and text of ``axisforge.results.fem_results.shaft_results`` (``ShaftResults`` and its
 ``BearingNodeData``). Mirrors the module it reads.
 
-Units are the ones AxisForge uses everywhere: N, mm, N mm, rad, MPa. Records carry them in the
-key; the text shows the slopes both in rad and in mrad.
+Units: N, mm, N mm, rad, MPa, and N m for the torque. Records carry the unit in the key, except
+``T_Nmm``, whose value is in N m (see ``mesh_node_records``); the text shows the slopes both in rad
+and in mrad.
 """
 from __future__ import annotations
 
@@ -50,8 +49,9 @@ SUMMARY_FIELDS: dict[str, str] = {
 }
 
 
-# ShaftResults array (one value per mesh node) -> record key. Units are the AxisForge ones
-# (N, mm, N mm, rad, MPa); ShaftResults does not state them for M, V, T, so confirm before quoting.
+# ShaftResults array (one value per mesh node) -> record key. Units of the ShaftResults arrays:
+# M [N mm], V [N], T [N m], v and u [mm], rotations and phi [rad], stresses [MPa]. The key "T_Nmm"
+# is therefore a misnomer: the value stored under it is in N m (see mesh_node_records).
 MESH_ARRAYS: dict[str, str] = {
     "x": "x_mm",
     "d": "d_mm",
@@ -85,6 +85,19 @@ def bearing_node_records(shaft_results, shaft_name: str | None = None) -> list[d
         (for example ``Fr_N``, ``M_xz_Nmm``, ``psi_xz_rad``). Empty if the result has no bearing
         node.
 
+    Warnings
+    --------
+    ``Fr_*``, ``Fa`` and ``M_*`` are rows of ``K d`` at the bearing node: the support reaction PLUS
+    the nodal load on that node (``Fr = R + f_ext``), so ``|Fr|`` is smaller than the force carried
+    by the support when a point load, or a distributed load of an adjacent element, reaches the
+    node. With no load on the node, ``Fr_*`` and ``Fa`` are the force of the support ON THE SHAFT,
+    opposite to the load (positive along +Z for ``_xz``, +Y for ``_xy`` and +X for the axial
+    force); the bearing solver builds ``phi_Fr = arctan2(Fr_xy, Fr_xz)`` from them, so ``phi_Fr``
+    is the direction of the reaction on the shaft, 180 deg from the direction in which the shaft
+    pushes the inner ring (whether this is intended is a question for the owner). ``M_*`` are the
+    nodal moments of the load vector, not reactions (the rotation is never constrained). See
+    ``BearingNodeData``.
+
     Notes
     -----
     ``psi_xz`` and ``psi_xy`` are the beam rotation at the bearing node, in rad (the contact
@@ -117,6 +130,11 @@ def mesh_node_records(shaft_results, shaft_name: str | None = None) -> list[dict
         ``M_Nmm``, ``V_N``, ``T_Nmm``, ``v_mm``, ``u_mm``, ``theta_xz_rad``, ``theta_xy_rad``,
         ``phi_rad``, ``sigma_b_MPa``, ``tau_MPa``). An array that is empty or does not have one
         value per node gives NaN in that key. Empty if the result has no node positions.
+
+    Warnings
+    --------
+    ``ShaftResults.T`` is in N m, but it is stored unchanged under the key ``T_Nmm``: the record
+    value is in N m, not N mm.
     """
     shaft = shaft_name if shaft_name is not None else shaft_results.name
     x = np.asarray(getattr(shaft_results, "x", []), dtype=float)
@@ -149,9 +167,8 @@ def shaft_summary_record(shaft_results, shaft_name: str | None = None) -> dict:
 
     Notes
     -----
-    ``ShaftResults`` does not state the units of its maxima. They are taken from the N, mm, MPa
-    convention of AxisForge (bending moment in N mm, stress in MPa); phi_max is documented in
-    rad. Confirm before quoting them.
+    Units of the maxima as documented in ``ShaftResults``: bending moment N mm, deflection mm,
+    stresses MPa, twist angle rad.
     """
     record = dict(
         shaft=shaft_name if shaft_name is not None else shaft_results.name,
@@ -178,6 +195,11 @@ def bearing_nodes_text(shaft_results, shaft_name: str | None = None) -> str:
     text: str
         One block per bearing node. The slopes psi and the rotations theta are given in rad and
         in mrad.
+
+    Warnings
+    --------
+    The block labels call ``Fr``, ``Fa`` and ``M`` "reaction"; they are rows of ``K d`` at the
+    node (see ``bearing_node_records``), and the moments are applied nodal moments.
     """
     rows = []
     for rec in bearing_node_records(shaft_results, shaft_name):
@@ -230,6 +252,12 @@ def mesh_nodes_table_text(records, indent: int = 0) -> str:
         Fixed-width table: position, diameter, bending moment and shear force (resultants),
         torque, deflection, axial displacement, bending rotations, twist, bending and shear
         stress at every node. The moment and the torque are shown in N m.
+
+    Warnings
+    --------
+    The moment column scales ``M_Nmm`` by 1e-3 (N mm to N m), which is correct. The torque column
+    applies the same 1e-3 to ``T_Nmm``, but that record value is already in N m (see
+    ``mesh_node_records``), so the table prints the torque divided by 1000 under an "N m" label.
     """
     return format_table(MESH_TABLE_COLUMNS, records, indent)
 
@@ -296,7 +324,7 @@ def shaft_summary_table_text(records, indent: int = 0) -> str:
 
     Notes
     -----
-    ``ShaftResults`` does not state the units of its maxima; see ``shaft_summary_record``.
+    Units of the maxima: see ``shaft_summary_record``.
     """
     columns = list(SUMMARY_TABLE_COLUMNS)
     if any("power_W" in r for r in records):

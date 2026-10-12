@@ -1,54 +1,11 @@
 """
-axisforge/core/mechanical_system/Parallel_Axis_systems/gear_meshing/planetary_gear_meshing.py
+Single-stage planetary (epicyclic) gear train: sun, k planets, ring and carrier.
 
-Single-stage planetary (epicyclic) train: sun + k planets + ring + carrier.
-
-Composition, not inheritance: the two tooth-contact problems are delegated to
-the existing pair objects —
-    meshing_12 : SpurHelicalGearMeshing(sun, planet)    external pair
-    meshing_23 : InternalGearMeshing(planet, ring)      internal pair
-
-This module owns ONLY what is specific to the train:
-  - structural conditions (coaxiality, assembly, neighbouring)
-  - kinematics (Willis), F = 1 and F = 2 modes
-  - ideal torque distribution over the members and over the k planets (Ch.6)
-  - per-planet angular placement (phi_j)
-
-NOT YET covered (Ch.8/9 of Arnaudov & Karaivanov): load distribution /
-unevenness between planets (K_gamma), and actual mesh/bearing/pin forces.
-`torques()` gives IDEAL torques only (K_gamma=1, eta_0=1, omega=const).
-
-References
-----------
-  - ISO 21771:2007
-  - KHK Gear Technical Reference §4.2 / §5 (planetary trains)
-  - Arnaudov & Karaivanov, "Planetary Gear Trains", §6.1-6.3 (forces/torques,
-    ideal Ft/F_H2/t) and §7.1 (Willis analytical method); equation numbers
-    6.1-6.7 and 7.1-7.11 below refer to this text.
-  - Henriot, "Traité théorique et pratique des engrenages", ch. trains épicycloïdaux
-  - MAAG Gear Book
-
-Willis index notation (§7.1)
-----------------------------
-    1 = sun,  2 = planet,  3 = ring,  H = carrier
-    A = input element, B = output element, C = fixed element
-    i_AB(C) — the FIXED element goes in brackets: i_1H(3), never i_1H^3.
-
-Conventions
------------
-  - All members rotate about the global +X axis; omega [rad/s], +X right-hand.
-  - Torque in N·m, forces in N, lengths in mm  (same as the pair objects).
-  - phi_deg: line of centres in the global YZ frame, +Y toward +Z.
-    Planet j sits at phi_j = phi_0 + j*360/k  (sun -> planet direction).
-    The planet -> ring line of centres is phi_j + 180 (ring centre == sun centre).
-  - SIGN CONVENTION: z_sun, z_planet > 0 (external); z_ring < 0 (InternalGear
-    signed-z convention). The negative z_ring is STRUCTURAL, not cosmetic — it
-    is what makes InternalGearMeshing's z1+z2 collapse to the difference form
-    and what makes rotation_dir_out = +rotation_dir_in (ring and planet turn the
-    same way). Use abs(z_ring) only where a tooth COUNT is meant (assembly
-    condition); use the signed value wherever a RATIO is meant (i_0).
-
-Units note: torque propagates in N·m end-to-end, matching *GearMeshing.forces().
+Composition of the two tooth-contact problems (sun-planet external pair, planet-ring
+internal pair, both delegated to the pair classes) with what is specific to the train:
+structural conditions (coaxiality, assembly, neighbouring), Willis kinematics, the ideal
+torque distribution over the members and over the planets, and the placement of the planets.
+Load sharing between planets and the real mesh, bearing and pin forces are not covered.
 """
 
 from __future__ import annotations
@@ -70,6 +27,12 @@ from axisforge.core.machine_elements.gears.parallel_axis.gear_meshing.spurhelica
 # ===========================================================================
 
 class PlanetaryMember(Enum):
+    """
+    Member of the planetary train, used as key in the kinematics and torque calls.
+
+    Willis index notation: 1 = sun (SUN), 2 = planet (PLANET), 3 = ring (RING),
+    H = carrier (CARRIER).
+    """
     SUN = auto()        # 1
     PLANET = auto()     # 2
     RING = auto()       # 3
@@ -87,8 +50,7 @@ COAXIAL_MEMBERS: tuple[PlanetaryMember, ...] = (
 class MeshTag(Enum):
     """
     Identifies which of the two tooth contacts a force set belongs to.
-    Currently unused — was consumed only by the removed forces() draft.
-    Kept as a likely building block for the Ch.8/9 rebuild.
+    Not read by any module of the package.
     """
     SUN_PLANET = auto()     # external pair, meshing_12
     PLANET_RING = auto()    # internal pair, meshing_23
@@ -97,17 +59,40 @@ class MeshTag(Enum):
 @dataclass(frozen=True)
 class PlanetaryKinematics:
     """
-    Result of solve_kinematics(), in the Willis index notation:
-        1 = sun, 2 = planet, 3 = ring, H = carrier.
-    omega in rad/s about +X. Absolute velocities are omega_N; velocities
-    relative to the carrier (eq. 7.11) are omega_N_rel = omega_N(H).
+    Result of ``solve_kinematics``: angular speeds of the members in the Willis index notation.
 
-    F : degrees of freedom of the OPERATING MODE, not of the mechanism.
-        The PGT is inherently 2-DoF; prescribing one central element at
-        omega = 0 reduces it to F = 1. F = 2 is the differential /
-        summation mode.
-    willis_residual : LHS of eq. (7.2) evaluated at the solution. Should be
-        ~0; exposed for numerical transparency, not consumed internally.
+    1 = sun, 2 = planet, 3 = ring, H = carrier. Absolute speeds are omega_N;
+    speeds relative to the carrier (eq. 7.11) are omega_N_rel = omega_N(H).
+
+    Parameters
+    ----------
+    omega_1, omega_2, omega_3, omega_H : float
+        Absolute angular speed of sun, planet (spin about its own axis), ring
+        and carrier. The speeds are used only in linear combinations, so any
+        consistent unit works; rad/s about +X is the convention of the module.
+    omega_1_rel, omega_2_rel, omega_3_rel : float
+        Speeds relative to the carrier, same unit as omega_1. omega_1_rel =
+        omega_1 - omega_H, omega_2_rel = -omega_1_rel*z1/z2, omega_3_rel =
+        omega_3 - omega_H.
+    i_0 : float
+        Basic ratio i_13(H) = z_ring / z_sun [-], negative with z_ring < 0.
+    F : int
+        Degrees of freedom of the OPERATING MODE [-], not of the mechanism. The
+        PGT is inherently 2-DoF; prescribing one central element at omega = 0
+        reduces it to F = 1. F = 2 is the differential / summation mode.
+    fixed : PlanetaryMember or None
+        The element prescribed at omega == 0.0, if any.
+    willis_residual : float
+        Left-hand side of eq. (7.2) at the solution, in the unit of omega.
+        Should be ~0; exposed for numerical transparency, not used internally.
+    prescribed : tuple of (PlanetaryMember, float)
+        The input speeds as given, in the unit of omega.
+
+    References
+    ----------
+    .. [1] Arnaudov and Karaivanov, "Planetary Gear Trains", eq. 7.1-7.11, as
+       named in the code; not in the library; not checked against the source
+       (source to find).
     """
     omega_1: float                 # sun,     absolute
     omega_2: float                 # planet,  absolute spin about its own axis
@@ -116,7 +101,7 @@ class PlanetaryKinematics:
     omega_1_rel: float             # = omega_1 - omega_H          (7.11)
     omega_2_rel: float             # = -omega_1_rel*z1/z2         (7.11)
     omega_3_rel: float             # = omega_3 - omega_H          (7.11)
-    i_0: float                     # basic ratio i_13(H) = -z3/z1 < 0   (7.1)
+    i_0: float                     # basic ratio i_13(H) = z3/z1 = -abs(z3)/z1 < 0, z3 signed (7.1)
     F: int                         # 1 or 2 — operating-mode DoF
     fixed: PlanetaryMember | None  # the element held at omega = 0, if any
     willis_residual: float
@@ -124,39 +109,91 @@ class PlanetaryKinematics:
 
     # --- descriptive aliases (the rest of the module reads these) ---
     @property
-    def omega_sun(self) -> float:        return self.omega_1
+    def omega_sun(self) -> float:
+        """Absolute angular speed of the sun, ``omega_1`` (unit of omega)."""
+        return self.omega_1
+
     @property
-    def omega_planet_abs(self) -> float: return self.omega_2
+    def omega_planet_abs(self) -> float:
+        """Absolute spin speed of the planet about its own axis, ``omega_2`` (unit of omega)."""
+        return self.omega_2
+
     @property
-    def omega_planet_rel(self) -> float: return self.omega_2_rel
+    def omega_planet_rel(self) -> float:
+        """Spin speed of the planet relative to the carrier, ``omega_2_rel`` (unit of omega)."""
+        return self.omega_2_rel
+
     @property
-    def omega_ring(self) -> float:       return self.omega_3
+    def omega_ring(self) -> float:
+        """Absolute angular speed of the ring, ``omega_3`` (unit of omega)."""
+        return self.omega_3
+
     @property
-    def omega_carrier(self) -> float:    return self.omega_H
+    def omega_carrier(self) -> float:
+        """Absolute angular speed of the carrier, ``omega_H`` (unit of omega)."""
+        return self.omega_H
 
 
 @dataclass(frozen=True)
 class PlanetaryTorques:
     """
-    Ideal external torques (1=sun, 3=ring, H=carrier). Valid under three
-    preconditions: stationary load (omega_i = const, no inertial forces),
-    K_gamma = 1 (equal load sharing — load_sharing_factor is the extension
-    point), eta_0 = 1 (no losses).
+    Ideal external torques on the sun, ring and carrier and the nominal mesh loads (result of ``torques``).
 
-        T3 = -i_0 * T1 = +(z3/z1) * T1                              (6.3)
+    Valid under three preconditions: stationary load (omega_i = const, no
+    inertial forces), equal load sharing between planets (K_gamma = 1) and no
+    losses (eta_0 = 1).
+
+    Parameters
+    ----------
+    T1, T3, TH : float
+        External torque on the sun, the ring and the carrier [N m].
+    t : float
+        Torque ratio T3/T1 = -i_0 [-].
+    Ft : float
+        Nominal tangential force per mesh, F_t12 = F_t32 [N].
+    F_H2 : float
+        Ideal resultant force on one planet pin [N].
+    T_mesh_sun : float
+        Torque through one sun-planet mesh, on the sun [N m]; the quantity
+        that can be passed to ``meshing_12.forces`` (see ``torques``, Warnings).
+    T_mesh_planet : float
+        Torque through one planet-ring mesh, on the planet [N m]; the
+        quantity that can be passed to ``meshing_23.forces``.
+    k : int
+        Number of planets [-].
+
+    Notes
+    -----
+    As coded (1 = sun, 3 = ring, H = carrier; the numbers are the equation
+    numbers of the book named below)::
+
+        T3 = -i_0 * T1 = +(abs(z3)/z1) * T1                         (6.3)
         TH = -(T1 + T3)                                             (6.4)
         sum(Ti) = T1 + T3 + TH = 0                                  (6.5)
-        t  = T3 / T1 = -i_0 > +1     (torque ratio)                 (6.7)
-        Ft = F_t12 = F_t32 = 2000*T1/(k*d1)   [N]  (nominal, hand-calc,
-             uses the REFERENCE diameter d1 — NOT the working pitch diameter
-             dl1 that meshing_12.forces() uses; the two agree only at x=0.
-             meshing_12/meshing_23.forces() remain the precise source of
-             truth for stress/bearing loads. Ft here is a cross-check only.)  (6.1)
-        F_H2 = F_t12 + F_t32 = 2*Ft   (ideal resultant on ONE planet pin,
-             shifted-mesh approximation)                            (6.2)
+        t  = T3 / T1 = -i_0 > +1                                    (6.7)
+        Ft = 2000*T1/(k*d1)                                         (6.1)
+        F_H2 = F_t12 + F_t32 = 2*Ft                                 (6.2)
 
-    T_mesh_sun / T_mesh_planet are the per-mesh torques actually fed to
-    meshing_12.forces() / meshing_23.forces().
+    ``Ft`` uses the REFERENCE diameter d1 of the sun [mm], not the working
+    pitch diameter dl1 used by ``meshing_12.forces()`` and
+    ``meshing_23.forces()``. The values agree when al = a (no profile-shift
+    effect on the working diameter, e.g. x1 + x2 = 0) and z_sun <= z_planet
+    (see ``torques``, Warnings). F_H2 = 2*Ft is the ideal resultant on one
+    planet pin (sum of the two equal tangential forces; pressure-angle
+    components not included).
+
+    ``satisfies_torque_ordering`` tests eq. (6.6), |T1| < |T3| < |TH|.
+
+    References
+    ----------
+    .. [1] ISO_6336-1_2019, 4.2.2, Formula (1): F_t = 2000 T / d with T [N m],
+       d [mm] (reference diameter); 6.5.8.4 a) (dynamic factor, ring gear
+       fixed to the case): F_t in Formulae (15) to (17) is the whole peripheral
+       load of the sun divided by the number of planets p.
+       K_gamma is not included here.
+    .. [2] Arnaudov and Karaivanov, "Planetary Gear Trains", eq. 6.1-6.7, as
+       named in the code; not in the library; not checked against the source
+       (source to find). Includes F_H2 = 2 Ft.
     """
     T1: float
     T3: float
@@ -168,20 +205,41 @@ class PlanetaryTorques:
     T_mesh_planet: float
     k: int
 
-    # --- descriptive aliases (older call sites in this module read these) ---
+    # --- descriptive aliases of the fields above ---
     @property
-    def T_sun(self) -> float: return self.T1
+    def T_sun(self) -> float:
+        """External torque on the sun, ``T1`` [N m]."""
+        return self.T1
+
     @property
-    def T_ring(self) -> float: return self.T3
+    def T_ring(self) -> float:
+        """External torque on the ring, ``T3`` [N m]."""
+        return self.T3
+
     @property
-    def T_carrier(self) -> float: return self.TH
+    def T_carrier(self) -> float:
+        """External torque on the carrier, ``TH`` [N m]."""
+        return self.TH
+
     @property
-    def T_sun_planet_mesh(self) -> float: return self.T_mesh_sun
+    def T_sun_planet_mesh(self) -> float:
+        """Torque through one sun-planet mesh, on the sun, ``T_mesh_sun`` [N m]."""
+        return self.T_mesh_sun
+
     @property
-    def T_planet_ring_mesh(self) -> float: return self.T_mesh_planet
+    def T_planet_ring_mesh(self) -> float:
+        """Torque through one planet-ring mesh, on the planet, ``T_mesh_planet`` [N m]."""
+        return self.T_mesh_planet
 
     def satisfies_torque_ordering(self) -> bool:
-        """eq. (6.6): |T1| < |T3| < |TH|. A cheap sanity check, not enforced."""
+        """
+        Torque ordering of eq. (6.6), |T1| < |T3| < |TH|.
+
+        Returns
+        -------
+        bool
+            True if the ordering holds. A sanity check, not enforced.
+        """
         return abs(self.T1) < abs(self.T3) < abs(self.TH)
 
 
@@ -191,20 +249,88 @@ class PlanetaryTorques:
 
 class PlanetaryGearTrainMeshing:
     """
+    Single-stage planetary train: sun (1), k equally spaced planets (2), ring (3), carrier (H).
+
+    Built from two pair objects, ``meshing_12`` (``SpurHelicalGearMeshing``,
+    sun-planet, external) and ``meshing_23`` (``InternalGearMeshing``,
+    planet-ring, internal). The class adds the train-level checks, the Willis
+    kinematics, the ideal torques and the planet positions.
+
     Parameters
     ----------
-    sun_gear, planet_gear : SpurHelicalGear   (external, z > 0)
-    ring_gear             : InternalGear      (z < 0, signed-z convention)
-    k                     : number of planets, >= 1 (equally spaced)
-    phi0_deg              : angular position of planet 0 [deg]
-    al_12 / al_23         : working centre distances [mm] (None -> derived from x)
-    equalise_gs_*, addendum_reduction_* : forwarded to each pair object.
+    sun_gear, planet_gear : SpurHelicalGear
+        External gears, z > 0.
+    ring_gear : InternalGear
+        Ring gear, z < 0 (signed-z convention; required by ``validate``).
+    k : int, optional
+        Number of planets [-], >= 1, equally spaced. Default 3.
+    label : str, optional
+        Name used in messages and in the summary.
+    phi0_deg : float, optional
+        Angle of the line of centres sun -> planet 0 [deg]; stored modulo 360.
+    al_12, al_23 : float or None, optional
+        Working centre distance of the sun-planet and planet-ring pairs [mm];
+        None: derived from the profile shifts by the pair object.
+    equalise_gs_12, equalise_gs_23 : bool, optional
+        Forwarded to the pair objects (``equalise_gs=True`` fails for the
+        planet-ring pair, see ``InternalGearMeshing``).
+    addendum_reduction_12, addendum_reduction_23 : bool, optional
+        Forwarded to the pair objects.
+    load_sharing_factor : float, optional
+        Placeholder for K_gamma [-]; 1.0 = equal sharing. It is only checked
+        (>= 1.0) by ``validate``; no formula uses it.
+
+    Attributes
+    ----------
+    meshing_12, meshing_23 : object
+        The two pair objects; ``forces`` of each gives the tooth loads on the
+        working pitch radius.
+    al_12, al_23 : float
+        Resolved working centre distances [mm].
+    r_carrier : float
+        Radius of the planet axes from the train axis, set to al_12 [mm].
+    i_0 : float
+        Basic ratio i_13(H) = ring.z / sun.z [-] (negative for z_ring < 0).
 
     Notes
     -----
-    Equal load sharing over the k planets is ASSUMED (no mesh-stiffness /
-    manufacturing-error load-sharing factor yet). A K_gamma-style factor is the
-    natural extension point — see `load_sharing_factor`.
+    Index notation: 1 = sun, 2 = planet, 3 = ring, H = carrier. In a speed
+    ratio i_AB(C), A is the input, B the output and C the fixed element; C
+    goes in brackets: i_1H(3), never i_1H^3.
+
+    Conventions: all members rotate about the global +X axis (right-hand).
+    Torque in N m, forces in N, lengths in mm (as in the pair objects). The
+    speeds omega are used only in linear combinations, so any consistent unit
+    works (the module speaks of rad/s). phi_deg is the line of centres in the
+    global YZ frame, +Y toward +Z; planet j sits at phi_j = phi_0 + j*360/k
+    (sun -> planet direction); the planet -> ring line of centres is
+    phi_j + 180 (ring centre = sun centre).
+
+    The negative z_ring is structural: it makes the signed tooth-number sum of
+    ``InternalGearMeshing`` a difference and makes rotation_dir_out =
+    +rotation_dir_in (ring and planet turn the same way). abs(z_ring) is used
+    where a tooth count is meant (assembly condition); the signed value where
+    a ratio is meant (i_0).
+
+    Equal load sharing over the k planets is assumed (K_gamma = 1, no
+    mesh-stiffness or manufacturing-error load-sharing factor). Not covered:
+    load distribution between planets and the real mesh, bearing and pin forces
+    (``torques`` gives ideal torques only). This class computes no F_r, F_a or
+    F_n; ``meshing_12.forces`` and ``meshing_23.forces`` do.
+
+    References
+    ----------
+    .. [1] ISO_6336-1_2019, 4.2.1 (K_gamma) and 6.5.8.4 a) (dynamic factor,
+       ring gear fixed to the case: F_t in Formulae (15) to (17) = peripheral
+       load of the sun divided by the number of planets).
+    .. [2] Arnaudov and Karaivanov, "Planetary Gear Trains", sections 6.1-6.3,
+       7.1; eq. 6.1-6.7 and 7.1-7.11; chapters 8 and 9 for the load
+       distribution, as named in the code; not in the library; not checked
+       against the source (source to find).
+    .. [3] KHK Gear Technical Reference sections 4.2 and 5 (planetary trains);
+       Henriot, "Traite theorique et pratique des engrenages", chapter on
+       epicyclic trains; MAAG Gear Book; ISO 21771:2007: all named in the code;
+       not in the library; not checked against the source (source to find).
     """
 
     def __init__(self,
@@ -221,6 +347,7 @@ class PlanetaryGearTrainMeshing:
                  equalise_gs_23: bool = False,
                  addendum_reduction_23: bool = False,
                  load_sharing_factor: float = 1.0):
+        """Build the two pair objects and the train data; see the class docstring."""
 
         self.label = label
         self.k = int(k)
@@ -257,7 +384,7 @@ class PlanetaryGearTrainMeshing:
         # planet axis radius from the train axis (carrier pitch radius)
         self.r_carrier = self.al_12
 
-        # basic ratio (7.1):  i_0 = i_13(H) = omega_1rel/omega_3rel = -z3/z1 < 0
+        # basic ratio (7.1):  i_0 = i_13(H) = omega_1rel/omega_3rel = z3/z1 = -abs(z3)/z1 < 0 (z3 signed)
         # With the signed convention (z_ring < 0) this is simply z3/z1 — no
         # explicit negation, the sign rides on z_ring.
         self.i_0 = ring_gear.z / sun_gear.z
@@ -267,11 +394,36 @@ class PlanetaryGearTrainMeshing:
     # ------------------------------------------------------------------
 
     def planet_phi_deg(self, j: int) -> float:
-        """Line-of-centres angle sun -> planet j [deg], equally spaced."""
+        """
+        Angle of the line of centres sun -> planet j.
+
+        Parameters
+        ----------
+        j : int
+            Planet index, 0 <= j < k.
+
+        Returns
+        -------
+        float
+            (phi0 + 360*j/k) mod 360 [deg], from +Y toward +Z (P11).
+        """
         return (self.phi0_deg + 360.0 * j / self.k) % 360.0
 
     def planet_position(self, j: int) -> tuple[float, float]:
-        """(y, z) of planet j's axis in the global frame [mm], sun axis at (0,0)."""
+        """
+        Position of the axis of planet j in the global YZ frame.
+
+        Parameters
+        ----------
+        j : int
+            Planet index, 0 <= j < k.
+
+        Returns
+        -------
+        tuple of float
+            (y, z) = r_carrier*(cos(phi_j), sin(phi_j)) [mm] with r_carrier =
+            al_12 and the sun axis at (0, 0) (P11).
+        """
         phi = math.radians(self.planet_phi_deg(j))
         return (self.r_carrier * math.cos(phi), self.r_carrier * math.sin(phi))
 
@@ -282,12 +434,26 @@ class PlanetaryGearTrainMeshing:
     def willis_residual(self, omega_1: float, omega_3: float,
                         omega_H: float) -> float:
         """
-        LHS of the Willis equation in its canonical form (eq. 7.2):
+        Residual of the Willis equation for given member speeds.
 
-            omega_1 - i_0*omega_3 - (1 - i_0)*omega_H = 0
+        Parameters
+        ----------
+        omega_1, omega_3, omega_H : float
+            Absolute speeds of the sun, the ring and the carrier, in any
+            consistent unit.
 
-        Zero for any admissible motion. Exposed for numerical transparency /
-        regression tests — never consumed internally.
+        Returns
+        -------
+        float
+            omega_1 - i_0*omega_3 - (1 - i_0)*omega_H, in the unit of the
+            speeds; zero for any admissible motion.
+
+        Notes
+        -----
+        Willis equation in its canonical form, eq. (7.2) of the book named in
+        the class docstring (P02). Used for numerical transparency and
+        regression tests; not consumed internally except to fill
+        ``PlanetaryKinematics.willis_residual``.
         """
         return omega_1 - self.i_0 * omega_3 - (1.0 - self.i_0) * omega_H
 
@@ -296,9 +462,12 @@ class PlanetaryGearTrainMeshing:
         prescribed: dict[PlanetaryMember, float],
     ) -> PlanetaryKinematics:
         """
-        Solve the Willis equation (7.2) for the one unknown central velocity.
+        Speeds of all members from two prescribed central speeds (Willis).
 
-            i_0 = i_13(H) = omega_1rel/omega_3rel = -z3/z1 < 0        (7.1)
+        Solves the Willis equation (7.2) for the one unknown central velocity.
+
+            i_0 = i_13(H) = omega_1rel/omega_3rel = z3/z1 = -abs(z3)/z1 < 0   (7.1)
+            (z3 signed, z_ring < 0 as required by this module)
             omega_1 - i_0*omega_3 - (1 - i_0)*omega_H = 0             (7.2)
 
         The PGT is a 2-DoF mechanism (three central elements 1/3/H, one
@@ -318,9 +487,44 @@ class PlanetaryGearTrainMeshing:
 
         Parameters
         ----------
-        prescribed : {PlanetaryMember: omega [rad/s]}. Only SUN / RING /
-                     CARRIER are accepted — the planet spin (omega_2) is a
-                     dependent coordinate, not a DoF.
+        prescribed : dict
+            {PlanetaryMember: omega}; the speeds are in any consistent unit
+            (rad/s in the module convention), and the result is in the same
+            unit. Only SUN / RING / CARRIER are accepted; the planet spin
+            (omega_2) is a dependent coordinate, not a DoF.
+
+        Returns
+        -------
+        PlanetaryKinematics
+            Absolute and carrier-relative speeds, i_0, the mode F, the fixed
+            element and the Willis residual.
+
+        Raises
+        ------
+        ValueError
+            If a key is not SUN / RING / CARRIER, or if the number of
+            prescribed speeds is not exactly two.
+
+        Notes
+        -----
+        The missing speed is (P03)::
+
+            omega_1 = i_0*omega_3 + (1 - i_0)*omega_H              (7.10)
+            omega_3 = (omega_1 - (1 - i_0)*omega_H) / i_0          (7.10)
+            omega_H = (omega_1 - i_0*omega_3) / (1 - i_0)          (7.9)
+
+        and the planet speed follows from the carrier frame, eq. (7.11) (P04)::
+
+            omega_2_rel = -(omega_1 - omega_H)*z1/z2;  omega_2 = omega_2_rel + omega_H
+
+        with z1 and z2 the tooth numbers of sun and planet. F = 1 if a
+        prescribed element has speed exactly 0.0, otherwise 2.
+
+        References
+        ----------
+        .. [1] Arnaudov and Karaivanov, "Planetary Gear Trains", eq. 7.1-7.11,
+           as named in the code; not in the library; not checked against the
+           source (source to find).
         """
         SUN, RING, CARRIER = (PlanetaryMember.SUN, PlanetaryMember.RING,
                               PlanetaryMember.CARRIER)
@@ -391,15 +595,36 @@ class PlanetaryGearTrainMeshing:
     def _ratio_and_equation(self, A: PlanetaryMember, B: PlanetaryMember,
                             C: PlanetaryMember) -> tuple[float, str]:
         """
-        Closed form of i_AB(C) and the book equation number backing it.
-        Single source of truth for speed_ratio() / speed_ratio_equation().
+        Closed form of the speed ratio i_AB(C) and the equation number of the book.
 
+        Single source of truth for ``speed_ratio`` / ``speed_ratio_equation``.
         Written as explicit closed forms rather than derived from
-        solve_kinematics() so each branch is traceable to its equation and
-        directly regression-testable against it.
+        ``solve_kinematics`` so each branch is traceable to its equation.
+        Only valid for F = 1 (one element fixed).
 
-        NOTE: Only valid for F=1 cases
+        Parameters
+        ----------
+        A, B, C : PlanetaryMember
+            Input, output and fixed element; a permutation of SUN, RING,
+            CARRIER.
 
+        Returns
+        -------
+        tuple
+            (ratio [-], equation number as str, e.g. "7.3").
+
+        Raises
+        ------
+        ValueError
+            If (A, B, C) is not one of the six F = 1 modes.
+
+        Notes
+        -----
+        The six ratios (P05), with i_0 = z_ring/z_sun < 0: i_1H(3) = 1 - i_0
+        (7.3); i_H1(3) = 1/(1 - i_0) (7.4); i_3H(1) = (i_0 - 1)/i_0 (7.5);
+        i_H3(1) = i_0/(i_0 - 1) (7.6); i_13(H) = i_0 (7.7); i_31(H) = 1/i_0
+        (7.8). Equation numbers are those of Arnaudov and Karaivanov (class
+        docstring; source to find).
         """
         SUN, RING, CARRIER = (PlanetaryMember.SUN, PlanetaryMember.RING,
                               PlanetaryMember.CARRIER)
@@ -434,10 +659,10 @@ class PlanetaryGearTrainMeshing:
     def speed_ratio(self, A: PlanetaryMember, B: PlanetaryMember,
                     C: PlanetaryMember) -> float:
         """
-        Speed ratio i_AB(C) = omega_A / omega_B with element C stationary,
-        in the book's index notation ("A—input, B—output, C—fixed").
-        Note the fixed element belongs in BRACKETS: i_1H(3), never i_1H^3.
-        NOTE: Only valid for F=1 cases
+        Speed ratio i_AB(C) = omega_A / omega_B with element C stationary.
+
+        Book index notation: A input, B output, C fixed; the fixed element goes
+        in BRACKETS: i_1H(3), never i_1H^3. Only valid for F = 1 cases.
 
         Covers all six F=1 modes:
 
@@ -448,20 +673,53 @@ class PlanetaryGearTrainMeshing:
             i_13(H) = i_0                  reducer,    < -1  (pseudo-PGT)
             i_31(H) = 1/i_0                multiplier, > -1  (pseudo-PGT)
 
-        Purely kinematic — no losses.
+        Purely kinematic, no losses. Equations 7.3-7.8 of the book named in
+        the class docstring (P05).
+
+        Parameters
+        ----------
+        A, B, C : PlanetaryMember
+            Input, output and fixed element.
+
+        Returns
+        -------
+        float
+            The ratio i_AB(C) [-].
         """
         return self._ratio_and_equation(A, B, C)[0]
 
     def speed_ratio_equation(self, A: PlanetaryMember, B: PlanetaryMember,
                              C: PlanetaryMember) -> str:
-        """Book equation number backing speed_ratio(A, B, C) — traceability.
-        NOTE: Only valid for F=1 cases
+        """
+        Equation number of the book behind ``speed_ratio(A, B, C)``.
+
+        Parameters
+        ----------
+        A, B, C : PlanetaryMember
+            Input, output and fixed element (F = 1 cases only).
+
+        Returns
+        -------
+        str
+            Equation number, e.g. "7.3".
         """
         return self._ratio_and_equation(A, B, C)[1]
 
     @staticmethod
     def mode_of_work(i: float) -> str:
-        """'reducer' if |i| > 1, 'multiplier' if |i| < 1."""
+        """
+        Classify a speed ratio.
+
+        Parameters
+        ----------
+        i : float
+            Speed ratio [-].
+
+        Returns
+        -------
+        str
+            "reducer" if abs(i) > 1, "multiplier" if abs(i) < 1, else "direct".
+        """
         if abs(i) > 1.0:
             return "reducer"
         if abs(i) < 1.0:
@@ -470,26 +728,44 @@ class PlanetaryGearTrainMeshing:
 
     def is_pseudo_pgt(self, C: PlanetaryMember) -> bool:
         """
-        True when the CARRIER is the fixed element: the train degenerates to a
-        fixed-axis gear train and is not planetary at all — the book's
-        'pseudo-PGT'. Downstream consequence: the
-        planets do not orbit, so there is NO centrifugal load and the tooth
-        load-cycle count changes.
+        True when the carrier is the fixed element (pseudo-PGT).
+
+        The train then degenerates to a fixed-axis gear train and is not
+        planetary at all (the book's "pseudo-PGT"): the planets do not orbit,
+        so there is no centrifugal load and the tooth load-cycle count changes.
+
+        Parameters
+        ----------
+        C : PlanetaryMember
+            The fixed element.
+
+        Returns
+        -------
+        bool
+            True if C is CARRIER.
         """
         return C is PlanetaryMember.CARRIER
 
     def ratio(self, input_member: PlanetaryMember,
               output_member: PlanetaryMember,
               fixed_member: PlanetaryMember) -> float:
-        """Backwards-compatible alias for speed_ratio()."""
+        """
+        Alias of ``speed_ratio(input_member, output_member, fixed_member)``.
+
+        Returns
+        -------
+        float
+            The ratio i_AB(C) [-].
+        """
         return self.speed_ratio(input_member, output_member, fixed_member)
 
     @property
     def t(self) -> float:
         """
-        Torque ratio (6.7): t = T3/T1 = -i_0 > +1 for an AI-PGT. Depends only
-        on i_0 (fixed once the train is built) — unlike torques(), which also
-        needs T_in.
+        Torque ratio t = T3/T1 = -i_0 [-] (eq. 6.7, > +1 when abs(z_ring) > z_sun).
+
+        Depends only on i_0, which is fixed once the train is built; unlike
+        ``torques``, it needs no input torque (P06).
         """
         return -self.i_0
 
@@ -500,22 +776,66 @@ class PlanetaryGearTrainMeshing:
     def torques(self, T_in: float,
                 input_member: PlanetaryMember) -> PlanetaryTorques:
         """
-        Ideal external torques on the three coaxial members from one known
-        input torque. Independent of which member is fixed — the fixed member
-        simply absorbs its share as a reaction.
+        Ideal external torques on the sun, ring and carrier from one known input torque.
 
+        Independent of which member is fixed: the fixed member simply absorbs
+        its share as a reaction.
+
+        Parameters
+        ----------
+        T_in : float
+            Known external torque on ``input_member`` [N m].
+        input_member : PlanetaryMember
+            SUN, RING or CARRIER.
+
+        Returns
+        -------
+        PlanetaryTorques
+            T1, T3, TH [N m], t [-], Ft and F_H2 [N], T_mesh_sun and
+            T_mesh_planet [N m], k.
+
+        Raises
+        ------
+        ValueError
+            If ``input_member`` is not SUN, RING or CARRIER.
+
+        Notes
+        -----
+        As coded (P06-P08; d1 = reference diameter of the sun [mm], k planets)::
+
+            T1 = T_in (SUN);  T_in/(-i_0) (RING);  T_in/(i_0 - 1) (CARRIER)
             T3 = -i_0 * T1                                          (6.3)
             TH = -(T1 + T3)                                         (6.4)
             t  = -i_0  = T3/T1                                      (6.7)
+            T_mesh_sun = T1/k;  T_mesh_planet = T_mesh_sun*z_planet/z_sun
             Ft = 2000*T1/(k*d1)         nominal per-mesh force       (6.1)
             F_H2 = 2*Ft                 ideal resultant planet-pin force (6.2)
 
-        Ft/F_H2 use the book's simplified reference-diameter formula — see
-        PlanetaryTorques docstring for why they are cross-checks, not the
-        precise mesh forces (those come from forces() below).
+        The planet is an idler: what it takes from the sun it hands to the ring,
+        scaled by z_planet/z_sun (same Ft, different radius). Equal load sharing
+        over the k planets is assumed; ``load_sharing_factor`` is not used here.
+        Ft is on the reference diameter of the sun (ISO_6336-1_2019, 4.2.2,
+        Formula (1)); ``meshing_12.forces`` and ``meshing_23.forces`` use the
+        working pitch radius (see ``PlanetaryTorques``). The planetary
+        class computes no F_r, F_a or F_n.
 
-        Torque through ONE mesh assumes ideal load sharing over k planets,
-        scaled by load_sharing_factor (K_gamma placeholder).
+        Warnings
+        --------
+        Ft uses the reference diameter (ISO_6336-1_2019, 4.2.2, Formula (1)) while
+        ``meshing_12.forces`` uses the working pitch radius.
+        When z_sun > z_planet, ``meshing_12.forces(T_mesh_sun)`` takes the
+        working radius of the planet for the sun (the pair object gives gear1
+        the smaller working diameter, see ``SpurHelicalGearMeshing``), so its
+        Ft and T_out differ from Ft here and from T_mesh_planet.
+
+        References
+        ----------
+        .. [1] ISO_6336-1_2019, 4.2.2, Formula (1) and 6.5.8.4 a) (sun peripheral
+           load divided by the number of planets; the standard's symbol is p,
+           the code's k; K_gamma is not included).
+        .. [2] Arnaudov and Karaivanov, "Planetary Gear Trains", eq. 6.1-6.4 and
+           6.7, as named in the code; not in the library; not checked against
+           the source (source to find). F_H2 = 2 Ft has no other source.
         """
         if input_member not in COAXIAL_MEMBERS:
             raise ValueError(
@@ -565,22 +885,47 @@ class PlanetaryGearTrainMeshing:
     # ------------------------------------------------------------------
 
     def coaxiality_error(self) -> float:
-        """|al_12 - al_23| [mm]. Must be ~0 for the ring and sun to be coaxial."""
+        """
+        Coaxiality error of the two pairs, |al_12 - al_23|.
+
+        Returns
+        -------
+        float
+            Difference of the working centre distances [mm]; must be ~0 for the
+            ring and the sun to be coaxial.
+        """
         return abs(self.al_12 - self.al_23)
 
     def assembly_condition(self) -> tuple[bool, float]:
         """
-        Equally-spaced planets require (z_ring + z_sun) / k to be an integer.
-        Returns (ok, value).
+        Assembly condition for equally spaced planets.
+
+        Returns
+        -------
+        tuple
+            (ok, value): value = (abs(z_ring) + z_sun) / k [-] (P09); ok is
+            True when value is an integer within 1e-9.
         """
         val = (abs(self.ring_gear.z) + self.sun_gear.z) / self.k
         return (abs(val - round(val)) < 1e-9, val)
 
     def neighbouring_condition(self, Safety_Factor: float = 1.1) -> tuple[bool, float, float]:
         """
-        Adjacent planets must not touch:
-            2 * al_12 * sin(pi/k) > da_planet * Safety_Factor
-        Returns (ok, available_spacing, required).
+        Neighbouring condition: adjacent planets must not touch.
+
+        Parameters
+        ----------
+        Safety_Factor : float, optional
+            Factor on the planet tip diameter [-]. Default 1.1.
+
+        Returns
+        -------
+        tuple
+            (ok, available, required) [-, mm, mm]. available = 2*al_12*sin(pi/k)
+            is the distance between neighbouring planet axes; required =
+            da_planet * Safety_Factor with da_planet the working tip diameter
+            of the planet (``meshing_12.gear2_w.da``) (P10). ok is True when
+            available > required. For k < 2 the result is (True, inf, 0.0).
         """
         if self.k < 2:
             return (True, math.inf, 0.0)
@@ -588,7 +933,7 @@ class PlanetaryGearTrainMeshing:
         required = self.meshing_12.gear2_w.da * Safety_Factor
         return (available > required, available, required)
 
-# depois incluir as funções que permitem obter o i0_max e o k_max tendo em conta a neighbouring_condition
+# TODO: later add the functions that give i0_max and k_max taking the neighbouring_condition into account
 
     # ------------------------------------------------------------------
     # Validation
@@ -596,6 +941,32 @@ class PlanetaryGearTrainMeshing:
 
     def validate(self, coaxiality_tol_mm: float = 1e-4,
                  Safety_Factor: float = 1.1) -> list[str]:
+        """
+        Check the train: both pairs, signs, coaxiality, assembly, neighbouring.
+
+        Parameters
+        ----------
+        coaxiality_tol_mm : float, optional
+            Allowed |al_12 - al_23| [mm]. Default 1e-4.
+        Safety_Factor : float, optional
+            Factor of the neighbouring condition [-]. Default 1.1.
+
+        Returns
+        -------
+        list of str
+            One message per violation; empty if the train is valid. Checks:
+            the ``validate()`` lists of the two pair objects; k >= 1;
+            ring z < 0; sun and planet z > 0; i_0 < 0; coaxiality;
+            assembly condition; neighbouring condition; load_sharing_factor
+            >= 1.0.
+
+        Warnings
+        --------
+        The list inherits the messages of ``InternalGearMeshing.validate``, in
+        which the trimming test (z - z1) < 2 is always true for z < 0 (as
+        coded), so the list is never empty for the signed ring this class
+        requires and ``validate_or_raise`` raises.
+        """
         errors: list[str] = []
         tag = self.label or self.__class__.__name__
 
@@ -663,6 +1034,7 @@ class PlanetaryGearTrainMeshing:
         return errors
 
     def validate_or_raise(self, **kwargs) -> None:
+        """Raise ``ValueError`` with all messages of ``validate(**kwargs)`` if any."""
         errors = self.validate(**kwargs)
         if errors:
             raise ValueError(
@@ -675,6 +1047,7 @@ class PlanetaryGearTrainMeshing:
     # ------------------------------------------------------------------
 
     def summary(self) -> str:
+        """Multi-line text with the main data of the train (lengths [mm])."""
         tag = self.label or "PlanetaryGearTrainMeshing"
         ok_asm, val_asm = self.assembly_condition()
         ok_nb, avail, req = self.neighbouring_condition()
@@ -699,6 +1072,7 @@ class PlanetaryGearTrainMeshing:
         return "\n".join(lines)
 
     def __repr__(self) -> str:
+        """One-line representation: tooth numbers, k, i_0 and al_12."""
         return (f"PlanetaryGearTrainMeshing(z_s={self.sun_gear.z}, "
                 f"z_p={self.planet_gear.z}, z_r={abs(self.ring_gear.z)}, "
                 f"k={self.k}, i_0={self.i_0:.4f}, al={self.al_12:.4f} mm)")

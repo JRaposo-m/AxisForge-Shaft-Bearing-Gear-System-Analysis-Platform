@@ -1,6 +1,4 @@
 """
-axisforge/outputs/solvers/bearings/load_distribution/load_distribution_results.py
-
 Records and text of ``axisforge.results.bearings.load_distribution.load_distribution_results``
 (``BearingResult`` and its rows, ISO/TS 16281 internal load distribution). Mirrors the module it
 reads.
@@ -60,7 +58,7 @@ def bearing_result_record(result) -> dict:
     -------
     record: dict
         ``label``, ``contact``, ``n_rows``, ``n_loaded`` (single-row bearings only, else NaN),
-        the applied load (``Fr_xz_N``, ``Fr_xy_N``, ``Fr_N``, ``Fa_N``), ``Mz_Nmm``, the shared
+        the node force used as load (``Fr_xz_N``, ``Fr_xy_N``, ``Fr_N``, ``Fa_N``), ``Mz_Nmm``, the shared
         state of the solve (``delta_r_mm``, ``delta_a_mm``, ``psi_rad``, ``phi_Fr_rad``), the
         equilibrium errors (``equilibrium_error_Fr_N``, ``equilibrium_error_Fa_N``), the
         convergence (``ok``, ``residual``, ``n_iter``) and the stiffness when present
@@ -70,9 +68,14 @@ def bearing_result_record(result) -> dict:
 
     Notes
     -----
-    ``phi_Fr_rad`` is the direction of Fr in the global frame; the element angles ``phi_rad``
-    of ``element_records`` are measured from it. ``n_iter`` holds the number of function
-    evaluations of the root find (see ``BearingResult``).
+    ``phi_Fr_rad`` is the direction of the node force (Fr_xz, Fr_xy) in the global frame (see
+    the Warnings of ``BearingResult``); the element angles ``phi_rad``
+    of ``element_records`` are measured from it (local frame). ``n_iter`` holds the number of
+    function evaluations of the root find (see ``BearingResult``), not iterations. ``residual``
+    is the Euclidean norm of the force residual [N]; its key carries no unit suffix (review
+    item). The other units are in the key (``_N``, ``_mm``, ``_rad``, ``_Nmm``,
+    ``_N_per_mm``); ``Mz_Nmm`` is the sum of the row tilting moments (symbol of the standard,
+    not a moment about the global Z axis).
 
     The stiffness is the secant stiffness of the stationary analysis, projected on each plane
     (Kr_xz = Fr_xz / delta_r_xz, Kr_xy = Fr_xy / delta_r_xy). Where the load has no component
@@ -81,8 +84,9 @@ def bearing_result_record(result) -> dict:
     ``inf`` and it is kept as ``inf`` here.
 
     Multi-row bearings (``n_rows > 1``) are reported structurally, one record per row (see
-    ``row_records``). ISO/TS 16281 does not cover them, so those values are not validated
-    against the standard; the single-row case is the one in use.
+    ``row_records``). ISO/TS 16281 gives the equations for single-row bearings only (clause 1
+    says multi-row analysis can be derived from them, row by row), so those values are not
+    validated against the standard; the single-row case is the one in use.
     """
     eq_r, eq_a = result.equilibrium_error
     record = dict(
@@ -121,7 +125,8 @@ def row_records(result) -> list[dict]:
     Returns
     -------
     records: list of dict
-        ``label``, ``row``, ``Z``, ``n_loaded``, ``Fr_row_N``, ``Fa_row_N``, ``Mz_Nmm``.
+        ``label``, ``row``, ``Z``, ``n_loaded``, ``Fr_row_N`` (along phi_Fr [N]), ``Fa_row_N``
+        [N] and ``Mz_Nmm`` [N mm], the reactions of that row.
     """
     return [dict(label=result.label, row=i, Z=r.Z, n_loaded=r.n_loaded, Fr_row_N=r.Fr_row,
                  Fa_row_N=r.Fa_row, Mz_Nmm=r.Mz) for i, r in enumerate(result.rows)]
@@ -163,7 +168,8 @@ def element_records(result, row: int = 0) -> list[dict]:
     records: list of dict
         ``label``, ``row``, ``j``, ``phi_rad`` (local frame wrapped to [-pi, pi); 0 is the
         element on the load line), ``Q_N``, ``delta_mm`` (element deflection; for rollers the
-        raw approach, which may be negative), ``alpha_rad`` (operating contact angle) and, for
+        raw approach, which may be negative), ``alpha_rad`` (contact angle: operating angle for balls; for rollers the nominal
+        ``alpha_0`` repeated, not a result) and, for
         line contact, ``psi_j_rad`` (roller tilt).
 
     Raises

@@ -1,11 +1,5 @@
 """
-axisforge/mesh/shaft/__init__.py
-
-Eager rollup de tudo dentro de mesh/shaft/: element_type/ (Elem e toda
-a hierarquia de formulações de viga), mesh_generation/ (Mesh1D,
-Grader), e beam_model_settings.py (BeamModelSettings, a configuração ao
-nível da análise que liga beam_theory/shear_theory/integration_method).
-Sem lazy loading -- mesma lógica dos __init__ dos subpacotes.
+Rollup of the shaft mesh package: beam elements and formulations (element_type), 1D node generation and grading (mesh_generation) and the beam model settings.
 """
 from __future__ import annotations
 

@@ -1,55 +1,7 @@
-"""
-axisforge/solvers/machine_elements/shaft/fem_solvers/global_solver/global_postprocessing.py
-
-Turns a RigidSupportSolution (raw DOFs from RigidSupportFEMSolver.solve(),
-see rigid_support.py in this same folder) into a ShaftResults
-(results/fem_results/shaft_results.py) for the whole shaft.
-
-REPLACES static_solvers/results_reader.py's ShaftResultsReader class --
-same job (M/V recovery + deflections + axial/rotation readback +
-section properties + bearing reactions/node data + torsion, assembled
-into ShaftResults), restructured as a plain function
-(build_shaft_result) instead of a class holding a stashed
-(solver, shaft_system) pair, to mirror
-submodel_solver/postprocessing.py's build_submodel_result(). "The
-results reader becomes the postprocessing" -- same job, this is its new
-home and shape.
-
-M/V recovery reuses element_theories/element_postprocessing.py's
-EulerBernoulliPostProcessing/TimoshenkoPostProcessing directly, via
-origin-specific subclasses (GlobalEulerBernoulliPostProcessing/
-GlobalTimoshenkoPostProcessing below) -- same pattern as
-submodel_solver/postprocessing.py's SubmodelEulerBernoulliPostProcessing/
-SubmodelTimoshenkoPostProcessing. Unlike those, these two need NO view
-adapter: RigidSupportSolution's own field names (elements, d_total_xz,
-d_total_xy, _kGA_override) already match exactly what
-_sweep_plane()/_element_nodal_displacements() expect -- see
-RigidSupportSolution in rigid_support.py, which deliberately kept those
-names (including the leading underscore on _kGA_override) for this
-reason. The override bodies below are therefore pure passthroughs to
-super() -- their only job is giving recover_internal_forces() a precise
-RigidSupportSolution type hint instead of element_postprocessing.py's
-generic Any, mirroring the submodel side's shape even though no
-adaptation work is actually needed here.
-
-Torsion lives here (via TorsionSolver, global_solver/torsion.py), not
-inside rigid_support.py's solve() -- solve() stays deliberately thin
-(bending + axial DOFs only, per its own docstring); torsion is an
-independent static analysis, assembled into the final result at the
-same point M/V recovery, bearing reactions and section properties are,
-which is exactly what this module is for. If this choice turns out
-wrong for how you want to use it, moving the TorsionSolver().solve()
-call into rigid_support.py itself is a small, localized change -- but
-note it would mean RigidSupportFEMSolver importing another class named
-"...Solver", which is the situation solvers/README.md's "no solver
-imports another solver" rule was written to avoid; today that call
-stays outside any solver class, in this orchestration function instead.
-
-Theory dispatch (if beam_theory == "timoshenko": ... elif ==
-"euler_bernoulli": ...) is duplicated here rather than shared via a
-factory function or a registry/decorator -- same deliberate choice as
-submodel_solver/postprocessing.py's postprocessor_for_submodel(); see
-that function's docstring.
+"""Post-processing of the global shaft solve: turns a ``RigidSupportSolution`` (raw nodal DOFs) into
+a ``ShaftResults`` with moments, shear forces, deflections, stresses, torsion, bearing reactions
+and bearing-node data. The moment and shear recovery reuses the element post-processors; torsion
+comes from ``TorsionSolver``, called here and not from ``RigidSupportFEMSolver.solve`` itself.
 """
 
 from __future__ import annotations
@@ -74,6 +26,27 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 def _find_node(x_nodes: list[float], x: float, tol: float = 1e-6) -> int:
+    """Index of the node at position ``x`` (absolute distance below ``tol``).
+
+    Parameters
+    ----------
+    x_nodes : list of float
+        Node positions [mm].
+    x : float
+        Requested position [mm].
+    tol : float, optional
+        Accepted distance [mm]. Default 1e-6.
+
+    Returns
+    -------
+    int
+        Node index.
+
+    Raises
+    ------
+    ValueError
+        If no node is within ``tol``.
+    """
     for i, xi in enumerate(x_nodes):
         if abs(xi - x) < tol:
             return i
@@ -85,24 +58,79 @@ def _find_node(x_nodes: list[float], x: float, tol: float = 1e-6) -> int:
 # ===========================================================================
 
 class GlobalEulerBernoulliPostProcessing(EulerBernoulliPostProcessing):
-    """Euler-Bernoulli M/V recovery, specialized to a RigidSupportSolution.
-    No view/adapter needed -- see module docstring."""
+    """Euler-Bernoulli moment and shear recovery, typed for a ``RigidSupportSolution``.
+
+    No adapter is needed: the field names of the solution already match what the element
+    post-processor reads. The override only adds the type hint.
+    """
 
     def recover_internal_forces(self, solution: "RigidSupportSolution", x_nodes: list[float], n: int):
+        """Moment and shear force at every node (see ``ElementTheoryPostProcessor.recover_internal_forces``).
+
+        Parameters
+        ----------
+        solution : RigidSupportSolution
+            Raw solution of the global solve.
+        x_nodes : list of float
+            Node positions [mm].
+        n : int
+            Number of nodes.
+
+        Returns
+        -------
+        M_xz, M_xy : ndarray, shape (n,)
+            Bending moments [N mm].
+        V_xz, V_xy : ndarray, shape (n,)
+            Shear forces [N].
+        """
         return super().recover_internal_forces(solution, x_nodes, n)
 
 
 class GlobalTimoshenkoPostProcessing(TimoshenkoPostProcessing):
-    """Timoshenko counterpart of GlobalEulerBernoulliPostProcessing."""
+    """Timoshenko counterpart of ``GlobalEulerBernoulliPostProcessing``.
+    """
 
     def recover_internal_forces(self, solution: "RigidSupportSolution", x_nodes: list[float], n: int):
+        """Moment and shear force at every node (see ``ElementTheoryPostProcessor.recover_internal_forces``).
+
+        Parameters
+        ----------
+        solution : RigidSupportSolution
+            Raw solution of the global solve.
+        x_nodes : list of float
+            Node positions [mm].
+        n : int
+            Number of nodes.
+
+        Returns
+        -------
+        M_xz, M_xy : ndarray, shape (n,)
+            Bending moments [N mm].
+        V_xz, V_xy : ndarray, shape (n,)
+            Shear forces [N].
+        """
         return super().recover_internal_forces(solution, x_nodes, n)
 
 
 def postprocessor_for_global(
     solution: "RigidSupportSolution",
 ) -> "GlobalEulerBernoulliPostProcessing | GlobalTimoshenkoPostProcessing":
-    """Mirrors submodel_solver/postprocessing.py's postprocessor_for_submodel()."""
+    """Select the moment/shear post-processor that matches the beam theory of the solution.
+
+    Parameters
+    ----------
+    solution : RigidSupportSolution
+        Raw solution; ``solution.elements[0].beam_theory`` decides.
+
+    Returns
+    -------
+    GlobalEulerBernoulliPostProcessing or GlobalTimoshenkoPostProcessing
+
+    Raises
+    ------
+    ValueError
+        If the beam theory is neither ``"timoshenko"`` nor ``"euler_bernoulli"``.
+    """
     beam_theory = solution.elements[0].beam_theory
     if beam_theory == "timoshenko":
         return GlobalTimoshenkoPostProcessing()
@@ -112,18 +140,45 @@ def postprocessor_for_global(
 
 
 # ===========================================================================
-# Full-result assembly (was ShaftResultsReader.read())
+# Full-result assembly
 # ===========================================================================
 
 def build_shaft_result(solution: "RigidSupportSolution", shaft_system: "ShaftSystem") -> ShaftResults:
-    """
-    The entry point that replaces ShaftResultsReader(solver, shaft_system).read().
+    """Assemble the ``ShaftResults`` of the whole shaft from the raw global solution.
 
-    Usage
+    Parameters
+    ----------
+    solution : RigidSupportSolution
+        Raw output of the global solve (displacements [mm, rad], forces [N, N mm]).
+    shaft_system : ShaftSystem
+        Provides the section properties, bearings and torque loads.
+
+    Returns
+    -------
+    ShaftResults
+        Values at the mesh nodes unless noted; units are listed in ``ShaftResults``.
+
+    Warnings
+    --------
+    Moment and shear force are written node by node from the elements (an interior node holds the
+    value of the element on its left); Onate2013_vol2 samples the bending moment at the Gauss points
+    (Euler-Bernoulli) or M and Q at the element mid-point (Timoshenko), see the element
+    post-processors.
+
+    At a node on a change of section, ``d``, ``W``, ``Wt``, ``sigma_b`` and ``tau`` are those of the
+    section to the RIGHT of the node (``Shaft.section_at``). The stress of the smaller section at a
+    step up is therefore not evaluated and ``sigma_b_max`` can be underestimated (at the step the
+    stored stress uses the larger W, ``sigma_b = M / W``).
+
+    Notes
     -----
-        solver   = RigidSupportFEMSolver(settings)
-        solution = solver.solve(shaft_system)
-        result   = build_shaft_result(solution, shaft_system)
+    Plane resultants are combined with the quadratic sum: ``M = hypot(M_xz, M_xy)`` [N mm],
+    ``V = hypot(V_xz, V_xy)`` [N], ``v = hypot(v_xz, v_xy)`` [mm]. The nominal bending stress is
+    ``sigma_b = M / W`` [MPa] with ``W`` = ``Shaft.W_at`` [mm^3] (no stress concentration, no
+    transverse shear stress); Onate2013_vol2, Eq. (1.4)-(1.5) give ``sigma_x = -z E d2w/dx2`` and
+    ``M``, from which the nominal form follows; ``sigma_b = M/W`` as one equation is not printed in the
+    library (source to find). The torsional shear stress, torque and twist come from ``TorsionSolver``.
+    The maxima (``M_max``, ``v_max``, ``sigma_b_max``, ``tau_max``, ``phi_max``) are taken at nodes.
     """
     x_nodes = solution.x_nodes
     n       = len(x_nodes)
@@ -205,25 +260,49 @@ def build_shaft_result(solution: "RigidSupportSolution", shaft_system: "ShaftSys
 
 # ------------------------------------------------------------------
 # Internal helpers -- module-level functions taking (solution,
-# shaft_system) explicitly, instead of ShaftResultsReader's
-# self._solver/self._sys. Logic unchanged from the previous class
-# methods, only de-classed.
+# shaft_system) explicitly.
 # ------------------------------------------------------------------
 
 def _recover_deflections(solution: "RigidSupportSolution", n: int):
+    """Transverse deflection of each bending plane at every node.
+
+    Parameters
+    ----------
+    solution : RigidSupportSolution
+        Raw solution.
+    n : int
+        Number of nodes.
+
+    Returns
+    -------
+    v_xz, v_xy : ndarray, shape (n,)
+        Deflection ``d[3i+1]`` of the XZ and XY planes [mm].
+    """
     v_xz = np.array([solution.d_total_xz[3 * i + 1] for i in range(n)])
     v_xy = np.array([solution.d_total_xy[3 * i + 1] for i in range(n)])
     return v_xz, v_xy
 
 
 def _recover_axial_and_rotation(solution: "RigidSupportSolution", n: int):
-    """
-    Same stride-3 layout (u, v, theta per DOF-triplet) _bearing_node_data()
-    below already uses per bearing node -- applied here to every node.
-    u is read from d_total_xz only -- same convention documented in
-    submodel_solver/postprocessing.py's build_submodel_result() (axial
-    DOF shared between planes, only the xz load vector ever receives
-    AxialLoad -- reading it from d_total_xy would reintroduce that trap).
+    """Axial displacement and section rotation of each plane at every node.
+
+    ``u`` is read from the XZ solution only: the axial DOF is shared between the planes and only the
+    XZ load vector receives ``AxialLoad``.
+
+    Parameters
+    ----------
+    solution : RigidSupportSolution
+        Raw solution.
+    n : int
+        Number of nodes.
+
+    Returns
+    -------
+    u : ndarray, shape (n,)
+        Axial displacement [mm].
+    theta_xz, theta_xy : ndarray, shape (n,)
+        Nodal rotation DOF of the XZ and XY planes [rad]. For Timoshenko elements this is the section
+        rotation, not dv/dx.
     """
     u        = np.array([solution.d_total_xz[3 * i]     for i in range(n)])
     theta_xz = np.array([solution.d_total_xz[3 * i + 2] for i in range(n)])
@@ -232,6 +311,24 @@ def _recover_axial_and_rotation(solution: "RigidSupportSolution", n: int):
 
 
 def _section_properties(shaft_system: "ShaftSystem", x_nodes: list[float]):
+    """Diameter and section moduli of the shaft at every node.
+
+    Parameters
+    ----------
+    shaft_system : ShaftSystem
+        Provides ``shaft.diameter_at``, ``shaft.W_at`` and ``shaft.Wt_at``.
+    x_nodes : list of float
+        Node positions [mm].
+
+    Returns
+    -------
+    d_arr : ndarray
+        Diameter [mm].
+    W_arr : ndarray
+        Bending section modulus [mm^3].
+    Wt_arr : ndarray
+        Torsion section modulus [mm^3].
+    """
     shaft  = shaft_system.shaft
     d_arr  = np.array([shaft.diameter_at(x) for x in x_nodes])
     W_arr  = np.array([shaft.W_at(x)        for x in x_nodes])
@@ -242,6 +339,33 @@ def _section_properties(shaft_system: "ShaftSystem", x_nodes: list[float]):
 def _bearing_reactions(
     solution: "RigidSupportSolution", shaft_system: "ShaftSystem", x_nodes: list[float],
 ) -> list[dict]:
+    """Support reactions at the bearing nodes.
+
+    Parameters
+    ----------
+    solution : RigidSupportSolution
+        Raw solution; uses ``f_xz_reaction`` and ``f_xy_reaction`` (``K d - f_ext``).
+    shaft_system : ShaftSystem
+        Provides the bearings.
+    x_nodes : list of float
+        Node positions [mm].
+
+    Returns
+    -------
+    list of dict
+        One dict per bearing with ``"label"``, ``"position"`` [mm], ``"R_xz"`` and ``"R_xy"``
+        (radial reactions of the two planes [N]), ``"R"`` (their ``hypot`` [N]) and ``"R_axial"``
+        [N].
+
+    Warnings
+    --------
+    ``R_axial`` is non-zero for ``"locating"`` bearings only; a ``"thrust"`` bearing constrains the
+    axial DOF but reports 0.0.
+
+    Sign: these are forces exerted by the support ON THE SHAFT, positive along +Z (``_xz``), +Y
+    (``_xy``) and +X (axial); the load on the bearing is the opposite (1000 N along +Y between two
+    bearings gives ``R_xy`` = -666.67 N and -333.33 N).
+    """
     reactions = []
     for b in shaft_system.bearings:
         i    = _find_node(x_nodes, b.position)
@@ -262,6 +386,44 @@ def _bearing_reactions(
 def _bearing_node_data(
     solution: "RigidSupportSolution", shaft_system: "ShaftSystem", x_nodes: list[float],
 ) -> list[BearingNodeData]:
+    """State of the shaft at every bearing node, the input of the bearing solver.
+
+    Parameters
+    ----------
+    solution : RigidSupportSolution
+        Raw solution.
+    shaft_system : ShaftSystem
+        Provides the bearings.
+    x_nodes : list of float
+        Node positions [mm].
+
+    Returns
+    -------
+    list of BearingNodeData
+        Displacements [mm], rotations ``psi_xz = theta_xz``, ``psi_xy = theta_xy`` [rad], forces
+        ``Fr_xz``, ``Fr_xy``, ``Fa`` [N] and moments ``M_xz``, ``M_xy`` [N mm] at the node.
+
+    Warnings
+    --------
+    ``Fr_xz``, ``Fr_xy`` and ``Fa`` are rows of ``K d`` at the bearing node, that is the support
+    reaction PLUS the nodal load on that node (``Fr = R + f_ext``). They equal ``ShaftResults.R_*``
+    (``K d - f_ext``) only if no load reaches the node. A point load on the node, or a distributed
+    load on an element that touches the node (its consistent nodal force, about ``q le/2``, mesh
+    dependent), makes ``|Fr|`` smaller than the force carried by the support (500 N on the node:
+    ``Fr_xy`` = -333.33 N, ``R_xy`` = -833.33 N). ``M_xz``/``M_xy`` are the nodal moments of the
+    load vector at the node: an ``ExternalMoment`` on the node and, for Euler-Bernoulli, the
+    consistent moment ``q le^2/12`` of an adjacent distributed load. They are not reactions (the
+    rotation is never constrained).
+    ``Fa`` is non-zero for ``"locating"`` bearings only (a ``"thrust"`` bearing constrains u but
+    reports 0.0).
+
+    Sign (no load on the node): these are forces exerted by the support ON THE SHAFT, positive
+    along +Z (``_xz``), +Y (``_xy``) and +X (axial); the load on the bearing is the opposite
+    (1000 N along +Y between two bearings gives ``Fr_xy`` = -666.67 N and -333.33 N).
+    ``arctan2(Fr_xy, Fr_xz)``, which the bearing solver builds as ``phi_Fr`` and uses as load
+    direction, is therefore the direction of the support reaction, 180 deg from the direction in
+    which the shaft pushes the inner ring (whether this is intended is a question for the owner).
+    """
     nodes = []
 
     for b in shaft_system.bearings:

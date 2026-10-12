@@ -1,11 +1,9 @@
-# axisforge/core/mechanical_system/parallel_axis/__init__.py
 """
-axisforge/core/mechanical_system/parallel_axis/__init__.py
+Parallel-axis mechanical systems (spur and helical gear trains).
 
-Ponto único de import para o subsistema parallel_axis de
-mechanical_system -- eager, sem lazy loading. spur_helical/ deixa de
-ter __init__.py próprio (namespace package); toda a lógica de import
-vive só aqui.
+Re-exports the single-shaft container (``ShaftSystem``, ``GearElement``) and
+the multi-shaft assembler (``SpurHelicalGearSystem``, ``SpurHelicalMeshLink``)
+defined in ``spur_helical/``.
 """
 from __future__ import annotations
 

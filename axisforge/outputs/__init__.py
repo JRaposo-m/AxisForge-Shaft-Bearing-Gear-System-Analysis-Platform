@@ -1,7 +1,4 @@
-"""
-axisforge/outputs
-
-Records, text and CSV of AxisForge's own objects (a built system, FEM results, bearing load
+"""Records, text and CSV of AxisForge's own objects (a built system, FEM results, bearing load
 distribution and life results). Mirrors the structure of ``axisforge.results``:
 
 - ``construction``: what was built (shaft system, gear system, bearings, loads).

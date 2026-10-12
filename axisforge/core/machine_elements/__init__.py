@@ -1,10 +1,8 @@
 # axisforge/core/machine_elements/__init__.py
-"""
-axisforge/core/machine_elements/__init__.py
+"""Public interface of the machine elements: bearings, gears and shaft.
 
-Ponto único de import para todos os machine elements: bearings/,
-gears/, shaft/ -- eager, sem lazy loading, mesmo estilo do resto da
-árvore.
+Single import point; the public names of the three subpackages are re-exported
+eagerly, without lazy loading.
 """
 from __future__ import annotations
 

@@ -1,11 +1,12 @@
 # axisforge/core/machine_elements/gears/parallel_axis/__init__.py
 """
-axisforge/core/machine_elements/gears/parallel_axis/__init__.py
+Single import point of the parallel-axis gear subsystem (eager re-export).
 
-Ponto único de import para o subsistema parallel_axis -- estilo
-bearings/, eager, sem lazy loading. gear_properties/, gear_meshing/ e
-planetary_gear/ deixam de ter __init__.py próprio (namespace packages);
-toda a lógica de import vive só aqui.
+Exposes the gear definitions (``SpurHelicalGear``, ``InternalGear``), the pair
+objects (``SpurHelicalGearMeshing``, ``InternalGearMeshing``) and the planetary
+train (``PlanetaryGearTrainMeshing``). The folders ``gear_properties/``,
+``gear_meshing/`` and ``planetary_gear/`` have no ``__init__.py`` of their own
+(namespace packages); every import is made here.
 """
 from __future__ import annotations
 

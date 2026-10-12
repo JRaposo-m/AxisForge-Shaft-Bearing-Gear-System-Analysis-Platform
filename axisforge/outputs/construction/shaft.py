@@ -1,7 +1,4 @@
-"""
-axisforge/outputs/construction/shaft.py
-
-Records and text of a ``ShaftSystem`` (``axisforge.core.mechanical_system.parallel_axis.
+"""Records and text of a ``ShaftSystem`` (``axisforge.core.mechanical_system.parallel_axis.
 spur_helical.shaft_system``): the shaft, its gears, its bearings and its loads.
 
 A ``ShaftSystem`` already reaches everything that is built on one shaft (``.shaft``, ``.gears``,
@@ -37,22 +34,25 @@ def shaft_geometry_records(shaft_system) -> list[dict]:
 
     Parameters
     ----------
-    shaft_system: ShaftSystem
+    shaft_system : ShaftSystem
         The shaft container.
 
     Returns
     -------
-    records: list of dict
-        Rows ``{section, parameter, value, unit}`` for section ``shaft <name>``: label, speed
-        [rpm], design life [h], axis offset (y, z) and origin_x [mm], total length [mm]; then,
-        for every section of the shaft, length, diameter, inner diameter [mm], material and
-        surface finish Ra, and for every shoulder its axial position, fillet radius and the two
-        diameters [mm].
+    records : list of dict
+        Rows ``{section, parameter, value, unit}`` (``kv_record`` schema). Section
+        ``shaft <name>``: label, speed [rpm], design life [h], axis offset y and z [mm],
+        origin_x [mm], total length [mm], number of sections. Section
+        ``shaft <name> - sections``, for every shaft section ``i``: length, diameter, inner
+        diameter [mm], material (no unit), surface finish Ra [um] and number of keyways (no
+        unit). Section ``shaft <name> - shoulders``, for every shoulder: fillet radius, large
+        and small diameter [mm], the parameter prefixed by ``at z = <position> mm``.
 
-    Notes
-    -----
-    ``speed_rpm`` is the value stored on the ``ShaftSystem``; the gear system does not set it
-    when it resolves the loads, so it is whatever the user (or the study) gave.
+    Warnings
+    --------
+    The speed row shows ``ShaftSystem.speed_rpm`` as set by the user (or the study). The gear
+    system does not propagate speed to the shafts when it resolves the loads, so for a driven
+    shaft this value is not the kinematic speed of the mesh.
     """
     shaft = shaft_system.shaft
     s = f"shaft {shaft_system.name}"
@@ -100,14 +100,16 @@ def section_records(shaft_system) -> list[dict]:
 
     Parameters
     ----------
-    shaft_system: ShaftSystem
+    shaft_system : ShaftSystem
         The shaft container.
 
     Returns
     -------
-    records: list of dict
-        ``shaft``, ``index`` (from 1), ``label``, ``length_mm``, ``diameter_mm``,
-        ``inner_diameter_mm``, ``material_id``, ``surface_finish_ra_um`` and ``n_keyways``.
+    records : list of dict
+        Flat dicts with the keys ``shaft`` (name), ``index`` (int, from 1), ``label``,
+        ``length_mm`` [mm], ``diameter_mm`` [mm], ``inner_diameter_mm`` [mm], ``material_id``,
+        ``surface_finish_ra_um`` [um] and ``n_keyways`` (int, count). The numbers are
+        converted with ``float``; no unit conversion is done.
     """
     records = []
     for i, sec in enumerate(shaft_system.shaft.sections, start=1):
@@ -125,14 +127,15 @@ def shoulder_records(shaft_system) -> list[dict]:
 
     Parameters
     ----------
-    shaft_system: ShaftSystem
+    shaft_system : ShaftSystem
         The shaft container.
 
     Returns
     -------
-    records: list of dict
-        ``shaft``, ``z_mm`` (axial position), ``diameter_small_mm``, ``diameter_large_mm`` and
-        ``fillet_radius_mm``. Empty if the shaft has no shoulder.
+    records : list of dict
+        Flat dicts with the keys ``shaft`` (name), ``z_mm`` (axial position) [mm],
+        ``diameter_small_mm`` [mm], ``diameter_large_mm`` [mm] and ``fillet_radius_mm`` [mm].
+        Empty if the shaft has no shoulder or does not provide ``shoulders()``.
     """
     shaft = shaft_system.shaft
     shoulders = shaft.shoulders() if callable(getattr(shaft, "shoulders", None)) else []
@@ -146,14 +149,17 @@ def gear_element_records(shaft_system) -> list[dict]:
 
     Parameters
     ----------
-    shaft_system: ShaftSystem
+    shaft_system : ShaftSystem
         The shaft container.
 
     Returns
     -------
-    records: list of dict
-        Per ``GearElement``: role, rotation direction, axial position [mm] and every attribute
-        of ``GEAR_ATTRIBUTES`` that the gear has. Empty if the shaft has no gear.
+    records : list of dict
+        Rows ``{section, parameter, value, unit}``, section ``gear <label or i> (<shaft>)``.
+        Per ``GearElement``: role, rotation direction (``propagated`` when it is None),
+        axial position [mm] and every attribute of ``GEAR_ATTRIBUTES`` that the gear has
+        (lengths and diameters [mm], pressure and helix angle [deg] as the gear stores them).
+        Empty if the shaft has no gear.
     """
     rows: list[dict] = []
     for i, ge in enumerate(shaft_system.gears, start=1):
@@ -171,14 +177,14 @@ def shaft_system_records(shaft_system) -> list[dict]:
 
     Parameters
     ----------
-    shaft_system: ShaftSystem
+    shaft_system : ShaftSystem
         The shaft container.
 
     Returns
     -------
-    records: list of dict
-        ``shaft_geometry_records``, ``gear_element_records``, then ``bearing_records`` of every
-        bearing and ``load_records``.
+    records : list of dict
+        ``kv_record`` rows: ``shaft_geometry_records``, ``gear_element_records``, then
+        ``bearing_records`` of every bearing and ``load_records``, concatenated in that order.
     """
     rows = shaft_geometry_records(shaft_system) + gear_element_records(shaft_system)
     for bearing in shaft_system.bearings:
@@ -191,15 +197,16 @@ def shaft_system_text(shaft_system) -> str:
 
     Parameters
     ----------
-    shaft_system: ShaftSystem
+    shaft_system : ShaftSystem
         The shaft container.
 
     Returns
     -------
-    text: str
-        ``ShaftSystem.summary()`` (speed, life, position, counts), the table of sections and
-        the table of shoulders, the gears, the ``summary()`` of every bearing with its geometry,
-        and the ``repr`` of every load.
+    text : str
+        ``ShaftSystem.summary()`` (speed, life, position, counts), the table of sections
+        (``SECTION_COLUMNS``), the table of shoulders (``SHOULDER_COLUMNS``, only if there is
+        one), the gears (only if there is one), the text of every bearing and the ``repr`` of
+        every load, separated by blank lines.
     """
     parts = [shaft_system.summary(),
              "Sections:\n" + format_table(SECTION_COLUMNS, section_records(shaft_system), indent=2)]
@@ -219,7 +226,7 @@ def print_shaft_system(shaft_system) -> None:
 
     Parameters
     ----------
-    shaft_system: ShaftSystem
+    shaft_system : ShaftSystem
         The shaft container.
     """
     print(shaft_system_text(shaft_system))

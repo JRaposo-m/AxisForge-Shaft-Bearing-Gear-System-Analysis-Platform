@@ -1,20 +1,10 @@
 # axisforge/core/machine_elements/bearings/base.py
-"""
-axisforge/core/machine_elements/bearings/base.py
+"""Catalogue data and family contract of a rolling bearing.
 
-Defines the three foundational primitives on which the rest of the
-``bearings`` package depends: ``BearingType``, ``BearingCatalog`` and
-``BearingFamily``. They are kept in a single module not because the
-package requires one file per concept, but because they are small,
-stable, and mutually coupled: ``BearingFamily.assemble_geometry`` reads
-a ``BearingCatalog``, and ``BearingFamily.BEARING_TYPE`` is itself a
-``BearingType``.
-
-``bearings/__init__.py`` re-exports all three directly from this module
-(a plain import, without ``__getattr__``-based lazy loading, since they
-are inexpensive to import and deferring them would offer no benefit).
-``Bearing`` (see ``bearing.py``) remains lazily imported there, as it is
-comparatively more expensive to load.
+``BearingCatalog`` holds the family-agnostic catalogue data of a bearing
+(bore, outer diameter, width, position on the shaft, arrangement).
+``BearingFamily`` is the contract that every bearing family implements so that
+``Bearing.assemble()`` can build the geometry and evaluate the load ratings.
 """
 from __future__ import annotations
 
@@ -28,30 +18,39 @@ from typing import Any, Literal
 
 @dataclass(frozen=True)
 class BearingCatalog:
-    """
-    Generic, family-agnostic catalogue data for a bearing.
+    """Family-agnostic catalogue data of a bearing.
 
-    Validates itself at construction time: ``__post_init__`` calls
-    ``validate_or_raise()``. Previously, ``validate()``/
-    ``validate_or_raise()`` existed but were opt-in, which allowed a
-    physically impossible catalogue (``D < d``, negative ``b``) to be
-    constructed and to circulate through the rest of the code
-    unchecked until something happened to call
-    ``validate_or_raise()`` explicitly.
+    Frozen dataclass that validates itself at construction: ``__post_init__``
+    calls ``validate_or_raise()``.
 
-    Attributes
+    Parameters
     ----------
-    d, D, b     : bore diameter, outer diameter, width [mm].
-    designation : manufacturer designation, e.g. ``"6208"``.
-    label       : identifier used for reporting and traceability.
-    position    : axial coordinate along the shaft [mm].
-    arrangement : ``"locating"`` | ``"floating"`` | ``"non-locating"``.
+    d : float
+        Bore diameter [mm].
+    D : float
+        Outer diameter [mm].
+    b : float, optional
+        Width [mm].
+    designation : str, optional
+        Manufacturer designation, e.g. ``"6208"``.
+    label : str, optional
+        Identifier used for reporting and traceability.
+    position : float, optional
+        Axial coordinate along the shaft [mm].
+    arrangement : {"locating", "floating", "non-locating", "thrust"}, optional
+        Axial role of the bearing in the shaft arrangement; ``"thrust"`` is
+        required by the thrust families and refused by the others.
+
+    Raises
+    ------
+    ValueError
+        At construction, if a value is invalid (see ``validate``).
 
     Notes
     -----
-    ``C`` and ``C0`` are intentionally not catalogue data: the dynamic
-    load rating is computed by the family from the assembled geometry
-    (see ``BearingFamily.dynamic_capacity``).
+    The basic dynamic load rating is not catalogue data: it is computed by the
+    family from the assembled geometry (``BearingFamily.dynamic_capacity``).
+    The static rating is not implemented in any family.
     """
     d: float
     D: float
@@ -62,9 +61,17 @@ class BearingCatalog:
     arrangement: Literal["locating", "floating", "non-locating", "thrust"] = "locating"
 
     def __post_init__(self) -> None:
+        """Validate the fields; see the class docstring for what is checked."""
         self.validate_or_raise()
 
     def validate(self) -> list[str]:
+        """Check the catalogue values (d > 0, D > d, b >= 0, position >= 0, known arrangement).
+
+        Returns
+        -------
+        list[str]
+            One message per violated condition; empty if the catalogue is valid.
+        """
         errors: list[str] = []
         tag = self.label or self.designation or "BearingCatalog"
 
@@ -86,6 +93,13 @@ class BearingCatalog:
         return errors
 
     def validate_or_raise(self) -> None:
+        """Raise if the catalogue is invalid.
+
+        Raises
+        ------
+        ValueError
+            With the messages of ``validate()`` joined by newlines.
+        """
         errors = self.validate()
         if errors:
             raise ValueError("\n".join(errors))
@@ -96,61 +110,61 @@ class BearingCatalog:
 # =====================================================================
 
 class BearingFamily(ABC):
-    """
-    Contract that every bearing family/subtype must implement in order
-    to be pluggable into ``Bearing.assemble()``. This is a plain
-    instance contract; it does not itself require registration
-    (``families/family.py`` maintains its own ``@register_family``
-    decorator, which is a separate concern from this contract).
+    """Contract that every bearing family implements to be used by ``Bearing.assemble()``.
 
-    ``__init_subclass__`` (below) enforces, at class-definition time
-    rather than only in tests, two consistency requirements that were
-    previously caught only by a test suite: ``DUTY`` must agree with
-    ``BEARING_TYPE.duty``, and the keys of ``REQUIRED_FOR`` must match
-    ``CAPABILITIES`` exactly. A misdeclared family therefore fails at
-    import time rather than at first use.
+    A family maps the principal dimensions of one bearing type to the geometry
+    attributes stored on the ``Bearing`` and evaluates its load ratings. The
+    contract is a plain instance contract; registration and classification
+    (``@register_family``, ``@point_contact``, ``@line_contact``, ``@thrust``)
+    are kept in ``families/family.py``.
     """
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Calls the default implementation only; no check is made at class definition."""
         super().__init_subclass__(**kwargs)
 
     @property
     @abstractmethod
     def name(self) -> str:
-        """Short identifier, e.g. ``'deep_groove_ball'``."""
+        """Short identifier of the family, e.g. ``'deep_groove_ball'``."""
 
     @abstractmethod
     def assemble_geometry(self, catalog: BearingCatalog, **geometry_kwargs: Any) -> dict[str, Any]:
-        """
-        Pure function mapping raw geometry inputs to a flat attribute
-        dictionary that is mirrored onto the ``Bearing``. Must have no
-        side effects and must not cache state on ``self``.
+        """Map the raw geometry inputs of the bearing to the attributes stored on the ``Bearing``.
+
+        Intended as a pure function: no side effects and no state cached on
+        ``self``.
 
         Parameters
         ----------
-        catalog : read-only; provided so that families that need to
-            cross-check catalogue fields can do so (e.g. rejecting
-            ``arrangement="locating"`` where it is not physically
-            meaningful).
+        catalog : BearingCatalog
+            Read-only; lets a family cross-check catalogue fields (e.g. the
+            arrangement).
+        **geometry_kwargs
+            Family-specific inputs (diameters in [mm], angles as documented by
+            each family).
 
         Returns
         -------
         dict
-            Must include every field referenced by this family's own
-            ``REQUIRED_FOR``.
+            Flat dictionary of attributes, each set on the ``Bearing`` by
+            ``Bearing.assemble()``. The keys are family-specific.
         """
 
     @staticmethod
     @abstractmethod
     def dynamic_capacity(bearing) -> float:
-        """
-        Basic dynamic load rating (``Cr`` for radial duty, ``Ca`` for
-        thrust duty) [N], computed from the assembled geometry. This
-        replaces the ``C`` value that previously came from the
-        catalogue.
+        """Basic dynamic load rating of the assembled bearing [N]: Cr for radial duty, Ca for thrust duty.
+
+        Computed from the assembled geometry (not catalogue data).
         """
 
     @staticmethod
     @abstractmethod
     def per_element_dynamic_capacity(bearing, capacity: float | None = None) -> tuple[float, float]:
-        """Per-rolling-element dynamic capacity (``Q_ci``, ``Q_ce``)."""
+        """Load capacities (Q_ci, Q_ce) of one rolling element at the inner and outer ring contact [N].
+
+        ISO_TS_16281_2008, 4.3 (ball) and 5.3 (roller). The ``capacity``
+        argument is accepted by the contract; the implementations name it Cr
+        or Ca and ignore it. The multi-row families return one pair per row.
+        """

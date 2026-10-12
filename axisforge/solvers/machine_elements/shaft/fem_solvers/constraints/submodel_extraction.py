@@ -1,18 +1,6 @@
-"""
-axisforge/solvers/machine_elements/shaft/fem_solvers/submodel_extraction.py
-
-MOCKUP / SKELETON -- extracted from RigidSupportFEMSolver.return_values()
-exactly as it was. Beam-theory-agnostic: it only reads the solver's
-already-resolved public attributes (d_total_xz, d_total_xy, f_xz_total,
-f_xy_total) -- it never looks at elements, beam, or theory. It only
-needs solve() to have already run.
-
-TODO (you): this function currently takes the four arrays explicitly
--- decide whether you would rather keep calling it as
-solver.return_values(x) (a method) or as the free function
-extract_submodel_values(solver, x) taking the whole solver. Left as a
-free function taking the arrays explicitly to avoid a circular
-dependency with rigid_support.py; adjust to whatever you find cleanest.
+"""Extraction of the nodal displacements and nodal forces of a global shaft solution inside an
+interval, used as the cut-boundary data of the sub-model solve. It only reads the solution arrays
+of ``RigidSupportFEMSolver.solve`` and does not depend on the beam theory.
 """
 
 from __future__ import annotations
@@ -30,42 +18,47 @@ def extract_submodel_values(
     f_xz_total: np.ndarray | None,
     f_xy_total: np.ndarray | None,
 ) -> dict[float, dict[str, float]]:
-    """
-    Extracted from RigidSupportFEMSolver.return_values() -- logic
-    unchanged (it only stopped reading self.*, and now takes the
-    already-resolved arrays as parameters instead).
-
-    Extracts nodal solution quantities for every node within the
-    interval [x[0], x[1]].
+    """Nodal solution values of every node inside the interval ``[x[0], x[1]]``.
 
     Parameters
     ----------
-    x_nodes : mesh node positions of the current FEM solution
-    x       : [x_lo, x_hi] -- interval bounds (must coincide with nodes)
-    d_total_xz, d_total_xy, f_xz_total, f_xy_total :
-        attributes already published by RigidSupportFEMSolver.solve()
+    x_nodes : list of float
+        Node positions of the global solution [mm].
+    x : list of float
+        ``[x_lo, x_hi]``, interval bounds [mm]; they must coincide with nodes (a tolerance of
+        ``SOLVER_TOLERANCE`` is applied at the ends).
+    d_total_xz, d_total_xy : ndarray or None
+        Nodal displacements of the XZ and XY planes, DOF order ``[u, v, theta]`` per node [mm, mm,
+        rad].
+    f_xz_total, f_xy_total : ndarray or None
+        Nodal forces ``K d`` of the XZ and XY planes, same DOF order [N, N, N mm].
 
     Returns
     -------
-    dict mapping each node position within [x_lo, x_hi] to its
-    quantities:
-        {
-            x_i: {"v_xz": ..., "theta_xz": ..., "f1_xz": ..., "f2_xz": ...,
-                   "v_xy": ..., "theta_xy": ..., "f1_xy": ..., "f2_xy": ...},
-            ...
-        }
-
-    Notes
-    -----
-    v     : transverse displacement   [mm]
-    theta : rotation                  [rad]
-    f1    : nodal transverse force    [N]
-    f2    : nodal moment              [N*mm]
+    dict
+        Maps each node position in the interval to a dict with the keys ``"u"`` [mm] (axial
+        displacement, read from the XZ solution), ``"v_xz"`` [mm], ``"theta_xz"`` [rad], ``"f_u"`` [N],
+        ``"f_v_xz"`` [N], ``"f_theta_xz"`` [N mm], ``"v_xy"`` [mm], ``"theta_xy"`` [rad], ``"f1_xy"``
+        [N] (transverse force) and ``"f2_xy"`` [N mm] (moment). The two planes use different names
+        for the force keys.
 
     Raises
     ------
-    RuntimeError if solve() has not been called yet.
-    ValueError   if x does not contain exactly two positions.
+    RuntimeError
+        If ``d_total_xz`` is ``None`` (``solve`` has not been called).
+    ValueError
+        If ``x`` does not hold exactly two values.
+
+    Notes
+    -----
+    The forces are rows of ``K d``, that is the applied nodal load plus the support reaction (not
+    ``K d - f_ext``).
+
+    Sign: ``K d`` at a node is the sum of the external forces on that node, positive along the
+    positive DOF directions (+Z for ``_xz``, +Y for ``_xy``, +X axial). At a free node it is the
+    applied nodal load (+1000 N for 1000 N along +Y on the node; 0 at an unloaded node). At a
+    bearing node with no load on it, it is the force of the support on the shaft, opposite to the
+    load (-666.67 N and -333.33 N for that load between two bearings).
     """
     if d_total_xz is None:
         raise RuntimeError(

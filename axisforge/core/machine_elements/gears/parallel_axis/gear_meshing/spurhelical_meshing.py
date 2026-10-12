@@ -1,13 +1,7 @@
 """
-core/mechanical_elements/Gears/Parallel_Axis_gears/helical_gear_meshing.py
-
-Helical gear pair: working geometry, interference checks, and meshing forces.
-
-References:
-  - ISO 21771:2007  — cylindrical involute gear geometry
-  - KHK Technical Reference §4.1–4.2 — gear pair calculations & interference
-  - ISO 6336-1:2019 — load on gear teeth (force definitions)
-  - MAAG Gear Book — working geometry, contact ratio, Ohlendorf loss factor
+Pair of external spur or helical involute gears: working centre distance and
+pressure angle, contact ratios, path of contact, interference checks and the
+tooth force components transmitted to the shafts.
 """
 
 from __future__ import annotations
@@ -20,22 +14,79 @@ from axisforge.core.machine_elements.gears.parallel_axis.gear_properties.spur_he
 
 class SpurHelicalGearMeshing:
     """
-    Defines a helical gear pair and computes:
-      - Working centre distance and transverse working pressure angle
-      - Transverse, overlap and total contact ratios (εα, εβ, εγ)
-      - Interference checks (involute, undercutting)
-      - Meshing forces: Ft, Fr, Fa (tangential, radial, axial)
+    External spur or helical gear pair (gear1 meshing with gear2).
+
+    From two ``SpurHelicalGear`` objects it computes the working centre
+    distance and transverse working pressure angle, the working copies
+    ``gear1_w`` / ``gear2_w``, the transverse, overlap and total contact ratios,
+    the points of the path of contact, the Ohlendorf loss factor, and (in
+    ``forces``) the tooth force components. Lengths are in [mm], angles stored
+    in [rad], torques in [N m], forces in [N].
 
     Parameters
     ----------
-    gear1 : HelicalGear   — driving gear (pinion)
-    gear2 : HelicalGear   — driven gear (wheel)
-    label : str
-    al    : float | None
-        Working centre distance [mm].
-        If None → computed from reference geometry and profile shifts.
-        If provided → gear1_w / gear2_w are updated accordingly,
-        and consistency with declared x1+x2 is validated.
+    gear1 : SpurHelicalGear
+        First gear (the pinion in the formulas of this class).
+    gear2 : SpurHelicalGear
+        Second gear; same module, normal pressure angle and helix angle as
+        ``gear1`` (checked, ``ValueError`` otherwise).
+    label : str, optional
+        Name used in the summary.
+    al : float or None, optional
+        Working centre distance [mm]. None: derived from x1 + x2 (or from the
+        Henriot shifts if ``equalise_gs``). A value: imposed; alphatw is
+        back-calculated and x1, x2 are those of the gears.
+    equalise_gs : bool, optional
+        If True and ``al`` is None, x1 and x2 are first computed by
+        ``correction_for_gs_equilibrium``. Ignored when ``al`` is given.
+    addendum_reduction : bool, optional
+        Apply the addendum reduction k to the working tip diameters.
+        Default False.
+    driver : str, optional
+        "gear1" or "gear2": which gear delivers the input torque. Stored in
+        ``driver`` / ``driven``; ``forces`` does not use it.
+
+    Attributes
+    ----------
+    a : float
+        Reference centre distance, (d1 + d2) / 2 [mm].
+    al, alphatw, inv_alphatw : float
+        Working centre distance [mm], transverse working pressure angle [rad],
+        inv(alphatw) [rad].
+    u : float
+        Gear ratio max(z1, z2) / min(z1, z2) >= 1 [-].
+    x1, x2 : float
+        Profile shift coefficients used [-].
+    gear1_w, gear2_w : SpurHelicalGear
+        Shallow copies of the gears with the working data added (see
+        ``gear_geometry``); the originals are not modified.
+    epslon_alpha, epslon_beta, epslon_gamma : float
+        Transverse, overlap and total contact ratios [-].
+    x_sum_from_al, x_sum_declared : float
+        x1 + x2 implied by ``al`` and declared by the gears [-].
+
+    Warnings
+    --------
+    - u is max(z)/min(z), and the working pitch diameters are assigned in the
+      order dl1 = 2 al / (u + 1) (smaller), dl2 = 2 u al / (u + 1) (larger):
+      ``gear1_w`` always gets the smaller working diameter. If z1 > z2 the
+      working diameters, and what is derived from them (rl, Ft, speeds), are
+      exchanged between the gears. The loss factor HV and T_out use z1 and u in the same
+      way, which is consistent only if gear1 is the smaller gear.
+    - The helix angle is a magnitude (no hand of helix).
+
+    References
+    ----------
+    .. [1] ISO_6336-1_2019, Table 2: u = z2/z1 >= 1; eps_gamma = eps_alpha +
+       eps_beta; Table F.1: eps_1 = CE/p_bt, eps_2 = AC/p_bt; 10.5.1, Formulae
+       (104)-(112).
+    .. [2] ISO 21771:2007, named in the code; not in the library; not checked
+       against the source (source to find).
+    .. [3] KHK Technical Reference sections 4.1-4.2, named in the code; not in
+       the library; not checked against the source (source to find).
+    .. [4] MAAG Gear Book (working geometry, contact ratio, Ohlendorf loss
+       factor), named in the code; not in the library; not checked against the
+       source (source to find).
     """
 
     def __init__(self,
@@ -47,19 +98,17 @@ class SpurHelicalGearMeshing:
                  addendum_reduction: bool = False,
                  driver: str = "gear1"):
         """
-        Parameters
-        ----------
-        gear1, gear2  : HelicalGear
-        label         : str
-        al            : float | None
-            Working centre distance [mm].
-            - None + equalise_gs=False → derived from x1, x2 via involute function
-            - None + equalise_gs=True  → x1, x2 computed by Henriot method first,
-                                         then al derived from those
-            - float                    → imposed directly; alphatw back-calculated
-        equalise_gs   : bool
-            If True, call correction_for_gs_equilibrium() to find x1, x2 before
-            computing al. Ignored when al is explicitly provided.
+        Resolve al and alphatw, then build the working geometry.
+
+        The arguments are described in the class docstring. Order of
+        precedence for the working centre distance: an imposed ``al``, the
+        Henriot shifts (``equalise_gs``), the shifts declared on the gears.
+
+        Raises
+        ------
+        ValueError
+            If the gears differ in module, normal pressure angle or helix
+            angle, or if ``driver`` is not "gear1" or "gear2".
         """
         # --- compatibility check before anything else ---
         self._check_compatibility(gear1, gear2)
@@ -112,7 +161,7 @@ class SpurHelicalGearMeshing:
         # --- gear ratio ---
         self.u = max(self.gear1.z, self.gear2.z) / min(self.gear1.z, self.gear2.z)
 
-        # --- working geometry, calculada uma vez, automaticamente ---
+        # --- working geometry, computed once, automatically ---
         self.gear_geometry(addendum_reduction=addendum_reduction)
 
         # --- profile shift sum (for consistency check in validate) ---
@@ -130,8 +179,28 @@ class SpurHelicalGearMeshing:
 
     def _set_al_from_x_sum(self, x_sum: float) -> None:
         """
-        Derive al and alphatw from a profile shift sum (x1 + x2).
-        Sets self.al, self.alphatw, self.inv_alphatw.
+        Working centre distance and pressure angle from the profile shift sum.
+
+        Parameters
+        ----------
+        x_sum : float
+            x1 + x2 [-].
+
+        Notes
+        -----
+        Sets ``inv_alphatw`` [rad], ``alphatw`` [rad] and ``al`` [mm]::
+
+            inv(alphatw) = inv(alphat) + 2*tan(alpha)*(x1 + x2)/(z1 + z2)  (F09)
+            alphatw      = inverse involute, scipy brentq on [1e-6, 0.7] rad  (F10)
+            al           = (db1 + db2) / (2*cos(alphatw))                 (F11)
+
+        alpha and alphat are those of gear1 (the pair has equal angles).
+        The bracket limits alphatw to below 0.7 rad (40.1 deg).
+
+        References
+        ----------
+        .. [1] ISO 21771:2007 and "MAAG Gear Book", named in the code; not in
+           the library; not checked against the source (source to find).
         """
         alpha  = self.gear1.alpha     # normal pressure angle
         alphat = self.gear1.alphat    # transverse pressure angle
@@ -143,6 +212,7 @@ class SpurHelicalGearMeshing:
         )
 
         def funOPT(xx, inv_a):
+            """Residual ``inv_a - inv(xx)`` [rad]; zero when the angle xx [rad] has involute inv_a."""
             return inv_a - np.tan(xx) + xx
 
         self.alphatw = optimize.brentq(funOPT, 1e-6, 0.7, args=(self.inv_alphatw,))
@@ -153,8 +223,16 @@ class SpurHelicalGearMeshing:
 
     def _set_alphatw_from_al(self) -> None:
         """
-        Back-calculate alphatw and inv_alphatw from an imposed al.
-        Sets self.alphatw, self.inv_alphatw.
+        Transverse working pressure angle from an imposed centre distance.
+
+        Notes
+        -----
+        Sets ``alphatw`` [rad] only (``inv_alphatw`` is set later by the
+        constructor)::
+
+            alphatw = arccos(a * cos(alphat) / al)                     (F12)
+
+        with a = (d1 + d2) / 2 the reference centre distance [mm].
         """
         self.alphatw = np.arccos(self.a * np.cos(self.gear1.alphat) / self.al)
 
@@ -164,18 +242,58 @@ class SpurHelicalGearMeshing:
 
     def correction_for_gs_equilibrium(self) -> tuple[float, float]:
         """
-        Compute the profile shift coefficients x1, x2 that equalise the
-        maximum specific sliding speeds at both gears (g_s1B' = g_s2A').
+        Profile shifts x1, x2 that equalise the maximum specific sliding.
 
-        Same Henriot procedure as for spur gears, but using the transverse
-        pressure angle αt (instead of α) and the transverse reference
-        centre distance a = (d1+d2)/2. Profile-shift radial increments
-        still use the normal module mn (addendum is defined in the
-        normal plane).
+        Looks for x1, x2 such that the specific sliding at the two ends of the
+        path of contact is equal, g_s1B = g_s2A, by the Henriot procedure
+        (spur-gear procedure applied to the virtual spur gears of the helical
+        pair). Used when ``equalise_gs`` is True.
 
         Returns
         -------
-        tuple (x1, x2)
+        tuple of float
+            (x1, x2) [-]; also stored in ``self.x1``, ``self.x2``.
+
+        Raises
+        ------
+        RuntimeError
+            If no sign change of the sliding difference is found.
+
+        Notes
+        -----
+        As coded, with z1, z2 the virtual tooth numbers ``zn`` of the gears,
+        sq the root term and a the reference centre distance [mm] (F30)::
+
+            sq_2  = sqrt(ra2**2 - rb2**2);   sq_1 = sqrt(ra1**2 - rb1**2)
+            g_s1B = | 1 - (z1/z2) * sq_2 / (a*sin(alphat) - sq_2) |
+            g_s2A = | (z2/z1) * sq_1 / (a*sin(alphat) - sq_1) - 1 |
+            ra = mt*zn/2 + mn*(haP + cP + x);   rb = mt*zn*cos(alphat)
+
+        If z1 + z2 > 60: x2 = -x1 and a is kept; x1 is the root of
+        g_s1B - g_s2A found by a scan of 400 points and brentq. If z1 + z2 <= 60:
+        x1 is first found for a hypothetical mate with 60 - z1 teeth (Henriot),
+        then x2 is found with alphatw and al recomputed from x1 + x2 through
+        the involute equation (600-point scan, brentq).
+
+        Warnings
+        --------
+        rb is written without the factor 1/2 (mt*zn*cos(alphat) is a diameter)
+        while ra is a radius, and the pitch radius uses mt*zn/2, not mn*zn/2
+        (to be checked against the source).
+
+        The unknown of the solver (x) is added to tip radii that already
+        contain the declared x of the gears (ra uses ``gear.x``), and the root
+        is then stored as the total x1 (``self.x1 = x``, ``self.x2 = -x``).
+        The stored value is therefore an increment over the declared shift
+        stored as if it were the total shift; the two coincide only when the
+        declared x of both gears is zero.
+
+        References
+        ----------
+        .. [1] Henriot, "Traite theorique et pratique des engrenages", named in
+           the code; not in the library; not checked against the source (source
+           to find). The 60-tooth hypothetical gear rule has no other source in
+           the code.
         """
         z1, z2   = self.gear1.zn, self.gear2.zn
         ra1, ra2 = self.gear1.mt * z1 / 2.0 + self.gear1.mn * (self.gear1.haP + self.gear1.cP + self.gear1.x), self.gear2.mt * z2 / 2.0 + self.gear2.mn * (self.gear2.haP + self.gear2.cP + self.gear2.x)
@@ -186,6 +304,7 @@ class SpurHelicalGearMeshing:
 
         # --- helpers ---
         def _gs1B(ra2_v, rb2_v, a_v, alphat_v):
+            """Specific sliding g_s1B [-] at the pinion (formula in the Notes); inf if the denominator is ~0."""
             sq  = np.sqrt(max(ra2_v**2 - rb2_v**2, 0.0))
             den = a_v * np.sin(alphat_v) - sq
             if abs(den) < 1e-12:
@@ -193,6 +312,7 @@ class SpurHelicalGearMeshing:
             return abs(1.0 - (z1 / z2) * sq / den)
 
         def _gs2A(ra1_v, rb1_v, a_v, alphat_v):
+            """Specific sliding g_s2A [-] at the wheel (formula in the Notes); inf if the denominator is ~0."""
             sq  = np.sqrt(max(ra1_v**2 - rb1_v**2, 0.0))
             den = a_v * np.sin(alphat_v) - sq
             if abs(den) < 1e-12:
@@ -202,6 +322,7 @@ class SpurHelicalGearMeshing:
         def _solve_direct(z1_v, z2_v, ra1_v, ra2_v, rb1_v, rb2_v, a_v, alphat_v):
             """Solve gs1B' = gs2A' with x2=-x1, a'=a."""
             def equation(x):
+                """Sliding difference g_s1B - g_s2A [-] for the shift x [-] (x1 = x, x2 = -x)."""
                 return (_gs1B(ra2_v - x * mn, rb2_v, a_v, alphat_v)
                       - _gs2A(ra1_v + x * mn, rb1_v, a_v, alphat_v))
 
@@ -240,15 +361,19 @@ class SpurHelicalGearMeshing:
         alpha = self.gear1.alpha
 
         def _alphatw_from_x2(x2_v):
+            """Transverse working pressure angle alphatw [rad] for the shifts x1 and x2_v [-]."""
             inv_aw = inv_alphat + 2.0 * np.tan(alpha) * (x1 + x2_v) / (z1 + z2)
             def funOPT(xx, inv_a):
+                """Residual ``inv_a - inv(xx)`` [rad]; zero when the angle xx [rad] has involute inv_a."""
                 return inv_a - np.tan(xx) + xx
             return optimize.brentq(funOPT, 1e-6, 0.7, args=(inv_aw,))
 
         def _al_from_alphatw(alphatw_v):
+            """Working centre distance al = a cos(alphat) / cos(alphatw_v) [mm], alphatw_v in [rad]."""
             return a * np.cos(alphat) / np.cos(alphatw_v)
 
         def equation_x2(x2_v):
+            """Sliding difference g_s1B - g_s2A [-] for the wheel shift x2_v [-] (x1 fixed)."""
             alphatw_v = _alphatw_from_x2(x2_v)
             al_v      = _al_from_alphatw(alphatw_v)
             return (_gs1B(ra2 + x2_v * mn, rb2, al_v, alphatw_v)
@@ -275,16 +400,93 @@ class SpurHelicalGearMeshing:
 
     def gear_geometry(self, addendum_reduction: bool = True) -> None:
         """
-        Builds gear1_w / gear2_w: independent copies of the reference gears
-        with working geometry applied (k, da, ra, dl, αl, αtw), and computes
-        the contact ratios (εα, εβ, εγ) and Ohlendorf loss factor HV.
+        Working geometry, contact ratios, path of contact and loss factor.
+
+        Builds ``gear1_w`` / ``gear2_w`` (shallow copies of the reference gears
+        with k, al, alphatw, dl, rl, da, ra, alpha_a, epslon_a1/2, galpha added)
+        and the pair attributes epslon_alpha/beta/gamma, galpha, ReqI, the
+        points T1T2 ... rD2 of the path of contact, HV and the roughness
+        combinations. Lengths [mm], angles [rad].
 
         Parameters
         ----------
-        addendum_reduction : bool
-            If True, computes the addendum reduction coefficient k
-            (MAAG / KHK §4.1) and reduces da accordingly.
-            If False, k = 0 and da follows the plain x-only formula.
+        addendum_reduction : bool, optional
+            True: compute the addendum reduction coefficient k and subtract it
+            from the tip diameters. False: k = 0. The default of this method is
+            True; the constructor always passes its own flag (default False).
+
+        Notes
+        -----
+        Equations as coded (m = mn of gear1; x1, x2 the resolved shifts)::
+
+            k = (z1+z2)/2 * ((inv(atw) - inv(at))/tan(a)
+                - 1/cos(b) * (cos(at)/cos(atw) - 1))                   (F16)
+            dl1 = 2*al/(u+1);  dl2 = 2*u*al/(u+1);  rl = dl/2          (F15)
+            da_w = d + 2*m*(haP + cP + x - k)                           (F17)
+            alpha_a = arccos(db / da_w)                                 (F18)
+            eps_a1 = z1*(tan(alpha_a1) - tan(atw))/(2 pi), same for 2   (F19)
+            eps_alpha = eps_a1 + eps_a2                                 (F19)
+            eps_beta  = b*tan(betab)/pbt,  b = min(b1, b2)              (F20)
+            eps_gamma = eps_alpha + eps_beta                            (F21)
+            galpha = rb1*(tan(alpha_a1)-tan(atw)) + rb2*(tan(alpha_a2)-tan(atw))
+                                                                        (F22)
+            ReqI = 1/(1/(rl1 sin(atw)) + 1/(rl2 sin(atw)))              (F23)
+            T1T2 = al*sin(atw)                                          (F24)
+            T1E = sqrt(ra1**2 - rb1**2);  T2A = sqrt(ra2**2 - rb2**2)   (F25)
+            T1A = T1T2 - T2A;  T1B = T1E - pbt;  T1C = rb1*tan(atw)
+            T1D = T1A + pbt;   T2E = T1T2 - T1E; T2B = T2E + pbt
+            T2C = rb2*tan(atw); T2D = T2A - pbt                         (F26)
+            AE = T1E - T1A;  AB, AC, AD = T1B, T1C, T1D minus T1A       (F26)
+            rA1 = sqrt(T1A**2 + rb1**2), rB1, rD1; rA2 = sqrt((T2A-AE)**2
+                + rb2**2), rB2 (uses AD), rD2 (uses AB)                 (F27)
+            (rA2, rB2, rD2: radii of gear2 at E, D, B; see Warnings)
+            HV = pi*(u+1)/(z1*u*cos(betab))
+                 *(1 - eps_alpha + eps_a1**2 + eps_a2**2)               (F28)
+            Ram = (Ra1+Ra2)/2;  Rrms = sqrt(Rq1**2 + Rq2**2);
+            RzS = Rz1 + Rz2   [um]                                      (F29)
+
+        Here a, b, at, atw are alpha, beta, alphat, alphatw of gear1; pbt and
+        betab are those of gear1_w / gear1; b is the face width [mm] (unrelated
+        to the helix angle beta).
+
+        eps_a1 and eps_a2 are the pinion and wheel addendum contact ratios
+        eps_1 = CE/p_bt and eps_2 = AC/p_bt of ISO_6336-1_2019, Table F.1
+        (p_bt = 2 pi rb / z); eps_gamma is the sum of Table 2. The points
+        A..E are those of 10.5.1, Formulae (104)-(110), and rA1, rB1, rD1 are
+        the radii of gear1 at A, B, D, Formula (111); ReqI is Formulae
+        (96)-(97) at the pitch point.
+
+        Warnings
+        --------
+        - Working pitch diameters: dl1 (smaller) and dl2 (larger) are assigned
+          to gear1_w and gear2_w in that order whatever the tooth numbers; for
+          z1 > z2 they are exchanged (class docstring).
+        - The tip diameter da_w is used where ISO_6336-1_2019, 10.5.1 uses the
+          active tip diameter d_Na, and pbt where the standard writes p_et.
+        - ReqI is the transverse reduced radius at the working pitch point,
+          Formulae (96)-(97) with d_CP = d_w, without the 1/cos(beta_b) of
+          Formula (95).
+        - Not computed: radius of curvature along the line of action (G2);
+          load per unit length and load sharing along the path of contact (G3);
+          sliding and rolling speeds (G4).
+        - rA1, rB1, rD1 are the radii of gear1 at the points A, B, D. For gear2
+          the names are mirrored: rA2 is the radius of gear2 at the point E
+          (sqrt(T2E**2 + rb2**2), the code uses the distance AE), rB2 at the
+          point D (distance AD) and rD2 at the point B (distance AB), i.e.
+          counted from the wheel's own start of active profile.
+          ISO_6336-1_2019, 10.5.1, Formula (112), gives the wheel diameter at
+          A, B, D with g_CP = 0, AB, AD; that corresponds to ra2, the coded rD2
+          and the coded rB2 (not coded as such).
+
+        References
+        ----------
+        .. [1] ISO_6336-1_2019, Table 2 (eps_gamma), Table F.1 (eps_1, eps_2),
+           10.1 Formulae (95)-(97), 10.5.1 Formulae (104)-(112).
+        .. [2] MAAG Gear Book (k, contact ratio, Ohlendorf loss factor), named
+           in the code; not in the library; not checked against the source
+           (source to find).
+        .. [3] KHK Technical Reference section 4.1 (k), named in the code; not
+           in the library; not checked against the source (source to find).
         """
         # --- working gears: independent copies, originals untouched ---
         self.gear1_w = copy.copy(self.gear1)
@@ -298,6 +500,7 @@ class SpurHelicalGearMeshing:
         m      = self.gear1.mn
 
         def involute(ang):
+            """Involute function inv(ang) = tan(ang) - ang [rad], ang in [rad]."""
             return np.tan(ang) - ang
 
         # --- addendum reduction coefficient k (MAAG) ---
@@ -413,33 +616,86 @@ class SpurHelicalGearMeshing:
     def forces(self, T1: float, phi_deg: float = 0.0,
             rotation_dir: int = 1) -> dict[str, float]:
         """
-        Compute meshing forces given the driving torque T1 on gear1.
+        Tooth force components and output torque of the pair for a torque T1.
 
-        For helical gears, Fa ≠ 0 (axial thrust due to the helix angle):
-            Ft = T1 / rl1                  tangential force [N]
-            Fr = Ft·tan(αtw)                radial force     [N]
-            Fa = Ft·tan(β)                  axial force      [N]  (sign TBD — see helix_hand note)
-            Fn = Ft/(cos(αtw)·cos(β))       normal force     [N]
-            T_out = T1·u                    output torque    [N·m] (ideal, no losses)
+        The torque T1 is taken on gear1 (whatever ``driver`` says). Ft, Fr, Fa
+        are the components loading the shafts; the system layer applies them
+        to the two gears.
 
         Parameters
         ----------
-        T1           : driving torque on gear1 [N·m]
-        phi_deg      : angular position of the line of centres (gear1 → gear2)
-                    in the shaft cross-section [deg], from +Y toward +Z.
-                    Supplied by GearSystem from shaft_position geometry.
-        rotation_dir : +1 or -1, sign of gear1's rotation about +X.
-                    Determines which side of the line of centres Ft acts on.
+        T1 : float
+            Torque on gear1 [N m].
+        phi_deg : float, optional
+            Angle of the line of centres gear1 -> gear2 in the shaft cross-
+            section, from +Y toward +Z [deg].
+        rotation_dir : int, optional
+            +1 or -1, sense of rotation of gear1 about +X [-].
 
         Returns
         -------
-        dict with Ft, Fr, Fa, Fn, T_out, and theta_Ft/theta_Fr for BOTH gears
-        (driver=gear1, driven=gear2). Fa has no theta — apply directly as
-        AxialLoad; sign pending HelicalGear.helix_hand (not yet implemented).
+        dict
+            Ft, Fr, Fa, Fn : tangential, radial, axial and normal force [N];
+            T_out : output torque on gear2 [N m]; theta_Fr_driver,
+            theta_Ft_driver, theta_Fr_driven, theta_Ft_driven : angles
+            [deg, 0-360) of the radial and tangential forces of gear1 (driver)
+            and gear2 (driven), from +Y toward +Z; rotation_dir_out : sense of
+            rotation of gear2 [-].
+
+        Notes
+        -----
+        As coded (rl1 = gear1_w.rl, the working pitch radius [mm]; u >= 1)::
+
+            Ft = T1 / (rl1/1000)                                       (F32)
+            Fr = Ft * tan(alphatw)                                     (F33)
+            Fa = Ft * tan(beta),  beta = reference helix angle of gear1  (F34)
+            Fn = Ft / cos(alphatw)                                     (F35)
+            T_out = T1 * u                                             (F36)
+            theta_Fr_driver = phi mod 360
+            theta_Ft_driver = (phi + 90*rotation_dir) mod 360
+            rotation_dir_out = -rotation_dir
+            theta_Fr_driven = (phi + 180) mod 360
+            theta_Ft_driven = (phi + 180 + 90*rotation_dir_out) mod 360  (F37)
+
+        The reference helix angle is used in Fa, not the base or the working
+        helix angle. Fa has no angle: there is no hand of helix (beta < 0 is
+        rejected by the gear), so its direction is fixed by convention in the
+        system layer (+Fa on the driver, -Fa on the driven gear). T_out is
+        ideal (no losses). Fn is returned and read by no caller in axisforge.
+        ``driver`` is not used here: the torque is always taken on gear1.
+
+        Warnings
+        --------
+        - Differs from ISO_6336-1_2019, 4.2.2, Formula (1): F_t = 2000 T / d is
+          written on the reference diameter; here Ft uses the working pitch
+          radius rl1 (the PlanetaryGearTrainMeshing nominal Ft uses the
+          reference diameter).
+        - Fn: the coded form is Ft / cos(alphatw); the form
+          Ft / (cos(alphatw) cos(beta)) differs for helical gears; neither is
+          printed in a library source.
+        - For z1 > z2, rl1 is the radius of the smaller gear (class docstring).
+          T_out = T1*u is then also that of the opposite order: u = max/min
+          does not depend on the order, so Ft and T_out are the same as for
+          the pair with z1 and z2 exchanged and the same T1.
+        - Directions as coded: theta_Fr_driver = phi points from the centre of
+          gear1 toward gear2 (toward the mesh) and theta_Fr_driven = phi + 180
+          from gear2 toward gear1, i.e. opposite to the separating force on
+          each gear; theta_Ft_driven equals theta_Ft_driver for both senses of
+          rotation, so the two tangential forces are not an action-reaction
+          pair. Open review item (see ``SpurHelicalGearSystem._forces_to_loads``,
+          Warnings); no gear source in the library defines these angles.
+
+        References
+        ----------
+        .. [1] ISO_6336-1_2019, 4.2.2, Formula (1)-(2): F_t = 2000 T / d,
+           T [N m], d [mm]; Formula (2) gives T = F_t d / 2000.
+        .. [2] F_r, F_a, F_n: the code names "ISO 6336-1", which prints none of
+           them in the pages read (source to find).
         """
+        # F_t on the WORKING pitch radius; T [N m] / r [m] gives [N] (rl is in mm)
         Ft = T1 / (self.gear1_w.rl / 1000)
         Fr = Ft * np.tan(self.alphatw)
-        Fa = Ft * np.tan(self.gear1.beta)
+        Fa = Ft * np.tan(self.gear1.beta)   # reference helix angle, not the base or working one
         Fn = Ft / np.cos(self.alphatw)
         T_out = T1 * self.u
 
@@ -464,14 +720,29 @@ class SpurHelicalGearMeshing:
 
     def validate(self) -> list[str]:
         """
-        Validate the gear pair geometry. Returns a list of error strings;
-        an empty list means the pair is geometrically valid.
+        Check the pair geometry.
 
-        Checks:
-          1. Individual gear validation (undercutting, geometry bounds)
-          2. Profile shift consistency with al (only when al is overridden)
-          3. Contact ratio εα ≥ 1.0
-          4. Involute interference (path of approach / recess vs base circle)
+        Returns
+        -------
+        list of str
+            One message per violation; empty if the pair is valid. Checks:
+            (1) ``validate()`` of gear1, gear2 and the working copies;
+            (2) |x1+x2 implied by al - declared| <= 1e-4, only when al was
+            imposed; (3) epsilon_alpha >= 1.0 (a value below 1.2 adds a message
+            starting "Warning:" to the list, so ``validate_or_raise`` raises); (4) involute interference, F31:
+            sqrt(ra2**2 - rb2**2) - al*sin(alphatw) > rb1*tan(alphatw) for
+            gear1, and the mirrored test for gear2 [mm].
+
+        Notes
+        -----
+        The interference criterion (F31) has no source in the code or in the
+        library (source to find). ISO_6336-1_2019, clause 1, states that its
+        methods do not apply with transverse contact ratio below 1,0 or with
+        interference between tooth tips and root fillets.
+
+        The left side of the test in (4) equals -T1A (T1A = T1T2 - T2A), so
+        the test reads -T1A > T1C. A negative T1A (point A beyond the tangent
+        point T1) is therefore reported only when abs(T1A) exceeds T1C.
         """
         errors: list[str] = []
 
@@ -531,6 +802,7 @@ class SpurHelicalGearMeshing:
         return errors
 
     def validate_or_raise(self) -> None:
+        """Raise ``ValueError`` with all messages of ``validate()`` if any."""
         errors = self.validate()
         if errors:
             raise ValueError("\n".join(errors))
@@ -540,6 +812,7 @@ class SpurHelicalGearMeshing:
     # ------------------------------------------------------------------
 
     def summary(self) -> str:
+        """Multi-line text with the main data of the pair (lengths [mm], angles [deg])."""
         tag = self.label or "HelicalGearMeshing"
         lines = [
             f"── {tag} ─────────────────────────────────",
@@ -559,6 +832,7 @@ class SpurHelicalGearMeshing:
         return "\n".join(lines)
 
     def __repr__(self) -> str:
+        """One-line representation: tooth numbers, module, helix angle, al, alphatw, eps_gamma."""
         return (
             f"HelicalGearMeshing(z1={self.gear1_w.z}, z2={self.gear2_w.z}, "
             f"mn={self.gear1_w.mn}, β={self.gear1.beta_n_deg}°, al={self.al:.4f} mm, "
@@ -571,7 +845,12 @@ class SpurHelicalGearMeshing:
 
     @staticmethod
     def _check_compatibility(g1: SpurHelicalGear, g2: SpurHelicalGear) -> None:
-        """Raise ValueError if the two gears cannot mesh."""
+        """
+        Raise ``ValueError`` if the two gears cannot mesh.
+
+        Compares the normal module [mm], the normal pressure angle [deg] and
+        the helix angle [deg], each with relative tolerance 1e-6.
+        """
         if not np.isclose(g1.mn, g2.mn, rtol=1e-6):
             raise ValueError(
                 f"Module mismatch: gear1 mn={g1.mn}, gear2 mn={g2.mn}. "

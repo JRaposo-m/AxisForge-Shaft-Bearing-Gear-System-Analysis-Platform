@@ -1,103 +1,7 @@
-"""
-axisforge/solvers/machine_elements/shaft/fem_solvers/global_solver/rigid_support.py
-
-RigidSupportFEMSolver -- models each bearing location as a rigid point
-SUPPORT boundary condition. Knows nothing about rolling-bearing physics
-(ISO 281 / ISO/TS 16281, handled elsewhere in AxisForge). "Rigid" is
-this solver's identity, not one of several modes -- a compliant-bearing
-solver is a sibling module, not a flag on this one.
-
-MOVED (this pass): into global_solver/, sibling to submodel_solver/ --
-same reasoning discussed for lagrange_multipliers.py: this and
-SubmodelSolver are the same kind of thing (a solver that turns a
-ShaftSystem/BeamModelSettings into raw DOFs), so they live at the same
-folder depth now.
-
-BREAKING CHANGE (this pass): solve() used to return None and publish
-every intermediate quantity (x_nodes, elements, d_total_xz, ...) as
-public attributes on the solver instance itself -- re-calling solve()
-overwrote them in place. It now returns a ShaftResults directly --
-same shift already made for SubmodelSolver
-(submodel_solver/lagrange_multipliers.py), and now made consistent here
-too: solve() builds the raw RigidSupportSolution internally, then calls
-global_solver/postprocessing.py's build_shaft_result() on it (M/V
-recovery, torsion, bearing reactions, section properties) and returns
-the finished ShaftResults. RigidSupportSolution stays as a local,
-unreturned intermediate, same role SubmodelSolution plays in
-lagrange_multipliers.py. Every existing caller doing
-    solver.solve(shaft_system)
-    solver.d_total_xz
-needs updating to
-    result = solver.solve(shaft_system)
-    result.d_total_xz
-This solver is more likely than SubmodelSolver to already have callers
-elsewhere in the codebase (validation/fem_studies) -- check before
-relying on this file. This is also a bigger behavioural change than the
-submodel case: solve() now always runs TorsionSolver too, so every call
-pays for torsion even if a caller only wanted the bending/axial DOFs
-(e.g. an optimization loop varying bearing stiffness) -- see the
-"no solver imports another solver" note in postprocessing.py's
-docstring if that cost turns out to matter later.
-
-RigidSupportSolution's field names (elements, d_total_xz, d_total_xy,
-_kGA_override) are chosen to match exactly what
-element_theories/element_postprocessing.py's ElementTheoryPostProcessor
-expects -- deliberately, so global_solver/postprocessing.py's
-GlobalEulerBernoulliPostProcessing/GlobalTimoshenkoPostProcessing need
-no view/adapter object, unlike submodel_solver's SubmodelSolution (which
-chose shorter, locally-nicer names -- d_xz/d_xy -- and pays for that
-with _SubmodelSolverView). The leading underscore on _kGA_override is
-unusual for a public dataclass field; kept anyway for that exact-name
-match, since it mirrors the private attribute name
-RigidSupportFEMSolver already used internally for the same value.
-
-Orchestration only: solve() calls, in order,
-  Mesh1D -> Elem.from_mesh (BeamModelSettings-driven)
-  -> StiffnessMatrixBuilder (frame=True, fixed -- see note below)
-  -> boundary_dofs (constraints/boundary_conditions.py)
-  -> load_cases.py -> assembly/load_assembly/point_loads.py +
-     assembly/load_assembly/distributed_loads.py
-  -> linear solve (still beam-theory-agnostic)
-  -> returns RigidSupportSolution.
-
-Torsion is NOT part of this solver -- it lives in global_solver/torsion.py
-as a separate static analysis on the same ShaftSystem/x_nodes, called
-from global_solver/postprocessing.py's build_shaft_result() (not from
-solve() itself) -- see that module's docstring for why it lives there
-and not here. This solver only produces bending + axial results.
-
-Why frame=True is fixed, not a caller choice: this solver accepts
-AxialLoad and injects it into the global force vector, so the axial
-DOFs MUST be wired into K for the system to be solvable at all --
-frame=False would leave every axial DOF disconnected (see
-build_stiffness_matrix.py's own docstring on that). Since there is
-only one correct choice for what this solver does, making it a
-constructor argument would just be one more way to misconfigure it, so
-it is a fixed identity property instead -- same reasoning as "rigid"
-in the class name.
-
-FLAGGED, not verified in this pass -- these calls are carried forward
-UNCHANGED in shape from the previous skeleton because their source
-files were not available to check against BeamModelSettings/frame/the
-new distributed_loads.py API:
-  - assemble_point_load_vector()   (assembly/load_assembly/point_loads.py)
-  - extract_submodel_values()      (constraints/submodel_extraction.py)
-Confirm each of these still matches this call shape before relying on
-this file -- I have not seen their current content in this
-conversation. check_conditioning() (numerics/numerical_guards.py) HAS
-been confirmed -- takes only K_red, no tolerance argument, fixed
-1e14 condition-number threshold.
-
-DOF convention (per node, 3 DOF): [u (axial), v (transverse), theta
-(bending)]. Two INDEPENDENT planar solves are performed (XZ, XY),
-reusing the same K. Axial DOF is shared between planes -- AxialLoad is
-injected only into the XZ load vector, never XY, to avoid double-
-counting it.
-
-DROPPED (this pass): the previous version stored an unused
-`self._builder = builder` on the instance, left over with no reader
-anywhere -- removed, since RigidSupportSolution has no use for the
-builder object itself, only its output (K).
+"""Static FEM solver of the whole shaft with every bearing modelled as a rigid point support
+(constrained DOFs eliminated from the system). It does not model rolling-bearing physics
+(ISO 281, ISO/TS 16281 are handled elsewhere); a compliant-bearing solver would be a sibling
+module, not an option of this one.
 """
 
 from __future__ import annotations
@@ -146,11 +50,38 @@ if TYPE_CHECKING:  # pragma: no cover
 
 @dataclass
 class RigidSupportSolution:
-    """
-    Raw solve output for the whole shaft -- pre-postprocessing. Mirrors
-    SubmodelSolution (submodel_solver/lagrange_multipliers.py): data,
-    not behaviour. See module docstring for why the field names match
-    element_postprocessing.py exactly.
+    """Raw output of the global shaft solve, before post-processing (data only, no behaviour).
+
+    The field names ``elements``, ``d_total_xz``, ``d_total_xy`` and ``_kGA_override`` are the ones
+    expected by ``ElementTheoryPostProcessor``, so the global post-processors need no adapter. The
+    leading underscore of ``_kGA_override`` mirrors the private attribute of the solver.
+
+    Parameters
+    ----------
+    x_nodes : list of float
+        Node positions along the shaft axis [mm].
+    elements : list of Elem
+        Beam elements of the mesh.
+    K : ndarray, shape (3n, 3n)
+        Global stiffness matrix [N/mm, N, N mm/rad], DOF order ``[u, v, theta]`` per node.
+    free_dofs, constrained_dofs : list of int
+        Global DOF indices kept in / eliminated from the solve.
+    d_total_xz, d_total_xy : ndarray, shape (3n,)
+        Nodal displacements of the XZ and XY bending planes [mm, mm, rad] per ``[u, v, theta]``.
+    f_xz_ext, f_xy_ext : ndarray, shape (3n,)
+        Applied nodal loads (point loads plus consistent distributed loads) [N, N, N mm].
+    f_xz_total, f_xy_total : ndarray, shape (3n,)
+        ``K d`` for each plane [N, N, N mm]: applied load plus support reaction.
+    f_xz_reaction, f_xy_reaction : ndarray, shape (3n,)
+        ``K d - f_ext`` for each plane [N, N, N mm]; non-zero at constrained DOFs only (up to
+        round-off).
+    _kGA_override : float or None
+        Shear rigidity k G A used in the solve [N], or ``None`` for the element values.
+
+    Notes
+    -----
+    The axial DOF ``u`` is read from the XZ solution only: ``AxialLoad`` enters the XZ load vector
+    and never the XY one.
     """
 
     x_nodes: list[float]
@@ -172,13 +103,17 @@ class RigidSupportSolution:
     _kGA_override: float | None = None
 
     def return_values(self, x: list[float]) -> dict[float, dict[str, float]]:
-        """
-        Same job RigidSupportFEMSolver.return_values() always did --
-        kept as a method here (not a free function) to preserve the
-        existing call shape for whoever already calls
-        solver.return_values(x); the underlying logic
-        (extract_submodel_values) is unchanged, only where it's called
-        from moved (solver -> solution).
+        """Nodal displacements and forces of the nodes inside ``[x[0], x[1]]``.
+
+        Parameters
+        ----------
+        x : list of float
+            ``[x_lo, x_hi]``, interval bounds [mm].
+
+        Returns
+        -------
+        dict
+            See ``extract_submodel_values`` (keys, units and sign note).
         """
         return extract_submodel_values(
             self.x_nodes, x,
@@ -188,59 +123,54 @@ class RigidSupportSolution:
 
 
 class RigidSupportFEMSolver:
-    """
-    Usage
-    -----
-        settings = BeamModelSettings(beam_theory="timoshenko",
-                                      shear_theory="cowper",
-                                      integration_method="exact")
-        solver = RigidSupportFEMSolver(settings)
-        result = solver.solve(shaft_system)
-        result.d_total_xz      # -> np.ndarray, global displacement (XZ)
-        result.f_xz_total      # -> np.ndarray, global force (incl. reactions)
-        result.M_xz, result.T, result.phi   # -> already postprocessed, torsion included
+    """Static finite-element solution of a shaft on rigid bearing supports, bending in two planes plus
+    axial force, followed by post-processing and torsion.
 
-    solve() does both steps itself (raw solve + postprocessing) and
-    returns the finished ShaftResults -- see module docstring's
-    BREAKING CHANGE note for why, and for the cost this carries (torsion
-    + full postprocessing runs on every call now, unconditionally).
+    Frame elements (axial plus bending) are always assembled, because ``AxialLoad`` is injected into
+    the global force vector and the axial DOFs must therefore be wired into K. The two bending planes
+    (XZ and XY) are solved separately with the same reduced matrix; the axial load goes to the XZ
+    vector only.
+
+    Parameters
+    ----------
+    settings : BeamModelSettings
+        Beam theory (and, for Timoshenko, shear theory and integration method) of every element.
+    distribute_gear_labels : set of str or None, optional
+        Gear labels whose gear-mesh point loads (``RadialLoad`` with ``source="gear_mesh"``) are
+        LEFT OUT of the load vector; ``{"*"}`` leaves out all of them. The solver does not create
+        the distributed load: a ``DistributedRadialLoad`` must already be in ``shaft_system`` (gear
+        system resolved with ``distribute=True``), and such loads are always assembled as
+        distributed, whatever this argument. With a label flagged and no distributed counterpart,
+        the radial gear force is missing from the solve. ``None`` or empty: every ``RadialLoad`` is
+        assembled as a point load.
+    kGA_override : float or None, optional
+        Transverse shear rigidity k G A [N] that replaces the value of every Timoshenko element
+        (``shear_theory`` is then ignored); no effect for Euler-Bernoulli. Intended for plugging in a
+        value read from an Abaqus section-properties printout (``*Preprint, model=YES``). ``None``:
+        element values.
+
+    Notes
+    -----
+    Boundary conditions are imposed by elimination (``K_red = K[free, free]``, no penalty); the
+    reactions are ``K d - f_ext`` (Onate2013_vol2, 1.3.4, Eq. (1.22), Examples 1.3-1.4). Bearings are
+    rigid supports (see ``boundary_dofs``); bearing stiffness is not used by this solver.
+
+    Examples
+    --------
+    >>> settings = BeamModelSettings(beam_theory="timoshenko", shear_theory="cowper",
+    ...                              integration_method="exact")  # doctest: +SKIP
+    >>> result = RigidSupportFEMSolver(settings).solve(shaft_system)  # doctest: +SKIP
+    >>> result.d_total_xz  # doctest: +SKIP
     """
 
     # This solver always assembles full frame elements (axial + bending)
-    # -- see module docstring for why this is fixed, not a constructor
-    # argument.
+    # -- fixed, not a constructor argument (see the class docstring).
     _FRAME = True
 
     def __init__(self, settings: BeamModelSettings,
                  distribute_gear_labels: set[str] | None = None,
                  kGA_override: float | None = None):
-        """
-        settings : BeamModelSettings -- decides beam_theory (and, for
-                Timoshenko, shear_theory/integration_method) for every
-                Elem this solver builds. No default on purpose: the
-                caller must decide explicitly (see
-                beam_model_settings.py).
-        distribute_gear_labels : set of gear labels whose mesh loads
-                should be treated as distributed over face width. None
-                or empty -> all gear mesh loads as point loads. e.g.
-                {"pinion", "wheel"} -> only those two distributed. Use
-                {"*"} as a sentinel to distribute ALL gear mesh loads.
-        kGA_override : if given, REPLACES the transverse shear
-                stiffness K*G*A used for every Timoshenko element in
-                this solve -- forwarded to
-                StiffnessMatrixBuilder.build() (which assembles K).
-                shear_theory is ignored for every element once this is
-                set. Has no effect when settings.beam_theory ==
-                "euler_bernoulli" -- Euler-Bernoulli has no shear term
-                to override. None (default): normal path, unchanged
-                behaviour.
-
-                Use this to plug in a value read directly from
-                Abaqus's own *Preprint, model=YES section-properties
-                printout (e.g. "K*G(23)*A"/"K*G(13)*A" for a *Beam
-                Section) to test whether matching Abaqus's ACTUAL
-                transverse shear stiffness closes a deflection gap
-                against Abaqus.
+        """Store the settings and the gear-load distribution flags (see the class docstring).
         """
         self._settings = settings
         self._distribute_all    = distribute_gear_labels == {"*"}
@@ -254,6 +184,42 @@ class RigidSupportFEMSolver:
     def solve(self,
               shaft_system: ShaftSystem,
               extra_mandatory: list[float] | None = None) -> "ShaftResults":
+        """Solve the shaft for all loads and return the post-processed results.
+
+        Steps: mesh, elements, global K, boundary conditions (elimination), conditioning check, load
+        vectors (point loads and consistent distributed loads, per plane), solution of the XZ and XY
+        planes, ``K d`` and reactions, then ``build_shaft_result`` (moment and shear force, bearing data,
+        section properties and torsion).
+
+        Parameters
+        ----------
+        shaft_system : ShaftSystem
+            Shaft geometry, bearings and loads (lengths [mm], forces [N], moments [N mm]); validated
+            first.
+        extra_mandatory : list of float or None, optional
+            Extra positions [mm] that must be mesh nodes.
+
+        Returns
+        -------
+        ShaftResults
+            Displacements [mm, rad], resultants, reactions, bearing-node data, stresses and twist; units
+            in ``ShaftResults``.
+
+        Raises
+        ------
+        numpy.linalg.LinAlgError
+            If the reduced stiffness matrix is (near-)singular (``check_conditioning``).
+        ValueError
+            From ``boundary_dofs`` (missing axial fixed point or fewer than two radial supports) and from
+            node lookup of loads and bearings; also if ``shaft_system`` is not valid
+            (``validate_or_raise``).
+        KeyError
+            If a section material is not registered.
+
+        Warnings
+        --------
+        ``TorsionSolver`` runs on every call, even if only bending and axial results are wanted.
+        """
         shaft_system.validate_or_raise()
 
         mesh = Mesh1D(shaft_system, extra_mandatory=extra_mandatory or [])
@@ -323,8 +289,6 @@ class RigidSupportFEMSolver:
             _kGA_override=self._kGA_override,
         )
 
-        # solve() returns the postprocessed result directly -- see the
-        # module docstring's BREAKING CHANGE note. RigidSupportSolution
-        # stays a local, unreturned intermediate, same role
-        # SubmodelSolution plays in lagrange_multipliers.py.
+        # RigidSupportSolution is a local intermediate; build_shaft_result
+        # turns it into the ShaftResults that solve() returns.
         return build_shaft_result(solution, shaft_system)

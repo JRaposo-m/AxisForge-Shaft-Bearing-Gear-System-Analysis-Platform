@@ -1,28 +1,7 @@
-"""
-axisforge/solvers/machine_elements/shaft/fem_solvers/assembly/load_assembly/vector_external_forces.py
-
-MOCKUP / SKELETON -- extracted from
-RigidSupportFEMSolver._build_load_cases() exactly as it was, with no
-change in logic. Beam-theory-agnostic: decomposes the ShaftSystem's
-loads (RadialLoad, distributed_radial_loads, AxialLoad, ExternalMoment)
-into per-plane (XZ/XY) "load case" dictionaries, regardless of whether
-the solver is using Timoshenko or Euler-Bernoulli elements -- hence it
-lives in its own module rather than in one of the theory-specific
-modules.
-
-This module only decomposes and packages loads -- it never touches an
-Elem, a mesh, or a quadrature rule. The per-element distributed-load
-integration that consumes the "distributed_xz"/"distributed_xy"
-entries built here lives in assembly/load_assembly/distributed_loads.py;
-point-load entries ("radial_xz", "axial", "moments_xz", etc.) are
-injected directly into the global vector by
-assembly/load_assembly/point_loads.py, with no per-element step at all.
-
-TorqueLoad is intentionally EXCLUDED here -- it has no DOF in this
-element, and is handled separately in torsion.py.
-
-Called by rigid_support.py::RigidSupportFEMSolver.solve() -- see that
-module for the orchestrating entry point.
+"""Splits the loads of a ``ShaftSystem`` (radial, distributed radial, axial, external moments) into
+per-plane (XZ and XY) load-case dictionaries, independent of the beam theory. It only packages the
+loads: no element, mesh or quadrature is touched. ``TorqueLoad`` is excluded (it has no DOF in the
+beam element and is handled by ``TorsionSolver``). Used by ``RigidSupportFEMSolver.solve``.
 """
 
 from __future__ import annotations
@@ -33,13 +12,24 @@ from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system im
 
 def is_distributed(label: str, source: str, *,
                     distribute_all: bool, distribute_labels: set[str]) -> bool:
-    """
-    Extracted from RigidSupportFEMSolver._is_distributed() -- decides
-    whether a gear-mesh load (source="gear_mesh") should be treated as
-    distributed over the tooth face width or as a point load.
+    """Decide whether a gear-mesh load is treated as distributed over the face width or as a point load.
 
-    User loads (source != "gear_mesh") are ALWAYS point loads -- they
-    never pass through here as distributed.
+    Parameters
+    ----------
+    label : str
+        Load label; the part before the first ``":"`` is taken as the gear label.
+    source : str
+        Load origin; only ``"gear_mesh"`` loads can be distributed.
+    distribute_all : bool
+        If ``True``, every gear-mesh load is distributed.
+    distribute_labels : set of str
+        Gear labels whose mesh loads are distributed.
+
+    Returns
+    -------
+    bool
+        ``True`` if the load is to be treated as distributed. User loads (``source != "gear_mesh"``)
+        are always point loads.
     """
     if source != "gear_mesh":
         return False
@@ -55,17 +45,41 @@ def build_load_cases(
     distribute_all: bool,
     distribute_labels: set[str],
 ) -> list[dict]:
-    """
-    Extracted from RigidSupportFEMSolver._build_load_cases() -- logic
-    unchanged, only now takes distribute_all/distribute_labels as
-    parameters instead of reading self._distribute_all/self._distribute_labels
-    (the solver still owns those two flags, it just calls this free
-    function instead of a method of its own).
+    """Decompose the loads of the shaft system into one dictionary per load, by bending plane.
 
-    TODO (you): decide whether this should become a method of a small
-    LoadCaseBuilder class (if it ever needs more internal state) or
-    stay a free function -- left as a free function for now since it
-    held no state of its own, only read attributes off the solver.
+    Parameters
+    ----------
+    shaft_system : ShaftSystem
+        Source of ``radial_loads``, ``distributed_radial_loads``, ``axial_loads`` and
+        ``external_moments``.
+    distribute_all : bool
+        Treat every gear-mesh radial load as distributed (see ``is_distributed``).
+    distribute_labels : set of str
+        Gear labels whose mesh loads are treated as distributed.
+
+    Returns
+    -------
+    list of dict
+        One dictionary per load, with the keys ``"label"`` (str), ``"source"`` (str), ``"radial_xz"``
+        and ``"radial_xy"`` (lists of ``(x [mm], F [N])``), ``"axial"`` (list of ``(x [mm], F [N])``),
+        ``"moments_xz"`` and ``"moments_xy"`` (lists of ``(x [mm], M [N mm])``), and, for distributed
+        loads only, ``"distributed_xz"`` and ``"distributed_xy"`` (lists of dict with ``"x_lo"``,
+        ``"x_hi"`` [mm], ``"q"`` callable ``q(x)`` [N/mm] and ``"theta_fn"`` callable [deg] or None).
+        Keys that do not apply to the load are empty lists or absent.
+
+    Warnings
+    --------
+    The plane assigned to ``ExternalMoment.component`` is forwarded unchanged (``core/loads.py``); its
+    agreement with the moment-axis convention of that module is an open review item.
+
+    Notes
+    -----
+    Plane mapping: the XZ plane takes ``component(LoadPlane.XZ)`` (Fz) and the XY plane
+    ``component(LoadPlane.XY)`` (Fy), as in the AxisForge README "Conventions" (D-0010). Axial loads go
+    to the XZ vector only, when the solver assembles them.
+
+    A gear-mesh ``RadialLoad`` flagged as distributed is skipped here; this function does not create
+    its distributed counterpart, it only reads ``shaft_system.distributed_radial_loads``.
     """
     cases: list[dict] = []
 

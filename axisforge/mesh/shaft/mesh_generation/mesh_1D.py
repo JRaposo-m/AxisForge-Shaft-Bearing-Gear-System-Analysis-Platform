@@ -1,13 +1,12 @@
 """
-mesh/shaft/mesh_generation/mesh_1D.py
-
-1D FEM node grid for a single ShaftSystem.
+1D FEM node grid for a single ShaftSystem: the axial positions [mm] of the beam element nodes.
 
 Two classes of node
 -------------------
 * **Mandatory** nodes come from the physical model and must always be
   present: section boundaries (shoulders), shaft ends, bearing centres
-  and extents, gear centres and face-width limits, point-load positions,
+  and extents, gear centres and face-width limits, point-load positions
+  (radial, axial and torque loads, external moments),
   distributed-load limits and centroids, and any ``protected`` position
   supplied by the caller (e.g. the cut nodes of a submodel). They are
   never removed.
@@ -25,10 +24,16 @@ Merging rules
   one (recorded in :meth:`Mesh1D.merge_report`);
 * extra close to extra       -> the first is kept, the second dropped
   (recorded);
-* mandatory close to mandatory (closer than ``MESH_MIN_NODE_DIST_MM`` but
-  not the same point) -> **error**: the model itself places two physical
+* mandatory close to mandatory (gap <= ``MESH_MIN_NODE_DIST_MM`` and
+  > ``NODE_LOOKUP_TOL_MM``) -> **error**: the model itself places two physical
   features less than the minimum element length apart. Reported by
   :meth:`Mesh1D.validate` and raised by :meth:`Mesh1D.build`.
+
+``MESH_MIN_NODE_DIST_MM`` (0.1 mm) and ``NODE_LOOKUP_TOL_MM`` (1e-6 mm) come
+from ``axisforge.config``; they are values of this code, not from a source.
+There is no maximum element length and no automatic subdivision between
+mandatory nodes: element size is set by the model and by the refinement
+nodes only.
 """
 
 from __future__ import annotations
@@ -100,6 +105,7 @@ class Mesh1D:
         extra_mandatory: list[float] | None = None,
         protected: list[float] | None = None,
     ):
+        """Store the arguments; see the class docstring."""
         self.shaft_system = shaft_system
         self._x_nodes: list[float] | None = None
         self._extra_mandatory: list[float] = extra_mandatory or []
@@ -114,6 +120,7 @@ class Mesh1D:
 
     @staticmethod
     def _tag(obj, default: str) -> str:
+        """Origin text ``"<default> <label>"`` used in merge reports."""
         label = getattr(obj, "label", "") or getattr(obj, "designation", "") or ""
         return f"{default} '{label}'" if label else default
 
@@ -164,10 +171,9 @@ class Mesh1D:
         return out
 
     def _mandatory_positions(self) -> list[float]:
-        """All candidate positions (mandatory and extra), untagged.
+        """All candidate positions (mandatory then extra) [mm], untagged.
 
-        Kept for backward compatibility; :meth:`_create_mesh` works on the
-        tagged lists.
+        Used only by the tests; :meth:`_create_mesh` works on the tagged lists.
         """
         return [x for x, _ in self._mandatory_tagged()] + [x for x, _ in self._extra_tagged()]
 
@@ -226,6 +232,12 @@ class Mesh1D:
     def build(self) -> list[float]:
         """Compute (or return cached) node positions.
 
+        Returns
+        -------
+        list of float
+            Ascending node positions [mm]; mandatory nodes plus the extra
+            nodes that survived the merge rules.
+
         Raises
         ------
         ValueError
@@ -240,10 +252,12 @@ class Mesh1D:
 
     @property
     def x_nodes(self) -> list[float]:
+        """Ascending node positions [mm] (same list as :meth:`build`)."""
         return self.build()
 
     @property
     def n_nodes(self) -> int:
+        """Number of nodes [-]."""
         return len(self.x_nodes)
 
     def merge_report(self) -> list[MergeEvent]:
@@ -274,26 +288,34 @@ class Mesh1D:
         return list(self._conflicts)
 
     def validate_or_raise(self) -> None:
-        """Raise ValueError listing every mandatory-node conflict."""
+        """Raise ValueError listing every mandatory-node conflict.
+
+        Raises
+        ------
+        ValueError
+            If :meth:`validate` returns any message.
+        """
         self._raise_on_conflicts(self.validate())
 
     @staticmethod
     def _raise_on_conflicts(errors: list[str]) -> None:
+        """Raise ValueError with one line per conflict message, if any."""
         if errors:
             raise ValueError("Mesh1D: mandatory-node conflicts:\n"
                              + "\n".join(f"  - {e}" for e in errors))
 
     def show_nodes(self, print_output: bool = True) -> list[tuple[int, float]]:
-        """
-        Return a numbered list of all node positions in the current mesh.
+        """Numbered list of all node positions of the current mesh.
 
         Parameters
         ----------
-        print_output : if True, prints the node table to stdout
+        print_output : bool, optional
+            If True, print the node table to stdout.
 
         Returns
         -------
-        list of (node_index, x_position_mm) tuples
+        list of (int, float)
+            ``(node_index, x)`` with ``x`` the axial position [mm].
         """
         nodes = self.x_nodes
         result = [(i, x) for i, x in enumerate(nodes)]
@@ -308,12 +330,21 @@ class Mesh1D:
         return result
 
     def add_grader(self, grader: "Grader", grade: str) -> None:
-        """
-        Inject a Grader + grade level as extra (refinement) nodes.
+        """Add the nodes of a Grader grade as extra (refinement) nodes.
 
-        Call AFTER the base mesh is built (x_nodes must already exist
-        so the Grader was constructed with a valid base node set).
-        Invalidates the node cache — next .x_nodes call rebuilds.
+        Parameters
+        ----------
+        grader : Grader
+            Built from the base mesh ``x_nodes``, so call this after the base
+            mesh exists.
+        grade : str
+            Grade name, ``"grade_N"`` (see Grader.get_grade).
+
+        Notes
+        -----
+        Invalidates the node cache; the next ``x_nodes`` call rebuilds.
+        Grader nodes closer than ``MESH_MIN_NODE_DIST_MM`` to another node
+        are merged away (see :meth:`merge_report`).
         """
         self._graders.append((grader, grade))
         self._x_nodes = None

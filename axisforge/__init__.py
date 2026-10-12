@@ -1,7 +1,5 @@
 # axisforge/__init__.py
 """
-axisforge/__init__.py
-
 Package root -- single top-level import point, slippy style (eager, no lazy loading), same
 cascade as the levels below:
 

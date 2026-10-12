@@ -1,17 +1,12 @@
 """
-solvers/machine_elements/shaft/static_solvers/shaft_post_processor.py
+Stress concentration factors (Kt, q, Kf) at shaft shoulders and keyways, and the
+corrected stress arrays built from them.
 
-ShaftPostProcessor — enriches a ShaftResults with stress concentration
-factors (Kt, Kf) at shoulders and other geometric features, producing
-corrected stress arrays ready for fatigue/failure solvers.
-
-No FEM or equilibrium solving here — purely reads ShaftResults geometry
-and applies Peterson/Shigley correction factors.
-
-References:
-  Shigley §6  — stress concentration factors
-  Peterson    — interpolation charts / formulae for Kt
-  FKM         — surface factor, notch sensitivity
+``ShaftPostProcessor`` reads a ``ShaftResults`` and the shaft geometry and
+multiplies the nominal stresses by Kf at the node nearest to each feature. It
+solves no FEM or equilibrium problem and implements no failure criterion. It has
+no caller outside this file. The sources named in the code (Shigley, Peterson,
+Neuber) are not in the library; see the References of each member.
 """
 
 from __future__ import annotations
@@ -33,20 +28,30 @@ if TYPE_CHECKING:
 @dataclass
 class StressConcentration:
     """
-    One stress concentration feature (shoulder, keyway, groove, etc.)
+    Record of one stress concentration feature (shoulder or keyway).
 
-    x          [mm]   axial position on shaft
-    feature    str    "shoulder" | "keyway" | "groove" | "press_fit"
-    Kt_bending float  theoretical stress concentration factor, bending
-    Kt_torsion float  theoretical stress concentration factor, torsion
-    Kf_bending float  fatigue stress concentration factor, bending
-    Kf_torsion float  fatigue stress concentration factor, torsion
-    q_bending  float  notch sensitivity factor, bending
-    q_torsion  float  notch sensitivity factor, torsion
-    r          [mm]   fillet / notch radius
-    D          [mm]   larger diameter
-    d          [mm]   smaller diameter
-    note       str    free-form traceability note
+    Traceability record of the factors computed for one feature. The code
+    produces only ``"shoulder"`` and ``"keyway"``.
+
+    Parameters
+    ----------
+    x : float
+        Axial position on the shaft [mm].
+    feature : str
+        ``"shoulder"`` or ``"keyway"`` (the only values the code produces; the
+        field is a free string).
+    Kt_bending, Kt_torsion : float
+        Theoretical stress concentration factor, bending and torsion [-].
+    Kf_bending, Kf_torsion : float
+        Fatigue stress concentration factor, bending and torsion [-].
+    q_bending, q_torsion : float
+        Notch sensitivity, bending and torsion [-].
+    r : float
+        Fillet / notch radius [mm].
+    D, d : float
+        Larger and smaller diameter [mm] (``D`` stays 0 for keyways).
+    note : str
+        Free-form traceability note.
     """
     x:          float = 0.0
     feature:    str   = "shoulder"
@@ -65,20 +70,32 @@ class StressConcentration:
 @dataclass
 class PostProcessedResults:
     """
-    ShaftResults extended with stress concentration data and corrected stresses.
+    Shaft results together with the stress concentration factors and corrected stresses.
 
-    Inherits all arrays from ShaftResults via composition (not inheritance —
-    keeps the two classes independently picklable/serialisable).
+    Holds the original ``ShaftResults`` in the field ``results`` (it is not a
+    subclass) and node-aligned arrays on the same grid as ``results.x``.
 
-    Extra arrays  (same node grid as ShaftResults.x)
-    ------------------------------------------------
-    Kf_b     [-]   fatigue bending SCF at each node (1.0 where no feature)
-    Kf_t     [-]   fatigue torsion SCF at each node
-    sigma_b_corrected  [MPa]   Kf_b * sigma_b
-    tau_corrected      [MPa]   Kf_t * tau
-
-    features : list[StressConcentration]
-        One entry per identified feature, with full Kt/Kf/q traceability.
+    Parameters
+    ----------
+    results : ShaftResults
+        The nominal results the factors were applied to.
+    Kf_b, Kf_t : numpy.ndarray
+        Fatigue stress concentration factor, bending and torsion, at each node
+        [-]; 1.0 where there is no feature.
+    sigma_b_corrected : numpy.ndarray
+        ``Kf_b * results.sigma_b`` [MPa].
+    tau_corrected : numpy.ndarray
+        ``Kf_t * results.tau`` [MPa].
+    features : list of StressConcentration
+        One entry per feature, with its Kt, q and Kf.
+    sigma_b_corr_max : float
+        Maximum of ``sigma_b_corrected`` (signed maximum) [MPa].
+    x_sigma_b_corr_max : float
+        Axial position of that maximum [mm].
+    tau_corr_max : float
+        Maximum of ``abs(tau_corrected)`` [MPa].
+    x_tau_corr_max : float
+        Axial position of that maximum [mm].
     """
     results:   ShaftResults = field(default_factory=ShaftResults)
 
@@ -104,35 +121,58 @@ class PostProcessedResults:
 
 class ShaftPostProcessor:
     """
-    Enriches a ShaftResults with stress concentration factors.
+    Applies stress concentration factors at shoulders and keyways to the nominal stresses.
 
-    Usage
+    For each shoulder (``Shaft.shoulders()``) and each keyway of each section it
+    computes Kt, the notch sensitivity q and Kf, assigns Kf to the node nearest to
+    the feature (the larger value if two features share a node) and multiplies
+    the nominal stresses by it. No failure criterion, equivalent stress or safety
+    factor is computed here (``static_failure.py`` is empty).
+
+    Parameters
+    ----------
+    shaft_system : ShaftSystem
+        Provides ``shaft.shoulders()``, ``shaft.sections`` (``diameter``,
+        ``length``, ``keyways``, ``material_id``) and ``shaft.section_at(x)``.
+        Lengths and diameters [mm].
+    results : ShaftResults
+        Nominal results. Used: ``x`` [mm], ``sigma_b`` [MPa] (bending stress) and
+        ``tau`` [MPa] (torsional shear stress). ``sigma_b`` [MPa] = resultant
+        bending moment over W, always >= 0 (``build_shaft_result``,
+        global_postprocessing.py); ``tau`` [MPa] = T [N.m] * 1000 / Wt [mm^3],
+        signed (``TorsionSolver``, torsion.py). No unit is converted here.
+
+    Warning
+    -------
+    The material strength lookup, the keyway inputs and the shoulder Kt formula
+    differ from what their names suggest; see ``_get_Su``, ``_keyway_scf`` and
+    ``_kt_bending_shoulder``.
+
+    Notes
     -----
-        pp  = ShaftPostProcessor(shaft_system, results)
-        ppr = pp.process()
+    Per feature (repeated at the method that computes each term)::
 
-    What it does
-    ------------
-    1. Iterates over shaft shoulders (from Shaft.shoulders()).
-    2. Computes Kt_bending and Kt_torsion via Peterson closed-form
-       (r/d and D/d interpolation — Shigley Table 6-2 / Peterson §5.2).
-    3. Computes notch sensitivity q from Neuber's constant (material-
-       dependent — reads Su from material database if available, else
-       falls back to q=1 conservative).
-    4. Kf = 1 + q*(Kt - 1).
-    5. Injects Kf onto the nearest node; takes the max if two features
-       share a node.
-    6. Keyways on ShaftSection.keyways: uses fixed Kt values from
-       Shigley Table 6-3 (parallel key: Kt_b=2.14, Kt_t=3.0).
-    7. Produces corrected stress arrays sigma_b_corrected = Kf_b * sigma_b.
+        Kf = 1 + q * (Kt - 1)
+        sigma_b_corrected = Kf_b * sigma_b
+        tau_corrected     = Kf_t * tau
+
+    Neuber table: ``_NEUBER_SU`` [MPa] and ``_NEUBER_SQA`` [mm^0.5], interpolated
+    linearly by ``numpy.interp`` (clamped to the end values outside 350-1400 MPa).
+
+    References
+    ----------
+    Shigley Table 6-2, for the Neuber constants, named in the comments and
+    docstrings of the code; not in the library; not checked against the source
+    ((source to find)).
     """
 
-    # Neuber material constant sqrt(a) [mm^0.5] vs Su [MPa] — Shigley Table 6-2
-    # Linear interpolation between these anchor points.
+    # Neuber material constant sqrt(a) [mm^0.5] vs Su [MPa]; the code names
+    # "Shigley Table 6-2" as the origin (not checked).
     _NEUBER_SU  = np.array([350,  500,  700,  900, 1100, 1400])   # MPa
     _NEUBER_SQA = np.array([0.38, 0.28, 0.20, 0.15, 0.11, 0.07])  # mm^0.5
 
     def __init__(self, shaft_system: "ShaftSystem", results: ShaftResults):
+        """Store the arguments; see the class docstring."""
         self.sys     = shaft_system
         self.results = results
 
@@ -141,6 +181,45 @@ class ShaftPostProcessor:
     # ------------------------------------------------------------------
 
     def process(self) -> PostProcessedResults:
+        """
+        Compute the factors of all features and the corrected stress arrays.
+
+        Returns
+        -------
+        PostProcessedResults
+            Kf arrays [-], corrected stresses [MPa], feature records and the
+            peak corrected stresses with their positions [mm].
+
+        Warning
+        -------
+        The reference of ``Keyway.z_position`` is not established (the ``Keyway``
+        docstring leaves it open). As coded here it is read as measured from the
+        left face of the owning section. If it is meant from the left face of
+        the first section, ``x_kw`` counts the start of the section twice for
+        every keyway not in the first section. ``_get_Su`` calls ``section_at(x_kw)``
+        outside its ``try`` block; it raises ``ValueError`` when ``x_kw`` is
+        outside [0, L] by more than ``TOL_GEOMETRY_mm``.
+
+        Notes
+        -----
+        At the node ``i`` nearest to a feature, ``Kf_b[i] = max(Kf_b[i],
+        Kf_bending)`` (same for torsion); Kf = 1 elsewhere. Then::
+
+            sigma_b_corrected = Kf_b * sigma_b          [MPa]
+            tau_corrected     = Kf_t * tau              [MPa]
+            peak sigma_b: argmax(sigma_b_corrected)     (signed)
+            peak tau:     argmax(abs(tau_corrected))
+
+        Keyway axial position: ``x_kw = cumulative + kw.z_position``, where
+        ``cumulative`` is the sum of the lengths of the previous sections [mm].
+
+        The nominal stress at a shoulder node is the one in ``results``: computed
+        with W and Wt of the section to the right of the boundary
+        (``Shaft.section_at``). For a step up (larger diameter on the right) Kf
+        therefore multiplies the stress of the larger section, although Kt is
+        computed from r/d of the smaller one. Kf is applied at one node only
+        (the nearest); a keyway is not spread over its length.
+        """
         res  = self.results
         n    = len(res.x)
 
@@ -189,10 +268,32 @@ class ShaftPostProcessor:
         )
 
     # ------------------------------------------------------------------
-    # Shoulder Kt — Peterson closed-form (Shigley §6, Table 6-2)
+    # Shoulder Kt (curve fits named after Peterson / Shigley Table 6-2)
     # ------------------------------------------------------------------
 
     def _shoulder_scf(self, x: float, shoulder) -> StressConcentration:
+        """
+        Kt, q and Kf of one shoulder fillet, bending and torsion.
+
+        Parameters
+        ----------
+        x : float
+            Axial position of the shoulder [mm].
+        shoulder : Shoulder
+            Provides ``fillet_radius`` r, ``diameter_small`` d and
+            ``diameter_large`` D [mm].
+
+        Returns
+        -------
+        StressConcentration
+            Kt, q, Kf [-]; ``note`` holds r/d and D/d.
+
+        Notes
+        -----
+        ``r/d = r / d``, ``D/d = D / d`` [-]; Kt from ``_kt_bending_shoulder`` and
+        ``_kt_torsion_shoulder``; q from ``_notch_sensitivity(r, Su)`` with Su from
+        ``_get_Su(x)`` [MPa]; ``Kf = 1 + q (Kt - 1)``, bending and torsion.
+        """
         r = shoulder.fillet_radius
         d = shoulder.diameter_small
         D = shoulder.diameter_large
@@ -222,11 +323,48 @@ class ShaftPostProcessor:
     @staticmethod
     def _kt_bending_shoulder(r_d: float, D_d: float) -> float:
         """
-        Peterson Eq. 5.2 / Shigley Table 6-2 curve fit (stepped shaft, bending):
-            Kt ≈ C1 + C2*(2r/d) + C3*(2r/d)² + C4*(2r/d)³
-        Coefficients from Shigley 10th ed. Table 6-2, D/d = 1.5 baseline.
-        For simplicity: use the conservative D/d=3 fit unless D/d < 1.1.
-        Replace with a proper 2-D interpolation table when precision is needed.
+        Theoretical stress concentration factor of a shoulder fillet in bending.
+
+        Parameters
+        ----------
+        r_d : float
+            Fillet radius over small diameter, r/d [-].
+        D_d : float
+            Large over small diameter, D/d [-].
+
+        Returns
+        -------
+        Kt : float
+            Theoretical stress concentration factor, bending [-].
+
+        Warning
+        -------
+        The coefficients and the power-law branch are not verified against any
+        source.
+
+        Notes
+        -----
+        With ``t = 2 r/d``:
+
+        - if ``D/d < 1.1``: ``Kt = min(1 + 0.1 / max(r/d, 1e-6)**0.3, 1.5)``;
+        - otherwise ``Kt = max(1, 3.04 - 6.50 t + 7.20 t**2 - 2.90 t**3)``.
+
+        Above ``D/d = 1.1`` the result does not depend on D/d. The origin of the
+        coefficients is not established. The comment at the cubic names "Shigley
+        Table 6-2 fit coefficients (D/d ~ 1.5, bending)".
+
+        Kt is discontinuous at ``D/d = 1.1``. From the coded formula, the cubic
+        gives a finite Kt as r -> 0 (3.04) and is clamped to 1.0 for
+        r/d >= 0.368. No validity range of r/d is stated in the code.
+
+        References
+        ----------
+        Named by the original author, not checked (not in the library; source to
+        find): the comment at the cubic, "Shigley Table 6-2 fit coefficients
+        (D/d ~ 1.5, bending)"; the docstring at commit b3f624a, "Peterson Eq. 5.2 /
+        Shigley Table 6-2 curve fit", "Shigley 10th ed. Table 6-2, D/d = 1.5
+        baseline" and "the conservative D/d=3 fit" (the last two contradict each
+        other).
         """
         t = 2.0 * r_d
         if D_d < 1.1:
@@ -240,8 +378,39 @@ class ShaftPostProcessor:
     @staticmethod
     def _kt_torsion_shoulder(r_d: float, D_d: float) -> float:
         """
-        Peterson Eq. 5.2 for torsion — Shigley Table 6-2.
-        Same curve-fit structure, different coefficients.
+        Theoretical stress concentration factor of a shoulder fillet in torsion.
+
+        Parameters
+        ----------
+        r_d : float
+            Fillet radius over small diameter, r/d [-].
+        D_d : float
+            Large over small diameter, D/d [-].
+
+        Returns
+        -------
+        Kt : float
+            Theoretical stress concentration factor, torsion [-].
+
+        Notes
+        -----
+        With ``t = 2 r/d``:
+
+        - if ``D/d < 1.1``: ``Kt = min(1 + 0.07 / max(r/d, 1e-6)**0.3, 1.3)``;
+        - otherwise ``Kt = max(1, 2.0 - 3.60 t + 4.0 t**2 - 1.60 t**3)``.
+
+        Independent of D/d above 1.1. The origin of the coefficients is not
+        established.
+
+        Kt is discontinuous at ``D/d = 1.1``. From the coded formula, the cubic
+        gives a finite Kt as r -> 0 (2.0) and is clamped to 1.0 for
+        r/d >= 0.25. No validity range of r/d is stated in the code.
+
+        References
+        ----------
+        Named by the original author, not checked (not in the library; source to
+        find): the section comment "Peterson / Shigley Table 6-2"; the docstring
+        at commit b3f624a, "Peterson Eq. 5.2 for torsion - Shigley Table 6-2".
         """
         t = 2.0 * r_d
         if D_d < 1.1:
@@ -251,10 +420,48 @@ class ShaftPostProcessor:
         return max(1.0, C[0] + C[1]*t + C[2]*t**2 + C[3]*t**3)
 
     # ------------------------------------------------------------------
-    # Keyway Kt — Shigley Table 6-3
+    # Keyway Kt (fixed values named after Shigley Table 6-3)
     # ------------------------------------------------------------------
 
     def _keyway_scf(self, x: float, diameter: float, kw) -> StressConcentration:
+        """
+        Kt, q and Kf of a keyway, bending and torsion.
+
+        Parameters
+        ----------
+        x : float
+            Axial position of the keyway, as computed by ``process`` [mm].
+        diameter : float
+            Diameter of the section carrying the keyway [mm].
+        kw : Keyway
+            The keyway (only ``fillet_radius``, if present, is read).
+
+        Returns
+        -------
+        StressConcentration
+            ``feature="keyway"``, ``d = diameter``, ``D`` left at 0.
+
+        Warning
+        -------
+        ``Keyway`` has no ``fillet_radius`` attribute, so the radius is always
+        0.02 d [mm]. ``Keyway.Kf_bending`` and ``Keyway.Kf_torsion`` are ignored,
+        and Kt is fixed whatever the keyway type (parallel or Woodruff) and
+        dimensions. The record's ``note`` says "parallel key, Shigley Table 6-3"
+        for every keyway type.
+
+        Notes
+        -----
+        ``Kt_b = 2.14``, ``Kt_t = 3.00`` (fixed); root radius
+        ``r = getattr(kw, "fillet_radius", 0.02 * diameter)`` [mm]; q from
+        ``_notch_sensitivity(r, Su)``; ``Kf = 1 + q (Kt - 1)``. The code labels
+        the Kt values "Shigley Table 6-3: parallel key, end-milled".
+
+        References
+        ----------
+        Shigley Table 6-3, named in the comments and docstrings of the
+        code; not in the library; not checked against the source ((source to
+        find)).
+        """
         # Shigley Table 6-3: parallel key, end-milled
         Kt_b = 2.14
         Kt_t = 3.00
@@ -274,14 +481,57 @@ class ShaftPostProcessor:
         )
 
     # ------------------------------------------------------------------
-    # Notch sensitivity — Neuber (Shigley §6-14)
+    # Notch sensitivity — Neuber (named in the code: Shigley §6-14)
     # ------------------------------------------------------------------
 
     def _notch_sensitivity(self, r: float, Su: float, torsion: bool) -> float:
         """
-        q = 1 / (1 + sqrt(a)/sqrt(r))
-        sqrt(a) interpolated from Neuber table vs Su.
-        Torsion: use Ssy ≈ 0.577*Su as the reference (von Mises).
+        Notch sensitivity from the Neuber constant.
+
+        Parameters
+        ----------
+        r : float
+            Fillet / notch radius [mm].
+        Su : float
+            Ultimate tensile strength [MPa].
+        torsion : bool
+            True for torsion, False for bending.
+
+        Returns
+        -------
+        q : float
+            Notch sensitivity [-].
+
+        Warning
+        -------
+        For torsion the table, which is indexed by Su, is read at 0.577 Su.
+        Whether the sources named support this is not checked (source to find).
+        ``neuber_constant_sqrt_a`` (solvers/machine_elements/shaft/utils.py),
+        which names the same book, gives the opposite trend: at Su = 700 MPa,
+        sqrt(a) = 0.307 (bending) and 0.234 (torsion) mm^0.5, against 0.20 and
+        0.344 here. The two implementations disagree; neither is checked against
+        a source.
+
+        Notes
+        -----
+        ``q = 1 / (1 + sqrt(a) / sqrt(r))``. ``sqrt(a)`` [mm^0.5] is interpolated
+        in ``_NEUBER_SU`` / ``_NEUBER_SQA`` at ``Su_ref = Su`` (bending) or
+        ``Su_ref = 0.577 Su`` (torsion; the original author's docstring called it
+        "Ssy ~ 0.577*Su ... (von Mises)").
+        Returns 1.0 if ``Su <= 0`` and 0.0 if ``r <= 0`` (the ``Su`` test comes
+        first).
+
+        Consequence of the 0.577 factor: sqrt(a) is larger in torsion than in
+        bending, so q (torsion) < q (bending) for the same r; from the coded
+        formula, for Su < 606.6 MPa the torsion lookup is clamped at
+        0.38 mm^0.5. With Su = 700 MPa (the value ``_get_Su`` always returns):
+        sqrt(a) = 0.20 (bending) and 0.344 (torsion) mm^0.5.
+
+        References
+        ----------
+        Neuber constants "Shigley Table 6-2" and "Neuber (Shigley 6-14)", named in
+        the comments and docstrings of the code; not in the library; not checked
+        against the source ((source to find)).
         """
         if Su <= 0.0:
             return 1.0   # conservative fallback
@@ -297,8 +547,27 @@ class ShaftPostProcessor:
 
     def _get_Su(self, x: float) -> float:
         """
-        Ultimate tensile strength [MPa] at position x.
-        Reads from material database if available; falls back to 700 MPa.
+        Ultimate tensile strength of the section at position x.
+
+        Parameters
+        ----------
+        x : float
+            Axial position [mm].
+
+        Returns
+        -------
+        Su : float
+            Ultimate tensile strength [MPa].
+
+        Warning
+        -------
+        ``_get_Su`` always returns 700.0 MPa. AxisForge registers no material, so
+        ``get_material(material_id)`` raises ``KeyError``; for a material
+        registered by the caller, ``mat.Su`` raises ``AttributeError`` because
+        ``Material`` stores the ultimate strength as ``strength.Sut``
+        (core/materials/base.py). Both are swallowed by ``except Exception``.
+        ``section_at(x)`` is called outside the ``try`` and raises ``ValueError``
+        for x outside [0, L] (beyond ``TOL_GEOMETRY_mm``).
         """
         section, _ = self.sys.shaft.section_at(x)
         mat_id     = getattr(section, "material_id", "")
@@ -315,4 +584,5 @@ class ShaftPostProcessor:
 # ---------------------------------------------------------------------------
 
 def _nearest_node(x_arr: np.ndarray, x: float) -> int:
+    """Index of the node of ``x_arr`` nearest to ``x`` (same length unit, [mm])."""
     return int(np.argmin(np.abs(x_arr - x)))

@@ -1,21 +1,8 @@
-"""
-axisforge/solvers/machine_elements/bearings/ISO_16281/numerics.py
+"""Nonlinear-system driver of the ISO/TS 16281 load-distribution solvers.
 
-Generic numerical helpers shared across solvers.
-
-Nothing in this module knows about bearings, shafts or gears -- it is a thin,
-dependency-free layer over SciPy that any solver in the project may import.
-Keeping it at the `solvers/` root (rather than inside a per-element package)
-is deliberate: `run_root` is the same nonlinear-system driver whether the
-residual comes from ISO/TS 16281 contact equilibrium, a fan-out power split,
-or anything added later.
-
-Import direction
-----------------
-    solvers/**  ---->  numerics.py
-
-Never the reverse. This module must not import from any solver package,
-core element, or results registry.
+Thin layer over SciPy that solves the contact-equilibrium residual of the
+ball and roller solvers (clause 4.2 and 5.2 of ISO_TS_16281_2008); it knows
+nothing about bearings and imports nothing from the solvers.
 """
 from __future__ import annotations
 
@@ -30,41 +17,63 @@ __all__ = ["run_root"]
 
 def run_root(fun: Callable, x0: Sequence[float],
              tol: float) -> tuple[np.ndarray, int, float, bool]:
-    """
-    Solve a nonlinear system with scipy.optimize.root, hybr with lm fallback.
+    """Find the zero of a nonlinear residual vector with SciPy ``root``.
 
-    Tries 'hybr' first. If it reports failure, retries with 'lm' and keeps
-    whichever attempt left the smaller residual norm -- an unsuccessful hybr
-    run is not discarded blindly, since it is not unusual for it to land
-    closer than a nominally successful lm run.
+    Numerical method: Powell hybrid (MINPACK ``hybr``, a dogleg Newton-type
+    method with a finite-difference Jacobian). If ``hybr`` reports failure,
+    the system is solved again from the same ``x0`` with Levenberg-Marquardt
+    (MINPACK ``lm``) and the attempt with the smaller residual norm is kept,
+    since a failed ``hybr`` run can end closer to the root than a nominally
+    successful ``lm`` run. In the ISO/TS 16281 solvers the unknowns are the
+    relative radial (and axial) displacement of the bearing rings,
+    ``delta_r`` (and ``delta_a``), found from the force equilibrium.
 
     Parameters
     ----------
     fun : callable
-        Residual function, f(x) -> array_like. Zero at the solution.
+        Residual ``f(x) -> array_like`` with the same length as ``x``; zero at
+        the solution. In ``contact_solver.py`` ``x`` is ``[delta_r, delta_a]``
+        [mm] (ball, point contact, single row and multi-row) or ``[delta_r]``
+        [mm] (roller, line contact), and ``f`` is the force residual [N]
+        (radial, and axial for balls).
     x0 : sequence of float
-        Initial guess.
+        Initial guess, same units as ``x`` [mm] in the callers.
     tol : float
-        Tolerance passed through to scipy.optimize.root.
+        Tolerance passed unchanged to ``scipy.optimize.root`` (``tol``
+        argument, which SciPy maps to the method's own tolerance; relative
+        step of the solution for ``hybr``, see the SciPy documentation). The
+        callers pass ``self.tol`` of the solver, default ``SOLVER_TOLERANCE`` =
+        1e-6 (general numerical tolerance of ``axisforge.config``, not from
+        the standard) [-]. It is not compared with the force residual.
 
     Returns
     -------
     x : np.ndarray
-        Solution vector, always at least 1-D.
+        Solution vector, always at least 1-D; same units as ``x0`` [mm] in the
+        callers.
     nfev : int
         Residual evaluations reported by the accepted attempt (0 if the
-        solver did not report it).
+        solver did not report it) [-].
     residual_norm : float
-        Euclidean norm of the residual at `x` -- the value to check against
-        a physical tolerance, since `success` alone is not a guarantee of
-        convergence to the intended root.
+        Euclidean norm of the residual at ``x``, in the units of ``fun``
+        ([N] in the callers). This is the value to check against a physical
+        tolerance, since ``success`` alone does not guarantee convergence to
+        the intended root.
     success : bool
         The accepted attempt's own success flag.
 
     Notes
     -----
-    `nfev` and `success` describe the ACCEPTED attempt only; the discarded
-    attempt's cost is not included in `nfev`.
+    ``nfev`` and ``success`` describe the ACCEPTED attempt only; the cost of
+    the discarded attempt is not included in ``nfev``. The fallback rule
+    (keep the smaller residual norm) is a heuristic of this code, not from
+    the standard. ISO_TS_16281_2008 prescribes the equilibrium equations, not
+    the solution algorithm.
+
+    References
+    ----------
+    SciPy ``scipy.optimize.root`` (software documentation, not in the
+    library: source to find).
     """
     sol = root(fun, x0, method="hybr", tol=tol)
     if not sol.success:

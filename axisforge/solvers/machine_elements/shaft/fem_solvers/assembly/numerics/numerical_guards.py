@@ -1,8 +1,4 @@
-"""
-axisforge/solvers/machine_elements/shaft/fem_solvers/numerics/numerical_guards.py
-
-Beam-theory-agnostic and stateless -- kept separate only so
-rigid_support.py stays cleaner, not for any deeper reason.
+"""Numerical guard of the shaft FEM solve: rejects a (near-)singular reduced stiffness matrix.
 """
 
 from __future__ import annotations
@@ -11,10 +7,24 @@ import numpy as np
 
 
 def check_conditioning(K_red: np.ndarray) -> None:
-    """
-    Raises if the reduced stiffness matrix is (near-)singular -- almost
-    always a sign of a mechanism (not enough / badly placed bearings)
-    rather than a numerical-precision issue, given the 1e14 threshold.
+    """Raise if the reduced stiffness matrix is (near-)singular.
+
+    A condition number above the threshold is almost always a mechanism (too few or badly placed
+    bearings) rather than a rounding problem.
+
+    Parameters
+    ----------
+    K_red : ndarray, shape (m, m)
+        Stiffness matrix after elimination of the constrained DOFs [N/mm, N, N mm/rad].
+
+    Raises
+    ------
+    numpy.linalg.LinAlgError
+        If ``cond(K_red) > 1e14``.
+
+    Notes
+    -----
+    The threshold 1e14 is a choice of this code (source to find).
     """
     if np.linalg.cond(K_red) > 1e14:
         raise np.linalg.LinAlgError(

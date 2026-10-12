@@ -1,17 +1,12 @@
-# axisforge/solvers/machine_elements/bearings/load_distribution/__init__.py
-"""
-axisforge/solvers/machine_elements/bearings/load_distribution/__init__.py
+"""Public interface of the bearing load-distribution solvers.
 
-Ponto único de import para load_distribution/ -- de momento só tem o
-subpacote ISO/TS 16281 (iso_16281/), por isso reexporta o seu __all__
-tal e qual, estilo slippy (eager, sem lazy loading) -- mesmo padrão de
-core/machine_elements/bearings/__init__.py com families/. Um segundo
-modelo de contacto/solver (se/quando existir) junta-se aqui do mesmo
-modo, ao lado deste import.
+Re-exports, unchanged, the public names of the ISO/TS 16281 subpackage
+(``iso_16281``), which is the only load-distribution model at present; a
+further model would be imported next to it in the same way.
 """
 from __future__ import annotations
 
-from .iso_16281 import *  # noqa: F401,F403 -- __all__ já vem de iso_16281/__init__.py
+from .iso_16281 import *  # noqa: F401,F403 -- __all__ comes from iso_16281/__init__.py
 from .iso_16281 import __all__ as _iso16281_names
 
 __all__ = list(_iso16281_names)

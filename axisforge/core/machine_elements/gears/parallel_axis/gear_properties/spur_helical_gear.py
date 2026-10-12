@@ -1,9 +1,9 @@
 """
-core/mechanical_elements/Gears/Parallel_Axis_gears/helical_gear.py
+Geometry of one external cylindrical involute gear, spur or helical.
 
-References:
-  - ISO 53:2013    — standard basic rack tooth profile
-  - ISO 21771:2007 — cylindrical involute gear geometry
+Computes the reference, base, tip and root circles, the pitches and the helix
+angles of a gear defined by its basic rack, module, tooth number and profile
+shift, and checks it for undercut. Used by the pair and planetary classes.
 """
 
 from __future__ import annotations
@@ -11,6 +11,132 @@ import numpy as np
 
 
 class SpurHelicalGear:
+    """
+    External cylindrical involute gear (spur when beta = 0, helical otherwise).
+
+    One gear of a pair: it holds the basic-rack data, the tooth number and the
+    profile shift, and derives the diameters, pitches and angles listed under
+    Attributes. It is gear1/gear2 of ``SpurHelicalGearMeshing`` and the sun and
+    planet of ``PlanetaryGearTrainMeshing``.
+
+    Parameters
+    ----------
+    mn : float
+        Normal module [mm].
+    z : int
+        Number of teeth [-]; positive (external gear).
+    Ca : float, optional
+        Tip relief. Stored only; no formula of the gear classes uses it. The
+        unit is not stated in the code (ISO_6336-1_2019, Table 2, gives [um]
+        for C_a and C_f). Default 0.0.
+    Cf : float, optional
+        Root relief. Same remarks as ``Ca``. Default 0.0.
+    x : float, optional
+        Profile shift coefficient [-]. Default 0.0.
+    b : float, optional
+        Face width [mm]. Default 0.0.
+    alpha_n_deg : float, optional
+        Normal pressure angle [deg]; stored in radians as ``alpha``.
+        Default 20.0.
+    beta_n_deg : float, optional
+        Helix angle at the reference cylinder [deg]; stored in radians as
+        ``beta``. The formulas use it as beta (mt = mn / cos(beta)); the
+        "_n" in the name is not used in them. Default 0.0.
+    haP : float, optional
+        Addendum coefficient of the basic rack [-] (addendum = haP * mn).
+        Default 1.0.
+    cP : float, optional
+        Tip clearance coefficient of the basic rack [-]. Default 0.25.
+    rfP : float, optional
+        Root fillet radius coefficient of the basic rack [-]
+        (rhoF = rfP * mn). Default 0.38.
+    Ra : float, optional
+        Arithmetic mean roughness [um]. Default 0.8.
+    Rq : float, optional
+        Root mean square roughness [um]. Default 1.0.
+    Rz : float, optional
+        Mean peak-to-valley roughness [um]. Default 4.0.
+    label : str, optional
+        Name used in validation messages.
+    material_id : str, optional
+        Material key; stored only.
+    position : float, optional
+        Position of the gear [mm]; stored only, not used here.
+
+    Attributes
+    ----------
+    alpha, beta : float
+        Normal pressure angle and reference helix angle [rad].
+    hfP : float
+        Dedendum coefficient of the basic rack, haP + cP [-].
+    mt : float
+        Transverse module [mm].
+    alphat : float
+        Transverse pressure angle [rad].
+    betab : float
+        Base helix angle [rad].
+    rhoF : float
+        Root fillet radius of the basic rack [mm].
+    pb, pt, pbt : float
+        Normal base pitch, transverse pitch, transverse base pitch [mm].
+    d, r : float
+        Reference (pitch) diameter and radius [mm].
+    db, rb : float
+        Base diameter and radius [mm].
+    da, ra : float
+        Tip diameter and radius [mm].
+    df, rf : float
+        Root diameter and radius [mm].
+    zn : float
+        Virtual number of teeth of the equivalent spur gear [-].
+    de : float
+        mn * zn [mm] (see the Warnings on the symbol d_e).
+
+    Notes
+    -----
+    Equations as coded (angles in radians; the ids refer to the review map)::
+
+        mt     = mn / cos(beta)                                  (F01)
+        alphat = arctan(tan(alpha) / cos(beta))                  (F02)
+        betab  = arcsin(sin(beta) * cos(alpha))                  (F03)
+        pb = pi*mn*cos(alpha);  pt = pi*mt;  pbt = pt*cos(alphat)  (F04)
+        d  = mt*z;  db = d*cos(alphat)                           (F05)
+        da = d + 2*mn*(haP + cP + x)                             (F06)
+        df = d + 2*mn*(x - hfP),  hfP = haP + cP                 (F06)
+        rhoF = rfP*mn;  zn = z / cos(beta)**3;  de = mn*zn       (F07)
+
+    ``da`` carries no addendum reduction: the working tip diameter with the
+    reduction k is built in ``SpurHelicalGearMeshing.gear_geometry``.
+
+    Assumptions and conventions: external gear, z > 0; the helix angle is a
+    magnitude (negative values are rejected by ``validate``), so there is no
+    hand of helix; lengths in mm.
+
+    Warnings
+    --------
+    - ISO_6336-1_2019, Table 2, lists h_aP and h_fP as lengths [mm]; here
+      haP, cP, hfP are dimensionless coefficients multiplied by mn.
+    - The symbol d_e of ISO_6336-1_2019, Table F.1, is the diameter of the
+      circle through the outer point of single pair tooth contact; ``de`` here
+      is mn * zn, a different quantity.
+    - ``Ca`` and ``Cf`` are stored and not used by any gear formula.
+    - ``da`` contains the clearance coefficient: da = d + 2 mn (haP + cP + x),
+      so da - df = 2 mn (2 haP + 2 cP) and, for a pair at al = a, the distance
+      al - ra1 - rf2 is zero (no bottom clearance). The contact ratios and the path of contact use this
+      ``da``. ``InternalGear.trochoid_interference`` uses haP + x1 only. No
+      library source prints the tip diameter (ISO 21771: source to find).
+
+    References
+    ----------
+    .. [1] ISO_6336-1_2019, 9.3.1 NOTE, Formula (81): z_n ~ z / cos^3(beta),
+       "approximately" (used for ``zn``); Table 2 and Table F.1 for the symbols
+       and units.
+    .. [2] ISO 21771:2007, named in the code; not in the library; not checked
+       against the source (source to find). Needed for F01-F07.
+    .. [3] ISO 53:2013, named in the code as the origin of haP = 1, cP = 0.25,
+       rfP = 0.38; not in the library; ISO_6336-1_2019, clause 2, lists
+       ISO 53:1998 instead; not checked against the source (source to find).
+    """
 
     def __init__(self,
                  mn: float,
@@ -31,21 +157,10 @@ class SpurHelicalGear:
                  material_id: str = "",
                  position: float = 0.0):
         """
-        Parameters
-        ----------
-        mn          : normal module [mm]
-        z           : number of teeth
-        x           : profile shift coefficient [-]
-        b           : face width [mm]
-        alpha_n_deg : normal pressure angle [°]
-        beta_n_deg  : helix angle [°]
-        haP         : addendum coefficient        (ISO 53: 1.0)
-        cP          : tip clearance coefficient   (ISO 53: 0.25)
-        rfP         : fillet radius coefficient   (ISO 53: 0.38)
-        k           : addendum reduction factor   [-]
-        Ra          : arithmetic mean roughness   [µm]
-        Rq          : root mean square roughness  [µm]
-        Rz          : mean peak-to-valley roughness [µm]
+        Store the inputs and compute the reference geometry.
+
+        The arguments and the derived attributes are described in the class
+        docstring.
         """
         # --- metadata ---
         self.label       = label
@@ -96,9 +211,27 @@ class SpurHelicalGear:
 
     def undercutting(self) -> bool:
         """
-        Returns True if the gear is undercut.
+        Undercut check of the tooth root against a minimum tooth number.
 
-            z_min = 2*cos(β)/sin²(αt) * (haP - x)
+        Returns
+        -------
+        bool
+            True if z < z_min, i.e. the gear is considered undercut.
+
+        Notes
+        -----
+        ::
+
+            z_min = 2 * cos(beta) / sin(alphat)**2 * (haP - x)       (F08)
+
+        z_min is a real number evaluated with the transverse pressure angle
+        alphat and the profile shift x, and compared with z.
+
+        Warnings
+        --------
+        The formula has no named source in the code and none in the library
+        (ISO_6336-1_2019, clause 1, only states that its methods do not apply
+        when tip/root-fillet interference occurs) (source to find).
         """
         z_min = 2.0 * (np.cos(self.beta) / (np.sin(self.alphat) ** 2)) * (self.haP - self.x)
         return bool(self.z < z_min)
@@ -108,6 +241,17 @@ class SpurHelicalGear:
     # ------------------------------------------------------------------
 
     def validate(self) -> list[str]:
+        """
+        Check the inputs and the undercut condition.
+
+        Returns
+        -------
+        list of str
+            One message per violation; empty if the gear is valid. Checks:
+            mn > 0, z >= 1, b >= 0, 0 < alpha_n_deg < 45, 0 <= beta_n_deg < 45
+            (negative helix angles, i.e. a hand of helix, are rejected),
+            Ra, Rq, Rz >= 0, and ``undercutting()`` is False.
+        """
         errors: list[str] = []
         tag = self.label or self.__class__.__name__
 
@@ -140,6 +284,7 @@ class SpurHelicalGear:
         return errors
 
     def validate_or_raise(self) -> None:
+        """Raise ``ValueError`` with all messages of ``validate()`` if any."""
         errors = self.validate()
         if errors:
             raise ValueError("\n".join(errors))

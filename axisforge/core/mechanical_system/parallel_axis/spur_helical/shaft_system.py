@@ -1,23 +1,14 @@
 """
-mechanical_system/systems/shaft_system.py
+Single-shaft container: the gears, bearings and loads placed on one shaft, with placement checks.
 
-Single-shaft assembly container for AxisForge (parallel-axis transmissions).
+GearElement binds a gear geometry object to a kinematic role (driver or driven). ShaftSystem holds
+every bearing, gear and load of one shaft, sorted by axial position, and validates their placement
+(supports, overlaps, shoulder keep-out, axial reaction path of a helical mesh). It has no knowledge
+of other shafts; its shaft_position (y, z) is normally set by SpurHelicalGearSystem.resolve().
 
-Two classes:
-  - GearElement : thin wrapper binding a gear geometry object to a kinematic
-                  role ("driver"/"driven") on a shaft. Carries no geometry of
-                  its own; `position` delegates to the underlying gear.
-  - ShaftSystem : autonomous per-shaft container of bearings, gears and loads.
-                  Has NO knowledge of other shafts. Its `shaft_position`
-                  (y, z global offset of the shaft axis) is normally set by
-                  GearSystem.resolve(), not by the user.
-
-Conventions (AxisForge):
-  - explicit __init__ (no dataclass)
-  - validate() -> list[str], never raises internally
-  - validate_or_raise() wrapper
-  - SI-ish shop units: mm for positions, N for forces, N*mm for torque/moment
-  - GUI-independent, numerically transparent
+Units: positions and lengths [mm] along the shaft axis x from the left end (x = 0); forces [N];
+speed [rpm]; design life [h]. The torque and moment unit is that of core/loads.py, which is an open
+review item (U1); the gear system stores torque in N m.
 """
 
 from __future__ import annotations
@@ -30,14 +21,14 @@ from axisforge.core.loads import (
 )
 
 # Type-only imports: annotations are strings (PEP 563), so these never need to
-# resolve at runtime — keeps ShaftSystem importable without dragging in the
-# whole geometry/config stack.
+# resolve at runtime, which keeps ShaftSystem importable without the whole geometry stack.
 if TYPE_CHECKING:  # pragma: no cover
     from axisforge.core.machine_elements.shaft.shaft import Shaft
     from axisforge.core.machine_elements.bearings.bearing import Bearing
 
-# Default design life. Sourced from config when available; the fallback keeps
-# the module importable standalone (e.g. for unit tests).
+# Default design life [h]. The bare "from config import" resolves only when the axisforge/ package
+# directory itself is on sys.path (not the repository root); otherwise the except branch silently
+# uses the literal 20_000.0 (same value as axisforge.config.DEFAULT_DESIGN_LIFE_HOURS).
 try:  # pragma: no cover
     from config import DEFAULT_DESIGN_LIFE_HOURS
 except Exception:  # pragma: no cover
@@ -53,21 +44,32 @@ class GearElement:
     """
     Binds a gear geometry object to its kinematic role on a shaft.
 
+    Thin wrapper: it carries no geometry of its own, and ``position`` delegates to the gear.
+
     Parameters
     ----------
-    gear         : geometry object exposing `.position` (SpurGear / HelicalGear
-                   / InternalGear). No geometry is duplicated here.
+    gear         : geometry object exposing `.position` [mm] (SpurGear / HelicalGear
+                   / InternalGear), the axial coordinate of the CENTRE of the face width,
+                   and optionally `.b` (face width [mm]). No geometry is duplicated here.
     role         : "driver" | "driven"
-    rotation_dir : +1 / -1 — set explicitly ONLY for the kinematic SOURCE gear
-                   of a GearSystem. Left None everywhere else and propagated by
-                   GearSystem during resolve().
+    rotation_dir : +1 / -1 [-], sense of rotation about +X. Set explicitly ONLY for the kinematic
+                   SOURCE gear of a SpurHelicalGearSystem; left None everywhere else.
     label        : reporting tag.
+
+    Notes
+    -----
+    ``role`` and ``rotation_dir`` are not read by SpurHelicalGearSystem.resolve(): the driver and
+    driven sides are the gear_a and gear_b of each SpurHelicalMeshLink, and the sense of rotation
+    of the source is the argument ``rotation_dir_source``. Both attributes are only validated and
+    printed. resolve() keeps the computed senses in its ``_resolved`` record and does not write
+    them here.
     """
 
     _VALID_ROLES = ("driver", "driven")
 
     def __init__(self, gear, role: str,
                  rotation_dir: int | None = None, label: str = ""):
+        """Store the arguments; see the class docstring."""
         self.gear = gear
         self.role = role
         self.rotation_dir = rotation_dir
@@ -75,9 +77,11 @@ class GearElement:
 
     @property
     def position(self) -> float:
+        """Axial position of the gear [mm]: centre of the face width, taken from the gear."""
         return self.gear.position
 
     def validate(self) -> list[str]:
+        """Return the error messages (role, rotation_dir, and those of the gear); empty if valid."""
         errors: list[str] = []
         tag = self.label or "GearElement"
 
@@ -96,11 +100,20 @@ class GearElement:
         return errors
 
     def validate_or_raise(self) -> None:
+        """Raise ValueError with all messages of validate() if there are any."""
         errors = self.validate()
         if errors:
             raise ValueError("\n".join(errors))
 
     def __repr__(self) -> str:
+        """
+        Text of the gear element.
+
+        Returns
+        -------
+        str
+            Role, axial position [mm], rotation_dir and label.
+        """
         return (f"GearElement(role={self.role!r}, position={self.position:.2f} mm, "
                 f"rotation_dir={self.rotation_dir!r}, label={self.label!r})")
 
@@ -114,13 +127,55 @@ class ShaftSystem:
     Autonomous single-shaft container.
 
     Retains ALL bearings / gears / loads placed on the shaft, persistently,
-    for downstream per-shaft consumption by StaticsSolver, StressSolver and
-    BearingLifeSolver. Nothing is summarised or discarded.
+    for downstream per-shaft consumption by the shaft solvers. Nothing is summarised or discarded.
 
     Bearing arrangement (BearingCatalog.arrangement): "locating" | "floating" |
-    "non-locating" | "thrust". The axial reaction of the shaft goes to the "locating"
-    bearing, so a shaft that receives a gear-mesh AxialLoad (helical gears) needs one
-    (validate()). The other arrangements carry radial load only.
+    "non-locating" | "thrust". In the shaft FEM a "locating" bearing fixes v and u, a "thrust"
+    bearing fixes u only (no radial support) and "floating" / "non-locating" fix v only.
+    validate() requires a "locating" bearing when a gear-mesh AxialLoad is present; it does not
+    accept a "thrust" bearing for that, although the FEM boundary conditions do.
+
+    Parameters
+    ----------
+    shaft : Shaft
+        Shaft geometry; its ``total_length`` L [mm] bounds every position (0 <= x <= L).
+    name : str
+        Identifier used in messages and in the gear-system record.
+    speed_rpm : float
+        Rotational speed of this shaft [rpm], >= 0 (checked in validate()). Default 0.0. It is not
+        set by SpurHelicalGearSystem.resolve(); it holds whatever the caller assigns.
+    design_life_hours : float
+        Design life [h]. Default 20 000 h (see Warnings). Not read by any solver;
+        only printed by outputs/construction/shaft.py.
+    shaft_position : tuple of float
+        (y, z) global offset of the shaft axis [mm], with y and z as in the AxisForge convention
+        (D-0010). Overwritten by SpurHelicalGearSystem.resolve().
+    shaft_origin_x : float
+        Global x of the shaft coordinate x = 0 [mm]; used only by the axial-alignment check of the
+        gear system, never propagated by resolve().
+    label : str
+        Reporting tag.
+
+    Notes
+    -----
+    Conventions: every position is the axial coordinate x [mm] measured from the left end of the
+    shaft. gear.position is the CENTRE of the face width; bearing.position is the CENTRE of the
+    bearing width. Loads keep their own ``position`` (core/loads.py).
+
+    Warnings
+    --------
+    The default of ``design_life_hours`` comes from a bare ``from config import`` that falls back
+    silently to the literal 20_000.0 when it fails; the value of axisforge.config is never read.
+
+    The shoulder check for bearings (``_shoulder_coincidence_errors``) reports every bearing whose
+    footprint contains a shoulder as an overlap error, except a zero-width bearing exactly at the
+    shoulder; the arrangement-specific checks written after it are therefore practically
+    unreachable.
+
+    A gear-mesh AxialLoad requires a bearing with arrangement == "locating" (validate()).
+    Tolerances: MIN_BEARING_SEPARATION_MM = 1e-3 [mm] (two supports closer than this are an error),
+    MIN_SHOULDER_CLEARANCE_MM = 1.0 [mm] (gear keep-out around a shoulder),
+    FLOATING_BEARING_CLEARANCE_MM = 0.1 [mm] (floating bearing margin); all from axisforge.config.
     """
 
     def __init__(self, shaft: "Shaft", name: str = "System_1",
@@ -128,12 +183,13 @@ class ShaftSystem:
                  design_life_hours: float = DEFAULT_DESIGN_LIFE_HOURS,
                  shaft_position: tuple[float, float] = (0.0, 0.0),
                  shaft_origin_x: float = 0.0, label: str = ""):
+        """Store the arguments and create empty bearing, gear and load lists; see the class docstring."""
         self.shaft = shaft
         self.name = name
         self.speed_rpm = speed_rpm
         self.design_life_hours = design_life_hours
-        # (y, z) global offset of the shaft axis. Overwritten by
-        # GearSystem.resolve(); the user rarely sets this directly.
+        # (y, z) global offset of the shaft axis [mm]. Overwritten by
+        # SpurHelicalGearSystem.resolve(); the user rarely sets this directly.
         self.shaft_position = shaft_position
         self.shaft_origin_x = shaft_origin_x
         self.label = label
@@ -147,6 +203,7 @@ class ShaftSystem:
     # ------------------------------------------------------------------
 
     def _check_axial_bounds(self, position: float, what: str) -> None:
+        """Raise ValueError if position [mm] is outside the shaft extent [0, L]."""
         L = self.shaft.total_length
         if not (0.0 <= position <= L):
             raise ValueError(
@@ -155,16 +212,23 @@ class ShaftSystem:
             )
 
     def add_bearing(self, bearing: "Bearing") -> "ShaftSystem":
+        """Add a bearing at bearing.position [mm] (ValueError outside [0, L]); return self."""
         self._check_axial_bounds(bearing.position, "bearing")
         self._bearings.append(bearing)
         return self
 
     def add_gear(self, gear: GearElement) -> "ShaftSystem":
+        """Add a gear element at gear.position [mm] (ValueError outside [0, L]); return self."""
         self._check_axial_bounds(gear.position, "gear")
         self._gears.append(gear)
         return self
 
     def add_load(self, load: Load) -> "ShaftSystem":
+        """
+        Add a load (ValueError if outside [0, L] mm; a distributed load needs its whole span inside).
+
+        Returns self, so calls can be chained.
+        """
         if isinstance(load, DistributedRadialLoad):
             L = self.shaft.total_length
             if load.x_lo < 0.0 or load.x_hi > L:
@@ -179,7 +243,7 @@ class ShaftSystem:
         return self
 
     # ------------------------------------------------------------------
-    # Gear-mesh load injection (called by GearSystem.resolve)
+    # Gear-mesh load injection (called by SpurHelicalGearSystem.resolve)
     # ------------------------------------------------------------------
 
     def set_gear_loads(self, loads: list[Load]) -> None:
@@ -187,6 +251,12 @@ class ShaftSystem:
         Replace every load with source=="gear_mesh" by `loads`, preserving all
         user (and any other non-gear-mesh) loads. Idempotent: safe to call
         repeatedly after re-resolve() without accumulating duplicates.
+
+        Parameters
+        ----------
+        loads : list of Load
+            New gear-mesh loads (positions [mm], forces [N], torques as produced by the gear
+            system).
         """
         self._loads = [ld for ld in self._loads if ld.source != "gear_mesh"]
         self._loads.extend(loads)
@@ -197,44 +267,53 @@ class ShaftSystem:
 
     @property
     def bearings(self) -> list["Bearing"]:
+        """Bearings sorted by axial position (new list on every access)."""
         return sorted(self._bearings, key=lambda b: b.position)
 
     @property
     def gears(self) -> list[GearElement]:
+        """Gear elements sorted by axial position (new list on every access)."""
         return sorted(self._gears, key=lambda g: g.position)
 
     @property
     def loads(self) -> list[Load]:
+        """All loads sorted by position [mm]; a distributed load sorts by its midpoint."""
         return sorted(self._loads, key=lambda ld: ld.position)
 
     @property
     def support_positions(self) -> list[float]:
+        """Axial positions of the bearings [mm], in increasing order."""
         return [b.position for b in self.bearings]
 
     # ------------------------------------------------------------------
-    # Type-filtered accessors (full objects, position-sorted)
-    # StaticsSolver calls .component(plane) itself — no plane pre-filtering,
+    # Type-filtered accessors (full objects, position-sorted).
+    # The solvers call .component(plane) themselves: no plane pre-filtering,
     # since every RadialLoad contributes to both XY and XZ via theta_deg.
     # ------------------------------------------------------------------
 
     @property
     def radial_loads(self) -> list[RadialLoad]:
+        """RadialLoad objects, sorted by position [mm]."""
         return [ld for ld in self.loads if isinstance(ld, RadialLoad)]
 
     @property
     def axial_loads(self) -> list[AxialLoad]:
+        """AxialLoad objects, sorted by position [mm]."""
         return [ld for ld in self.loads if isinstance(ld, AxialLoad)]
 
     @property
     def torque_loads(self) -> list[TorqueLoad]:
+        """TorqueLoad objects, sorted by position [mm] (unit: see core/loads.py, item U1)."""
         return [ld for ld in self.loads if isinstance(ld, TorqueLoad)]
 
     @property
     def external_moments(self) -> list[ExternalMoment]:
+        """ExternalMoment objects, sorted by position [mm]."""
         return [ld for ld in self.loads if isinstance(ld, ExternalMoment)]
 
     @property
     def distributed_radial_loads(self) -> list[DistributedRadialLoad]:
+        """DistributedRadialLoad objects, sorted by midpoint position [mm]."""
         return [ld for ld in self.loads if isinstance(ld, DistributedRadialLoad)]
     
     # ------------------------------------------------------------------
@@ -243,9 +322,11 @@ class ShaftSystem:
 
     def gear_extent(self, ge: GearElement) -> tuple[float, float]:
         """
-        Axial [lo, hi] footprint of a gear element.
+        Axial [lo, hi] footprint of a gear element [mm].
         Convention: position is the CENTRE of the face width (b).
         b == 0.0 (not yet defined) -> treated as a point.
+
+        Returns (position - b/2, position + b/2) [mm], with b = ge.gear.b [mm] (0 if absent).
         """
         b = getattr(ge.gear, "b", 0.0)
         p = ge.position
@@ -253,9 +334,11 @@ class ShaftSystem:
 
     def bearing_extent(self, bearing: "Bearing") -> tuple[float, float]:
         """
-        Axial [lo, hi] footprint of a bearing.
+        Axial [lo, hi] footprint of a bearing [mm].
         Convention: position is the CENTRE of the bearing width (b).
         b == 0.0 (not yet defined) -> treated as a point.
+
+        Returns (position - b/2, position + b/2) [mm], with b = bearing.b [mm] (0 if absent).
         """
         width = getattr(bearing, "b", 0.0)
         p = bearing.position
@@ -285,8 +368,9 @@ class ShaftSystem:
         only adjacent pairs is sufficient once sorted.
 
         Point-vs-point pairs (both b/width == 0.0) fall back to
-        MIN_BEARING_SEPARATION_mm as a purely numerical minimum
-        separation, not an engineering clearance.
+        MIN_BEARING_SEPARATION_MM (1e-3 mm) as a purely numerical minimum
+        separation, not an engineering clearance. For extended elements the
+        gap lo2 - hi1 [mm] must be >= 0; touching faces are accepted.
         """
         errors: list[str] = []
         tag = self.name or self.label or "ShaftSystem"
@@ -316,6 +400,27 @@ class ShaftSystem:
     def _shoulder_coincidence_errors(
         self, margin: float | None = None
     ) -> list[str]:
+        """
+        Check gears and bearings against the shoulders of the shaft; return the error messages.
+
+        Parameters
+        ----------
+        margin : float or None
+            Gear keep-out distance around a shoulder [mm]; default MIN_SHOULDER_CLEARANCE_MM
+            (1.0 mm).
+
+        Notes
+        -----
+        Gears: error if any shoulder x lies in [lo - margin, hi + margin] of the gear footprint.
+        Bearings: only shoulders inside the footprint [lo, hi] are examined. The code then tests
+        ``hi > x_shoulder or lo < x_shoulder``, which is true for every such bearing except a
+        zero-width one exactly at the shoulder, so the bearing is reported as overlapping the
+        shoulder; the arrangement branches that follow (locating must abut a shoulder and the
+        shoulder diameter must not exceed the bearing d1; floating needs a margin of
+        FLOATING_BEARING_CLEARANCE_MM) are practically unreachable. The non-locating arrangement
+        is not checked. d1 is the maximum permissible shoulder diameter of a bearing catalogue
+        (SKF catalogue in the code comment): (source to find).
+        """
 
         errors: list[str] = []
         tag = self.name or self.label or "ShaftSystem"
@@ -346,7 +451,7 @@ class ShaftSystem:
                     continue  # no axial overlap at all — nothing to check
                 
                 if hi > x_shoulder or lo < x_shoulder:
-                    # bearing overlaps shoulder axially — check inner
+                    # as coded: true unless lo == hi == x_shoulder (see the docstring Notes)
                     errors.append(
                         f"{tag}: bearing '{elem_tag}' [{lo:.3f}, {hi:.3f}] mm "
                         f"overlaps shoulder at x={x_shoulder:.3f} mm — "
@@ -383,7 +488,7 @@ class ShaftSystem:
                                 f"from the shoulder at x={x_shoulder:.3f} mm "
                             )
 
-                    # falta o non-locating arrangement mas preciso de verificar as suas condições
+                    # TODO: the non-locating arrangement is not checked yet; its conditions are still to be verified.
 
         return errors
     # ------------------------------------------------------------------
@@ -391,6 +496,15 @@ class ShaftSystem:
     # ------------------------------------------------------------------
 
     def validate(self) -> list[str]:
+        """
+        Return the error messages of the shaft system; empty if valid.
+
+        Checks: the shaft, bearings, gears and loads validate themselves; at least 2 bearings;
+        speed_rpm >= 0; every position inside [0, L] mm; no two bearings closer than
+        MIN_BEARING_SEPARATION_MM; no gear/bearing overlap; gear and bearing placement against the
+        shoulders; and, if a gear-mesh AxialLoad is present, at least one bearing with
+        arrangement == "locating" (the axial reaction path).
+        """
         errors: list[str] = []
         tag = self.name or self.label or "ShaftSystem"
 
@@ -469,6 +583,7 @@ class ShaftSystem:
         return errors
 
     def validate_or_raise(self) -> None:
+        """Raise ValueError listing all messages of validate() if there are any."""
         errors = self.validate()
         if errors:
             raise ValueError(
@@ -508,6 +623,7 @@ class ShaftSystem:
     # ------------------------------------------------------------------
 
     def summary(self) -> str:
+        """Multi-line text summary: length [mm], speed [rpm], design life [h], axis offset [mm], counts."""
         y, z = self.shaft_position
         lines = [
             f"── ShaftSystem '{self.name}' ─────────────────────────────",
@@ -525,6 +641,14 @@ class ShaftSystem:
         return "\n".join(lines)
 
     def __repr__(self) -> str:
+        """
+        Text of the shaft system.
+
+        Returns
+        -------
+        str
+            Name, total shaft length [mm] and the numbers of bearings, gears and loads.
+        """
         return (f"ShaftSystem(name={self.name!r}, "
                 f"L={self.shaft.total_length:.1f} mm, "
                 f"bearings={len(self._bearings)}, gears={len(self._gears)}, "

@@ -1,13 +1,8 @@
-"""
-axisforge/solvers/machine_elements/shaft/fem_solvers/submodel_solver/lagrange_multipliers.py
-
-Submodel solver for Richardson GCI convergence study.
-
-Restricts a solve to a subdomain [x_lo, x_hi], with the global solution
-injected as prescribed displacement BCs at the two cut nodes via
-Lagrange multipliers. Used exclusively by MeshConvergenceStudy -- not
-part of the production solve pipeline.
-
+"""Sub-model solver of the shaft FEM: re-solves a sub-domain [x_lo, x_hi] on a finer mesh, with the
+displacements of the global solution imposed at the two cut nodes by Lagrange multipliers. It is
+called by no other module of the package: the caller runs it once per mesh grade and hands each
+``SubmodelResult`` to ``MeshConvergenceStudy.add_level``. The method (cut-boundary
+displacement method) has no source in the library (source to find).
 """
 
 from __future__ import annotations
@@ -54,10 +49,39 @@ if TYPE_CHECKING:  # pragma: no cover
 
 @dataclass
 class SubmodelSolution:
-    """Raw solve output for the submodel within [x_lo, x_hi] -- pre-postprocessing.
-    See SubmodelResult in results/fem_results/submodel_results.py for the
-    postprocessed, engineering-quantity shape built FROM this one, via
-    submodel_solver/postprocessing.py."""
+    """Raw output of the sub-model solve, before post-processing (data only).
+
+    ``build_submodel_result`` turns it into a ``SubmodelResult``.
+
+    Parameters
+    ----------
+    x_lo, x_hi : float
+        Sub-domain bounds [mm].
+    grade : str
+        Mesh grade used to generate the sub-model mesh (for example ``"grade_0"``, ``"grade_2"``).
+    x_nodes : list of float
+        Node positions inside the sub-domain [mm].
+    d_xz, d_xy : ndarray
+        Nodal displacements of the XZ and XY planes, DOF order ``[u, v, theta]`` per node
+        [mm, mm, rad].
+    lam_xz, lam_xy : ndarray, shape (6,)
+        Lagrange multipliers of the XZ and XY planes, one per constrained DOF at the cut nodes
+        (``[u, v, theta]`` at ``x_lo``, then at ``x_hi``) [N, N, N mm].
+    elements : list of Elem
+        Elements of the sub-model mesh, the ones used to build ``K_sub``; needed by the post-processing
+        to rebuild the element displacement vectors ``a_e``.
+    kGA_override : float or None
+        Shear rigidity k G A [N] the solve was run with, or ``None``; kept so the post-processing can
+        pass it to the Timoshenko shear recovery.
+
+    Notes
+    -----
+    The augmented system is ``K_sub d + C^T lam = f`` and ``C d = q``, so on the constrained DOFs
+    ``lam = f - K_sub d``; ``lam`` is the opposite of the force that the constraint exerts on the
+    sub-model. The sign is the one stored by the solver. In the sign convention of the shear force
+    and bending moment of this package, the transverse and rotation entries are ``[+V, +M]`` at
+    ``x_lo`` and ``[-V, -M]`` at ``x_hi``.
+    """
 
     x_lo: float
     x_hi: float
@@ -100,27 +124,46 @@ class SubmodelSolution:
 # ===========================================================================
 
 class _SubdomainMesh(Mesh1D):
-    """
-    Synthetic Mesh1D for the subdomain [x_lo, x_hi]. Bypasses
-    _create_mesh -- uses the already-filtered nodes directly. Used
-    exclusively by SubmodelSolver.
+    """Mesh of the sub-domain built directly from already filtered node positions (the mesh creation
+    step is bypassed). Used only by ``SubmodelSolver``.
+
+    Parameters
+    ----------
+    shaft_system : ShaftSystem
+        Shaft the mesh belongs to.
+    x_nodes_sub : list of float
+        Node positions inside the sub-domain [mm].
     """
     def __init__(self, shaft_system, x_nodes_sub: list[float]):
+        """Store the arguments; see the class docstring."""
         super().__init__(shaft_system)
         self._x_nodes = x_nodes_sub
 
 
 class SubmodelSolver:
-    """
-    Solves a subdomain [x_lo, x_hi] of shaft_system, with the global
-    solution (given as a ShaftResults) injected as prescribed
-    displacement BCs at the two cut nodes, and returns the postprocessed
-    SubmodelResult directly -- solve() does both steps itself (see
-    module docstring's second CHANGED note for why this solver, unlike
-    RigidSupportFEMSolver, folds postprocessing into the same call
-    instead of leaving it to a separate caller).
+    """Solve a sub-domain [x_lo, x_hi] of the shaft with the global solution imposed at the cut nodes.
+
+    The displacements of the global solution (``ShaftResults``) at the two cut nodes are prescribed
+    as boundary conditions through Lagrange multipliers on all three DOFs of each node. The solver
+    folds the post-processing into the same call and returns the finished ``SubmodelResult``.
+
+    Parameters
+    ----------
+    x_lo, x_hi : float
+        Sub-domain bounds [mm]; they must be nodes of the global mesh.
+
+    Warnings
+    --------
+    The sub-model loads (``_build_submodel_load_cases``) take the shaft loads as they are, without the
+    gear-mesh distribution flags of ``RigidSupportFEMSolver``.
+
+    A bearing strictly inside (x_lo, x_hi) is not modelled: the sub-model has neither its support
+    condition nor its reaction, only the prescribed displacements at the two cut nodes. Such a
+    sub-model does not reproduce the global solution (the moment at an interior load differs from the
+    global one). Choose sub-domains with the bearings at the cut nodes or outside.
     """
     def __init__(self, x_lo: float, x_hi: float):
+        """Store the arguments; see the class docstring."""
         self._x_lo = x_lo
         self._x_hi = x_hi
 
@@ -132,6 +175,41 @@ class SubmodelSolver:
               *,
               kGA_override: float | None = None) -> "SubmodelResult":
 
+        """Solve the sub-domain and return its post-processed result.
+
+        Steps: nodal values of the global solution at the cut nodes, candidate nodes of the requested
+        grade, sub-domain mesh and elements, stiffness matrix, load vectors (loads inside the
+        sub-domain only), constraint matrix, solution of the augmented system per plane, post-processing.
+
+        Parameters
+        ----------
+        shaft_results : ShaftResults
+            Solved global result (displacements [mm, rad] and nodal forces [N, N mm]); the global model is
+            never solved here.
+        shaft_system : ShaftSystem
+            Shaft geometry and loads.
+        settings : BeamModelSettings
+            Beam theory of the sub-model elements.
+        grade : str
+            Mesh grade that selects the candidate nodes inside the sub-domain.
+        kGA_override : float or None, optional
+            Shear rigidity k G A [N] replacing the element value (Timoshenko only).
+
+        Returns
+        -------
+        SubmodelResult
+            Sub-model displacements, resultants and cut-node multipliers; units in ``SubmodelResult``.
+
+        Raises
+        ------
+        RuntimeError
+            If ``shaft_results.d_total_xz`` is empty or ``None``.
+        KeyError
+            If ``x_lo`` or ``x_hi`` is not exactly (same float) a node position of
+            ``shaft_results.x_nodes``.
+        ValueError
+            From ``Grader.get_grade`` (malformed grade, refinement floor) and from the node lookup.
+        """
         x_lo = self._x_lo
         x_hi = self._x_hi
 
@@ -144,8 +222,7 @@ class SubmodelSolver:
                 "-- SubmodelSolver never solves the global model itself."
             )
 
-        # 2. BC data at the cut nodes, via the free extraction function --
-        #    not a solver method (see module docstring)
+        # 2. BC data at the cut nodes, via the free extraction function
         bc_data = extract_submodel_values(
             shaft_results.x_nodes, [x_lo, x_hi],
             shaft_results.d_total_xz, shaft_results.d_total_xy,
@@ -171,8 +248,7 @@ class SubmodelSolver:
         x_nodes_sub = sorted(set(x_nodes_sub))
         load_cases = self._build_submodel_load_cases(shaft_system)
 
-        # 6. synthetic subdomain mesh + its own elements (settings passed
-        #    explicitly now -- no more global_solver._settings reach-through)
+        # 6. synthetic subdomain mesh + its own elements
         mesh_sub = _SubdomainMesh(shaft_system, x_nodes_sub)
         x_nodes  = mesh_sub.x_nodes
         elements = Elem.from_x_nodes(x_nodes_sub, shaft_system, settings)
@@ -249,18 +325,34 @@ class SubmodelSolver:
             kGA_override=kGA_override,
         )
 
-        # solve() returns the postprocessed result directly -- see the
-        # module docstring's second CHANGED note. SubmodelSolution stays
-        # a local, unreturned intermediate.
+        # SubmodelSolution is a local intermediate; build_submodel_result
+        # turns it into the SubmodelResult that solve() returns.
         return build_submodel_result(solution)
 
     # ------------------------------------------------------------------
     # Load-case construction (submodel-specific: filters + clamps to
-    # [x_lo, x_hi]; NOT a duplicate of build_load_cases() -- see module
-    # docstring) -- unchanged from the previous draft.
+    # [x_lo, x_hi]; differs from build_load_cases())
     # ------------------------------------------------------------------
 
     def _build_submodel_load_cases(self, shaft_system) -> list[dict]:
+        """Load cases of the sub-domain: the shaft loads inside [x_lo, x_hi], in the format of
+        ``build_load_cases``.
+
+        Point loads, axial loads and moments are kept if their position lies in the interval (within
+        ``SOLVER_TOLERANCE``); distributed loads are clipped to the interval. Gear-mesh radial loads are
+        kept as point loads (no distribution flags).
+
+        Parameters
+        ----------
+        shaft_system : ShaftSystem
+            Source of the loads.
+
+        Returns
+        -------
+        list of dict
+            Load-case dictionaries with the keys described in ``build_load_cases`` (positions [mm],
+            forces [N], moments [N mm], intensities [N/mm]).
+        """
         cases: list[dict] = []
 
         for ld in shaft_system.radial_loads:
@@ -328,8 +420,7 @@ class SubmodelSolver:
         return cases
 
     # ------------------------------------------------------------------
-    # Constraints (Lagrange multipliers at the two cut nodes) --
-    # unchanged from the previous draft.
+    # Constraints (Lagrange multipliers at the two cut nodes)
     # ------------------------------------------------------------------
 
     def _build_constraint_matrix(
@@ -337,6 +428,21 @@ class SubmodelSolver:
         x_nodes: list[float],
     ) -> tuple[np.ndarray, list[int]]:
 
+        """Constraint matrix that picks the six DOFs at the two cut nodes.
+
+        Parameters
+        ----------
+        x_nodes : list of float
+            Sub-model node positions [mm]; ``x_lo`` and ``x_hi`` must be nodes.
+
+        Returns
+        -------
+        C : ndarray, shape (6, 3 len(x_nodes))
+            ``C[row, dof] = 1`` for the DOFs ``[u, v, theta]`` of the node at ``x_lo``, then of the node
+            at ``x_hi``; the constraint is ``C d = q``.
+        p_dofs : list of int
+            The six constrained global DOF indices.
+        """
         n_dofs = 3 * len(x_nodes)
 
         i_lo = Elem.find_node_index(x_nodes, self._x_lo)
@@ -360,6 +466,21 @@ class SubmodelSolver:
         bc_data: dict,
     ) -> tuple[np.ndarray, np.ndarray]:
 
+        """Prescribed displacements at the cut nodes, taken from the global solution.
+
+        Parameters
+        ----------
+        x_nodes : list of float
+            Sub-model node positions [mm] (not used).
+        bc_data : dict
+            Output of ``extract_submodel_values``; it must contain ``x_lo`` and ``x_hi`` as keys.
+
+        Returns
+        -------
+        q_xz, q_xy : ndarray, shape (6,)
+            ``[u, v, theta]`` at ``x_lo``, then at ``x_hi``, for the XZ and XY planes [mm, mm, rad]. The
+            axial displacement ``u`` is the one of the XZ solution in both vectors.
+        """
         q_xz = np.array([
             bc_data[self._x_lo]["u"],
             bc_data[self._x_lo]["v_xz"],

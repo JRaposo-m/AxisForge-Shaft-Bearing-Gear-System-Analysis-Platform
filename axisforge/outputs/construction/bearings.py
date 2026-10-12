@@ -1,6 +1,4 @@
 """
-axisforge/outputs/construction/bearings.py
-
 Records and text of an assembled ``Bearing`` (``axisforge.core.machine_elements.bearings``).
 
 The record lists the attributes the bearing actually carries (a deep groove ball bearing has no
@@ -112,9 +110,14 @@ def bearing_summary_record(bearing) -> dict:
         ``label``, ``family``, ``arrangement``, ``position_mm``, ``d_mm``, ``D_mm``, ``b_mm``,
         ``Z``, ``element_diameter_mm`` (Dw for a ball, Dwe for a roller), ``element_length_mm``
         (Lwe, NaN for a ball), ``Dpw_mm``, ``s_mm``, ``alpha_0_rad`` and ``C_N``. A quantity the
-        bearing does not have is NaN.
+        bearing does not have is NaN. Lengths in mm, ``alpha_0_rad`` in rad, ``C_N`` in N.
+        ``s_mm`` is the radial internal clearance measured on the diameter (ISO/TS 16281
+        "diametrically measured radial operating clearance" s; P_d of Harris) [mm]: an input
+        for deep-groove ball and roller bearings, s = 2 A (1 - cos alpha_0) when the bearing
+        is defined by its contact angle.
     """
     def get(name):
+        """Attribute ``name`` of the bearing as a float in the unit the bearing stores, NaN if missing or not numeric."""
         value = to_python(getattr(bearing, name, NAN))
         return float(value) if isinstance(value, (int, float)) else NAN
 

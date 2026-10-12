@@ -1,18 +1,9 @@
-"""
-axisforge/solvers/machine_elements/shaft/fem_solvers/__init__.py
+"""Finite-element solvers of the shaft (static bending in two planes, axial force and torsion).
 
-
-    RigidBearingFEMSolver  -> ".rigid_bearing"   (nunca existiu com este
-                                                    nome; a classe real é
-                                                    RigidSupportFEMSolver,
-                                                    em global_solver/rigid_support.py)
-    SubmodelResult,
-    SubmodelSolver         -> ".sub_models"      (pasta moveu-se para
-                                                    submodel_solver/;
-                                                    SubmodelResult também
-                                                    não é definido aqui,
-                                                    ver nota abaixo)
-
+Re-exports the public names of the sub-packages: element post-processing, assembly (stiffness,
+loads, quadrature, conditioning guard), constraints (boundary conditions, sub-model extraction),
+the global rigid-support solver with its post-processing and the sub-model solver
+(Lagrange multipliers). ``RigidSupportFEMSolver`` is the solver that produces ``ShaftResults``.
 """
 from __future__ import annotations
 

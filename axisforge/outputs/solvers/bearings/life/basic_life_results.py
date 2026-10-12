@@ -1,6 +1,4 @@
 """
-axisforge/outputs/solvers/bearings/life/basic_life_results.py
-
 Records and text of ``axisforge.results.bearings.life.basic_life_results``
 (``BasicReferenceRatingLifeResult``, ISO/TS 16281:2008 basic reference rating life).
 Mirrors the module it reads.

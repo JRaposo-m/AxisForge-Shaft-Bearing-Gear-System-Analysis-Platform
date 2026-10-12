@@ -1,11 +1,9 @@
 """
-database/shaft/keyway/Parallel/parallel_keyway.py
+Lookup of parallel-key keyway dimensions by shaft diameter.
 
-Lookup for DIN 6885 parallel keyway dimensions by shaft diameter.
-Tolerance bands are pre-resolved into _min/_max columns so callers can
-pick the critical value (nominal, min or max) for simulation.
-
-Units: mm.
+Reads ``parallel_keyway.csv`` (named "DIN 6885" in the code; the file carries no
+part number, edition or source). Tolerance bands are pre-resolved into _min/_max
+columns so callers can pick the critical value. All lengths in mm.
 """
 
 from __future__ import annotations
@@ -24,6 +22,7 @@ _FLOAT_COLUMNS = {
 
 
 def _load_table() -> list[dict]:
+    """Read the CSV: float columns to float, empty cell to ``None``, others kept as str."""
     rows: list[dict] = []
     with open(_TABLE_PATH, newline="") as f:
         for row in csv.DictReader(f):
@@ -42,15 +41,54 @@ _TABLE = _load_table()
 
 def lookup_parallel_keyway(shaft_diameter: float) -> dict:
     """
-    Return the DIN 6885 row matching shaft_diameter.
+    Keyway dimensions of the table row that contains a shaft diameter.
 
-    Row selection: d_min < shaft_diameter <= d_max.
-    Includes nominal, min and max for t_shaft / T_hub, and L_min / L_max.
+    Used by ``Keyway.from_standard`` (core/machine_elements/shaft/shaft.py), its
+    only caller, which reads ``b``, ``t_shaft``, ``t_shaft_min``, ``t_shaft_max``,
+    ``L_min`` and ``L_max``.
+
+    Parameters
+    ----------
+    shaft_diameter : float
+        Shaft diameter [mm].
+
+    Returns
+    -------
+    row : dict
+        The whole table row (the same dict object held by the module, not a
+        copy). Keys, all lengths [mm]; an empty cell is ``None``:
+
+        - ``d_min``, ``d_max``: shaft diameter band.
+        - ``b``, ``h``: key width and height.
+        - ``b_fine``, ``h_fine``, ``t_fine_shaft``, ``T_fine_hub``: key section
+          and keyseat depths of a second variant (``None`` for d <= 12 mm; not
+          labelled in the file).
+        - ``L_min``, ``L_max``: key length range.
+        - ``t_shaft``, ``t_shaft_min``, ``t_shaft_max``: depth of the keyseat in
+          the shaft.
+        - ``T_hub``, ``T_hub_min``, ``T_hub_max``: depth of the keyseat in the
+          hub.
+        - ``c_min``, ``c_max``: chamfer; ``r_min``: keyseat radius.
+        - ``screw``: string (not a length, e.g. ``"M2.5x6"``), or ``None``.
 
     Raises
     ------
     ValueError
-        If shaft_diameter is outside the table range.
+        If ``shaft_diameter`` is not in (6, 75] mm (the lower limit of the first
+        row is excluded).
+
+    Notes
+    -----
+    Row selection: ``d_min < shaft_diameter <= d_max``.
+
+    Tolerance convention of the data: the nominal ``t_shaft`` equals
+    ``t_shaft_max`` and the nominal ``T_hub`` equals ``T_hub_min``. The Woodruff
+    table uses the opposite convention for ``t_shaft`` (nominal = min).
+
+    References
+    ----------
+    DIN 6885, named in the comments and docstrings of the code; not in the
+    library; not checked against the source ((source to find)).
     """
     for row in _TABLE:
         if row["d_min"] < shaft_diameter <= row["d_max"]:

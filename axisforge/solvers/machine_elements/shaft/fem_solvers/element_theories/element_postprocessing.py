@@ -1,49 +1,6 @@
-"""axisforge/solvers/machine_elements/shaft/element_theories/element_postprocessing.py
-
-Internal-effort (M, V) recovery for the shaft's beam element theories,
-split out of ShaftResultsReader (results_reader.py). Everything here is
-about turning solved nodal DOFs into bending-moment / shear-force
-diagrams -- deflections, axial/rotation readback, section properties,
-bearing reactions and bearing-node data all stay in ShaftResultsReader.
-
-Merged from two previously separate, near-identical files:
-    element_theories/euler_bernoulli/postprocessing.py -> EulerBernoulliPostProcessing
-    element_theories/timoshenko/postprocessing.py       -> TimoshenkoPostProcessing
-into this single module, with the shared shape pulled up into an ABC
-(ElementTheoryPostProcessor) and only the genuinely theory-specific part
-(shear_force) left abstract. See class docstrings for what changed and
-why relative to the two source files.
-
-NOT changed relative to the two source files, only flagged:
-    - Sign convention mismatch between the two shear_force()
-      implementations (Euler-Bernoulli negates the closed-form
-      expression, Timoshenko does not). Preserved as-is from both
-      originals -- see the TODO(owner) on ElementTheoryPostProcessor.
-      Needs an explicit decision before this is trusted for a case that
-      compares/mixes V_xz, V_xy across theories.
-    - TODO(owner) about theory dispatch (which class ShaftResultsReader/
-      RigidSupportFEMSolver should instantiate for a given ShaftSystem)
-      still open -- carried over unchanged from both source files, not
-      resolved by this merge.
-
-TODO(owner): wire up the actual dispatch that decides "this ShaftSystem/
-RigidSupportFEMSolver uses Euler-Bernoulli -> EulerBernoulliPostProcessing"
-vs "-> TimoshenkoPostProcessing". That selection didn't exist in either
-source file (elem.stiffness_element() dispatches per-element internally,
-but nothing at the ShaftResultsReader level chooses between the two
-classes here yet). Once you tell me the attribute/flag to key off of
-(e.g. something on ShaftSystem, on BeamModelSettings, or on the solver
-itself), this can be wired into results_reader.py -- and would be a
-natural place for the same @register_family-style pattern already used
-elsewhere in the project (see BearingFamily(ABC)), if you want the two
-subclasses to self-register against a theory key instead of being
-imported and branched on by name.
-
-TODO(owner): sign convention. EulerBernoulliPostProcessing.shear_force()
-returns a negated value; TimoshenkoPostProcessing.shear_force() does not.
-Confirm which is the intended sign before this is relied on anywhere that
-compares or mixes V_xz/V_xy across the two theories (e.g. a mesh-theory
-convergence study, or any diagram that overlays both).
+"""Recovery of the internal bending moment M and shear force V of the shaft beam elements from the
+solved nodal DOFs (Euler-Bernoulli and Timoshenko theories), as values at the mesh nodes. Axial
+force, deflections, section properties and bearing reactions are handled in ``global_postprocessing``.
 """
 
 from __future__ import annotations
@@ -61,49 +18,60 @@ if TYPE_CHECKING:
 
 
 class ElementTheoryPostProcessor(ABC):
-    """
-    Common contract for recovering M(x)/V(x) from solved nodal DOFs, per
-    beam element theory (Euler-Bernoulli, Timoshenko, ...).
+    """Common contract for recovering M(x) and V(x) from solved nodal DOFs, per beam element theory.
 
-    Everything except shear_force() turned out to be identical code
-    between the two original classes:
+    Everything except ``shear_force`` is identical for the two theories and lives here: extraction of
+    the element displacement vector, the bending moment, and the sweep over the elements that writes
+    M and V at the mesh nodes. ``shear_force`` is the one theory-specific method.
 
-    - recover_element_displacements / _element_nodal_displacements: pull
-      a^(e) = [v_a, th_a, v_b, th_b] out of the solver's global
-      displacement vector for one element/plane. Bending-only -- axial is
-      decoupled and not part of a^(e) here. Theory-agnostic by
-      construction (just indexing into d_total_xz/d_total_xy).
+    Warnings
+    --------
+    Onate2013_vol2 samples the bending moment at the Gauss points for the Euler-Bernoulli element
+    (1.3.4, Fig. 1.11) and M and Q at the element mid-point for the 2-noded Timoshenko element
+    (2.3.2); this code writes the values at the element ends instead.
 
-    - bending_moment: M(x) = D_b * B_b(zeta) @ a^(e), D_b = E*I. Also
-      theory-agnostic at this level -- elem.bending_strain_matrix(zeta)
-      already dispatches internally to the right theory's B_b for
-      whichever Elem instance it's called on, so the two original
-      subclasses had byte-identical bodies here. Kept concrete on the
-      base class rather than duplicated or made abstract.
+    Notes
+    -----
+    Element displacement vector (one plane): ``a_e = [v_a, th_a, v_b, th_b]`` with ``v`` in mm and
+    ``th`` in rad; the axial DOF is uncoupled and not part of it.
 
-    - recover_internal_forces / _sweep_plane: build M/V over every mesh
-      node by evaluating bending_moment()/shear_force() at each
-      element's two end nodes (elem.x_a, elem.x_b), using that element's
-      own a^(e). Node-assignment pattern: the first element also writes
-      its 'a' node, every element writes its 'b' node -- M/V are taken as
-      continuous at shared nodes for this element formulation (no applied
-      point moments/point shear jumps assumed exactly at a shared node).
-      kGA_override is read off the solver (solver._kGA_override) and
-      threaded into shear_force() unconditionally; Euler-Bernoulli's
-      implementation simply ignores it (see below).
+    Bending moment (both theories): ``M(x) = D_b * B_b(zeta) @ a_e`` with ``D_b = E I`` [N mm^2] and
+    ``B_b`` the bending-strain row of the element (``elem.bending_strain_matrix``). ``B_b @ a_e`` is
+    the bending strain [1/mm]: ``d2v/dx2`` for Euler-Bernoulli, so ``M = +E I d2v/dx2`` (Onate2013_vol2,
+    Eq. (1.5), (1.16c)), and ``dtheta/dx`` for Timoshenko, so ``M = +E I dtheta/dx`` (Eq. (2.4b),
+    (2.17)). Harris2007_vol2, 9.2.2, Eq. (9.8) prints ``E I d2y/dx2 = -M``, the opposite sign.
 
-    shear_force() is the one method each subclass must supply: Euler-
-    Bernoulli uses a closed-form cubic-Hermite shear expression that does
-    not depend on elem's own dispatch methods; Timoshenko goes through
-    elem.shear_strain_matrix()/elem.shear_rigidity(). See the TODO(owner)
-    above the sign-convention note in the module docstring before trusting
-    both sides against each other.
+    Sign of the shear force (both theories): Q is the force on the cross-section whose outward normal
+    is +x, positive along +v (Onate2013_vol2, Fig. 1.2); with ``M = +E I d2v/dx2`` this is
+    ``dM/dx = -Q``. The Euler-Bernoulli and the Timoshenko ``shear_force`` return the same sign
+    (simply supported beam, 1000 N along +v at one third of the span: +666.67 N left of the load,
+    -333.33 N right of it, for both).
+
+    Node assignment: M and V are evaluated at the two ends of each element with that element's own
+    ``a_e``; element 0 writes its node ``a`` and every element writes its node ``b``. An interior node
+    therefore holds the value at the end of the element on its left; the value at the start of the
+    element on its right is not stored. At a point load the stored V is the left-hand value (the jump
+    P is not represented); under a distributed load the two element values differ by ``q le``.
     """
 
     def recover_element_displacements(self, solver: Any, x_nodes: list[float], n: int):
-        """
-        Returns a list of (elem, a_xz, a_xy), one entry per element in
-        solver.elements order, each a_* a length-4 array [v_a, th_a, v_b, th_b].
+        """Element displacement vectors of both bending planes, for every element.
+
+        Parameters
+        ----------
+        solver : object
+            Exposes ``elements``, ``d_total_xz`` and ``d_total_xy`` (global displacements, DOF order
+            ``[u, v, theta]`` per node [mm, mm, rad]).
+        x_nodes : list of float
+            Node positions [mm] (not used here).
+        n : int
+            Number of nodes (not used here).
+
+        Returns
+        -------
+        list of tuple
+            ``(elem, a_xz, a_xy)`` per element in ``solver.elements`` order; each ``a_*`` is the length-4
+            array ``[v_a, th_a, v_b, th_b]`` [mm, rad, mm, rad].
         """
         out = []
         for elem in solver.elements:
@@ -113,11 +81,21 @@ class ElementTheoryPostProcessor(ABC):
         return out
 
     def _element_nodal_displacements(self, solver: Any, elem, plane: LoadPlane) -> np.ndarray:
-        """
-        a^(e) = [v_a, th_a, v_b, th_b] -- the local 4-dof nodal displacement
-        vector for one element in one plane, pulled straight from that
-        plane's global displacement vector. Bending-only: axial is
-        decoupled and not part of a^(e) here.
+        """Local displacement vector of one element in one bending plane.
+
+        Parameters
+        ----------
+        solver : object
+            Exposes ``d_total_xz`` and ``d_total_xy`` [mm, rad], DOF order ``[u, v, theta]`` per node.
+        elem : Elem
+            Beam element (nodes ``idx_node_1``, ``idx_node_2``).
+        plane : LoadPlane
+            ``LoadPlane.XZ`` or ``LoadPlane.XY``.
+
+        Returns
+        -------
+        ndarray, shape (4,)
+            ``a_e = [v_a, th_a, v_b, th_b]`` [mm, rad, mm, rad]; bending only.
         """
         d_total = solver.d_total_xz if plane == LoadPlane.XZ else solver.d_total_xy
         i, j = elem.idx_node_1, elem.idx_node_2
@@ -125,18 +103,30 @@ class ElementTheoryPostProcessor(ABC):
         return d_total[dof]
 
     def bending_moment(self, elem: "Elem", a_e: np.ndarray, x: float) -> tuple[float, float]:
-        """
-        Returns (x, M(x)) -- not just M(x) -- so each call already comes
-        out as an (x_coord, value) pair ready to drop into the eventual
-        x-vs-M map across the whole shaft, per Eq.(1.16c):
-        M(x) = D_b * B_b(zeta) @ a^(e), D_b = E*I.
+        """Bending moment at position ``x`` of an element.
 
-        zeta is elem's own natural coordinate for x -- elem.bending_strain_matrix(zeta)
-        already dispatches to the right theory's B_b for whichever Elem
-        instance this is (confirmed for Euler-Bernoulli: returns a flat
-        (4,) array, so a plain B_b @ a_e is a true scalar -- no ravel
-        needed). Identical for both theories, so this lives on the base
-        class rather than being duplicated per subclass.
+        Parameters
+        ----------
+        elem : Elem
+            Beam element; ``elem.E`` [MPa] and ``elem.I`` [mm^4] give ``D_b = E I``.
+        a_e : ndarray, shape (4,)
+            Element displacement vector ``[v_a, th_a, v_b, th_b]`` [mm, rad, mm, rad].
+        x : float
+            Axial position within the element [mm].
+
+        Returns
+        -------
+        x : float
+            The input position [mm] (returned so that each call is an ``(x, value)`` pair).
+        M : float
+            Bending moment [N mm], ``M = (E I) B_b(zeta) a_e`` (Onate2013_vol2, Eq. (1.16c)); sign as in
+            the class notes.
+
+        Notes
+        -----
+        ``zeta = elem.natural_coordenates(x)`` is the natural coordinate of ``x``;
+        ``elem.bending_strain_matrix(zeta)`` already dispatches to the curvature row of the element
+        theory and returns a flat array, so the product with ``a_e`` is a scalar.
         """
         zeta = elem.natural_coordenates(x)
         B_b  = elem.bending_strain_matrix(zeta)
@@ -146,41 +136,77 @@ class ElementTheoryPostProcessor(ABC):
 
     @abstractmethod
     def shear_force(self, elem: "Elem", a_e: np.ndarray, x: float, *, kGA_override: float | None = None) -> tuple[float, float]:
-        """
-        Returns (x, Q(x)). The one method that genuinely differs by
-        theory -- see each subclass. kGA_override is accepted by every
-        implementation for a uniform call shape from _sweep_plane(), even
-        where a subclass has no use for it (Euler-Bernoulli).
+        """Transverse shear force at position ``x`` of an element (theory specific).
+
+        Parameters
+        ----------
+        elem : Elem
+            Beam element.
+        a_e : ndarray, shape (4,)
+            Element displacement vector ``[v_a, th_a, v_b, th_b]`` [mm, rad, mm, rad].
+        x : float
+            Axial position within the element [mm].
+        kGA_override : float or None, optional
+            Shear rigidity k G A [N] replacing the element value; accepted by every implementation for a
+            uniform call, used only by Timoshenko.
+
+        Returns
+        -------
+        x : float
+            The input position [mm].
+        Q : float
+            Shear force [N].
         """
         raise NotImplementedError
 
     def recover_internal_forces(self, solver: Any, x_nodes: list[float], n: int):
-        """
-        Returns (M_xz, M_xy, V_xz, V_xy), each a length-n np.ndarray
-        aligned with x_nodes -- the shape ShaftResults/SubmodelResult
-        expect (one M and V value per mesh node, matching x_nodes/x
-        exactly).
+        """Bending moment and shear force at every mesh node, for both bending planes.
 
-        `solver` is anything exposing .elements/.d_total_xz/.d_total_xy
-        (and optionally ._kGA_override) -- structurally, not by type.
-        Being a bound method (not a module-level function like the old
-        sweep), the caller instantiates the concrete subclass first,
-        e.g.: EulerBernoulliPostProcessing().recover_internal_forces(solver, x_nodes, n).
-        global_solver/ and submodel_solver/ each define their own
-        origin-specific subclasses that override this to accept their
-        real solution type directly (RigidSupportSolution /
-        SubmodelSolution) -- see those folders' postprocessing.py.
+        Parameters
+        ----------
+        solver : object
+            Exposes ``elements``, ``d_total_xz``, ``d_total_xy`` and optionally ``_kGA_override`` [N]
+            (structural typing, not a class). The global and sub-model post-processors override this
+            method to accept their own solution type.
+        x_nodes : list of float
+            Node positions [mm].
+        n : int
+            Number of nodes.
+
+        Returns
+        -------
+        M_xz, M_xy : ndarray, shape (n,)
+            Bending moment of the XZ and XY planes at each node [N mm].
+        V_xz, V_xy : ndarray, shape (n,)
+            Shear force of the XZ and XY planes at each node [N].
+
+        Notes
+        -----
+        Node assignment: see the class notes (an interior node holds the value of the element on its left).
         """
         M_xz, V_xz = self._sweep_plane(solver, x_nodes, n, LoadPlane.XZ)
         M_xy, V_xy = self._sweep_plane(solver, x_nodes, n, LoadPlane.XY)
         return M_xz, M_xy, V_xz, V_xy
 
     def _sweep_plane(self, solver: Any, x_nodes: list[float], n: int, plane: LoadPlane):
-        """
-        Builds M and V over every mesh node, for one plane. kGA_override
-        is read off the solver once per sweep and passed to every
-        shear_force() call; subclasses that don't need it (Euler-
-        Bernoulli) simply ignore the keyword.
+        """Moment and shear force at every mesh node for one bending plane.
+
+        Parameters
+        ----------
+        solver : object
+            As in ``recover_internal_forces``; ``_kGA_override`` is read once and passed to every
+            ``shear_force`` call (ignored by Euler-Bernoulli).
+        x_nodes : list of float
+            Node positions [mm] (not used here).
+        n : int
+            Number of nodes.
+        plane : LoadPlane
+            ``LoadPlane.XZ`` or ``LoadPlane.XY``.
+
+        Returns
+        -------
+        M, V : ndarray, shape (n,)
+            Bending moment [N mm] and shear force [N] at each node.
         """
         M = np.zeros(n)
         V = np.zeros(n)
@@ -206,22 +232,42 @@ class ElementTheoryPostProcessor(ABC):
 
 
 class EulerBernoulliPostProcessing(ElementTheoryPostProcessor):
-    """
-    Euler-Bernoulli shear recovery: closed-form cubic-Hermite expression,
-    per Eq.(1.24): Q = (E*I)/(l_e**3) * [12, 6*l_e, -12, 6*l_e] @ a_e.
-    Unchanged from the original euler_bernoulli/postprocessing.py,
-    including the leading minus sign -- see module docstring TODO(owner)
-    on sign convention before trusting this against the Timoshenko side.
+    """Euler-Bernoulli shear recovery: closed-form shear of the cubic Hermite element.
+
+    Notes
+    -----
+        Q = -(E I / l_e^3) * ([12, 6 l_e, -12, 6 l_e] . a_e)
+
+    with ``E I`` = ``elem.E * elem.I``, ``l_e`` = ``elem.length`` and ``a_e = [v_a, th_a, v_b, th_b]``.
+    This is ``Q = -E I d3v/dx3`` (Onate2013_vol2, 1.3.4, Eq. (1.24)); the third derivative of a cubic
+    is constant, so Q is constant within the element.
+
+    The last member of Onate2013_vol2, Eq. (1.24) is printed without the minus sign; since
+    ``[12, 6 l_e, -12, 6 l_e] . a_e / l_e^3 = +d3v/dx3`` for the Hermite element, that member has a
+    sign slip. The code follows ``Q = -E I d3v/dx3`` (first two members; consistent with Example 1.2
+    of the book). Sign of Q: see the base-class notes (same sign as the Timoshenko ``shear_force``).
     """
 
     def shear_force(self, elem: "Elem", a_e: np.ndarray, x: float, *, kGA_override: float | None = None) -> tuple[float, float]:
-        """
-        Returns (x, Q(x)). Q doesn't actually depend on x (shear is
-        constant within an Euler-Bernoulli element -- third derivative of
-        a cubic Hermite shape function is constant), but x is still
-        taken/returned to match bending_moment()'s (x, value) shape.
-        kGA_override has no meaning for this theory and is accepted only
-        for call-shape parity with TimoshenkoPostProcessing.
+        """Shear force of the Euler-Bernoulli element (constant along the element).
+
+        Parameters
+        ----------
+        elem : Elem
+            Beam element (``E`` [MPa], ``I`` [mm^4], ``length`` [mm]).
+        a_e : ndarray, shape (4,)
+            ``[v_a, th_a, v_b, th_b]`` [mm, rad, mm, rad].
+        x : float
+            Position [mm]; returned unchanged, Q does not depend on it.
+        kGA_override : float or None, optional
+            Accepted for call-shape parity with the Timoshenko class; has no meaning here.
+
+        Returns
+        -------
+        x : float
+            The input position [mm].
+        Q : float
+            Shear force [N]; see the class notes.
         """
         E  = elem.E
         I  = elem.I
@@ -231,25 +277,55 @@ class EulerBernoulliPostProcessing(ElementTheoryPostProcessor):
 
 
 class TimoshenkoPostProcessing(ElementTheoryPostProcessor):
-    """
-    Timoshenko shear recovery: Q = D_s * B_s(zeta) @ a^(e), where B_s
-    comes from elem.shear_strain_matrix(zeta) and D_s (the shear
-    rigidity, correction factor folded in) from
-    elem.shear_rigidity(kGA_override=...). This assumes elem.py has been
-    extended with shear_strain_matrix()/shear_rigidity() dispatch methods
-    mirroring bending_strain_matrix()/stiffness_element() -- not shown as
-    actual code, only discussed; if they don't exist on Elem yet, this
-    class won't run until they're added there. Unlike Euler-Bernoulli's Q,
-    this is not constant within the element in general (B_s depends on
-    zeta for the "exact" integration variant), so x is genuinely used
-    here, not just carried through for shape.
+    """Timoshenko shear recovery: shear force from the shear strain of the element.
 
-    Unchanged from the original timoshenko/postprocessing.py, including
-    the absence of a leading minus sign -- see module docstring
-    TODO(owner) on sign convention.
+    Warnings
+    --------
+    The bending moment of this element is constant along the element (Onate2013_vol2, 2.3.2), so the
+    value written at a node is the element-constant value of the element on its left: it is off by
+    ``V le/2`` from the moment at the node, so the stored M at the supports is not zero and ``M_max``
+    is underestimated on a coarse mesh. With ``integration_method="exact"`` the shear strain varies
+    linearly along the element, so the end value stored at the node is not a usable shear force (the
+    element mid-point value is; the book samples Q there: Onate2013_vol2, Eq. (2.17) and
+    section 2.4). The fully integrated element is also over-stiff in shear on a coarse mesh (shear
+    locking, Onate2013_vol2, 2.4), so the rotations, the deflections and the stored M are too
+    small; they converge only with mesh refinement.
+
+    Notes
+    -----
+    .. math::
+
+        Q = D_s B_s(zeta) a_e = k G A (dv/dx - theta)
+
+    with ``B_s = elem.shear_strain_matrix(zeta)`` (``B_s @ a_e`` is the shear strain gamma
+    [-]) and ``D_s = elem.shear_rigidity(kGA_override=...)`` = k G A [N], correction factor k
+    included (Onate2013_vol2, Eq. (2.4b), (2.6c), (2.17)). The book takes Q at the element mid-point;
+    here Q is evaluated at the requested position, and for the exact integration variant
+    ``B_s`` depends on ``zeta``, so ``x`` is genuinely used. Sign of Q: see the base-class notes (same
+    sign as the Euler-Bernoulli ``shear_force``).
     """
 
     def shear_force(self, elem: "Elem", a_e: np.ndarray, x: float, *, kGA_override: float | None = None) -> tuple[float, float]:
+        """Shear force of the Timoshenko element at position ``x``.
+
+        Parameters
+        ----------
+        elem : Elem
+            Beam element.
+        a_e : ndarray, shape (4,)
+            ``[v_a, th_a, v_b, th_b]`` [mm, rad, mm, rad].
+        x : float
+            Position within the element [mm].
+        kGA_override : float or None, optional
+            Shear rigidity k G A [N] replacing the element value.
+
+        Returns
+        -------
+        x : float
+            The input position [mm].
+        Q : float
+            Shear force [N], ``Q = k G A gamma``; see the class notes.
+        """
         zeta = elem.natural_coordenates(x)
         B_s  = elem.shear_strain_matrix(zeta)
         D_s  = elem.shear_rigidity(kGA_override=kGA_override)
@@ -257,8 +333,24 @@ class TimoshenkoPostProcessing(ElementTheoryPostProcessor):
         return (x, Q)
 
     def shear_strain(self, elem: "Elem", a_e: np.ndarray, x: float) -> float:
-        """Timoshenko-only: not part of the shared contract. Carried over
-        unchanged from the original file."""
+        """Shear strain gamma = dv/dx - theta of the Timoshenko element at position ``x``.
+
+        Specific to this theory; not part of the shared contract.
+
+        Parameters
+        ----------
+        elem : Elem
+            Beam element.
+        a_e : ndarray, shape (4,)
+            ``[v_a, th_a, v_b, th_b]`` [mm, rad, mm, rad].
+        x : float
+            Position within the element [mm].
+
+        Returns
+        -------
+        float
+            Shear strain ``B_s(zeta) @ a_e`` [-].
+        """
         zeta = elem.natural_coordenates(x)
         B_s  = elem.shear_strain_matrix(zeta)
         return B_s @ a_e

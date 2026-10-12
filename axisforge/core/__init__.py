@@ -1,6 +1,7 @@
-# axisforge/core/__init__.py
 """
-axisforge/core/__init__.py
+Domain objects of AxisForge: materials, loads, mechanical systems and machine elements.
+
+Flattens the ``__all__`` of the four sub-packages into one namespace.
 """
 from __future__ import annotations
 

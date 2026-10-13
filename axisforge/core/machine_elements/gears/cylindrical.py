@@ -3,13 +3,13 @@
 One family for both kinds of teeth under the sign convention of ISO_21771_2007, 4.1.5: the number
 of teeth of an internal gear is negative, every diameter and the centre distance are positive. The
 file follows the order of the standard: basic rack (ISO_53_1998), one gear (clause 4), the pair
-(clause 5), limits and checks (clause 7), then the tooth forces. Lengths in [mm], angles stored in
-[rad] (inputs in [deg]), torques in [N m], forces in [N].
+(clause 5), limits and checks (clause 7), the tooth forces, then the contact inputs along the path
+(5.4-5.6). Lengths in [mm], angles in [rad] (inputs in [deg]), torques in [N m], forces in [N].
 """
 from __future__ import annotations
 
+import warnings
 from dataclasses import KW_ONLY, dataclass
-
 import numpy as np
 from scipy import optimize
 
@@ -549,8 +549,8 @@ class CylindricalFamily(GearFamily):
 
     ``assemble_gear`` gives the geometry of one gear (clause 4), ``assemble_pair`` that of two gears
     in mesh (clause 5), ``validate_gear`` / ``validate_pair`` the limits (clause 7 and checks with
-    no library source), ``forces`` the tooth force components for a torque. An internal pair is a
-    pair whose gear 2 has z < 0.
+    no library source), ``forces`` the tooth forces for a torque, ``contact_inputs`` the contact data
+    along the path of contact. An internal pair is a pair whose gear 2 has z < 0.
 
     Notes
     -----
@@ -1198,3 +1198,414 @@ class CylindricalFamily(GearFamily):
             "theta_Fr_driven": theta_Fr_driven, "theta_Ft_driven": theta_Ft_driven,
             "rotation_dir_out": rotation_dir_out,
         }
+
+    # ----------------------------------------------------------------------------------------------
+    # Contact inputs along the path of contact (ISO 21771, 5.4.3-5.4.8 and 5.6; the load has no library source)
+    # ----------------------------------------------------------------------------------------------
+    # QUESTION(Q31): surface_speeds and contact_inputs take a speed or a force, which D-0026 item 7 puts in solvers/; all five are kept here as pure functions of the pair that store nothing. The plan (section 2.4) puts path_points, curvature_radii, surface_speeds here; load_sharing and contact_inputs come from card G5 items 1 and 3, and the plan names the slot solvers/machine_elements/gears/contact.py for load sharing.
+    # QUESTION(Q37): with them this file passes the 1200 lines at which D-0026 keeps "one file per clause group" as the fallback; it is not split (alternative: load_sharing and contact_inputs as module functions of the solvers slot of Q31).
+    @staticmethod
+    def path_points(pair, driver: str) -> dict[str, float]:
+        """Points A, B, C, D, E of the path of contact for a given driving gear, as positions g_y.
+
+        The path of contact is the part of the line of action (the common tangent of the two base
+        circles, transverse plane) on which a tooth pair touches. Meshing starts at A, on the tip
+        circle of the DRIVEN gear, and ends at E, on the tip circle of the DRIVING gear; C is the
+        pitch point; B lies one transverse base pitch before E and D one after A. The pair stores
+        these points once, with the names of gear 1 driving; this function only relabels them.
+
+        Parameters
+        ----------
+        pair : GearPair
+            Pair of this family.
+        driver : str
+            "gear1" or "gear2": the gear that drives (an operating quantity, not stored).
+
+        Returns
+        -------
+        dict
+            Keys "A", "B", "C", "D", "E": position g_y of each point [mm].
+
+        Raises
+        ------
+        ValueError
+            If ``driver`` is not "gear1" or "gear2".
+
+        Notes
+        -----
+        Position along the path, used by every function of this group: g_y = rho_y1 - rho_C1 [mm],
+        the distance from the pitch point C along the line of action, POSITIVE toward the tip of
+        gear 1 (the transverse radius of curvature of flank 1 grows with g_y). It does not depend
+        on the driver; abs(g_y) is the g_alpha_y of ISO_21771_2007, Eq. (107). With gear 1 driving
+        the contact point travels from A (g_y < 0) to E (g_y > 0); with gear 2 driving A and E, and
+        B and D, are exchanged and the contact point travels toward decreasing g_y.
+
+        B and D bound the zone of single tooth contact of ONE transverse section (a spur pair)
+        for 1 < eps_alpha < 2; a helical pair with eps_gamma >= 2 (baseline case 2) never has a
+        single tooth pair in contact. For eps_alpha >= 2 (baseline case 4) B and D are still E
+        minus and A plus one base pitch, and D comes before B.
+
+        Assumptions: rigid, unmodified involute flanks; the tip circle is the end of the active
+        profile (Q04: with the clearance cP in the tip diameter).
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, 5.4.3 and 5.4.5.1, p. 34-35 (definitions of A..E by driven and
+           driving gear); swap rule in the text after Eq. (80) and after Eq. (87), p. 36 (checked).
+        """
+        if driver not in ("gear1", "gear2"):
+            raise ValueError(f"driver must be 'gear1' or 'gear2', got '{driver}'.")
+        # the stored segments T1A..T1E are the radii of curvature of flank 1 at the points named for gear 1 driving
+        g = {name: getattr(pair, "T1" + name) - pair.T1C for name in "ABCDE"}
+        if driver == "gear2":
+            # start of meshing on the tip circle of the driven gear, now gear 1: the stored E
+            g = {"A": g["E"], "B": g["D"], "C": g["C"], "D": g["B"], "E": g["A"]}
+        return g
+
+    @staticmethod
+    def curvature_radii(pair, g_y) -> dict[str, np.ndarray]:
+        """Radii of curvature of the two flanks, and their reduced radius, at positions g_y of the path.
+
+        At the contact point the two involute flanks are replaced by two cylinders with these
+        radii (the local equivalent cylinders of the line contact). The transverse radius of an
+        involute is the distance from the contact point to the base-tangent point along the line of
+        action, so it varies linearly along the path and the two radii add up to T1T2.
+
+        Parameters
+        ----------
+        pair : GearPair
+            Pair of this family.
+        g_y : float or array_like
+            Position along the path [mm], from the pitch point C, positive toward the tip of gear 1
+            (see ``path_points``). Not limited to A..E.
+
+        Returns
+        -------
+        dict
+            rho1_t_mm, rho2_t_mm : radius of curvature of flank 1 and of flank 2 in the
+            transverse plane [mm]. SIGNED: positive for a convex (external) flank, negative for
+            the concave flank of a ring (D-0010 item 8).
+            rho_red_t_mm : reduced radius 1 / (1/rho1 + 1/rho2) with those signs, transverse
+            plane [mm].
+            rho1_n_mm, rho2_n_mm, rho_red_n_mm : the same in the plane normal to the contact
+            line (the principal radii of the flanks), each transverse value divided by
+            cos(beta_b) [mm].
+
+        Notes
+        -----
+        rho_y1 = T1C + g_y and rho_y2 = T1T2 - rho_y1. At the stored points they are the stored
+        segments T1A..T1E and T2A, T2B, T2D, T2E. A radius is zero at its base-tangent point
+        (start of the involute) and changes sign beyond it, where there is no involute: the
+        values returned there are not radii of a flank (baseline case 4 starts 2.39 mm beyond T1,
+        Q15: rho1 < 0 and a negative reduced radius, returned without a warning by this function).
+
+        Internal pair: with the negative radius of the ring the reduced radius at C is NOT the
+        stored ``ReqI``, which takes the ring radius as positive (Q22): case 4 gives 10.261 mm here
+        against ``ReqI`` = 5.130 mm = 1 / (1/rho1 + 1/abs(rho2)). For an external pair the two agree.
+        Helical internal pair (Q21): rho_y2 at C differs from the stored ``T2C``, because the base
+        circles of the two gears come from different transverse pressure angles.
+
+        Normal plane: an involute helicoid is a developable surface, with zero curvature along
+        the contact line. The transverse profile is an oblique section of it, inclined at beta_b
+        to the flank normal, so its radius rho_t is the radius of curvature of that section and
+        not a principal radius; by Meusnier's theorem the principal radius, in the plane normal
+        to the contact line, is rho_n = rho_t / cos(beta_b). The base helix angle is that of
+        gear 1 (Q21: the ring of a helical internal pair has another one today).
+
+        Assumptions: rigid, unmodified involute flanks; no deflection.
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, 4.3.8, Eq. (17), p. 21 (radius of curvature at any point Y, with
+           the factor z/abs(z)); 5.4.5.3, Eq. (81)-(87) and NOTE, p. 36 (sum of the two radii, negative
+           values of an internal gear) (checked).
+        .. [2] Normal plane, rho_t / cos(beta_b): derived (Notes), no library page.
+        """
+        g_y = np.asarray(g_y, dtype=float)
+        rho1 = pair.T1C + g_y      # Eq. (81) at C, plus the distance travelled along the line of action
+        # Eq. (87): rho_y1 + rho_y2 = T1T2 at every point; T1T2 < 0 for an internal pair, so the ring radius is negative
+        # QUESTION(Q21): I1. For a helical internal pair T1T2 - T1C is not the stored T2C (case 5: -20.3998 against -20.4606 mm).
+        rho2 = pair.T1T2 - rho1
+        # QUESTION(Q22): I2 / row 45. Reduced radius with the SIGNED ring radius (ISO_21771_2007, Eq. (82) NOTE); the stored ReqI takes it positive (case 4 at C: 10.261 here, ReqI 5.130 mm).
+        rho_red = 1.0 / (1.0 / rho1 + 1.0 / rho2)
+        # QUESTION(Q34): normal-plane radii as rho_t / cos(beta_b): derived (developable helicoid, Meusnier), no library page; the alternative is to return the transverse radii only.
+        # QUESTION(Q21): I1. beta_b of gear 1; the ring of a helical internal pair has another one today (case 5: 14.08 against 15.99 deg).
+        cos_betab = np.cos(pair.gear1.betab)
+        return {"rho1_t_mm": rho1, "rho2_t_mm": rho2, "rho_red_t_mm": rho_red,
+                "rho1_n_mm": rho1 / cos_betab, "rho2_n_mm": rho2 / cos_betab, "rho_red_n_mm": rho_red / cos_betab}
+
+    @staticmethod
+    def surface_speeds(pair, g_y, n1_rpm: float) -> dict[str, np.ndarray]:
+        """Tangential speeds of the two flanks, sliding speed and entrainment speed at positions g_y.
+
+        Each flank moves through the contact along the common tangent with the speed
+        omega rho_y (rolling). The two speeds are equal only at the pitch point; elsewhere their
+        difference is the sliding speed, which grows linearly with the distance from C. Their mean
+        is the speed at which lubricant is drawn into the contact.
+
+        Parameters
+        ----------
+        pair : GearPair
+            Pair of this family.
+        g_y : float or array_like
+            Position along the path [mm], from C, positive toward the tip of gear 1.
+        n1_rpm : float
+            Rotational speed of GEAR 1 [rpm], > 0 (a magnitude: the sense of rotation is not an
+            input), whichever gear drives.
+
+        Returns
+        -------
+        dict
+            u1_m_per_s, u2_m_per_s : tangential speed of flank 1 and of flank 2 at the contact
+            point [m/s]; positive where the flank is an involute (rho_y1 > 0; rho_y2 > 0 for an
+            external gear 2, rho_y2 < 0 for a ring).
+            vg_m_per_s : sliding speed u1 - u2 [m/s], SIGNED: positive where flank 1 is the faster
+            (g_y > 0, addendum of gear 1), zero at C.
+            ue_m_per_s : entrainment speed (u1 + u2) / 2 [m/s].
+
+        Notes
+        -----
+        u1 = omega1 rho_y1 and u2 = omega2 rho_y2 = omega1 rho_y2 / u with u = z2 / z1 signed, so
+        that vg = omega1 g_y (1 + 1/u). For an internal pair u and rho_y2 are both negative: u2
+        is positive and the sliding speed is smaller than that of the external pair.
+
+        Helical pair, which component this is (derived from rigid-body kinematics, no library
+        source; ISO 21771, 5.6.3 gives only "rho_y omega" for the transverse profile). At the
+        contact point take e_L along the line of action, e_z along the axes and e_p normal to the
+        plane of action. The velocity of the point of flank i is omega_i r_bi e_L +
+        omega_i rho_yi e_p; the contact line lies along cos(beta_b) e_z + sin(beta_b) e_L and the
+        flank normal along cos(beta_b) e_L - sin(beta_b) e_z. So: (a) omega rho_y, returned here,
+        is the component PERPENDICULAR to the contact line in the tangent plane, the rolling speed
+        across the line; (b) the component ALONG the contact line is omega1 r_b1 sin(beta_b), the
+        same on both flanks (no sliding along the line), and is NOT returned; (c) GEARpie's
+        omega rho_y / cos(beta_b) is omega times the normal-plane radius, not a component of
+        the flank velocity (Q38).
+
+        Helical internal pair (Q21): the base circles of the two gears follow different rules
+        today, so the sliding speed at C is not zero (case 5 at 1450 rpm: -0.0062 m/s).
+
+        Driver: ISO 21771 writes 5.6 for the pinion driving. The speeds themselves do not depend
+        on the driver; only the names A and E of the two ends do (``path_points``).
+
+        Assumptions: rigid involute kinematics, constant speed, no modifications, no deflection.
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, 5.6.1, Eq. (106)-(108), p. 42 (sliding speed; printed with a
+           plus-minus sign); 5.6.3, p. 44 (tangential velocity "rho_y omega") (checked).
+        .. [2] Entrainment speed: no numbered equation, no library source.
+        """
+        if n1_rpm <= 0:
+            raise ValueError(f"n1_rpm must be > 0, got {n1_rpm}.")
+        rho = CylindricalFamily.curvature_radii(pair, g_y)
+        omega1 = n1_rpm * 2.0 * np.pi / 60.0   # [rpm] -> [rad/s]
+        # QUESTION(Q03): u = z2 / z1, signed (ISO_21771_2007, Eq. (52)); the stored pair.u of an external pair is max(z)/min(z).
+        u = pair.gear2.z / pair.gear1.z
+        # QUESTION(Q38): returned: omega rho_y, the flank speed perpendicular to the contact line (case 2 at C: 2.0922 m/s); not returned: the component along the line, omega1 rb1 sin(beta_b) (1.2522 m/s, equal on both flanks); GEARpie's vr1, vr2 are omega rho_y / cos(beta_b) (2.1570 m/s), not a velocity component.
+        u1 = omega1 * rho["rho1_t_mm"] / 1000.0        # [rad/s] [mm] -> [m/s]
+        u2 = omega1 / u * rho["rho2_t_mm"] / 1000.0    # omega2 = omega1 / u; ring: u < 0 and rho_y2 < 0, u2 > 0
+        # QUESTION(Q35): entrainment speed taken as the mean (u1 + u2) / 2 and the sliding speed signed as u1 - u2 (Eq. (106) prints plus-minus); no numbered equation for the first.
+        return {"u1_m_per_s": u1, "u2_m_per_s": u2, "vg_m_per_s": u1 - u2, "ue_m_per_s": (u1 + u2) / 2.0}
+
+    @staticmethod
+    def load_sharing(pair, g_y) -> dict[str, np.ndarray]:
+        """Share of the normal tooth force carried by one tooth pair at positions g_y of the path.
+
+        Several tooth pairs, one transverse base pitch apart along the line of action, are in
+        contact at the same time. The model: the teeth are rigid and equal, so the normal force
+        is spread with ONE load per unit length over all the contact lines present. A tooth pair
+        then carries the fraction (length of its contact line) / (sum of the lengths). For a
+        spur pair this is 1 in the zone of single contact and 1/2 in the two zones of double
+        contact (1/2 and 1/3 for 2 <= eps_alpha < 3, baseline case 4).
+
+        Parameters
+        ----------
+        pair : GearPair
+            Pair of this family.
+        g_y : float or array_like
+            Position [mm] of the contact point of the tooth pair in the transverse section at
+            MID FACE WIDTH, from C, positive toward the tip of gear 1.
+
+        Returns
+        -------
+        dict
+            share : fraction of the normal force on this tooth pair [-]; zero where it has no
+            contact.
+            l_mm : length of the contact line of this tooth pair [mm].
+            l_sum_mm : sum of the lengths of all contact lines present at that instant [mm].
+            n_pairs : number of tooth pairs in contact at that instant [-].
+
+        Notes
+        -----
+        Contact lines: in the plane of action (length g_alpha along the path, width b) the
+        contact lines are straight, inclined at beta_b to the gear axes. With s the distance from
+        the stored point A of the mid-face point of a line, the line covers the path interval
+        [s - b tan(beta_b)/2, s + b tan(beta_b)/2]; the part of it inside [0, g_alpha], divided by
+        sin(beta_b), is its length. A spur pair has l = b for 0 <= s <= g_alpha. The largest value
+        is the l_max of ISO_21771_2007, Eq. (98)-(99). The neighbouring tooth pairs are at
+        s + k p_bt. With the mid-face section as the reference the result depends neither on the
+        driver nor on the hand of helix (there is none: Q08).
+
+        A helical tooth pair is in contact before its mid-face point reaches A and after it leaves
+        E (by b tan(beta_b)/2): ``share`` is not zero just outside the path. The sum of ``share``
+        over the tooth pairs k is 1 at every position.
+
+        Assumptions: teeth of equal, constant stiffness per unit length (rigid limit), no
+        modifications, no misalignment, no friction; common face width b = min(b1, b2) of aligned gears; transverse base pitch of
+        gear 1 (Q21).
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, 5.4.8, p. 39-40, Eq. (98)-(99): contact lines at beta_b, their
+           largest length; the sum of the lengths is defined in words only (checked).
+        .. [2] Uniform load per unit length and the lengths along the path: derived, no library
+           source. GEARpie uses the same model (CLASSES/LOAD_SHARING.py:62-90,
+           CLASSES/FORCES_SPEEDS.py:72), with the section at the face end as its first column.
+        """
+        # QUESTION(Q30): load-sharing model = one load per unit length on all contact lines (rigid, equal teeth); alternatives: mesh stiffness (ISO_6336-1_2019, clause 9, not written) or a measured/FE share.
+        g_y = np.asarray(g_y, dtype=float)
+        # QUESTION(Q21): I1. Base pitch and base helix angle of gear 1, as the stored path points; the ring of a helical internal pair has others today (case 5: 6.087 against 6.142 mm, 14.08 against 15.99 deg).
+        pbt = pair.gear1.pbt
+        betab = pair.gear1.betab
+        s = g_y + pair.AC                          # distance from the stored A (C is at AC from A)
+        # QUESTION(Q36): helical pair, the contact-line length is that of the line whose MID-FACE point is at g_y; the alternative reference is the face end where the tooth enters (GEARpie column 0), which needs the driver.
+        half = 0.5 * pair.b * np.tan(betab)        # half of the path interval covered by one contact line [mm]
+        tol = 1e-9 * pbt                           # the ends A and E count as in contact: sums of stored segments round at 1e-15 relative
+
+        def line_length(s):
+            if betab == 0.0:
+                return np.where((s >= -tol) & (s <= pair.AE + tol), pair.b, 0.0)   # spur: the whole face width
+            inside = np.clip(np.minimum(s + half, pair.AE) - np.maximum(s - half, 0.0), 0.0, None)
+            return inside / np.sin(betab)
+
+        # every tooth pair that can touch while this one is within reach of the path
+        n_max = int(np.ceil((pair.AE + 2.0 * half) / pbt))
+        lengths = np.array([line_length(s + k * pbt) for k in range(-n_max, n_max + 1)])
+        l_own, l_sum = lengths[n_max], lengths.sum(axis=0)
+        share = np.divide(l_own, l_sum, out=np.zeros_like(l_sum), where=l_sum > 0.0)
+        return {"share": share, "l_mm": l_own, "l_sum_mm": l_sum, "n_pairs": (lengths > 0.0).sum(axis=0)}
+
+    @staticmethod
+    def contact_inputs(pair, driver: str, n1_rpm: float, F_bn_N: float, *, n_points: int | None = None,
+                       t_s=None) -> dict[str, np.ndarray]:
+        """Everything a contact calculation needs at each step of a contact point along the path.
+
+        One record per step, from the start of meshing A to its end E for the given driver, of
+        the contact point in ONE transverse section: where it is and when, the two equivalent
+        cylinders, how fast the surfaces move, and the load per unit length of contact line.
+        These are the inputs of a line contact (Hertz, EHL) that changes along the path. For a
+        spur pair this is the whole life of a tooth pair; for a helical pair it is the section at
+        mid face width only (Notes).
+
+        Parameters
+        ----------
+        pair : GearPair
+            Pair of this family.
+        driver : str
+            "gear1" or "gear2": the driving gear (fixes A, E and the direction of travel).
+        n1_rpm : float
+            Rotational speed of GEAR 1 [rpm], > 0 (a magnitude, as in ``surface_speeds``),
+            whichever gear drives.
+        F_bn_N : float
+            Total force normal to the flanks transmitted by the mesh [N], >= 0 (F_bn = F_bt /
+            cos(beta_b)). An argument: no force is derived from a torque here (Q07b: the ``Fn`` of
+            ``forces`` is F_bt).
+        n_points : int, optional
+            Number of equally spaced steps from A to E, both included (>= 2).
+        t_s : array_like, optional
+            Times of the steps [s], t = 0 at A; finite, at least one, all within the time of
+            travel from A to E.
+            Exactly one of ``n_points`` and ``t_s`` is given.
+
+        Returns
+        -------
+        dict
+            Arrays of equal length, one entry per step:
+
+            s_mm : distance travelled from A along the path [mm].
+            t_s : time since A [s].
+            g_y_mm : position from the pitch point C, positive toward the tip of gear 1 [mm].
+            rho1_t_mm, rho2_t_mm, rho_red_t_mm, rho1_n_mm, rho2_n_mm, rho_red_n_mm : radii of
+            curvature, signed (``curvature_radii``) [mm].
+            u1_m_per_s, u2_m_per_s, vg_m_per_s, ue_m_per_s : surface, sliding and entrainment speeds
+            (``surface_speeds``) [m/s].
+            share, l_mm, l_sum_mm, n_pairs : load share and contact-line lengths
+            (``load_sharing``) [-], [mm], [mm], [-].
+            w_N_per_mm : load per unit length of contact line, share F_bn / l [N/mm].
+
+        Raises
+        ------
+        ValueError
+            If ``driver`` is not "gear1" or "gear2", if n1_rpm <= 0, if F_bn_N < 0, if not
+            exactly one of ``n_points`` and ``t_s`` is given, if n_points < 2, or if ``t_s`` is
+            empty, not finite or outside the travel from A to E.
+
+        Warns
+        -----
+        UserWarning
+            If the radius of curvature of an external flank is zero or negative on a returned
+            step: the path starts beyond a base-tangent point, where there is no involute
+            (baseline cases 4 and 5, Q15 / Q27). The numbers are returned unchanged (Q39).
+
+        Notes
+        -----
+        Time and position: the contact point moves along the line of action at the normal speed
+        of the flanks, v_n = omega1 r_b1 (ISO_21771_2007, Eq. (105)), so s = omega1 r_b1 t. The
+        standard gives v_n; the relation s(t) is derived from it (no library sentence).
+
+        Helical pair: a step is the contact point in the transverse section at MID face width.
+        A tooth pair is in contact over g_alpha + b tan(beta_b) of travel (case 2: 24.78 mm); the
+        record covers g_alpha (19.01 mm, 77 %). ``share`` and ``l_mm`` describe the whole contact
+        line, the radii and speeds only its mid point, and the load per unit length is uniform by
+        the model. Along the line the path position spans +-b tan(beta_b)/2: in case 2 at C,
+        +-2.88 mm, rho1 from 10.90 to 16.66 mm (+-21 %) and a sliding speed of +-0.73 m/s at the
+        line ends against 0 recorded; at A and E the recorded point is the END of a half-length
+        line. The record is fair for a two-dimensional slice at mid face, not for the line (Q36).
+
+        Helical internal pair (Q21): the sliding speed recorded at C is not zero (case 5:
+        -0.0062 m/s at 1450 rpm) and the normal speeds of the two flanks differ by 0.9 %.
+
+        Assumptions: those of the four functions above; steady speed and constant F_bn.
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, 5.6.1, Eq. (105), p. 42 (checked).
+        .. [2] Load per unit length: no library source.
+        """
+        if (n_points is None) == (t_s is None):
+            raise ValueError("give exactly one of n_points and t_s.")
+        if n1_rpm <= 0:
+            raise ValueError(f"n1_rpm must be > 0, got {n1_rpm}.")
+        if F_bn_N < 0:
+            raise ValueError(f"F_bn_N must be >= 0, got {F_bn_N}.")
+        points = CylindricalFamily.path_points(pair, driver)
+        # QUESTION(Q21): I1. Base radius of gear 1; in a helical internal pair omega2 rb2 is not omega1 rb1 today (case 5: ratio 1.0090).
+        v_n = n1_rpm * 2.0 * np.pi / 60.0 * pair.gear1.rb   # [rad/s] [mm] = [mm/s], speed of the contact point along the path
+        if t_s is None:
+            if n_points < 2:
+                raise ValueError(f"n_points must be >= 2, got {n_points}.")
+            s = np.linspace(0.0, pair.AE, n_points)
+        else:
+            s = v_n * np.atleast_1d(np.asarray(t_s, dtype=float))
+            if s.size == 0 or not np.all(np.isfinite(s)):
+                raise ValueError("t_s must hold at least one time, all finite.")
+            if s.min() < 0.0 or s.max() > pair.AE * (1.0 + 1e-12):   # 1e-12: rounding of t = AE / v_n given back as a time
+                raise ValueError(f"t_s must lie in [0, {pair.AE / v_n:.6g}] s, the travel from A to E.")
+        # from A toward E: increasing g_y when gear 1 drives (root to tip of the driving flank), decreasing when gear 2 drives
+        g_y = points["A"] + np.sign(points["E"] - points["A"]) * s
+
+        radii = CylindricalFamily.curvature_radii(pair, g_y)
+        # QUESTION(Q39): steps where an external flank has no involute (rho <= 0: the path starts beyond a base-tangent point, Q15 / Q27) are returned with a warning; the alternatives are to refuse the pair or to cut the path at the base-tangent point.
+        if np.any(radii["rho1_t_mm"] <= 0.0) or (pair.gear2.z > 0 and np.any(radii["rho2_t_mm"] <= 0.0)):
+            warnings.warn("contact_inputs: the path of contact passes a base-tangent point; the radii of curvature, "
+                          "speeds and reduced radius of the steps beyond it do not describe an involute flank.",
+                          stacklevel=2)
+        sharing = CylindricalFamily.load_sharing(pair, g_y)
+        # QUESTION(Q32): the Hertz half-width b is not computed here; it belongs to slippy_bridge (D-0019), from w_N_per_mm, rho_red_n_mm and E'.
+        # QUESTION(Q33): the flanks are given as local equivalent cylinders (the radii), not as involute surfaces.
+        return {"s_mm": s, "t_s": s / v_n, "g_y_mm": g_y,
+                **radii,
+                **CylindricalFamily.surface_speeds(pair, g_y, n1_rpm),
+                **sharing,
+                # share F_bn / l with share = l / l_sum: written without l, which is zero at the ends of a helical line
+                "w_N_per_mm": F_bn_N / sharing["l_sum_mm"]}

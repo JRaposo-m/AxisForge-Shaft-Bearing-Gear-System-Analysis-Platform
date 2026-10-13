@@ -1,8 +1,10 @@
 """Records and text of a ``SpurHelicalGearSystem`` (``axisforge.core.mechanical_system.
-parallel_axis.spur_helical.gear_system``): the gear stage, the mesh links and every shaft.
+gear_system``): the gear stage, the mesh links and every shaft.
 
 Read from the BUILT system, so the report always matches the model that was solved and never a
-set of constants kept somewhere else.
+set of constants kept somewhere else. The mesh loads are on the loaded copies that
+``system.resolve`` returns: pass them as ``shafts=``, otherwise the shafts are described as given
+to the system, without mesh loads.
 """
 from __future__ import annotations
 
@@ -46,7 +48,7 @@ def source_shaft(system):
     return sources[0] if len(sources) == 1 else None
 
 
-def system_records(system, power_W: float | None = None) -> list[dict]:
+def system_records(system, power_W: float | None = None, shafts=None) -> list[dict]:
     """Description of the whole gear system.
 
     Parameters
@@ -57,6 +59,10 @@ def system_records(system, power_W: float | None = None) -> list[dict]:
         Transmitted power [W] that was given to ``system.resolve``. The system does not keep
         it, so it is passed in; when given, the power and the torque of the source shaft are
         added.
+    shafts : sequence of ShaftSystem, optional (None)
+        The loaded copies returned by ``system.resolve`` (same order as ``system.shafts``), whose
+        loads and position are described. None: ``system.shafts`` as given, which carry no mesh
+        load (``resolve`` does not modify them).
 
     Returns
     -------
@@ -77,7 +83,7 @@ def system_records(system, power_W: float | None = None) -> list[dict]:
     The resolved torques are read from the gear system's internal record of ``resolve``
     (``_resolved``, keys ``name``, ``T_out_Nm``, ``rotation_dir``), because there is no public
     accessor yet; the section is empty of torque if the key is absent. The mesh forces Ft, Fr,
-    Fa appear as the gear-mesh loads of each shaft.
+    Fa appear as the gear-mesh loads of each shaft only when ``shafts`` is given.
 
     Warnings
     --------
@@ -113,7 +119,7 @@ def system_records(system, power_W: float | None = None) -> list[dict]:
             if entry.get("T_out_Nm") is not None:
                 rows.append(kv_record(sec, "torque T_out", entry["T_out_Nm"], "N m"))
             rows.append(kv_record(sec, "rotation direction", entry.get("rotation_dir")))
-    for shaft in system.shafts:
+    for shaft in (system.shafts if shafts is None else shafts):
         rows += shaft_system_records(shaft)
     return rows
 
@@ -143,7 +149,7 @@ def _without_shaft(records):
     return [{k: v for k, v in r.items() if k != "shaft"} for r in records]
 
 
-def system_text(system, power_W: float | None = None) -> str:
+def system_text(system, power_W: float | None = None, shafts=None) -> str:
     """Short description of the whole gear system, for reading.
 
     Parameters
@@ -152,6 +158,8 @@ def system_text(system, power_W: float | None = None) -> str:
         The built system (at least one shaft).
     power_W : float, optional (None)
         Transmitted power [W]; see ``system_records``.
+    shafts : sequence of ShaftSystem, optional (None)
+        Loaded copies returned by ``system.resolve``; see ``system_records``.
 
     Returns
     -------
@@ -167,13 +175,13 @@ def system_text(system, power_W: float | None = None) -> str:
     The ``speed <shaft>`` lines show ``ShaftSystem.speed_rpm`` as set by the user; the gear
     system never propagates speed, so a driven shaft shows whatever was set on it.
     """
-    shafts = list(system.shafts)
+    shafts = list(system.shafts if shafts is None else shafts)
     first = shafts[0]
     stage = []
     if power_W is not None:
         stage.append(kv_record("gear stage", "power", power_W, "W"))
     stage += [kv_record("gear stage", f"speed {ss.name}", ss.speed_rpm, "rpm") for ss in shafts]
-    stage += [r for r in system_records(system, power_W)
+    stage += [r for r in system_records(system, power_W, shafts)
               if r["parameter"] in SUMMARY_PARAMETERS
               and (r["section"].startswith(("mesh ", "gear ")) or r["section"] == "gear system")]
     parts = [format_key_values(stage)]
@@ -199,7 +207,7 @@ def system_text(system, power_W: float | None = None) -> str:
     return "\n\n".join(parts)
 
 
-def system_full_text(system, power_W: float | None = None) -> str:
+def system_full_text(system, power_W: float | None = None, shafts=None) -> str:
     """Complete description of the whole gear system.
 
     Parameters
@@ -208,6 +216,8 @@ def system_full_text(system, power_W: float | None = None) -> str:
         The built system.
     power_W : float, optional (None)
         Transmitted power [W]; see ``system_records``.
+    shafts : sequence of ShaftSystem, optional (None)
+        Loaded copies returned by ``system.resolve``; see ``system_records``.
 
     Returns
     -------
@@ -216,17 +226,17 @@ def system_full_text(system, power_W: float | None = None) -> str:
         [N m] and the mesh blocks, and the text of every shaft (``shaft_system_text``), joined
         by blank lines; empty parts are left out.
     """
-    stage = [r for r in system_records(system, power_W)
+    stage = [r for r in system_records(system, power_W, shafts)
              if r["section"].startswith("mesh ")
              or (r["section"] == "gear system"
                  and r["parameter"] in ("power", "torque of the source shaft"))]
     parts = [system.summary(), "\n".join(repr(link) for link in system.links),
              format_key_values(stage)]
-    parts += [shaft_system_text(shaft) for shaft in system.shafts]
+    parts += [shaft_system_text(shaft) for shaft in (system.shafts if shafts is None else shafts)]
     return "\n\n".join(p for p in parts if p)
 
 
-def print_system(system, power_W: float | None = None) -> None:
+def print_system(system, power_W: float | None = None, shafts=None) -> None:
     """Print ``system_text`` to the console.
 
     Parameters
@@ -235,5 +245,7 @@ def print_system(system, power_W: float | None = None) -> None:
         The built system.
     power_W : float, optional (None)
         Transmitted power [W].
+    shafts : sequence of ShaftSystem, optional (None)
+        Loaded copies returned by ``system.resolve``; see ``system_records``.
     """
-    print(system_text(system, power_W))
+    print(system_text(system, power_W, shafts))

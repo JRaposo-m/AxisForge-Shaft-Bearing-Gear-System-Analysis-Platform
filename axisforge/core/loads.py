@@ -93,7 +93,7 @@ class Load:
     label : str
         Reporting tag.
     source : str
-        Origin of the load: "user", "gear_mesh" (replaced on every gear-system resolve) or
+        Origin of the load: "user", "gear_mesh" (created by the gear-system resolve) or
         "bearing_reaction".
     """
 

@@ -4,7 +4,8 @@ Single-shaft container: the gears, bearings and loads placed on one shaft, with 
 GearElement binds a gear geometry object to a kinematic role (driver or driven). ShaftSystem holds
 every bearing, gear and load of one shaft, sorted by axial position, and validates their placement
 (supports, overlaps, shoulder keep-out, axial reaction path of a helical mesh). It has no knowledge
-of other shafts; its shaft_position (y, z) is normally set by SpurHelicalGearSystem.resolve().
+of other shafts; SpurHelicalGearSystem.resolve() does not write on it: it returns a loaded copy
+(ShaftSystem.with_loads) that carries the mesh loads and the shaft_position (y, z).
 
 Units: positions and lengths [mm] along the shaft axis x from the left end (x = 0); forces [N];
 speed [rpm]; design life [h]. The torque and moment unit is that of core/loads.py, which is an open
@@ -13,6 +14,7 @@ review item (U1); the gear system stores torque in N m.
 
 from __future__ import annotations
 
+import copy
 from typing import TYPE_CHECKING
 from axisforge.config import MIN_BEARING_SEPARATION_MM, MIN_SHOULDER_CLEARANCE_MM, FLOATING_BEARING_CLEARANCE_MM
 
@@ -71,6 +73,7 @@ class GearElement:
                  rotation_dir: int | None = None, label: str = ""):
         """Store the arguments; see the class docstring."""
         self.gear = gear
+        # QUESTION(Q17): role and rotation_dir are read by nothing in resolve() (review question 4: keep GearElement, or position in the gear data and delete it); kept, their strings are baseline rows.
         self.role = role
         self.rotation_dir = rotation_dir
         self.label = label
@@ -132,8 +135,9 @@ class ShaftSystem:
     Bearing arrangement (BearingCatalog.arrangement): "locating" | "floating" |
     "non-locating" | "thrust". In the shaft FEM a "locating" bearing fixes v and u, a "thrust"
     bearing fixes u only (no radial support) and "floating" / "non-locating" fix v only.
-    validate() requires a "locating" bearing when a gear-mesh AxialLoad is present; it does not
-    accept a "thrust" bearing for that, although the FEM boundary conditions do.
+    validate() requires a "locating" bearing when a gear-mesh AxialLoad is present, i.e. on a loaded
+    copy returned by SpurHelicalGearSystem.resolve() (the user's shaft carries no mesh load); it
+    does not accept a "thrust" bearing for that, although the FEM boundary conditions do.
 
     Parameters
     ----------
@@ -149,7 +153,7 @@ class ShaftSystem:
         only printed by outputs/construction/shaft.py.
     shaft_position : tuple of float
         (y, z) global offset of the shaft axis [mm], with y and z as in the AxisForge convention
-        (D-0010). Overwritten by SpurHelicalGearSystem.resolve().
+        (D-0010). SpurHelicalGearSystem.resolve() sets it on the loaded copies it returns.
     shaft_origin_x : float
         Global x of the shaft coordinate x = 0 [mm]; used only by the axial-alignment check of the
         gear system, never propagated by resolve().
@@ -188,8 +192,8 @@ class ShaftSystem:
         self.name = name
         self.speed_rpm = speed_rpm
         self.design_life_hours = design_life_hours
-        # (y, z) global offset of the shaft axis [mm]. Overwritten by
-        # SpurHelicalGearSystem.resolve(); the user rarely sets this directly.
+        # (y, z) global offset of the shaft axis [mm]. Set by SpurHelicalGearSystem.resolve()
+        # on the loaded copies; the user rarely sets this directly.
         self.shaft_position = shaft_position
         self.shaft_origin_x = shaft_origin_x
         self.label = label
@@ -243,23 +247,50 @@ class ShaftSystem:
         return self
 
     # ------------------------------------------------------------------
-    # Gear-mesh load injection (called by SpurHelicalGearSystem.resolve)
+    # Loaded copy (called by SpurHelicalGearSystem.resolve)
     # ------------------------------------------------------------------
 
-    def set_gear_loads(self, loads: list[Load]) -> None:
+    def with_loads(self, loads: list[Load], *, speed_rpm: float | None = None,
+                   shaft_position: tuple[float, float] | None = None) -> "ShaftSystem":
         """
-        Replace every load with source=="gear_mesh" by `loads`, preserving all
-        user (and any other non-gear-mesh) loads. Idempotent: safe to call
-        repeatedly after re-resolve() without accumulating duplicates.
+        Return a NEW ShaftSystem: this one plus ``loads``; ``self`` is never modified.
+
+        The copy shares the shaft, the bearings and the gear elements BY REFERENCE (one
+        definition of the geometry, no second copy that could disagree); only the load list, the
+        speed and the position of the axis belong to the copy. The loads already on ``self``
+        (user loads) come first, then ``loads``.
 
         Parameters
         ----------
         loads : list of Load
-            New gear-mesh loads (positions [mm], forces [N], torques as produced by the gear
-            system).
+            Loads to add (positions [mm] from the left end of the shaft, forces [N], torques
+            [N m] as produced by the gear system). Stored as given: see Notes.
+        speed_rpm : float or None
+            Rotational speed of the copy [rpm]; None keeps ``self.speed_rpm``.
+        shaft_position : tuple of float or None
+            (y, z) global offset of the shaft axis of the copy [mm]; None keeps
+            ``self.shaft_position``.
+
+        Returns
+        -------
+        ShaftSystem
+            The loaded copy.
+
+        Notes
+        -----
+        The positions of ``loads`` are NOT checked against the shaft extent [0, L] here (as the
+        former ``set_gear_loads``); ``validate()`` of the copy reports a load outside the shaft.
         """
-        self._loads = [ld for ld in self._loads if ld.source != "gear_mesh"]
-        self._loads.extend(loads)
+        loaded = copy.copy(self)     # shallow: shaft, bearings and gear elements are shared
+        loaded._bearings = list(self._bearings)
+        loaded._gears = list(self._gears)
+        # QUESTION(Q42): the loads are stored without the [0, L] check of add_load, as set_gear_loads stored them; the alternative (plan section 4) passes them through add_load, which refuses a valid gear flush with the shaft end when x_hi = (L - b/2) + b/2 exceeds L by one rounding step, unless a tolerance is ruled.
+        loaded._loads = list(self._loads) + list(loads)
+        if speed_rpm is not None:
+            loaded.speed_rpm = speed_rpm
+        if shaft_position is not None:
+            loaded.shaft_position = shaft_position
+        return loaded
 
     # ------------------------------------------------------------------
     # Sorted accessors (by axial position)

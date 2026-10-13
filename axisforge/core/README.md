@@ -30,10 +30,9 @@ core/
       gear_properties/          geometry of one external or internal involute gear
       gear_meshing/             external-external and external-internal pair, tooth forces
       planetary_gear/           single-stage epicyclic train built from two pairs
-  mechanical_system/parallel_axis/
-    spur_helical/
-      shaft_system.py           GearElement, ShaftSystem (bearings, gears, loads on one shaft)
-      gear_system.py            SpurHelicalMeshLink, SpurHelicalGearSystem (power-flow graph)
+  mechanical_system/
+    shaft_system.py             GearElement, ShaftSystem (bearings, gears, loads on one shaft)
+    gear_system.py              SpurHelicalMeshLink, SpurHelicalGearSystem (power-flow graph)
 ```
 
 Tests of the bearing code are in `bearings/tests/` and `bearings/families/tests/`.
@@ -59,7 +58,7 @@ result types (import them from the module `planetary_gear_meshing`).
 | Planetary train | `PlanetaryGearTrainMeshing(sun_gear, planet_gear, ring_gear, k, ...)` | train object |
 | Loads | `RadialLoad`, `AxialLoad`, `TorqueLoad`, `ExternalMoment`, `DistributedRadialLoad` | load objects; `component(LoadPlane)` |
 | One shaft with its elements | `ShaftSystem(shaft, ...)`, `.add_bearing`, `.add_gear`, `.add_load`; `GearElement(gear, role, ...)` | `ShaftSystem` |
-| Several shafts joined by meshes | `SpurHelicalMeshLink(...)`, `SpurHelicalGearSystem(shafts, links)`, `.resolve(P, rpm, rotation_dir_source)` | `None`; shaft positions and mesh loads are set on every `ShaftSystem` |
+| Several shafts joined by meshes | `SpurHelicalMeshLink(...)`, `SpurHelicalGearSystem(shafts, links)`, `.resolve(P, rpm, rotation_dir_source)` | tuple of loaded `ShaftSystem` copies (shaft positions and mesh loads), in the order of `shafts`; the given shafts are not modified |
 
 Concrete bearing families (`DeepGrooveBallFamily`, `AngularContactFamily`, `SelfAligningBallFamily`,
 `ThrustBallSingleRowFamily`, `ThrustBallMultiRowFamily`, `CylindricalRollerFamily`,
@@ -102,8 +101,8 @@ load decomposition is stated in the module docstring of `loads.py`.
 - Bearing families register themselves with `@register_family`; `@point_contact`,
   `@line_contact` and `@thrust` classify them. A new family is a new registered class; no
   table is edited.
-- `Load.source` is `"user"`, `"gear_mesh"` or `"bearing_reaction"`; `ShaftSystem.set_gear_loads`
-  replaces the `"gear_mesh"` loads and keeps the others.
+- `Load.source` is `"user"`, `"gear_mesh"` or `"bearing_reaction"`; `ShaftSystem.with_loads`
+  returns a copy with the given loads added after the loads of the shaft.
 - Fan-out in a gear system (one driver gear, several meshes) is detected by the identity of the
   `GearElement` object.
 - The material registry is process-local and starts empty: `get_material` finds only what the

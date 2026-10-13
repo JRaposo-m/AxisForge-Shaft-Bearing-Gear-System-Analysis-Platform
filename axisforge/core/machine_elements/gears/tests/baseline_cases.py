@@ -51,11 +51,11 @@ from axisforge.core.machine_elements.gears.parallel_axis.planetary_gear.planetar
     PlanetaryMember,
 )
 from axisforge.core.machine_elements.shaft.shaft import Shaft, ShaftSection, Shoulder
-from axisforge.core.mechanical_system.parallel_axis.spur_helical.gear_system import (
+from axisforge.core.mechanical_system.gear_system import (
     SpurHelicalGearSystem,
     SpurHelicalMeshLink,
 )
-from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import (
+from axisforge.core.mechanical_system.shaft_system import (
     GearElement,
     ShaftSystem,
 )
@@ -232,11 +232,11 @@ def _shaft(name):
     return sh
 
 
-def _shaft_system(name):
+def _shaft_system(name, ball_arrangement="locating"):
     ss = ShaftSystem(_shaft(name), name=name)
     ball = Bearing.assemble(family=DeepGrooveBallFamily(),
                             catalog=BearingCatalog(d=20.0, D=42.0, b=12.0, designation="6204", position=10.0,
-                                                   arrangement="locating", label=f"{name}_ball_locating"),
+                                                   arrangement=ball_arrangement, label=f"{name}_ball_locating"),
                             geometry=dict(Dw=7.0, Dpw=31.0, Z=9, s=0.02))
     roller = Bearing.assemble(family=CylindricalRollerFamily(),
                               catalog=BearingCatalog(d=20.0, D=47.0, b=14.0, designation="NU204", position=190.0,
@@ -252,8 +252,9 @@ class Case7(NamedTuple):
 
     ``P`` is the power [W] and ``rot`` the sense of rotation of the source shaft about +X (+1 or
     -1) passed to ``resolve``; ``phi`` the angle of the line of centres a -> b [deg], from +Y toward
-    +Z. ``sP``, ``sW`` are the pinion and wheel ``ShaftSystem``, ``geP``, ``geW`` their
-    ``GearElement``, ``p``, ``w`` the gears.
+    +Z. ``sP``, ``sW`` are the pinion and wheel ``ShaftSystem`` (after ``resolve_case7``: the loaded
+    copies returned by ``resolve``; the shafts given to the system stay in ``system.shafts``),
+    ``geP``, ``geW`` their ``GearElement``, ``p``, ``w`` the gears.
     """
     system: SpurHelicalGearSystem
     mesh: SpurHelicalGearMeshing
@@ -271,12 +272,12 @@ class Case7(NamedTuple):
     @property
     def driver_shaft(self):
         """Loaded shaft that receives the power (shaft a of the link)."""
-        return self.link.shaft_a
+        return (self.sP, self.sW)[self.system.shafts.index(self.link.shaft_a)]
 
     @property
     def driven_shaft(self):
         """Loaded shaft on the other side of the mesh (shaft b of the link)."""
-        return self.link.shaft_b
+        return (self.sP, self.sW)[self.system.shafts.index(self.link.shaft_b)]
 
     @property
     def T_driven_Nm(self):
@@ -289,7 +290,8 @@ class Case7(NamedTuple):
         return self.system._resolved[id(self.link.shaft_b)]["rotation_dir"]
 
 
-def build_case7(source, rot, alt=False, label=None, distribute_loads=False):
+def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear_pos=GEAR_POS,
+                ball_arrangement="locating"):
     """Two shafts of case 7 joined by the H501 pair, NOT yet resolved.
 
     Parameters
@@ -306,13 +308,18 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False):
         Label of the system.
     distribute_loads : bool
         Forwarded to ``SpurHelicalMeshLink`` (False in every baseline case).
+    gear_pos : float
+        Axial position of the centre of both gears on their shafts [mm] (100 in every baseline case).
+    ball_arrangement : str
+        Arrangement of the ball bearing of both shafts ("locating" in every baseline case: it takes
+        the axial thrust of the helical mesh).
 
     Returns
     -------
     Case7
     """
-    p, w = pinion_wheel("H501", position=GEAR_POS)
-    sP, sW = _shaft_system("shaft_pinion"), _shaft_system("shaft_wheel")
+    p, w = pinion_wheel("H501", position=gear_pos)
+    sP, sW = _shaft_system("shaft_pinion", ball_arrangement), _shaft_system("shaft_wheel", ball_arrangement)
     geP = GearElement(p, role="driver" if source == "pinion" else "driven", label="g_pinion")
     geW = GearElement(w, role="driver" if source == "wheel" else "driven", label="g_wheel")
     sP.add_gear(geP)
@@ -331,11 +338,12 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False):
     return Case7(system, mesh, link, sP, sW, p, w, geP, geW, T_NM * OMEGA, rot, PHI7)
 
 
-def resolve_case7(c):
-    """The ONE call of ``SpurHelicalGearSystem.resolve``: returns the ``Case7`` whose shafts carry
-    the mesh loads (today ``resolve`` loads the shafts in place, so it is the same object)."""
-    c.system.resolve(c.P, N_RPM, c.rot)
-    return c
+def resolve_case7(c, sinks=()):
+    """The ONE call of ``SpurHelicalGearSystem.resolve``: returns the ``Case7`` whose ``sP``, ``sW``
+    are the loaded copies (``system.shafts`` is ``[sP, sW]``, and the copies come in that order).
+    ``sinks``: ``(shaft of system.shafts, x [mm])`` pairs, forwarded (none in the baseline cases)."""
+    sP, sW = c.system.resolve(c.P, N_RPM, c.rot, sinks=sinks)
+    return c._replace(sP=sP, sW=sW)
 
 
 def resolved_case7(source, rot, alt=False, distribute_loads=False):
@@ -561,7 +569,7 @@ def run_case7(tag, source, rot, alt=False):
     rec.call("system", system, "summary")
     rec.add("system", "__repr__()", repr(system))
     rec.add("system", "label", system.label)
-    for s in (sP, sW):
+    for s in system.shafts:
         for k, v in system._resolved[id(s)].items():   # private record kept by resolve
             rec.add_value("system", f"_resolved[{s.name}].{k}", v)
     rec.object_("link", link, skip=("shaft_a", "shaft_b", "gear_a", "gear_b", "meshing"))

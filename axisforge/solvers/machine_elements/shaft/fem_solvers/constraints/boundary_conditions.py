@@ -7,7 +7,7 @@ how K was assembled.
 from __future__ import annotations
 
 from axisforge.mesh.shaft.element_type.elem import Elem
-from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
+from axisforge.core.mechanical_system.shaft_system import ShaftSystem
 
 
 def boundary_dofs(x_nodes: list[float], shaft_system: ShaftSystem) -> tuple[list[int], list[int]]:

@@ -31,7 +31,7 @@ and function docstrings for arguments and keys.
 
 | Task | Call | Returns |
 |---|---|---|
-| Gear system description | `construction.system.system_records(system, power_W=None)` | list of `{section, parameter, value, unit}` |
+| Gear system description | `construction.system.system_records(system, power_W=None, shafts=None)` (`shafts`: the loaded copies returned by `resolve`) | list of `{section, parameter, value, unit}` |
 | Gear system as text | `construction.system.system_text`, `print_system` | str, None |
 | Shaft system description | `construction.shaft.shaft_system_records(shaft_system)` | list of dicts |
 | Sections, shoulders, gears | `construction.shaft.section_records`, `shoulder_records`, `gear_element_records` | list of dicts |

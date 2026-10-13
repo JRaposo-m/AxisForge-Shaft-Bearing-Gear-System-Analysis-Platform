@@ -1,5 +1,5 @@
-"""Records and text of a ``ShaftSystem`` (``axisforge.core.mechanical_system.parallel_axis.
-spur_helical.shaft_system``): the shaft, its gears, its bearings and its loads.
+"""Records and text of a ``ShaftSystem`` (``axisforge.core.mechanical_system.
+shaft_system``): the shaft, its gears, its bearings and its loads.
 
 A ``ShaftSystem`` already reaches everything that is built on one shaft (``.shaft``, ``.gears``,
 ``.bearings``, ``.loads``), so this module only needs the ``ShaftSystem``. The text is made of

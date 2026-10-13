@@ -62,7 +62,7 @@ def test_a_family_defines_no_gear_alone_by_default():
     class PairOnly(GearFamily):
         name = "pair_only"
         axes = "intersecting"
-        assemble_pair = validate_pair = pair_summary = pair_repr = None
+        assemble_pair = mesh_forces = validate_pair = pair_summary = pair_repr = None
 
     with pytest.raises(NotImplementedError):
         Gear.assemble(PairOnly(), CylindricalGearData(2.0, 20))
@@ -392,7 +392,11 @@ def test_renamed_text_rows_are_counted():
     renamed = sum(n for _, n in bc.RENAMED_TEXT.values())
     total = sum(len(bc.baseline_rows(c)) for c in cases)
     assert echoed == count == 58
-    assert (total, total - echoed - renamed, renamed, echoed) == (7181, 7117, 6, 58)     # rows: computed, renamed text, echoed
+    # Q46 (step 5): the rows of case 7 that are text or state of the two replaced system classes, counted
+    # one by one in mechanical_system/tests/test_transmission_baseline.py
+    renamed += sum(n for _, n in bc.RENAMED_PATTERNS.values())
+    echoed += sum(n for _, n, _ in bc.ECHOED_ROWS_CASE7.values())
+    assert (total, total - echoed - renamed, renamed, echoed) == (7181, 7087, 18, 76)     # rows: computed, renamed text, echoed
 
 
 # ----------------------------------------------------------------------------------------------

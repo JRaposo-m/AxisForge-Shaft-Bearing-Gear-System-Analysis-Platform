@@ -17,6 +17,11 @@ below (``recorded_gear``, ``recorded_pair``): recorded row name -> accessor on t
 the recorded order. Every row is still compared; ``RENAMED_TEXT`` lists the few text rows that name
 a removed class.
 
+Since step 5 the system of case 7 is a ``Transmission`` with one ``PairStage`` and its result a
+``ResolvedTransmission``. The rows of the ``system`` and ``link`` objects are recorded in
+``run_case7`` under the names of the two classes they replace; ``RENAMED_PATTERNS`` and
+``ECHOED_ROWS_CASE7`` list the rows that are text or state of those classes.
+
 Units are those of AxisForge: lengths [mm], forces [N], torques [N m], angles [rad] in the gear
 objects and [deg] for ``phi_deg`` and the load angles, speeds [rpm], power [W].
 """
@@ -27,6 +32,7 @@ import enum
 import functools
 import inspect
 import math
+import re
 from pathlib import Path
 from typing import NamedTuple
 
@@ -48,13 +54,14 @@ from axisforge.core.machine_elements.gears.parallel_axis.planetary_gear.planetar
     PlanetaryMember,
 )
 from axisforge.core.machine_elements.shaft.shaft import Shaft, ShaftSection, Shoulder
-from axisforge.core.mechanical_system.gear_system import (
-    SpurHelicalGearSystem,
-    SpurHelicalMeshLink,
-)
 from axisforge.core.mechanical_system.shaft_system import (
     GearElement,
     ShaftSystem,
+)
+from axisforge.core.mechanical_system.transmission import (
+    PairStage,
+    ResolvedTransmission,
+    Transmission,
 )
 
 # <repo>/tests/data/gears_baseline: the case CSVs copied from the vault (question Q01)
@@ -238,6 +245,27 @@ RENAMED_TEXT = {
 # (row names, number of rows in cases 1-7). What the driver CHANGES is compared in the forces() rows.
 ECHOED_ROWS = (("driver", "driven"), 58)
 
+# QUESTION(Q46): text rows of case 7 that name one of the two classes ``Transmission`` and ``PairStage``
+# replace: regular expression of the baseline text -> (text given now, built from the groups; number
+# of such rows in cases 7a-7f). The summary() text is reproduced verbatim. The alternative is to
+# rule new texts and replace the rows.
+RENAMED_PATTERNS = {
+    # __repr__ of the system: its `resolved=True` was state of the system; the result is now a separate record
+    r"\"GearSystem\(label='(.*)', shafts=(\d+), links=(\d+), resolved=True\)\"":
+        ("\"Transmission(label='{0}', shafts={1}, stages={2})\"", 6),
+    # __repr__ of the link: torque_split=None (the full torque) is now share=1.0 (Q40)
+    r"\"SpurHelicalMeshLink\((.*), torque_split=None, label='(.*)'\)\"":
+        ("\"PairStage({0}, share=1.0, label='{1}')\"", 6),
+}
+
+# QUESTION(Q46): rows of case 7 that record STATE of the replaced classes with no counterpart of the
+# same value; they are written back as recorded (they pass by construction):
+# (object, row name ending) -> (recorded value, number of rows in cases 7a-7f, what holds it now).
+ECHOED_ROWS_CASE7 = {
+    ("link", "meshing_load_factor"): (1.0, 6, "removed: a constant 1.0 read by no live code"),
+    ("system", "].rpm"): (None, 12, "ResolvedTransmission.speed_rpm, a number (Q09)"),
+}
+
 
 class Recorded:
     """One object of the old classes as the baseline recorded it, rebuilt from the new objects.
@@ -377,11 +405,12 @@ class Case7(NamedTuple):
     +Z. ``sP``, ``sW`` are the pinion and wheel ``ShaftSystem`` (after ``resolve_case7``: the loaded
     copies returned by ``resolve``; the shafts given to the system stay in ``system.shafts``),
     ``geP``, ``geW`` their ``GearElement``, ``p``, ``w`` the gears. ``mesh`` is the pair as recorded
-    (``recorded_pair``); the link holds the ``GearPair`` itself (``mesh.new``).
+    (``recorded_pair``); the stage ``link`` holds the ``GearPair`` itself (``mesh.new``).
+    ``resolved`` is what ``resolve`` returned (None before ``resolve_case7``).
     """
-    system: SpurHelicalGearSystem
+    system: Transmission
     mesh: Recorded
-    link: SpurHelicalMeshLink
+    link: PairStage
     sP: ShaftSystem
     sW: ShaftSystem
     p: Gear
@@ -391,6 +420,7 @@ class Case7(NamedTuple):
     P: float
     rot: int
     phi: float
+    resolved: ResolvedTransmission | None = None
 
     @property
     def driver_shaft(self):
@@ -405,12 +435,12 @@ class Case7(NamedTuple):
     @property
     def T_driven_Nm(self):
         """Torque that ``resolve`` records for the driven shaft [N m]."""
-        return self.system._resolved[id(self.link.shaft_b)]["T_out_Nm"]
+        return self.resolved.torque_Nm[self.system.shafts.index(self.link.shaft_b)]
 
     @property
     def rot_driven(self):
         """Sense of rotation that ``resolve`` records for the driven shaft, +1 or -1 [-]."""
-        return self.system._resolved[id(self.link.shaft_b)]["rotation_dir"]
+        return self.resolved.rotation[self.system.shafts.index(self.link.shaft_b)]
 
 
 def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear_pos=GEAR_POS,
@@ -430,7 +460,7 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear
     label : str or None
         Label of the system.
     distribute_loads : bool
-        Forwarded to ``SpurHelicalMeshLink`` (False in every baseline case).
+        Forwarded to ``PairStage`` (False in every baseline case).
     gear_pos : float
         Axial position of the centre of both gears on their shafts [mm] (100 in every baseline case).
     ball_arrangement : str
@@ -447,26 +477,33 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear
     geW = GearElement(w, role="driver" if source == "wheel" else "driven", label="g_wheel")
     sP.add_gear(geP)
     sW.add_gear(geW)
+    # the stage keeps the `driver` of forces() at its default "gear1", as the link of the baseline did (Q03)
     kw = dict(phi_deg=PHI7, label="stage", distribute_loads=distribute_loads)
     if source == "pinion":
         mesh = assemble_pair(p, w, label="stage", driver="gear1")
-        link = SpurHelicalMeshLink(sP, geP, sW, geW, mesh.new, **kw)
+        link = PairStage(pair=mesh.new, shaft_a=sP, gear_a=geP, shaft_b=sW, gear_b=geW, **kw)
     elif not alt:
         mesh = assemble_pair(w, p, label="stage", driver="gear1")
-        link = SpurHelicalMeshLink(sW, geW, sP, geP, mesh.new, **kw)
+        link = PairStage(pair=mesh.new, shaft_a=sW, gear_a=geW, shaft_b=sP, gear_b=geP, **kw)
     else:
         mesh = assemble_pair(p, w, label="stage", driver="gear2")
-        link = SpurHelicalMeshLink(sW, geW, sP, geP, mesh.new, **kw)
-    system = SpurHelicalGearSystem([sP, sW], [link], label=label)
+        link = PairStage(pair=mesh.new, shaft_a=sW, gear_a=geW, shaft_b=sP, gear_b=geP, **kw)
+    system = Transmission([sP, sW], [link], source=link.shaft_a, label=label)
     return Case7(system, mesh, link, sP, sW, p, w, geP, geW, T_NM * OMEGA, rot, PHI7)
 
 
 def resolve_case7(c, sinks=()):
-    """The ONE call of ``SpurHelicalGearSystem.resolve``: returns the ``Case7`` whose ``sP``, ``sW``
-    are the loaded copies (``system.shafts`` is ``[sP, sW]``, and the copies come in that order).
-    ``sinks``: ``(shaft of system.shafts, x [mm])`` pairs, forwarded (none in the baseline cases)."""
-    sP, sW = c.system.resolve(c.P, N_RPM, c.rot, sinks=sinks)
-    return c._replace(sP=sP, sW=sW)
+    """The ONE call of ``Transmission.resolve``: returns the ``Case7`` whose ``sP``, ``sW`` are the
+    loaded copies (``system.shafts`` is ``[sP, sW]``, and the copies come in that order) and whose
+    ``resolved`` is the ``ResolvedTransmission``. ``sinks``: ``(shaft of system.shafts, x [mm])``
+    pairs (none in the baseline cases); they are an argument of the ``Transmission``, so with sinks
+    the same shafts and path are given to a new one."""
+    system = c.system
+    if sinks:
+        system = Transmission(system.shafts, system.path, system.source, sinks=sinks, label=system.label)
+    resolved = system.resolve(c.P, N_RPM, c.rot)
+    sP, sW = resolved.shafts
+    return c._replace(system=system, sP=sP, sW=sW, resolved=resolved)
 
 
 def resolved_case7(source, rot, alt=False, distribute_loads=False):
@@ -667,7 +704,7 @@ def run_planetary(case, beta):
 
 
 # ----------------------------------------------------------------------------------------------
-# case 7: SpurHelicalGearSystem.resolve on two shafts
+# case 7: Transmission.resolve on two shafts
 # ----------------------------------------------------------------------------------------------
 def load_row(rec, obj, i, ld):
     p = f"loads[{i}]"
@@ -689,20 +726,27 @@ def run_case7(tag, source, rot, alt=False):
     rec.add("inputs", "resolve args", f"P={c.P!r} W, rpm={N_RPM!r}, rotation_dir_source={rot}, source_position=(0.0, 0.0), source_torque_x=0.0")
     rec.call("system", c.system, "validate", label="validate() BEFORE resolve")
     c = R[(case, "system")] = resolve_case7(c)
-    system, mesh, link, sP, sW, geP, geW = c.system, c.mesh, c.link, c.sP, c.sW, c.geP, c.geW
+    system, mesh, link, sP, sW, geP, geW, resolved = c.system, c.mesh, c.link, c.sP, c.sW, c.geP, c.geW, c.resolved
     rec.call("system", system, "validate", label="validate() AFTER resolve")
-    rec.call("system", system, "summary")
-    rec.add("system", "__repr__()", repr(system))
+    rec.call("system", resolved, "summary")
+    rec.add("system", "__repr__()", repr(system))      # RENAMED_PATTERNS
     rec.add("system", "label", system.label)
-    for s in system.shafts:
-        for k, v in system._resolved[id(s)].items():   # private record kept by resolve
+    # NAME MAP of the private record `_resolved` of the replaced system: per shaft, in the order of
+    # system.shafts, the fields of the ResolvedTransmission and the position written on the loaded copy
+    for s, copy, T, rot_s in zip(system.shafts, resolved.shafts, resolved.torque_Nm, resolved.rotation):
+        for k, v in dict(name=s.name, T_out_Nm=T, rotation_dir=rot_s, shaft_position=copy.shaft_position,
+                         rpm=ECHOED_ROWS_CASE7[("system", "].rpm")][0]).items():
             rec.add_value("system", f"_resolved[{s.name}].{k}", v)
-    # `driver` of the link was added in step 3 (it was an attribute of the pair): recorded in the rows of the pair
-    rec.object_("link", link, skip=("shaft_a", "shaft_b", "gear_a", "gear_b", "meshing", "driver"))
+    # NAME MAP of the link: recorded attribute -> field of the PairStage (the `driver` is recorded in the rows of the pair)
+    # torque_split was None for a link that took the full torque: share = 1.0 (Q40)
+    for k, v in dict(phi_deg=link.phi_deg, torque_split=None if link.share == 1.0 else link.share,
+                     distribute_loads=link.distribute_loads,
+                     meshing_load_factor=ECHOED_ROWS_CASE7[("link", "meshing_load_factor")][0], label=link.label).items():
+        rec.add_value("link", k, v)
     rec.add("link", "shaft_a.name", link.shaft_a.name)
     rec.add("link", "shaft_b.name", link.shaft_b.name)
     rec.call("link", link, "validate")
-    rec.add("link", "__repr__()", repr(link))
+    rec.add("link", "__repr__()", repr(link))      # RENAMED_PATTERNS
     record_pair(rec, "mesh", mesh, T_NM, (case, "mesh"))
     for nm, s, ge in (("shaft_pinion", sP, geP), ("shaft_wheel", sW, geW)):
         rec.object_(nm, s, skip=("shaft",))
@@ -939,7 +983,7 @@ def physics_system(case):
     CHECKS.append(Check("7.c6", case, "driven shaft: sum of stored TorqueLoads [N m] (open end; closed only by a user load)", B["Tnet"], 0.0, "INFO", ""))
     Tstore_b = c.T_driven_Nm
     check("7.c7", case, "driven-shaft torque T_out (resolved) = T_in*z_b/z_a [N m]", abs(Tstore_b), T_src * gb.z / ga.z, scale=T_src * gb.z / ga.z,
-          note=f"_resolved T_out_Nm={Tstore_b!r}; z_a={ga.z}, z_b={gb.z}")
+          note=f"resolved torque_Nm={Tstore_b!r}; z_a={ga.z}, z_b={gb.z}")
     nb_phys = N_RPM * ga.z / gb.z
     check("7.c8", case, "driven-shaft power |T_out|*n_b = P_in [W], n_b=n*z_a/z_b", abs(Tstore_b) * nb_phys * 2 * math.pi / 60.0, P, scale=P, note=f"n_b={nb_phys!r} rpm")
     check("7.c9", case, "driven shaft speed_rpm stored by resolve = n*z_a/z_b [rpm]", sb.speed_rpm, nb_phys, scale=nb_phys, note=f"ShaftSystem.speed_rpm={sb.speed_rpm!r}; source shaft speed_rpm={sa.speed_rpm!r} (given {N_RPM})")
@@ -1032,6 +1076,10 @@ def equivalent(got, text):
         # alternative is to compare the numbers found inside a string under the tolerances.
         if text in RENAMED_TEXT:
             return got == RENAMED_TEXT[text][0]     # QUESTION(Q50): the row names a removed class
+        for pattern, (now, _) in RENAMED_PATTERNS.items():
+            m = re.fullmatch(pattern, text)
+            if m:
+                return got == now.format(*m.groups())     # QUESTION(Q46): the row names a replaced class
         return got == text
     try:
         ref = float(text)

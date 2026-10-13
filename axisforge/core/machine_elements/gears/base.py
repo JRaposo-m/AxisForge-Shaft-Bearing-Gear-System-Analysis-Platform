@@ -1,8 +1,11 @@
-"""Contract of a gear family, and the two assembled, immutable objects every family returns.
+"""Contract of a gear family, the two assembled, immutable objects every family returns, and the
+record of the forces of one mesh.
 
 A ``GearFamily`` turns input data into the geometry of one gear and of one gear pair; ``Gear`` and
 ``GearPair`` hold that geometry and refuse attribute writes once assembled, as ``Bearing`` does.
-Nothing physical is computed here: the equations belong to the family (``cylindrical.py``).
+``MeshForces`` is what a family returns for a torque on a pair; its docstring holds the mesh frame
+and the sign table. Nothing physical is computed here: the equations belong to the family
+(``cylindrical.py``).
 """
 from __future__ import annotations
 
@@ -18,6 +21,100 @@ def register_gear_family(cls: type["GearFamily"]) -> type["GearFamily"]:
     """Class decorator: add the family to the registry of all gear families (by class name)."""
     _GEAR_FAMILY_REGISTRY[cls.__name__] = cls
     return cls
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class MeshForces:
+    """Forces of one gear mesh on its two gears, for one torque: magnitudes and signed components.
+
+    One normal force F_bn acts between the flanks, in the plane tangent to both base cylinders
+    and inclined by the base helix angle to the transverse plane. This record holds its
+    components on the pitch cylinder (what the shafts and bearings receive), on the base cylinder
+    (what the tooth contact receives) and the nominal tangential force at the reference cylinder
+    (the input of the ISO 6336 rating formulae), then the same force as a signed vector on each
+    gear.
+
+    Mesh frame (D-0010 item 14), right-handed, origin at the pitch point C at mid face width:
+
+    - ``e_c``: along the line of centres, from the axis of gear 1 to the axis of gear 2;
+    - ``e_x``: the shaft axis of gear 1 (for parallel shafts, global +X);
+    - ``e_t = e_x x e_c``: tangent to both pitch circles at C.
+
+    A force here is the force exerted BY THE MESH ON a gear (D-0010 item 15), so ``on_2`` is the
+    reaction of ``on_1``: ``on_2 = -on_1``, both applied at C.
+
+    Sign table (D-0010 item 16), with T_1 the torque applied to gear 1 by its own shaft about
+    e_x [N m], rho_i the signed distance of C from the axis of gear i along e_c [mm] and h_1 the
+    hand of gear 1 (+1 right, -1 left). "Right-hand" is taken here geometrically: the tooth trace
+    turns in the right-hand sense about e_x when followed along +e_x. The definition of the
+    flank direction in ISO_21771_2007 was not transcribed, so this one has no library source::
+
+        F_1,t = -1000 T_1 / rho_1                    the mesh balances the shaft torque
+        F_1,c = -sign(z_1 z_2) F_r                   the flanks only push: an external gear is pushed
+                                                     toward its own axis, an internal gear outward
+        F_1,x = -h_1 sign(rho_1) tan(beta_w) F_1,t   normal to the tooth trace at C; equal to
+                                                     h rot F_a on the DRIVING gear along its axis
+
+    External pair, gear 1 driving with the sense rot (+1 or -1 about e_x), h the hand of gear 1::
+
+        on gear 1:  (-F_r, -rot F_tw, +h rot F_a)        on gear 2:  (+F_r, +rot F_tw, -h rot F_a)
+
+    Internal pair (gear 2 the ring), the pinion driving::
+
+        on gear 1:  (+F_r, +rot F_tw, +h rot F_a)        on gear 2:  (-F_r, -rot F_tw, -h rot F_a)
+
+    Attributes
+    ----------
+    F_tw_N : float
+        Tangential force at the working pitch cylinder, 2000 abs(T_1) / d_w1 [N], >= 0.
+    F_r_N : float
+        Radial (separating) force at the pitch point, F_tw tan(alpha_wt) [N], >= 0.
+    F_a_N : float
+        Axial force, F_bt tan(beta_b) = F_tw tan(beta_w) [N], >= 0 (0 for a spur pair).
+    F_bt_N : float
+        Transverse force along the line of action, 2000 abs(T_1) / d_b1 [N], >= 0.
+    F_bn_N : float
+        Force normal to the flanks, F_bt / cos(beta_b) [N], >= 0: the load of the tooth contact
+        (``CylindricalFamily.contact_inputs(F_bn_N=...)``).
+    F_t_nominal_N : float
+        Nominal tangential force at the REFERENCE cylinder, 2000 abs(T_1) / d_1 [N], >= 0: the
+        input of the rating formulae, never a shaft load.
+    on_1, on_2 : tuple of float
+        (F_c, F_t, F_x) [N]: force of the mesh on gear 1 and on gear 2 in the mesh frame, signed.
+    rho_mm : tuple of float
+        (rho_1, rho_2) [mm]: signed distance of C from the axis of each gear along e_c;
+        rho_2 = rho_1 - a_w. External pair: (+r_w1, -r_w2); internal pair: (-r_w1, -r_w2).
+    x_offset_mm : tuple of float
+        Axial offset of C from the position of each gear on its shaft [mm]; (0, 0) for a
+        cylindrical pair (C at mid face width). It exists for bevel pairs.
+
+    Notes
+    -----
+    Units: forces [N] from a torque in [N m] and diameters in [mm], hence the factor 2000
+    (D-0010 item 5). Assumptions: ideal mesh (no friction, no losses), rigid involute flanks,
+    steady rotation.
+
+    The three sets (pitch, base, reference cylinder) describe one force: F_tw**2 + F_r**2 +
+    F_a**2 = F_bn**2.
+
+    References
+    ----------
+    .. [1] ISO_6336-1_2019, 4.2.2, Formula (1), p. 19 (F_t nominal, reference diameter; checked).
+    .. [2] D-0010 items 14-18; vault note ``units_and_conventions.md``, C.4 and C.5. F_tw, F_r,
+           F_a, F_bt, F_bn and every direction: no library source (statics, compressive contact,
+           geometry of the involute helicoid with ISO_21771_2007 Eq. (5), (19)).
+    """
+
+    F_tw_N: float
+    F_r_N: float
+    F_a_N: float
+    F_bt_N: float
+    F_bn_N: float
+    F_t_nominal_N: float
+    on_1: tuple[float, float, float]
+    on_2: tuple[float, float, float]
+    rho_mm: tuple[float, float]
+    x_offset_mm: tuple[float, float] = (0.0, 0.0)
 
 
 class GearFamily(ABC):
@@ -79,6 +176,26 @@ class GearFamily(ABC):
         tuple
             ``(gear1, gear2, attributes)``: the two assembled gears and a flat dictionary of the
             mesh geometry (key ``"warnings"`` as in ``assemble_gear``).
+        """
+
+    @abstractmethod
+    def mesh_forces(self, pair: "GearPair", T1_Nm: float, rot1: int) -> MeshForces:
+        """Forces of the mesh on the two gears of the pair for a torque on gear 1.
+
+        Parameters
+        ----------
+        pair : GearPair
+            Pair of this family.
+        T1_Nm : float
+            Torque applied to gear 1 by its own shaft, about the axis of gear 1 [N m], signed.
+        rot1 : int
+            Sense of rotation of gear 1 about its axis, +1 or -1 [-]. Gear 1 drives when
+            ``T1_Nm * rot1 > 0`` (D-0010 items 11-13).
+
+        Returns
+        -------
+        MeshForces
+            Magnitudes and signed components in the mesh frame (see ``MeshForces``).
         """
 
     def validate_gear(self, gear: "Gear") -> list[str]:

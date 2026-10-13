@@ -5,7 +5,7 @@ single-shaft and multi-shaft systems, applied loads and materials. A domain obje
 physical thing, can validate itself and owns the standard formulae that depend only on its own
 geometry (for example the basic dynamic load rating of a bearing). The package runs no solver,
 stores no solver result and draws nothing; a `ShaftSystem` holds the loads applied to it and
-`SpurHelicalGearSystem.resolve` returns loaded copies of its shafts with the mesh loads. It imports nothing from
+`Transmission.resolve` returns loaded copies of its shafts with the mesh loads. It imports nothing from
 `mesh`, `solvers`, `results` or `outputs`. Detail of every class is in its docstring.
 
 ## Contents
@@ -27,14 +27,17 @@ core/
         geometry.py             raceway and rolling-element curvature geometry
         capacity.py             basic dynamic load rating calculators (point and line contact)
     gears/
-      base.py                   GearFamily (contract), @register_gear_family, Gear, GearPair (immutable once assembled)
+      base.py                   GearFamily (contract), @register_gear_family, Gear, GearPair (immutable once assembled),
+                                MeshForces (forces of one mesh; mesh frame and sign table)
       cylindrical.py            CylindricalGearData, CylindricalFamily: external and internal involute gears
-                                (z < 0), their pair, checks and tooth forces, in the order of ISO 21771
+                                (z < 0), their pair, checks and tooth forces (`forces`, `mesh_forces`), in the
+                                order of ISO 21771
       cylindrical_capacity.py   placeholder (ISO 6336 element factors): contracts only, nothing computed
       parallel_axis/planetary_gear/   single-stage epicyclic train built from two pairs
   mechanical_system/
     shaft_system.py             GearElement, ShaftSystem (bearings, gears, loads on one shaft)
-    gear_system.py              SpurHelicalMeshLink, SpurHelicalGearSystem (power-flow graph)
+    transmission.py             mesh_forces_to_shaft_loads, PairStage, Transmission, ResolvedTransmission
+                                (written power path)
 ```
 
 Tests of the bearing code are in `bearings/tests/` and `bearings/families/tests/`; those of the
@@ -58,11 +61,12 @@ result types (import them from the module `planetary_gear_meshing`).
 | Switch on ISO/TS 16281 contact data | `geometry` with `contact=ContactAnalysis.ISO16281`, `e1`, `e2`, `nu1`, `nu2` | bearing with contact spring constants |
 | Gear geometry | `Gear.assemble(CylindricalFamily(), CylindricalGearData(mn, z, x=..., b=..., ...))`; `z < 0` for an internal gear | immutable `Gear` |
 | Gear pair | `GearPair.assemble(family, gear1=..., gear2=..., al=None, addendum_reduction=False, label="")` | immutable `GearPair` (no shaft, driver or torque) |
-| Tooth forces of a pair | `pair.family.forces(pair, T, phi_deg, rotation_dir, driver="gear1")`, `T` in N m | dict of forces [N], output torque [N m] and force angles [deg] |
+| Tooth forces of a pair | `pair.family.forces(pair, T, phi_deg, rotation_dir, driver="gear1")`, `T` in N m | dict of forces [N], output torque [N m] and force angles [deg]; the shaft loads are built from it |
+| Forces of a mesh on its two gears | `pair.family.mesh_forces(pair, T1_Nm, rot1, hand1=1)` | `MeshForces`: `F_tw_N`, `F_r_N`, `F_a_N`, `F_bt_N`, `F_bn_N`, `F_t_nominal_N` [N], signed `on_1`, `on_2` in the mesh frame, `rho_mm` |
 | Planetary train | `PlanetaryGearTrainMeshing(sun_gear, planet_gear, ring_gear, k, ...)` | train object |
 | Loads | `RadialLoad`, `AxialLoad`, `TorqueLoad`, `ExternalMoment`, `DistributedRadialLoad` | load objects; `component(LoadPlane)` |
 | One shaft with its elements | `ShaftSystem(shaft, ...)`, `.add_bearing`, `.add_gear`, `.add_load`; `GearElement(gear, role, ...)` | `ShaftSystem` |
-| Several shafts joined by meshes | `SpurHelicalMeshLink(...)`, `SpurHelicalGearSystem(shafts, links)`, `.resolve(P, rpm, rotation_dir_source)` | tuple of loaded `ShaftSystem` copies (shaft positions and mesh loads), in the order of `shafts`; the given shafts are not modified |
+| Several shafts joined by meshes | `PairStage(pair=..., shaft_a=..., gear_a=..., shaft_b=..., gear_b=..., phi_deg=...)`, `Transmission(shafts, path, source, sinks=())`, `.resolve(P_W, n_rpm, rotation)` | `ResolvedTransmission`: `shafts` (loaded `ShaftSystem` copies with positions and mesh loads, in the order given), `torque_Nm`, `rotation`, `speed_rpm`, `meshes`, `checks`, `warnings`; the given shafts are not modified |
 
 Concrete bearing families (`DeepGrooveBallFamily`, `AngularContactFamily`, `SelfAligningBallFamily`,
 `ThrustBallSingleRowFamily`, `ThrustBallMultiRowFamily`, `CylindricalRollerFamily`,
@@ -109,8 +113,12 @@ load decomposition is stated in the module docstring of `loads.py`.
   table is edited.
 - `Load.source` is `"user"`, `"gear_mesh"` or `"bearing_reaction"`; `ShaftSystem.with_loads`
   returns a copy with the given loads added after the loads of the shaft.
-- Fan-out in a gear system (one driver gear, several meshes) is detected by the identity of the
-  `GearElement` object.
+- The power path of a `Transmission` is used as written (ordered stages, one source); a stage
+  takes `share` of the torque entering its input shaft (default 1.0).
+- `ResolvedTransmission.speed_rpm` holds the speed of every shaft; `resolve` does not write it on
+  `ShaftSystem.speed_rpm` of the loaded copies. The stored mesh loads are not `MeshForces`: the
+  differences are listed in the docstring of `mesh_forces_to_shaft_loads`, and
+  `ResolvedTransmission.checks` holds the closure checks they pass and fail.
 - The material registry is process-local and starts empty: `get_material` finds only what the
   caller has registered.
 - `core` imports `axisforge.config`, `axisforge.database`, NumPy and SciPy.

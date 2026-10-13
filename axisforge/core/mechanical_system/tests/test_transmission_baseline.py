@@ -1,5 +1,6 @@
-"""Golden tests of ``ShaftSystem`` and ``SpurHelicalGearSystem.resolve`` against the baseline of
-commit 39c7133 (cases 7a-7f), and the physics checks of the stored shaft loads that need no standard.
+"""Golden tests of ``ShaftSystem`` and ``Transmission.resolve`` against the baseline of commit
+39c7133 (cases 7a-7f, recorded on the system classes that ``Transmission`` and ``PairStage``
+replace), and the physics checks of the stored shaft loads that need no standard.
 
 The expected values are the CSVs in ``tests/data/gears_baseline`` (vault note
 ``gears_mechsys_review_2026-10-12/baseline/_baseline.md``); the case objects are built in
@@ -8,6 +9,7 @@ where the review found today's result wrong, the golden rows pin it and the phys
 breaks is ``xfail(strict=True)`` with its question id (Qnn) and review row.
 """
 import math
+import re
 
 import pytest
 
@@ -26,6 +28,27 @@ def test_baseline_rows(case, obj):
     """Every CSV row of one recorded object (system, link, pair, shafts with their stored loads) is
     reproduced under the equivalence rule (``baseline_cases.REL_TOL``)."""
     assert bc.mismatches(case, obj) == []
+
+
+def test_rows_of_the_replaced_classes_are_counted():
+    """Q46: of the 2232 rows of cases 7a-7f, 12 are text that names a replaced class (compared against
+    the new text) and 18 are state of those classes written back as recorded; with the 12 `driver` /
+    `driven` rows of the six recorded pairs (Q50) that leaves 2190 rows computed by the code."""
+    got = bc.run_baseline()[0]
+    rows = [(c, i, obj, name, text) for c in CASES for i, (obj, name, text) in enumerate(bc.baseline_rows(c))]
+    renamed = 0
+    for pattern, (now, count) in bc.RENAMED_PATTERNS.items():
+        hits = [(c, i, re.fullmatch(pattern, text)) for c, i, _, _, text in rows if re.fullmatch(pattern, text)]
+        assert len(hits) == count
+        assert all(got[c][i][2] == now.format(*m.groups()) for c, i, m in hits)
+        renamed += count
+    echoed = 0
+    for (obj, ending), (value, count, _) in bc.ECHOED_ROWS_CASE7.items():
+        hits = [text for _, _, o, name, text in rows if o == obj and name.endswith(ending)]
+        assert len(hits) == count and set(hits) == {bc.fmt(value)}
+        echoed += count
+    declared = sum(1 for _, _, obj, name, _ in rows if name in bc.ECHOED_ROWS[0] and obj != "link")
+    assert (len(rows), len(rows) - renamed - echoed - declared, renamed, echoed, declared) == (2232, 2190, 12, 18, 12)
 
 
 Q03 = "Q03: row 1 / X1, gear order and driver"
@@ -100,11 +123,12 @@ def test_alternative_tilting_moment_of_the_axial_force(case7):
 
 @pytest.mark.parametrize("driver", ("gear1", "gear2"))
 def test_internal_link_takes_the_declared_driver(driver):
-    """Q03: the link passes its ``driver`` to ``forces()`` as the pair did before step 3 (default
+    """Q03: the stage passes its ``driver`` to ``forces()`` as the pair did before step 3 (default
     "gear1"), whatever gear ``gear_a`` wraps. Here ``gear_a`` wraps the RING of the pair of case 5
-    (z 20/-60, mn 2 mm, beta 15 deg): with the default the torque is still taken on the pinion."""
+    (z 20/-60, mn 2 mm, beta 15 deg): with the default the torque is still taken on the pinion, and
+    the stage says so in its warnings (Q45)."""
     from axisforge.core.machine_elements.gears import GearPair
-    from axisforge.core.mechanical_system import GearElement, SpurHelicalGearSystem, SpurHelicalMeshLink
+    from axisforge.core.mechanical_system import GearElement, PairStage, Transmission
 
     pinion = bc.gear(2.0, 20, b=20.0, beta_n_deg=15.0, label="pinion", position=bc.GEAR_POS)
     ring = bc.gear(2.0, -60, b=20.0, beta_n_deg=15.0, label="ring", position=bc.GEAR_POS)
@@ -114,8 +138,10 @@ def test_internal_link_takes_the_declared_driver(driver):
     s_ring.add_gear(ge_ring)
     s_pinion.add_gear(ge_pinion)
     kw = {} if driver == "gear1" else {"driver": driver}
-    link = SpurHelicalMeshLink(s_ring, ge_ring, s_pinion, ge_pinion, pair, bc.PHI7, **kw)
-    loaded_ring, loaded_pinion = SpurHelicalGearSystem([s_ring, s_pinion], [link]).resolve(bc.T_NM * bc.OMEGA, bc.N_RPM, 1)
+    stage = PairStage(pair=pair, shaft_a=s_ring, gear_a=ge_ring, shaft_b=s_pinion, gear_b=ge_pinion, phi_deg=bc.PHI7, **kw)
+    system = Transmission([s_ring, s_pinion], [stage], source=s_ring)
+    loaded_ring, loaded_pinion = system.resolve(bc.T_NM * bc.OMEGA, bc.N_RPM, 1).shafts
+    assert any("not the gear on which forces() takes the torque" in w for w in system.warnings) == (driver == "gear1")
 
     F = bc.FAMILY.forces(pair, bc.T_NM, bc.PHI7, 1, driver=driver)       # [N], [N m]
     other = bc.FAMILY.forces(pair, bc.T_NM, bc.PHI7, 1, driver="gear2" if driver == "gear1" else "gear1")

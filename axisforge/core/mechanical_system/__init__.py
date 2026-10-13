@@ -2,12 +2,14 @@
 Mechanical systems: assemblies of shafts, bearings and gears.
 
 Re-exports the single-shaft container (``ShaftSystem``, ``GearElement``) of ``shaft_system`` and
-the multi-shaft assembler (``SpurHelicalGearSystem``, ``SpurHelicalMeshLink``) of ``gear_system``.
-Only parallel-axis (spur and helical) systems exist.
+the written power path of ``transmission``: ``PairStage``, ``Transmission``,
+``ResolvedTransmission`` and ``mesh_forces_to_shaft_loads``. Only parallel-axis systems of
+cylindrical gears exist.
 """
 from __future__ import annotations
 
-from .gear_system import SpurHelicalGearSystem, SpurHelicalMeshLink
 from .shaft_system import GearElement, ShaftSystem
+from .transmission import PairStage, ResolvedTransmission, Transmission, mesh_forces_to_shaft_loads
 
-__all__ = ["SpurHelicalMeshLink", "SpurHelicalGearSystem", "GearElement", "ShaftSystem"]
+__all__ = ["GearElement", "ShaftSystem",
+           "mesh_forces_to_shaft_loads", "PairStage", "Transmission", "ResolvedTransmission"]

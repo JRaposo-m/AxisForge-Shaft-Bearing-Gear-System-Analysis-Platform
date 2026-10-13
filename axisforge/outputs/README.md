@@ -11,7 +11,7 @@ use AxisForge.
 outputs/
     _format.py        shared helpers: text tables, key-value text, CSV write/read, record utilities
     construction/     the built system
-        system.py     SpurHelicalGearSystem: stage, mesh links, resolved torques, every shaft
+        system.py     Transmission: stages, resolved torques, every shaft
         shaft.py      ShaftSystem: sections, shoulders, gears, bearings, loads
         bearings.py   assembled Bearing: family, geometry, contact constants
         loads.py      the loads of a shaft system
@@ -31,7 +31,7 @@ and function docstrings for arguments and keys.
 
 | Task | Call | Returns |
 |---|---|---|
-| Gear system description | `construction.system.system_records(system, power_W=None, shafts=None)` (`shafts`: the loaded copies returned by `resolve`) | list of `{section, parameter, value, unit}` |
+| Gear system description | `construction.system.system_records(system, power_W=None)` (`system`: a `Transmission`, or the `ResolvedTransmission` returned by its `resolve`, which holds the mesh loads) | list of `{section, parameter, value, unit}` |
 | Gear system as text | `construction.system.system_text`, `print_system` | str, None |
 | Shaft system description | `construction.shaft.shaft_system_records(shaft_system)` | list of dicts |
 | Sections, shoulders, gears | `construction.shaft.section_records`, `shoulder_records`, `gear_element_records` | list of dicts |

@@ -4,7 +4,7 @@ Single-shaft container: the gears, bearings and loads placed on one shaft, with 
 GearElement binds a gear geometry object to a kinematic role (driver or driven). ShaftSystem holds
 every bearing, gear and load of one shaft, sorted by axial position, and validates their placement
 (supports, overlaps, shoulder keep-out, axial reaction path of a helical mesh). It has no knowledge
-of other shafts; SpurHelicalGearSystem.resolve() does not write on it: it returns a loaded copy
+of other shafts; Transmission.resolve() does not write on it: it returns a loaded copy
 (ShaftSystem.with_loads) that carries the mesh loads and the shaft_position (y, z).
 
 Units: positions and lengths [mm] along the shaft axis x from the left end (x = 0); forces [N];
@@ -55,16 +55,16 @@ class GearElement:
                    and optionally `.b` (face width [mm]). No geometry is duplicated here.
     role         : "driver" | "driven"
     rotation_dir : +1 / -1 [-], sense of rotation about +X. Set explicitly ONLY for the kinematic
-                   SOURCE gear of a SpurHelicalGearSystem; left None everywhere else.
+                   SOURCE gear of a Transmission; left None everywhere else.
     label        : reporting tag.
 
     Notes
     -----
-    ``role`` and ``rotation_dir`` are not read by SpurHelicalGearSystem.resolve(): the driver and
-    driven sides are the gear_a and gear_b of each SpurHelicalMeshLink, and the sense of rotation
-    of the source is the argument ``rotation_dir_source``. Both attributes are only validated and
-    printed. resolve() keeps the computed senses in its ``_resolved`` record and does not write
-    them here.
+    ``role`` and ``rotation_dir`` are not read by Transmission.resolve(): the driver and
+    driven sides are the gear_a and gear_b of each PairStage, and the sense of rotation
+    of the source is the argument ``rotation``. Both attributes are only validated and
+    printed. resolve() returns the computed senses in ``ResolvedTransmission.rotation`` and does
+    not write them here.
     """
 
     _VALID_ROLES = ("driver", "driven")
@@ -136,7 +136,7 @@ class ShaftSystem:
     "non-locating" | "thrust". In the shaft FEM a "locating" bearing fixes v and u, a "thrust"
     bearing fixes u only (no radial support) and "floating" / "non-locating" fix v only.
     validate() requires a "locating" bearing when a gear-mesh AxialLoad is present, i.e. on a loaded
-    copy returned by SpurHelicalGearSystem.resolve() (the user's shaft carries no mesh load); it
+    copy returned by Transmission.resolve() (the user's shaft carries no mesh load); it
     does not accept a "thrust" bearing for that, although the FEM boundary conditions do.
 
     Parameters
@@ -147,13 +147,14 @@ class ShaftSystem:
         Identifier used in messages and in the gear-system record.
     speed_rpm : float
         Rotational speed of this shaft [rpm], >= 0 (checked in validate()). Default 0.0. It is not
-        set by SpurHelicalGearSystem.resolve(); it holds whatever the caller assigns.
+        set by Transmission.resolve(), which returns the speed of every shaft in
+        ``ResolvedTransmission.speed_rpm``; it holds whatever the caller assigns.
     design_life_hours : float
         Design life [h]. Default 20 000 h (see Warnings). Not read by any solver;
         only printed by outputs/construction/shaft.py.
     shaft_position : tuple of float
         (y, z) global offset of the shaft axis [mm], with y and z as in the AxisForge convention
-        (D-0010). SpurHelicalGearSystem.resolve() sets it on the loaded copies it returns.
+        (D-0010). Transmission.resolve() sets it on the loaded copies it returns.
     shaft_origin_x : float
         Global x of the shaft coordinate x = 0 [mm]; used only by the axial-alignment check of the
         gear system, never propagated by resolve().
@@ -192,7 +193,7 @@ class ShaftSystem:
         self.name = name
         self.speed_rpm = speed_rpm
         self.design_life_hours = design_life_hours
-        # (y, z) global offset of the shaft axis [mm]. Set by SpurHelicalGearSystem.resolve()
+        # (y, z) global offset of the shaft axis [mm]. Set by Transmission.resolve()
         # on the loaded copies; the user rarely sets this directly.
         self.shaft_position = shaft_position
         self.shaft_origin_x = shaft_origin_x
@@ -247,7 +248,7 @@ class ShaftSystem:
         return self
 
     # ------------------------------------------------------------------
-    # Loaded copy (called by SpurHelicalGearSystem.resolve)
+    # Loaded copy (called by Transmission.resolve)
     # ------------------------------------------------------------------
 
     def with_loads(self, loads: list[Load], *, speed_rpm: float | None = None,

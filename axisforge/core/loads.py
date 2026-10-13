@@ -26,7 +26,7 @@ and printed in N m (``TorqueLoad.__repr__``), as is ``ExternalMoment.__repr__``.
 Producers and consumers of each load::
 
     load / field          produced by (unit)                     consumed by (unit)
-    TorqueLoad.magnitude  SpurHelicalGearSystem.resolve:         torsion solver (torsion.py):
+    TorqueLoad.magnitude  Transmission.resolve:                  torsion solver (torsion.py):
                           P/omega and +-T from forces()          treats it as [N m], x 1000 -> [N mm]
                           [N m]                                  outputs (shaft_results.py): stores
                                                                  ShaftResults.T under the key T_Nmm
@@ -237,7 +237,7 @@ class TorqueLoad(Load):
     Produced by the gear system (mesh torque, +T on the driver gear, -T at the entry of a driven
     gear and at the power input) and consumed by the torsion solver, which accumulates it from left
     to right. The gear system assigns the sign by power flow, whatever the sense of rotation (see
-    SpurHelicalGearSystem.resolve, Warnings).
+    Transmission.resolve, Warnings).
 
     Parameters
     ----------
@@ -365,7 +365,7 @@ class DistributedRadialLoad(Load):
     Transverse load distributed over [x_lo, x_hi] with arbitrary intensity
     and direction profiles.
 
-    Used for the tooth forces spread over the gear face width (SpurHelicalMeshLink with
+    Used for the tooth forces spread over the gear face width (PairStage with
     distribute_loads) and for user line loads. ``position`` is the midpoint of the span.
 
     Parameters

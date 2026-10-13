@@ -41,7 +41,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from axisforge.core.mechanical_system.shaft_system import GearElement, ShaftSystem
-from axisforge.core.mechanical_system.gear_system import SpurHelicalGearSystem
 from axisforge.core.materials import get_material
 from axisforge.core.loads import LoadPlane
 from axisforge.mesh.shaft.mesh_generation.mesh_grade import Grader
@@ -84,7 +83,7 @@ class Mesh1D:
     shaft_system : ShaftSystem
         Single-shaft container -- bearings, gears and loads already placed;
         for the gear-mesh loads, the loaded copy returned by
-        SpurHelicalGearSystem.resolve().
+        Transmission.resolve().
     extra_mandatory : list of float, optional
         Refinement or user-supplied positions [mm]. Low priority: merged
         into a nearby node when closer than ``MESH_MIN_NODE_DIST_MM``.

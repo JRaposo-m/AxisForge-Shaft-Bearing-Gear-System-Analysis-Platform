@@ -13,7 +13,7 @@ from dataclasses import KW_ONLY, dataclass
 import numpy as np
 from scipy import optimize
 
-from axisforge.core.machine_elements.gears.base import Gear, GearFamily, register_gear_family
+from axisforge.core.machine_elements.gears.base import Gear, GearFamily, MeshForces, register_gear_family
 
 
 def _involute(ang):
@@ -549,7 +549,8 @@ class CylindricalFamily(GearFamily):
 
     ``assemble_gear`` gives the geometry of one gear (clause 4), ``assemble_pair`` that of two gears
     in mesh (clause 5), ``validate_gear`` / ``validate_pair`` the limits (clause 7 and checks with
-    no library source), ``forces`` the tooth forces for a torque, ``contact_inputs`` the contact data
+    no library source), ``forces`` the tooth forces for a torque as the shaft loads still use them,
+    ``mesh_forces`` the same mesh under D-0010 (``MeshForces``), ``contact_inputs`` the contact data
     along the path of contact. An internal pair is a pair whose gear 2 has z < 0.
 
     Notes
@@ -1094,6 +1095,7 @@ class CylindricalFamily(GearFamily):
     # ----------------------------------------------------------------------------------------------
     # Forces
     # ----------------------------------------------------------------------------------------------
+    # QUESTION(Q05) / QUESTION(Q07a) / QUESTION(Q07b): this dictionary is kept until rows 17-19 are ruled: the golden rows of cases 1-5 record it and Transmission builds today's shaft loads from it. mesh_forces() below is the same mesh under D-0010.
     @staticmethod
     def forces(pair, T: float, phi_deg: float = 0.0, rotation_dir: int = 1,
                driver: str = "gear1") -> dict[str, float]:
@@ -1198,6 +1200,113 @@ class CylindricalFamily(GearFamily):
             "theta_Fr_driven": theta_Fr_driven, "theta_Ft_driven": theta_Ft_driven,
             "rotation_dir_out": rotation_dir_out,
         }
+
+    def mesh_forces(self, pair, T1_Nm: float, rot1: int, *, hand1: int = 1) -> MeshForces:
+        """Forces of the mesh on the two gears, for a torque on gear 1 (pitch-cylinder set of D-0010).
+
+        The single normal force between the flanks is resolved at the pitch point C: tangential
+        and radial components for the shafts, the force along the line of action and the force
+        normal to the flanks for the contact, and the nominal tangential force of ISO 6336 at
+        the reference cylinder. ``MeshForces`` holds the mesh frame and the sign table.
+
+        Parameters
+        ----------
+        pair : GearPair
+            Pair of this family.
+        T1_Nm : float
+            Torque applied to gear 1 by its own shaft, about +X [N m], signed (NOT N mm: 60.75 N m
+            on gear 1 of baseline case 2 gives F_tw = 1659.83 N; 60750 would give 1.66e6 N).
+        rot1 : int
+            Sense of rotation of gear 1 about +X, +1 or -1 [-]. Gear 1 drives when
+            ``T1_Nm * rot1 > 0``. With the symmetric flanks of a cylindrical gear the forces
+            follow from the signed torque alone, so ``rot1`` is checked and not used; it belongs
+            to the family contract (a bevel pair needs it for the loaded flank).
+        hand1 : int, optional
+            Hand of the helix of gear 1: +1 right-hand (default), -1 left-hand [-]. Gear 2 has the
+            opposite hand in an external pair and the same hand in an internal pair. No effect on
+            a spur pair. The gear data hold no hand (Q08): when it is not given, gear 1 is taken
+            as RIGHT-hand, so a driving gear 1 turning in the +1 sense is pushed along +X.
+
+        Returns
+        -------
+        MeshForces
+            ``F_tw_N``, ``F_r_N``, ``F_a_N``, ``F_bt_N``, ``F_bn_N``, ``F_t_nominal_N`` [N]
+            (magnitudes); ``on_1``, ``on_2`` = (F_c, F_t, F_x) [N], signed, ``on_2 = -on_1``;
+            ``rho_mm`` [mm]; ``x_offset_mm`` = (0, 0).
+
+        Raises
+        ------
+        ValueError
+            If ``rot1`` or ``hand1`` is not +1 or -1.
+
+        Notes
+        -----
+        With d_w1 = d_b1 / cos(alpha_wt) the working pitch diameter, d_b1 the base diameter, d_1
+        the reference diameter and beta_b the base helix angle of gear 1 [mm, rad]::
+
+            F_tw = 2000 abs(T_1) / d_w1          F_r  = F_tw tan(alpha_wt)
+            F_bt = 2000 abs(T_1) / d_b1          F_a  = F_bt tan(beta_b)
+            F_bn = F_bt / cos(beta_b)            F_t (nominal) = 2000 abs(T_1) / d_1
+            rho_1 = sign(z_2) d_w1 / 2           rho_2 = rho_1 - a_w
+            F_1,t = -1000 T_1 / rho_1            F_1,c = -sign(z_1 z_2) F_r
+            F_1,x = -h_1 sign(rho_1) sign(F_1,t) F_a
+
+        The factor 2000 converts N m and mm to N (D-0010 item 5). Baseline case 2 (z 20/30,
+        mn 3.5 mm, beta 15 deg), T_1 = 60.75 N m: F_tw 1659.831, F_r 674.505, F_a 449.236,
+        F_bt 1791.646, F_bn 1847.109, F_t nominal 1676.571 N.
+
+        Assumptions: ideal mesh (no friction, no losses), rigid involute flanks, steady rotation,
+        one normal force through the pitch point at mid face width.
+
+        Warnings
+        --------
+        These are the D-0010 definitions, NOT the numbers of ``forces()``, which the shaft loads
+        of today still use: ``F_a_N`` is 449.236 N where ``forces()`` gives ``Fa`` 444.750 N
+        (Q07a), ``F_bn_N`` 1847.109 N where ``Fn`` is 1791.646 N = ``F_bt_N`` (Q07b), and for an
+        external pair built with z1 > z2 the torque is taken on the working diameter of gear 1
+        itself (Q03). For a helical internal pair the base cylinder of gear 1 is used; the ring
+        has another one today (Q21), so ``rho_mm`` and the stored working radii disagree and the
+        torque balance of the ring is off: case 5, 60.75 N m on the pinion, rho_2 = -61.932 mm
+        against the stored r_w2 = 62.117 mm, moment of the mesh force on the ring -183.344 N m
+        against T z2/z1 = -182.25 N m (0.6 %). A spur internal pair (case 4) is exact.
+
+        References
+        ----------
+        .. [1] ISO_6336-1_2019, 4.2.2, Formula (1), p. 19 (F_t nominal; checked).
+        .. [2] ISO_21771_2007, 5.2.4, Eq. (56) third form (d_w = d_b / cos(alpha_wt); checked).
+        .. [3] D-0010 items 5, 14-18; ``units_and_conventions.md``, C.4, C.5: no library source
+               for F_tw, F_r, F_a, F_bt, F_bn and the directions (statics and helicoid geometry).
+        """
+        if rot1 not in (1, -1):
+            raise ValueError(f"rot1 must be +1 or -1, got {rot1!r}")
+        if hand1 not in (1, -1):
+            raise ValueError(f"hand1 must be +1 (right-hand) or -1 (left-hand), got {hand1!r}")
+        g1, z2 = pair.gear1, pair.gear2.z
+        # QUESTION(Q03): working pitch diameter of gear 1 from ITS base circle (ISO_21771_2007 Eq. (56), third form), not the stored pair.dl1, which is the smaller of the two diameters whatever the order of an external pair (case 3b: 109.800 against 73.200 mm).
+        d_w1 = g1.db / np.cos(pair.alphatw)
+        T = abs(T1_Nm)
+        # 2000 = 2 (diameter -> radius) x 1000 (mm -> m): T [N m] / r [m] gives [N]
+        F_tw = 2000.0 * T / d_w1
+        F_r = F_tw * np.tan(pair.alphatw)
+        F_bt = 2000.0 * T / g1.db
+        # QUESTION(Q21): base helix angle of gear 1; a helical ring has another beta_b today (case 5: 14.08 against 15.99 deg).
+        F_a = F_bt * np.tan(g1.betab)          # = F_tw tan(beta_w): one normal force, three cylinders
+        F_bn = F_bt / np.cos(g1.betab)
+        F_t_nominal = 2000.0 * T / g1.d        # reference cylinder: ISO 6336-1 Formula (1)
+
+        # pitch point C on the line of centres: between the axes for an external pair (rho_1 > 0),
+        # beyond the pinion on the side away from the ring centre for an internal pair (rho_1 < 0)
+        rho_1 = np.sign(z2) * d_w1 / 2.0
+        rho_2 = rho_1 - pair.al
+        F_1t = -1000.0 * T1_Nm / rho_1         # moment of the mesh force about the axis balances T_1
+        F_1c = -np.sign(g1.z * z2) * F_r       # compressive contact: external gear pushed toward its axis
+        # QUESTION(Q08): the axial sign needs the hand of the helix, which the gear data do not hold; hand1 = +1 (right-hand gear 1) unless given.
+        F_1x = -hand1 * np.sign(rho_1) * np.sign(F_1t) * F_a
+        on_1 = (float(F_1c), float(F_1t), float(F_1x))
+        return MeshForces(F_tw_N=float(F_tw), F_r_N=float(F_r), F_a_N=float(F_a), F_bt_N=float(F_bt),
+                          F_bn_N=float(F_bn), F_t_nominal_N=float(F_t_nominal), on_1=on_1,
+                          on_2=(-on_1[0], -on_1[1], -on_1[2]),    # action = reaction at C
+                          rho_mm=(float(rho_1), float(rho_2)))
 
     # ----------------------------------------------------------------------------------------------
     # Contact inputs along the path of contact (ISO 21771, 5.4.3-5.4.8 and 5.6; the load has no library source)

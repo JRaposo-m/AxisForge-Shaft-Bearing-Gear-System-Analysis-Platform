@@ -1,5 +1,5 @@
-"""``ShaftSystem.with_loads`` and the loaded copies returned by ``SpurHelicalGearSystem.resolve``
-(step 1 of the gears refactor), on the two shafts of baseline case 7a: pinion shaft source,
+"""``ShaftSystem.with_loads`` and the loaded copies returned by ``Transmission.resolve``, on the
+two shafts of baseline case 7a: pinion shaft source,
 T = 60.75 N m at 1450 rpm, sense of rotation +1, wheel shaft driven (T_out = 91.125 N m).
 
 The case objects are built in ``axisforge.core.machine_elements.gears.tests.baseline_cases``.
@@ -96,7 +96,7 @@ def test_resolve_leaves_the_user_shafts_untouched(case7a):
 
 
 def test_validate_after_resolve_sees_the_mesh_loads():
-    """Pins TODAY's behaviour (Q43): ``SpurHelicalGearSystem.validate()`` after ``resolve`` checks
+    """Pins TODAY's behaviour (Q43): ``Transmission.validate()`` after ``resolve`` checks
     the loaded shafts, so a helical mesh on shafts with no locating bearing is reported (the axial
     thrust has no reaction path); before ``resolve`` there is no mesh load and nothing to report."""
     case = bc.build_case7("pinion", 1, ball_arrangement="non-locating")
@@ -149,6 +149,7 @@ def test_sink_closes_the_driven_shaft(case7a):
 
 
 def test_sink_on_a_shaft_outside_the_system_is_refused(case7a):
+    """The sinks are written with the transmission, so the refusal comes when it is built."""
     other = bc.build_case7("pinion", 1).sW
     with pytest.raises(ValueError, match="not in this system"):
         bc.resolve_case7(case7a, sinks=((other, 200.0),))

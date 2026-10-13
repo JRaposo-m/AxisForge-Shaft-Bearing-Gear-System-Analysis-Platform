@@ -1,0 +1,566 @@
+case,object,name,value,unit,source_file_line,note
+case2_external_helical,inputs,GEARpie library gear,'H501',-,GEARpie CLASSES/GEAR_LIBRARY.py,inputs taken from GEARpie
+case2_external_helical,inputs,T1 torque on gear1 / speed,'60.75 N m / 1450.0 rpm',-,GEARpie CLASSES/LOAD_STAGES.py:K4_05 (torque); speed chosen,
+case2_external_helical,gear1(pinion),label,'H501_pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:166,
+case2_external_helical,gear1(pinion),material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,
+case2_external_helical,gear1(pinion),position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement
+case2_external_helical,gear1(pinion),mn,3.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,
+case2_external_helical,gear1(pinion),z,20,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,
+case2_external_helical,gear1(pinion),Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only)
+case2_external_helical,gear1(pinion),Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only)
+case2_external_helical,gear1(pinion),x,0.1809,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,
+case2_external_helical,gear1(pinion),b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:176,
+case2_external_helical,gear1(pinion),alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,
+case2_external_helical,gear1(pinion),alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,
+case2_external_helical,gear1(pinion),beta_n_deg,15.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,
+case2_external_helical,gear1(pinion),beta,0.2617993877991494,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,
+case2_external_helical,gear1(pinion),haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,
+case2_external_helical,gear1(pinion),cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,
+case2_external_helical,gear1(pinion),hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,
+case2_external_helical,gear1(pinion),rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,
+case2_external_helical,gear1(pinion),Ra,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,
+case2_external_helical,gear1(pinion),Rq,0.7,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,
+case2_external_helical,gear1(pinion),Rz,4.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,
+case2_external_helical,gear1(pinion),mt,3.623466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,
+case2_external_helical,gear1(pinion),alphat,0.36035632401741163,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,
+case2_external_helical,gear1(pinion),betab,0.24567421093290998,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,
+case2_external_helical,gear1(pinion),rhoF,1.33,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,
+case2_external_helical,gear1(pinion),pb,10.332460019327423,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,
+case2_external_helical,gear1(pinion),pt,11.383456149844864,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,
+case2_external_helical,gear1(pinion),pbt,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,
+case2_external_helical,gear1(pinion),d,72.46933262870581,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,
+case2_external_helical,gear1(pinion),r,36.23466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,
+case2_external_helical,gear1(pinion),db,67.81471729192808,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,
+case2_external_helical,gear1(pinion),rb,33.90735864596404,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,
+case2_external_helical,gear1(pinion),da,82.48563262870582,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,
+case2_external_helical,gear1(pinion),ra,41.24281631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,
+case2_external_helical,gear1(pinion),df,64.98563262870582,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,
+case2_external_helical,gear1(pinion),rf,32.49281631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,
+case2_external_helical,gear1(pinion),zn,22.192113318724722,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,
+case2_external_helical,gear1(pinion),de,77.67239661553653,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,
+case2_external_helical,gear1(pinion),undercutting(),False,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:237,
+case2_external_helical,gear1(pinion),validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:284,; empty list = no message
+case2_external_helical,gear1(pinion),validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:286,
+case2_external_helical,gear2(wheel),label,'H501_wheel',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:166,
+case2_external_helical,gear2(wheel),material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,
+case2_external_helical,gear2(wheel),position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement
+case2_external_helical,gear2(wheel),mn,3.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,
+case2_external_helical,gear2(wheel),z,30,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,
+case2_external_helical,gear2(wheel),Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only)
+case2_external_helical,gear2(wheel),Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only)
+case2_external_helical,gear2(wheel),x,0.0891,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,
+case2_external_helical,gear2(wheel),b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:176,
+case2_external_helical,gear2(wheel),alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,
+case2_external_helical,gear2(wheel),alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,
+case2_external_helical,gear2(wheel),beta_n_deg,15.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,
+case2_external_helical,gear2(wheel),beta,0.2617993877991494,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,
+case2_external_helical,gear2(wheel),haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,
+case2_external_helical,gear2(wheel),cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,
+case2_external_helical,gear2(wheel),hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,
+case2_external_helical,gear2(wheel),rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,
+case2_external_helical,gear2(wheel),Ra,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,
+case2_external_helical,gear2(wheel),Rq,0.7,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,
+case2_external_helical,gear2(wheel),Rz,4.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,
+case2_external_helical,gear2(wheel),mt,3.623466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,
+case2_external_helical,gear2(wheel),alphat,0.36035632401741163,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,
+case2_external_helical,gear2(wheel),betab,0.24567421093290998,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,
+case2_external_helical,gear2(wheel),rhoF,1.33,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,
+case2_external_helical,gear2(wheel),pb,10.332460019327423,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,
+case2_external_helical,gear2(wheel),pt,11.383456149844864,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,
+case2_external_helical,gear2(wheel),pbt,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,
+case2_external_helical,gear2(wheel),d,108.70399894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,
+case2_external_helical,gear2(wheel),r,54.35199947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,
+case2_external_helical,gear2(wheel),db,101.72207593789211,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,
+case2_external_helical,gear2(wheel),rb,50.86103796894606,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,
+case2_external_helical,gear2(wheel),da,118.07769894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,
+case2_external_helical,gear2(wheel),ra,59.03884947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,
+case2_external_helical,gear2(wheel),df,100.57769894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,
+case2_external_helical,gear2(wheel),rf,50.28884947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,
+case2_external_helical,gear2(wheel),zn,33.28816997808708,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,
+case2_external_helical,gear2(wheel),de,116.5085949233048,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,
+case2_external_helical,gear2(wheel),undercutting(),False,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:237,
+case2_external_helical,gear2(wheel),validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:284,; empty list = no message
+case2_external_helical,gear2(wheel),validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:286,
+case2_external_helical,mesh,driver,'gear1',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:122,
+case2_external_helical,mesh,driven,'gear2',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:123,
+case2_external_helical,mesh,label,'case2_external_helical',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,
+case2_external_helical,mesh,a,90.58666578588227,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:133,
+case2_external_helical,mesh,inv_alphatw,0.02038426842668517,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:159,
+case2_external_helical,mesh,alphatw,0.38598526839304975,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,
+case2_external_helical,mesh,al,91.50025755899902,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,
+case2_external_helical,mesh,x1,0.1809,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:286,
+case2_external_helical,mesh,x2,0.0891,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:147,
+case2_external_helical,mesh,u,1.5,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:162,
+case2_external_helical,mesh,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
+case2_external_helical,mesh,epslon_alpha,1.784650734729984,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:557,
+case2_external_helical,mesh,b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,
+case2_external_helical,mesh,epslon_beta,0.541384913754845,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:561,
+case2_external_helical,mesh,epslon_gamma,2.326035648484829,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:564,
+case2_external_helical,mesh,galpha,19.010654442989235,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw))
+case2_external_helical,mesh,ReqI,8.267350576644626,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:572,
+case2_external_helical,mesh,T1T2,34.44729406935261,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:575,
+case2_external_helical,mesh,T1E,23.478946466854563,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:577,
+case2_external_helical,mesh,T2A,29.97900204548727,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:579,
+case2_external_helical,mesh,T1A,4.468292023865338,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:581,
+case2_external_helical,mesh,T1B,12.826635584375065,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:582,
+case2_external_helical,mesh,T1C,13.778917627741041,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:583,
+case2_external_helical,mesh,T1D,15.120602906344836,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:584,
+case2_external_helical,mesh,T2E,10.968347602498046,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:585,
+case2_external_helical,mesh,T2B,21.620658484977543,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:586,
+case2_external_helical,mesh,T2C,20.66837644161156,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:587,
+case2_external_helical,mesh,T2D,19.326691163007773,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:588,
+case2_external_helical,mesh,AE,19.010654442989225,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:590,
+case2_external_helical,mesh,AB,8.358343560509727,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:591,
+case2_external_helical,mesh,AC,9.310625603875703,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:592,
+case2_external_helical,mesh,AD,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:593,
+case2_external_helical,mesh,rA1,34.20050590205605,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:595,
+case2_external_helical,mesh,rB1,36.25233165963796,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:596,
+case2_external_helical,mesh,rD1,37.12602325320335,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:597,
+case2_external_helical,mesh,rA2,52.03027803508066,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:598,
+case2_external_helical,mesh,rB2,54.4092471422722,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:599,
+case2_external_helical,mesh,rD2,55.265704162731915,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:600,
+case2_external_helical,mesh,HV,0.21821885265173113,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:603,
+case2_external_helical,mesh,Ram,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:608,
+case2_external_helical,mesh,Rrms,0.9899494936611665,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:609,
+case2_external_helical,mesh,RzS,9.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:610,
+case2_external_helical,mesh,x_sum_from_al,0.2699999999962041,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:171,
+case2_external_helical,mesh,x_sum_declared,0.27,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:174,
+case2_external_helical,mesh.gear1_w,label,'H501_pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,mn,3.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,z,20,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,x,0.1809,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,beta_n_deg,15.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,beta,0.2617993877991494,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,Ra,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,Rq,0.7,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,Rz,4.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,mt,3.623466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,alphat,0.36035632401741163,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,betab,0.24567421093290998,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,rhoF,1.33,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,pb,10.332460019327423,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,pt,11.383456149844864,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,pbt,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,d,72.46933262870581,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,r,36.23466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,db,67.81471729192808,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,rb,33.90735864596404,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,da,82.48563262870582,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,ra,41.24281631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,df,64.98563262870582,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,rf,32.49281631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,zn,22.192113318724722,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,de,77.67239661553653,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,al,91.50025755899902,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,alphatw,0.38598526839304975,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,dl,73.20020604719922,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:523,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,rl,36.60010302359961,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:525,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,alpha_a,0.6056367900976337,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:547,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,epslon_a1,0.9106032433833433,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:554,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear1_w,galpha,9.700028839113514,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,label,'H501_wheel',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,mn,3.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,z,30,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,x,0.0891,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,beta_n_deg,15.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,beta,0.2617993877991494,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,Ra,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,Rq,0.7,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,Rz,4.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,mt,3.623466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,alphat,0.36035632401741163,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,betab,0.24567421093290998,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,rhoF,1.33,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,pb,10.332460019327423,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,pt,11.383456149844864,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,pbt,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,d,108.70399894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,r,54.35199947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,db,101.72207593789211,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,rb,50.86103796894606,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,da,118.07769894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,ra,59.03884947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,df,100.57769894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,rf,50.28884947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,zn,33.28816997808708,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,de,116.5085949233048,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,al,91.50025755899902,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,alphatw,0.38598526839304975,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,dl,109.80030907079883,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:523,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,rl,54.900154535399416,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:525,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,alpha_a,0.5326109019187171,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:547,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,epslon_a2,0.8740474913466406,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:555,working copy (shallow copy + working data)
+case2_external_helical,mesh.gear2_w,galpha,9.310625603875723,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case2_external_helical,mesh,gear1.label,'H501_pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py,reference gear 1
+case2_external_helical,mesh,gear2.label,'H501_wheel',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py,reference gear 2
+case2_external_helical,mesh,validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:802,; empty list = no message
+case2_external_helical,mesh,validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:804,
+case2_external_helical,mesh,summary(),"'── case2_external_helical ─────────────────────────────────\n  gear1 : z=20, mn=3.5, x=0.1809, β=15.0°\n  gear2 : z=30, mn=3.5, x=0.0891, β=15.0°\n  u     : 1.5000\n  a     : 90.5867 mm   (reference centre distance)\n  al    : 91.5003 mm   (working centre distance)\n  αtw   : 22.1153°\n  dl1   : 73.2002 mm\n  dl2   : 109.8003 mm\n  εα    : 1.7847\n  εβ    : 0.5414\n  εγ    : 2.3260\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:832,
+case2_external_helical,mesh,__repr__(),"'HelicalGearMeshing(z1=20, z2=30, mn=3.5, β=15.0°, al=91.5003 mm, αtw=22.1153°, εγ=2.3260)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py,
+case2_external_helical,mesh,"forces(60.75, 0.0, 1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
+case2_external_helical,mesh,"forces(60.75, 0.0, 1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
+case2_external_helical,mesh,"forces(60.75, 0.0, 1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
+case2_external_helical,mesh,"forces(60.75, 0.0, 1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
+case2_external_helical,mesh,"forces(60.75, 0.0, 1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
+case2_external_helical,mesh,"forces(60.75, 0.0, 1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
+case2_external_helical,mesh,"forces(60.75, 0.0, 1).theta_Ft_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
+case2_external_helical,mesh,"forces(60.75, 0.0, 1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
+case2_external_helical,mesh,"forces(60.75, 0.0, 1).theta_Ft_driven",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
+case2_external_helical,mesh,"forces(60.75, 0.0, 1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
+case2_external_helical,mesh,"forces(60.75, 0.0, -1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
+case2_external_helical,mesh,"forces(60.75, 0.0, -1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
+case2_external_helical,mesh,"forces(60.75, 0.0, -1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
+case2_external_helical,mesh,"forces(60.75, 0.0, -1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
+case2_external_helical,mesh,"forces(60.75, 0.0, -1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
+case2_external_helical,mesh,"forces(60.75, 0.0, -1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
+case2_external_helical,mesh,"forces(60.75, 0.0, -1).theta_Ft_driver",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
+case2_external_helical,mesh,"forces(60.75, 0.0, -1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
+case2_external_helical,mesh,"forces(60.75, 0.0, -1).theta_Ft_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
+case2_external_helical,mesh,"forces(60.75, 0.0, -1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
+case2_external_helical,mesh,"forces(60.75, 90.0, 1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
+case2_external_helical,mesh,"forces(60.75, 90.0, 1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
+case2_external_helical,mesh,"forces(60.75, 90.0, 1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
+case2_external_helical,mesh,"forces(60.75, 90.0, 1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
+case2_external_helical,mesh,"forces(60.75, 90.0, 1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
+case2_external_helical,mesh,"forces(60.75, 90.0, 1).theta_Fr_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
+case2_external_helical,mesh,"forces(60.75, 90.0, 1).theta_Ft_driver",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
+case2_external_helical,mesh,"forces(60.75, 90.0, 1).theta_Fr_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
+case2_external_helical,mesh,"forces(60.75, 90.0, 1).theta_Ft_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
+case2_external_helical,mesh,"forces(60.75, 90.0, 1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
+case2_external_helical,mesh,"forces(60.75, 90.0, -1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
+case2_external_helical,mesh,"forces(60.75, 90.0, -1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
+case2_external_helical,mesh,"forces(60.75, 90.0, -1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
+case2_external_helical,mesh,"forces(60.75, 90.0, -1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
+case2_external_helical,mesh,"forces(60.75, 90.0, -1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
+case2_external_helical,mesh,"forces(60.75, 90.0, -1).theta_Fr_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
+case2_external_helical,mesh,"forces(60.75, 90.0, -1).theta_Ft_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
+case2_external_helical,mesh,"forces(60.75, 90.0, -1).theta_Fr_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
+case2_external_helical,mesh,"forces(60.75, 90.0, -1).theta_Ft_driven",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
+case2_external_helical,mesh,"forces(60.75, 90.0, -1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
+case2_external_helical,mesh,correction_for_gs_equilibrium()!exception,'RuntimeError: correction_for_gs_equilibrium (z≤60): no solution for x2.',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:311,"EXCEPTION; traceback tail: ^^^^^^^^^^^^^^^^^^^ | File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\gear_meshing\spurhelical_meshing.py"", line 388, in correction_for_gs_equilibrium | raise RuntimeError( | RuntimeError: correction_for_gs_equilibrium (z≤60): no solution for x2."
+case2_external_helical,mesh_addendum_reduction,driver,'gear1',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:122,
+case2_external_helical,mesh_addendum_reduction,driven,'gear2',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:123,
+case2_external_helical,mesh_addendum_reduction,label,'mesh_addendum_reduction',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,
+case2_external_helical,mesh_addendum_reduction,a,90.58666578588227,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:133,
+case2_external_helical,mesh_addendum_reduction,inv_alphatw,0.02038426842668517,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:159,
+case2_external_helical,mesh_addendum_reduction,alphatw,0.38598526839304975,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,
+case2_external_helical,mesh_addendum_reduction,al,91.50025755899902,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,
+case2_external_helical,mesh_addendum_reduction,x1,0.1809,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:286,
+case2_external_helical,mesh_addendum_reduction,x2,0.0891,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:147,
+case2_external_helical,mesh_addendum_reduction,u,1.5,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:162,
+case2_external_helical,mesh_addendum_reduction,k,0.008973779105703877,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
+case2_external_helical,mesh_addendum_reduction,epslon_alpha,1.7736562998207925,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:557,
+case2_external_helical,mesh_addendum_reduction,b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,
+case2_external_helical,mesh_addendum_reduction,epslon_beta,0.541384913754845,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:561,
+case2_external_helical,mesh_addendum_reduction,epslon_gamma,2.3150412135756375,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:564,
+case2_external_helical,mesh_addendum_reduction,galpha,18.893538304359346,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw))
+case2_external_helical,mesh_addendum_reduction,ReqI,8.267350576644626,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:572,
+case2_external_helical,mesh_addendum_reduction,T1T2,34.44729406935261,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:575,
+case2_external_helical,mesh_addendum_reduction,T1E,23.423731261415686,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:577,
+case2_external_helical,mesh_addendum_reduction,T2A,29.917101112296265,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:579,
+case2_external_helical,mesh_addendum_reduction,T1A,4.530192957056343,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:581,
+case2_external_helical,mesh_addendum_reduction,T1B,12.771420378936188,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:582,
+case2_external_helical,mesh_addendum_reduction,T1C,13.778917627741041,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:583,
+case2_external_helical,mesh_addendum_reduction,T1D,15.18250383953584,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:584,
+case2_external_helical,mesh_addendum_reduction,T2E,11.023562807936923,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:585,
+case2_external_helical,mesh_addendum_reduction,T2B,21.67587369041642,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:586,
+case2_external_helical,mesh_addendum_reduction,T2C,20.66837644161156,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:587,
+case2_external_helical,mesh_addendum_reduction,T2D,19.264790229816768,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:588,
+case2_external_helical,mesh_addendum_reduction,AE,18.893538304359343,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:590,
+case2_external_helical,mesh_addendum_reduction,AB,8.241227421879845,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:591,
+case2_external_helical,mesh_addendum_reduction,AC,9.248724670684698,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:592,
+case2_external_helical,mesh_addendum_reduction,AD,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:593,
+case2_external_helical,mesh_addendum_reduction,rA1,34.20864830089308,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:595,
+case2_external_helical,mesh_addendum_reduction,rB1,36.23283247058583,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:596,
+case2_external_helical,mesh_addendum_reduction,rD1,37.1512771406792,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:597,
+case2_external_helical,mesh_addendum_reduction,rA2,52.04194577702781,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:598,
+case2_external_helical,mesh_addendum_reduction,rB2,54.387290113384175,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:599,
+case2_external_helical,mesh_addendum_reduction,rD2,55.287328417291604,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:600,
+case2_external_helical,mesh_addendum_reduction,HV,0.21591300868700786,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:603,
+case2_external_helical,mesh_addendum_reduction,Ram,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:608,
+case2_external_helical,mesh_addendum_reduction,Rrms,0.9899494936611665,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:609,
+case2_external_helical,mesh_addendum_reduction,RzS,9.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:610,
+case2_external_helical,mesh_addendum_reduction,x_sum_from_al,0.2699999999962041,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:171,
+case2_external_helical,mesh_addendum_reduction,x_sum_declared,0.27,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:174,
+case2_external_helical,mesh_addendum_reduction.gear1_w,label,'H501_pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,mn,3.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,z,20,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,x,0.1809,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,beta_n_deg,15.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,beta,0.2617993877991494,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,Ra,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,Rq,0.7,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,Rz,4.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,mt,3.623466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,alphat,0.36035632401741163,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,betab,0.24567421093290998,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,rhoF,1.33,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,pb,10.332460019327423,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,pt,11.383456149844864,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,pbt,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,d,72.46933262870581,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,r,36.23466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,db,67.81471729192808,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,rb,33.90735864596404,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,da,82.42281617496589,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,ra,41.211408087482944,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,df,64.98563262870582,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,rf,32.49281631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,zn,22.192113318724722,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,de,77.67239661553653,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,k,0.008973779105703877,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,al,91.50025755899902,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,alphatw,0.38598526839304975,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,dl,73.20020604719922,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:523,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,rl,36.60010302359961,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:525,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,alpha_a,0.6045352838298852,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:547,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,epslon_a1,0.9054198417676723,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:554,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear1_w,galpha,9.64481363367464,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,label,'H501_wheel',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,mn,3.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,z,30,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,x,0.0891,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,beta_n_deg,15.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,beta,0.2617993877991494,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,Ra,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,Rq,0.7,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,Rz,4.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,mt,3.623466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,alphat,0.36035632401741163,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,betab,0.24567421093290998,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,rhoF,1.33,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,pb,10.332460019327423,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,pt,11.383456149844864,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,pbt,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,d,108.70399894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,r,54.35199947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,db,101.72207593789211,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,rb,50.86103796894606,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,da,118.0148824893188,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,ra,59.0074412446594,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,df,100.57769894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,rf,50.28884947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,zn,33.28816997808708,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,de,116.5085949233048,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,k,0.008973779105703877,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,al,91.50025755899902,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,alphatw,0.38598526839304975,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,dl,109.80030907079883,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:523,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,rl,54.900154535399416,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:525,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,alpha_a,0.5317071737769512,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:547,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,epslon_a2,0.8682364580531201,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:555,working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction.gear2_w,galpha,9.248724670684705,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case2_external_helical,mesh_addendum_reduction,gear1.label,'H501_pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py,reference gear 1
+case2_external_helical,mesh_addendum_reduction,gear2.label,'H501_wheel',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py,reference gear 2
+case2_external_helical,mesh_addendum_reduction,validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:802,; empty list = no message
+case2_external_helical,mesh_addendum_reduction,validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:804,
+case2_external_helical,mesh_addendum_reduction,summary(),"'── mesh_addendum_reduction ─────────────────────────────────\n  gear1 : z=20, mn=3.5, x=0.1809, β=15.0°\n  gear2 : z=30, mn=3.5, x=0.0891, β=15.0°\n  u     : 1.5000\n  a     : 90.5867 mm   (reference centre distance)\n  al    : 91.5003 mm   (working centre distance)\n  αtw   : 22.1153°\n  dl1   : 73.2002 mm\n  dl2   : 109.8003 mm\n  εα    : 1.7737\n  εβ    : 0.5414\n  εγ    : 2.3150\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:832,
+case2_external_helical,mesh_addendum_reduction,__repr__(),"'HelicalGearMeshing(z1=20, z2=30, mn=3.5, β=15.0°, al=91.5003 mm, αtw=22.1153°, εγ=2.3150)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py,
+case2_external_helical,mesh_addendum_reduction,"forces(60.75, 0.0, 1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
+case2_external_helical,mesh_addendum_reduction,"forces(60.75, 0.0, 1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
+case2_external_helical,mesh_addendum_reduction,"forces(60.75, 0.0, 1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
+case2_external_helical,mesh_addendum_reduction,"forces(60.75, 0.0, 1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
+case2_external_helical,mesh_addendum_reduction,"forces(60.75, 0.0, 1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
+case2_external_helical,mesh_addendum_reduction,"forces(60.75, 0.0, 1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
+case2_external_helical,mesh_addendum_reduction,"forces(60.75, 0.0, 1).theta_Ft_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
+case2_external_helical,mesh_addendum_reduction,"forces(60.75, 0.0, 1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
+case2_external_helical,mesh_addendum_reduction,"forces(60.75, 0.0, 1).theta_Ft_driven",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
+case2_external_helical,mesh_addendum_reduction,"forces(60.75, 0.0, 1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
+case2_external_helical,mesh_equalise_gs,constructor!exception,'RuntimeError: correction_for_gs_equilibrium (z≤60): no solution for x2.',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:92,EXCEPTION; kwargs={'equalise_gs': True}
+case2_external_helical,mesh_al_imposed_equal_a,driver,'gear1',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:122,
+case2_external_helical,mesh_al_imposed_equal_a,driven,'gear2',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:123,
+case2_external_helical,mesh_al_imposed_equal_a,label,'mesh_al_imposed_equal_a',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,
+case2_external_helical,mesh_al_imposed_equal_a,a,90.58666578588227,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:133,
+case2_external_helical,mesh_al_imposed_equal_a,al,90.58666578588227,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,
+case2_external_helical,mesh_al_imposed_equal_a,alphatw,0.3603563240174116,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,
+case2_external_helical,mesh_al_imposed_equal_a,x1,0.1809,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:286,
+case2_external_helical,mesh_al_imposed_equal_a,x2,0.0891,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:147,
+case2_external_helical,mesh_al_imposed_equal_a,inv_alphatw,0.01645338989666545,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:159,
+case2_external_helical,mesh_al_imposed_equal_a,u,1.5,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:162,
+case2_external_helical,mesh_al_imposed_equal_a,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
+case2_external_helical,mesh_al_imposed_equal_a,epslon_alpha,2.019880331347808,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:557,
+case2_external_helical,mesh_al_imposed_equal_a,b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,
+case2_external_helical,mesh_al_imposed_equal_a,epslon_beta,0.541384913754845,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:561,
+case2_external_helical,mesh_al_imposed_equal_a,epslon_gamma,2.561265245102653,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:564,
+case2_external_helical,mesh_al_imposed_equal_a,galpha,21.51639323492255,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw))
+case2_external_helical,mesh_al_imposed_equal_a,ReqI,7.665973266580629,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:572,
+case2_external_helical,mesh_al_imposed_equal_a,T1T2,31.941555277419287,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:575,
+case2_external_helical,mesh_al_imposed_equal_a,T1E,23.478946466854563,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:577,
+case2_external_helical,mesh_al_imposed_equal_a,T2A,29.97900204548727,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:579,
+case2_external_helical,mesh_al_imposed_equal_a,T1A,1.9625532319320165,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:581,
+case2_external_helical,mesh_al_imposed_equal_a,T1B,12.826635584375065,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:582,
+case2_external_helical,mesh_al_imposed_equal_a,T1C,12.776622110967715,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:583,
+case2_external_helical,mesh_al_imposed_equal_a,T1D,12.614864114411514,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:584,
+case2_external_helical,mesh_al_imposed_equal_a,T2E,8.462608810564724,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:585,
+case2_external_helical,mesh_al_imposed_equal_a,T2B,19.11491969304422,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:586,
+case2_external_helical,mesh_al_imposed_equal_a,T2C,19.164933166451572,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:587,
+case2_external_helical,mesh_al_imposed_equal_a,T2D,19.326691163007773,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:588,
+case2_external_helical,mesh_al_imposed_equal_a,AE,21.516393234922546,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:590,
+case2_external_helical,mesh_al_imposed_equal_a,AB,10.864082352443049,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:591,
+case2_external_helical,mesh_al_imposed_equal_a,AC,10.814068879035698,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:592,
+case2_external_helical,mesh_al_imposed_equal_a,AD,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:593,
+case2_external_helical,mesh_al_imposed_equal_a,rA1,33.964107312487975,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:595,
+case2_external_helical,mesh_al_imposed_equal_a,rB1,36.25233165963796,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:596,
+case2_external_helical,mesh_al_imposed_equal_a,rD1,36.17794586445034,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:597,
+case2_external_helical,mesh_al_imposed_equal_a,rA2,51.56026504159206,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:598,
+case2_external_helical,mesh_al_imposed_equal_a,rB2,54.4092471422722,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:599,
+case2_external_helical,mesh_al_imposed_equal_a,rD2,54.33438449223569,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:600,
+case2_external_helical,mesh_al_imposed_equal_a,HV,0.2753375910209802,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:603,
+case2_external_helical,mesh_al_imposed_equal_a,Ram,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:608,
+case2_external_helical,mesh_al_imposed_equal_a,Rrms,0.9899494936611665,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:609,
+case2_external_helical,mesh_al_imposed_equal_a,RzS,9.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:610,
+case2_external_helical,mesh_al_imposed_equal_a,x_sum_from_al,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:171,
+case2_external_helical,mesh_al_imposed_equal_a,x_sum_declared,0.27,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:174,
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,label,'H501_pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,mn,3.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,z,20,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,x,0.1809,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,beta_n_deg,15.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,beta,0.2617993877991494,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,Ra,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,Rq,0.7,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,Rz,4.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,mt,3.623466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,alphat,0.36035632401741163,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,betab,0.24567421093290998,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,rhoF,1.33,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,pb,10.332460019327423,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,pt,11.383456149844864,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,pbt,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,d,72.46933262870581,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,r,36.23466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,db,67.81471729192808,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,rb,33.90735864596404,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,da,82.48563262870582,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,ra,41.24281631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,df,64.98563262870582,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,rf,32.49281631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,zn,22.192113318724722,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,de,77.67239661553653,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,al,90.58666578588227,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,alphatw,0.3603563240174116,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,dl,72.46933262870581,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:523,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,rl,36.23466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:525,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,alpha_a,0.6056367900976337,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:547,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,epslon_a1,1.004695082030473,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:554,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear1_w,galpha,10.702324355886839,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,label,'H501_wheel',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,mn,3.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,z,30,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,x,0.0891,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,beta_n_deg,15.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,beta,0.2617993877991494,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,Ra,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,Rq,0.7,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,Rz,4.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,mt,3.623466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,alphat,0.36035632401741163,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,betab,0.24567421093290998,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,rhoF,1.33,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,pb,10.332460019327423,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,pt,11.383456149844864,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,pbt,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,d,108.70399894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,r,54.35199947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,db,101.72207593789211,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,rb,50.86103796894606,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,da,118.07769894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,ra,59.03884947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,df,100.57769894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,rf,50.28884947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,zn,33.28816997808708,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,de,116.5085949233048,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,al,90.58666578588227,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,alphatw,0.3603563240174116,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,dl,108.70399894305874,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:523,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,rl,54.35199947152937,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:525,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,alpha_a,0.5326109019187171,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:547,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,epslon_a2,1.015185249317335,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:555,working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a.gear2_w,galpha,10.81406887903571,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case2_external_helical,mesh_al_imposed_equal_a,gear1.label,'H501_pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py,reference gear 1
+case2_external_helical,mesh_al_imposed_equal_a,gear2.label,'H501_wheel',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py,reference gear 2
+case2_external_helical,mesh_al_imposed_equal_a,validate().len,1,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:802,
+case2_external_helical,mesh_al_imposed_equal_a,validate()[0],"'Profile shift inconsistency: declared x1+x2=0.2700 but al=90.5867 mm implies x1+x2=0.0000. Adjust x1, x2, or al so they are consistent.'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:802,
+case2_external_helical,mesh_al_imposed_equal_a,validate_or_raise()!exception,"'ValueError: Profile shift inconsistency: declared x1+x2=0.2700 but al=90.5867 mm implies x1+x2=0.0000. Adjust x1, x2, or al so they are consistent.'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:804,"EXCEPTION; traceback tail: ^^^^^^^^^^^^^^^^^^^ | File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\gear_meshing\spurhelical_meshing.py"", line 808, in validate_or_raise | raise ValueError(""\n"".join(errors)) | ValueError: Profile shift inconsistency: declared x1+x2=0.2700 but al=90.5867 mm implies x1+x2=0.0000. Adjust x1, x2, or al so they are consistent."
+case2_external_helical,mesh_al_imposed_equal_a,summary(),"'── mesh_al_imposed_equal_a ─────────────────────────────────\n  gear1 : z=20, mn=3.5, x=0.1809, β=15.0°\n  gear2 : z=30, mn=3.5, x=0.0891, β=15.0°\n  u     : 1.5000\n  a     : 90.5867 mm   (reference centre distance)\n  al    : 90.5867 mm   (working centre distance)\n  αtw   : 20.6469°\n  dl1   : 72.4693 mm\n  dl2   : 108.7040 mm\n  εα    : 2.0199\n  εβ    : 0.5414\n  εγ    : 2.5613\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:832,
+case2_external_helical,mesh_al_imposed_equal_a,__repr__(),"'HelicalGearMeshing(z1=20, z2=30, mn=3.5, β=15.0°, al=90.5867 mm, αtw=20.6469°, εγ=2.5613)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py,
+case2_external_helical,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).Ft",1676.5712556303113,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
+case2_external_helical,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).Fr",631.7483351906225,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
+case2_external_helical,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).Fa",449.23591399937527,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
+case2_external_helical,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
+case2_external_helical,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
+case2_external_helical,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
+case2_external_helical,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).theta_Ft_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
+case2_external_helical,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
+case2_external_helical,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).theta_Ft_driven",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
+case2_external_helical,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,

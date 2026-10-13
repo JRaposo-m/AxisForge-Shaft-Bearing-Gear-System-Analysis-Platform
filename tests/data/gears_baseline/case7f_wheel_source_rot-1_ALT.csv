@@ -1,0 +1,373 @@
+case,object,name,value,unit,source_file_line,note
+case7f_wheel_source_rot-1_ALT,inputs,resolve args,"'P=9224.501429103031 W, rpm=1450.0, rotation_dir_source=-1, source_position=(0.0, 0.0), source_torque_x=0.0'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:505,"P = T*omega with T=60.75 N m (GEARpie K4_05), n=1450.0 rpm; phi_deg=30.0; gear_a = wheel but meshing built as pinion,wheel with driver=gear2, so gear_a is NOT meshing.gear1 (violates the documented gear_a rule)"
+case7f_wheel_source_rot-1_ALT,system,validate() BEFORE resolve.len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:347,; empty list = no message
+case7f_wheel_source_rot-1_ALT,system,validate() AFTER resolve.len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:347,; empty list = no message
+case7f_wheel_source_rot-1_ALT,system,summary(),"'── case7f_wheel_source_rot-1_ALT ──────────────────────────────────────────────\n  shafts: 2   links: 1   source: shaft_wheel\n    shaft_wheel  T_out=60.750 N·m     rot=-1  pos=(y=0.00, z=0.00) mm\n    shaft_pinion T_out=91.125 N·m     rot=1.0 pos=(y=79.24, z=45.75) mm\n────────────────────────────────────────────────────────'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:705,
+case7f_wheel_source_rot-1_ALT,system,__repr__(),"""GearSystem(label='case7f_wheel_source_rot-1_ALT', shafts=2, links=1, resolved=True)""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:717,
+case7f_wheel_source_rot-1_ALT,system,label,'case7f_wheel_source_rot-1_ALT',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:160,
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_pinion].name,'shaft_pinion',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_pinion].T_out_Nm,91.12500000000001,N m,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_pinion].rotation_dir,1.0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_pinion].shaft_position.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_pinion].shaft_position[0],79.24154749891227,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_pinion].shaft_position[1],45.750128779499505,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_pinion].rpm,None,rpm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_wheel].name,'shaft_wheel',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_wheel].T_out_Nm,60.75000000000001,N m,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_wheel].rotation_dir,-1,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_wheel].shaft_position.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_wheel].shaft_position[0],0.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_wheel].shaft_position[1],0.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,system,_resolved[shaft_wheel].rpm,None,rpm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7f_wheel_source_rot-1_ALT,link,phi_deg,30.0,deg,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:93,
+case7f_wheel_source_rot-1_ALT,link,torque_split,None,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:94,
+case7f_wheel_source_rot-1_ALT,link,distribute_loads,False,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:95,
+case7f_wheel_source_rot-1_ALT,link,meshing_load_factor,1.0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:98,
+case7f_wheel_source_rot-1_ALT,link,label,'stage',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:99,
+case7f_wheel_source_rot-1_ALT,link,shaft_a.name,'shaft_wheel',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:88,driver shaft of the link
+case7f_wheel_source_rot-1_ALT,link,shaft_b.name,'shaft_pinion',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:90,driven shaft of the link
+case7f_wheel_source_rot-1_ALT,link,validate().len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:115,; empty list = no message
+case7f_wheel_source_rot-1_ALT,link,__repr__(),"""SpurHelicalMeshLink(shaft_wheel -> shaft_pinion, phi=30.0°, torque_split=None, label='stage')""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:126,
+case7f_wheel_source_rot-1_ALT,mesh,driver,'gear2',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:122,
+case7f_wheel_source_rot-1_ALT,mesh,driven,'gear1',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:123,
+case7f_wheel_source_rot-1_ALT,mesh,label,'stage',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,
+case7f_wheel_source_rot-1_ALT,mesh,a,90.58666578588227,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:133,
+case7f_wheel_source_rot-1_ALT,mesh,inv_alphatw,0.02038426842668517,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:159,
+case7f_wheel_source_rot-1_ALT,mesh,alphatw,0.38598526839304975,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,
+case7f_wheel_source_rot-1_ALT,mesh,al,91.50025755899902,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,
+case7f_wheel_source_rot-1_ALT,mesh,x1,0.1809,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:286,
+case7f_wheel_source_rot-1_ALT,mesh,x2,0.0891,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:147,
+case7f_wheel_source_rot-1_ALT,mesh,u,1.5,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:162,
+case7f_wheel_source_rot-1_ALT,mesh,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
+case7f_wheel_source_rot-1_ALT,mesh,epslon_alpha,1.784650734729984,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:557,
+case7f_wheel_source_rot-1_ALT,mesh,b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,
+case7f_wheel_source_rot-1_ALT,mesh,epslon_beta,0.541384913754845,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:561,
+case7f_wheel_source_rot-1_ALT,mesh,epslon_gamma,2.326035648484829,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:564,
+case7f_wheel_source_rot-1_ALT,mesh,galpha,19.010654442989235,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw))
+case7f_wheel_source_rot-1_ALT,mesh,ReqI,8.267350576644626,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:572,
+case7f_wheel_source_rot-1_ALT,mesh,T1T2,34.44729406935261,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:575,
+case7f_wheel_source_rot-1_ALT,mesh,T1E,23.478946466854563,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:577,
+case7f_wheel_source_rot-1_ALT,mesh,T2A,29.97900204548727,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:579,
+case7f_wheel_source_rot-1_ALT,mesh,T1A,4.468292023865338,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:581,
+case7f_wheel_source_rot-1_ALT,mesh,T1B,12.826635584375065,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:582,
+case7f_wheel_source_rot-1_ALT,mesh,T1C,13.778917627741041,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:583,
+case7f_wheel_source_rot-1_ALT,mesh,T1D,15.120602906344836,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:584,
+case7f_wheel_source_rot-1_ALT,mesh,T2E,10.968347602498046,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:585,
+case7f_wheel_source_rot-1_ALT,mesh,T2B,21.620658484977543,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:586,
+case7f_wheel_source_rot-1_ALT,mesh,T2C,20.66837644161156,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:587,
+case7f_wheel_source_rot-1_ALT,mesh,T2D,19.326691163007773,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:588,
+case7f_wheel_source_rot-1_ALT,mesh,AE,19.010654442989225,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:590,
+case7f_wheel_source_rot-1_ALT,mesh,AB,8.358343560509727,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:591,
+case7f_wheel_source_rot-1_ALT,mesh,AC,9.310625603875703,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:592,
+case7f_wheel_source_rot-1_ALT,mesh,AD,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:593,
+case7f_wheel_source_rot-1_ALT,mesh,rA1,34.20050590205605,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:595,
+case7f_wheel_source_rot-1_ALT,mesh,rB1,36.25233165963796,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:596,
+case7f_wheel_source_rot-1_ALT,mesh,rD1,37.12602325320335,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:597,
+case7f_wheel_source_rot-1_ALT,mesh,rA2,52.03027803508066,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:598,
+case7f_wheel_source_rot-1_ALT,mesh,rB2,54.4092471422722,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:599,
+case7f_wheel_source_rot-1_ALT,mesh,rD2,55.265704162731915,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:600,
+case7f_wheel_source_rot-1_ALT,mesh,HV,0.21821885265173113,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:603,
+case7f_wheel_source_rot-1_ALT,mesh,Ram,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:608,
+case7f_wheel_source_rot-1_ALT,mesh,Rrms,0.9899494936611665,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:609,
+case7f_wheel_source_rot-1_ALT,mesh,RzS,9.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:610,
+case7f_wheel_source_rot-1_ALT,mesh,x_sum_from_al,0.2699999999962041,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:171,
+case7f_wheel_source_rot-1_ALT,mesh,x_sum_declared,0.27,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:174,
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,label,'H501_pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,position,100.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,mn,3.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,z,20,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,x,0.1809,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,beta_n_deg,15.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,beta,0.2617993877991494,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,Ra,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,Rq,0.7,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,Rz,4.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,mt,3.623466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,alphat,0.36035632401741163,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,betab,0.24567421093290998,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,rhoF,1.33,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,pb,10.332460019327423,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,pt,11.383456149844864,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,pbt,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,d,72.46933262870581,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,r,36.23466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,db,67.81471729192808,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,rb,33.90735864596404,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,da,82.48563262870582,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,ra,41.24281631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,df,64.98563262870582,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,rf,32.49281631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,zn,22.192113318724722,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,de,77.67239661553653,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,al,91.50025755899902,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,alphatw,0.38598526839304975,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,dl,73.20020604719922,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:523,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,rl,36.60010302359961,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:525,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,alpha_a,0.6056367900976337,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:547,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,epslon_a1,0.9106032433833433,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:554,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear1_w,galpha,9.700028839113514,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,label,'H501_wheel',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,position,100.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,mn,3.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,z,30,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,x,0.0891,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,b,23.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,beta_n_deg,15.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,beta,0.2617993877991494,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,Ra,0.6,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,Rq,0.7,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,Rz,4.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,mt,3.623466631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,alphat,0.36035632401741163,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,betab,0.24567421093290998,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,rhoF,1.33,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,pb,10.332460019327423,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,pt,11.383456149844864,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,pbt,10.652310882479497,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,d,108.70399894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,r,54.35199947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,db,101.72207593789211,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,rb,50.86103796894606,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,da,118.07769894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,ra,59.03884947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,df,100.57769894305872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,rf,50.28884947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,zn,33.28816997808708,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,de,116.5085949233048,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,al,91.50025755899902,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,alphatw,0.38598526839304975,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,dl,109.80030907079883,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:523,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,rl,54.900154535399416,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:525,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,alpha_a,0.5326109019187171,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:547,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,epslon_a2,0.8740474913466406,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:555,working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh.gear2_w,galpha,9.310625603875723,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case7f_wheel_source_rot-1_ALT,mesh,gear1.label,'H501_pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py,reference gear 1
+case7f_wheel_source_rot-1_ALT,mesh,gear2.label,'H501_wheel',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py,reference gear 2
+case7f_wheel_source_rot-1_ALT,mesh,validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:802,; empty list = no message
+case7f_wheel_source_rot-1_ALT,mesh,validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:804,
+case7f_wheel_source_rot-1_ALT,mesh,summary(),"'── stage ─────────────────────────────────\n  gear1 : z=20, mn=3.5, x=0.1809, β=15.0°\n  gear2 : z=30, mn=3.5, x=0.0891, β=15.0°\n  u     : 1.5000\n  a     : 90.5867 mm   (reference centre distance)\n  al    : 91.5003 mm   (working centre distance)\n  αtw   : 22.1153°\n  dl1   : 73.2002 mm\n  dl2   : 109.8003 mm\n  εα    : 1.7847\n  εβ    : 0.5414\n  εγ    : 2.3260\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:832,
+case7f_wheel_source_rot-1_ALT,mesh,__repr__(),"'HelicalGearMeshing(z1=20, z2=30, mn=3.5, β=15.0°, al=91.5003 mm, αtw=22.1153°, εγ=2.3260)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, 1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, 1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, 1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, 1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, 1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, 1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, 1).theta_Ft_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, 1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, 1).theta_Ft_driven",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, 1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, -1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, -1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, -1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, -1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, -1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, -1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, -1).theta_Ft_driver",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, -1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, -1).theta_Ft_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 0.0, -1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, 1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, 1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, 1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, 1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, 1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, 1).theta_Fr_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, 1).theta_Ft_driver",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, 1).theta_Fr_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, 1).theta_Ft_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, 1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, -1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, -1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, -1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, -1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, -1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, -1).theta_Fr_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, -1).theta_Ft_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, -1).theta_Fr_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, -1).theta_Ft_driven",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
+case7f_wheel_source_rot-1_ALT,mesh,"forces(60.75, 90.0, -1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,name,'shaft_pinion',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:188,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,speed_rpm,0.0,rpm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:189,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,design_life_hours,20000.0,h,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:190,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,shaft_position.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:193,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,shaft_position[0],79.24154749891227,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:193,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,shaft_position[1],45.750128779499505,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:193,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,shaft_origin_x,0.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:194,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,label,'',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:76,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,axial_loads.len,1,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:300,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,axial_loads[0],"'<AxialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:300,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,bearings.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:613,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,bearings[0],"'<Bearing object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:613,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,bearings[1],"'<Bearing object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:613,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,distributed_radial_loads.len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:315,; empty list = no message
+case7f_wheel_source_rot-1_ALT,shaft_pinion,external_moments.len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:310,; empty list = no message
+case7f_wheel_source_rot-1_ALT,shaft_pinion,gears.len,1,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:614,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,gears[0],"'<GearElement object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:614,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads.len,4,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[0],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[1],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[2],"'<AxialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[3],"'<TorqueLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,radial_loads.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:295,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,radial_loads[0],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:295,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,radial_loads[1],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:295,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,support_positions.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:616,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,support_positions[0],10.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:616,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,support_positions[1],190.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:616,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,torque_loads.len,1,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:305,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,torque_loads[0],"'<TorqueLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:305,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,shaft.total_length,200.0,mm,axisforge/core/machine_elements/shaft/shaft.py:453,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,validate().len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:583,; empty list = no message
+case7f_wheel_source_rot-1_ALT,shaft_pinion,summary(),"""── ShaftSystem 'shaft_pinion' ─────────────────────────────\n  length        : 200.00 mm\n  speed         : 0.00 rpm\n  design life   : 20000 h\n  axis offset   : (y=79.242, z=45.750) mm   origin_x=0.000 mm\n  bearings      : 2  @ ['10.0', '190.0']\n  gears         : 1  @ ['100.0']\n  loads         : 4  (user=0, gear_mesh=4)\n──────────────────────────────────────────────────────────""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:641,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,__repr__(),"""ShaftSystem(name='shaft_pinion', L=200.0 mm, bearings=2, gears=1, loads=4)""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:652,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,support_positions,"[10.0, 190.0]",mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:286,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,n_radial/axial/torque/external_moment/distributed,"'(2, 1, 1, 0, 0)'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:297-317,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[0].type,'RadialLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[0].label,'g_pinion:Fr',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[0].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[0].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,axial coordinate from the left end of the shaft
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[0].magnitude,674.5049145320943,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,signed as stored
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[0].theta_deg,210.0,deg,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,"from +Y toward +Z, right-hand about +X"
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[0].Fy,-584.1383909622452,N,axisforge/core/loads.py:158,magnitude*cos(theta)
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[0].Fz,-337.2524572660472,N,axisforge/core/loads.py:163,magnitude*sin(theta)
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[1].type,'RadialLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[1].label,'g_pinion:Ft',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[1].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[1].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,axial coordinate from the left end of the shaft
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[1].magnitude,1659.831393393309,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,signed as stored
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[1].theta_deg,300.0,deg,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,"from +Y toward +Z, right-hand about +X"
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[1].Fy,829.9156966966548,N,axisforge/core/loads.py:158,magnitude*cos(theta)
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[1].Fz,-1437.4561526775278,N,axisforge/core/loads.py:163,magnitude*sin(theta)
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[2].type,'AxialLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[2].label,'g_pinion:Fa',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[2].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[2].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,axial coordinate from the left end of the shaft
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[2].magnitude,-444.7504814315623,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,signed as stored
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[3].type,'TorqueLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[3].label,'g_pinion:T',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[3].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[3].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,axial coordinate from the left end of the shaft
+case7f_wheel_source_rot-1_ALT,shaft_pinion,loads[3].magnitude,-91.12500000000001,N m (code: open item U1),axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,signed as stored
+case7f_wheel_source_rot-1_ALT,shaft_pinion.gear_element,role,'driven',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:74,
+case7f_wheel_source_rot-1_ALT,shaft_pinion.gear_element,rotation_dir,None,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:75,
+case7f_wheel_source_rot-1_ALT,shaft_pinion.gear_element,label,'g_pinion',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:76,
+case7f_wheel_source_rot-1_ALT,shaft_pinion.gear_element,position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:79,stored only; axial centre of face width when used by GearElement
+case7f_wheel_source_rot-1_ALT,shaft_pinion.gear_element,validate().len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:100,; empty list = no message
+case7f_wheel_source_rot-1_ALT,shaft_pinion,gear_extent(gear_element).len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:333,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,gear_extent(gear_element)[0],88.5,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:333,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,gear_extent(gear_element)[1],111.5,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:333,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,bearing_extent(shaft_pinion_ball_locating).len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:345,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,bearing_extent(shaft_pinion_ball_locating)[0],4.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:345,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,bearing_extent(shaft_pinion_ball_locating)[1],16.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:345,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,bearing_extent(shaft_pinion_roller_nonlocating).len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:345,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,bearing_extent(shaft_pinion_roller_nonlocating)[0],183.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:345,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,bearing_extent(shaft_pinion_roller_nonlocating)[1],197.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:345,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,snapshot() keys,"'name,label,speed_rpm,design_life_hours,shaft_position,shaft_origin_x,total_length,shaft,bearings,gears,loads,support_positions'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:604,
+case7f_wheel_source_rot-1_ALT,shaft_pinion,validate_or_raise(),None,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:585,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,name,'shaft_wheel',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:188,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,speed_rpm,0.0,rpm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:189,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,design_life_hours,20000.0,h,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:190,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,shaft_position.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:193,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,shaft_position[0],0.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:193,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,shaft_position[1],0.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:193,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,shaft_origin_x,0.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:194,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,label,'',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:76,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,axial_loads.len,1,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:300,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,axial_loads[0],"'<AxialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:300,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,bearings.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:613,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,bearings[0],"'<Bearing object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:613,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,bearings[1],"'<Bearing object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:613,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,distributed_radial_loads.len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:315,; empty list = no message
+case7f_wheel_source_rot-1_ALT,shaft_wheel,external_moments.len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:310,; empty list = no message
+case7f_wheel_source_rot-1_ALT,shaft_wheel,gears.len,1,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:614,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,gears[0],"'<GearElement object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:614,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads.len,5,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[0],"'<TorqueLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[1],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[2],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[3],"'<AxialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[4],"'<TorqueLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,radial_loads.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:295,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,radial_loads[0],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:295,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,radial_loads[1],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:295,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,support_positions.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:616,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,support_positions[0],10.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:616,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,support_positions[1],190.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:616,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,torque_loads.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:305,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,torque_loads[0],"'<TorqueLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:305,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,torque_loads[1],"'<TorqueLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:305,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,shaft.total_length,200.0,mm,axisforge/core/machine_elements/shaft/shaft.py:453,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,validate().len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:583,; empty list = no message
+case7f_wheel_source_rot-1_ALT,shaft_wheel,summary(),"""── ShaftSystem 'shaft_wheel' ─────────────────────────────\n  length        : 200.00 mm\n  speed         : 0.00 rpm\n  design life   : 20000 h\n  axis offset   : (y=0.000, z=0.000) mm   origin_x=0.000 mm\n  bearings      : 2  @ ['10.0', '190.0']\n  gears         : 1  @ ['100.0']\n  loads         : 5  (user=0, gear_mesh=5)\n──────────────────────────────────────────────────────────""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:641,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,__repr__(),"""ShaftSystem(name='shaft_wheel', L=200.0 mm, bearings=2, gears=1, loads=5)""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:652,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,support_positions,"[10.0, 190.0]",mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:286,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,n_radial/axial/torque/external_moment/distributed,"'(2, 1, 2, 0, 0)'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:297-317,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[0].type,'TorqueLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:624,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[0].label,'shaft_wheel:T_in',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:624,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[0].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:624,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[0].position,0.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:624,axial coordinate from the left end of the shaft
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[0].magnitude,-60.75000000000001,N m (code: open item U1),axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:624,signed as stored
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[1].type,'RadialLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[1].label,'g_wheel:Fr',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[1].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[1].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,axial coordinate from the left end of the shaft
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[1].magnitude,674.5049145320943,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,signed as stored
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[1].theta_deg,30.0,deg,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,"from +Y toward +Z, right-hand about +X"
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[1].Fy,584.1383909622452,N,axisforge/core/loads.py:158,magnitude*cos(theta)
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[1].Fz,337.2524572660471,N,axisforge/core/loads.py:163,magnitude*sin(theta)
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[2].type,'RadialLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[2].label,'g_wheel:Ft',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[2].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[2].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,axial coordinate from the left end of the shaft
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[2].magnitude,1659.831393393309,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,signed as stored
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[2].theta_deg,300.0,deg,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,"from +Y toward +Z, right-hand about +X"
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[2].Fy,829.9156966966548,N,axisforge/core/loads.py:158,magnitude*cos(theta)
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[2].Fz,-1437.4561526775278,N,axisforge/core/loads.py:163,magnitude*sin(theta)
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[3].type,'AxialLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[3].label,'g_wheel:Fa',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[3].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[3].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,axial coordinate from the left end of the shaft
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[3].magnitude,444.7504814315623,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,signed as stored
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[4].type,'TorqueLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[4].label,'g_wheel:T',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[4].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[4].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,axial coordinate from the left end of the shaft
+case7f_wheel_source_rot-1_ALT,shaft_wheel,loads[4].magnitude,60.75000000000001,N m (code: open item U1),axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,signed as stored
+case7f_wheel_source_rot-1_ALT,shaft_wheel.gear_element,role,'driver',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:74,
+case7f_wheel_source_rot-1_ALT,shaft_wheel.gear_element,rotation_dir,None,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:75,
+case7f_wheel_source_rot-1_ALT,shaft_wheel.gear_element,label,'g_wheel',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:76,
+case7f_wheel_source_rot-1_ALT,shaft_wheel.gear_element,position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:79,stored only; axial centre of face width when used by GearElement
+case7f_wheel_source_rot-1_ALT,shaft_wheel.gear_element,validate().len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:100,; empty list = no message
+case7f_wheel_source_rot-1_ALT,shaft_wheel,gear_extent(gear_element).len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:333,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,gear_extent(gear_element)[0],88.5,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:333,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,gear_extent(gear_element)[1],111.5,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:333,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,bearing_extent(shaft_wheel_ball_locating).len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:345,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,bearing_extent(shaft_wheel_ball_locating)[0],4.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:345,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,bearing_extent(shaft_wheel_ball_locating)[1],16.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:345,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,bearing_extent(shaft_wheel_roller_nonlocating).len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:345,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,bearing_extent(shaft_wheel_roller_nonlocating)[0],183.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:345,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,bearing_extent(shaft_wheel_roller_nonlocating)[1],197.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:345,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,snapshot() keys,"'name,label,speed_rpm,design_life_hours,shaft_position,shaft_origin_x,total_length,shaft,bearings,gears,loads,support_positions'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:604,
+case7f_wheel_source_rot-1_ALT,shaft_wheel,validate_or_raise(),None,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:585,

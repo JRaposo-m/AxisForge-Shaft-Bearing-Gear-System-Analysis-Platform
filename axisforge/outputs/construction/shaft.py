@@ -13,7 +13,7 @@ from axisforge.outputs._format import (
 from axisforge.outputs.construction.bearings import bearing_records, bearing_text
 from axisforge.outputs.construction.loads import load_records, loads_text
 
-# SpurHelicalGear attributes. The gear stores its pressure and helix angles as inputs in degrees
+# Attributes of a cylindrical ``Gear``. The gear stores its pressure and helix angles as inputs in degrees
 # (alpha_n_deg, beta_n_deg).
 GEAR_ATTRIBUTES = [
     ("mn", "mm", "normal module mn"),

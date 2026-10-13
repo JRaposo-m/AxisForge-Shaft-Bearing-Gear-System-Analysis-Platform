@@ -16,10 +16,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 
 
-from axisforge.core.machine_elements.gears.parallel_axis.gear_properties.spur_helical_gear import SpurHelicalGear
-from axisforge.core.machine_elements.gears.parallel_axis.gear_properties.internal_gear import InternalGear
-from axisforge.core.machine_elements.gears.parallel_axis.gear_meshing.internal_meshing import InternalGearMeshing
-from axisforge.core.machine_elements.gears.parallel_axis.gear_meshing.spurhelical_meshing import SpurHelicalGearMeshing
+from axisforge.core.machine_elements.gears.base import Gear, GearPair
 
 
 # ===========================================================================
@@ -155,10 +152,10 @@ class PlanetaryTorques:
         Ideal resultant force on one planet pin [N].
     T_mesh_sun : float
         Torque through one sun-planet mesh, on the sun [N m]; the quantity
-        that can be passed to ``meshing_12.forces`` (see ``torques``, Warnings).
+        that can be passed to ``CylindricalFamily.forces`` with ``meshing_12`` (see ``torques``, Warnings).
     T_mesh_planet : float
         Torque through one planet-ring mesh, on the planet [N m]; the
-        quantity that can be passed to ``meshing_23.forces``.
+        quantity that can be passed to ``CylindricalFamily.forces`` with ``meshing_23``.
     k : int
         Number of planets [-].
 
@@ -175,8 +172,8 @@ class PlanetaryTorques:
         F_H2 = F_t12 + F_t32 = 2*Ft                                 (6.2)
 
     ``Ft`` uses the REFERENCE diameter d1 of the sun [mm], not the working
-    pitch diameter dl1 used by ``meshing_12.forces()`` and
-    ``meshing_23.forces()``. The values agree when al = a (no profile-shift
+    pitch diameter dl1 used by ``CylindricalFamily.forces`` for ``meshing_12`` and
+    ``meshing_23``. The values agree when al = a (no profile-shift
     effect on the working diameter, e.g. x1 + x2 = 0) and z_sun <= z_planet
     (see ``torques``, Warnings). F_H2 = 2*Ft is the ideal resultant on one
     planet pin (sum of the two equal tangential forces; pressure-angle
@@ -251,16 +248,15 @@ class PlanetaryGearTrainMeshing:
     """
     Single-stage planetary train: sun (1), k equally spaced planets (2), ring (3), carrier (H).
 
-    Built from two pair objects, ``meshing_12`` (``SpurHelicalGearMeshing``,
-    sun-planet, external) and ``meshing_23`` (``InternalGearMeshing``,
-    planet-ring, internal). The class adds the train-level checks, the Willis
+    Built from two ``GearPair`` objects of the cylindrical family, ``meshing_12``
+    (sun-planet, external) and ``meshing_23`` (planet-ring, internal). The class adds the train-level checks, the Willis
     kinematics, the ideal torques and the planet positions.
 
     Parameters
     ----------
-    sun_gear, planet_gear : SpurHelicalGear
+    sun_gear, planet_gear : Gear
         External gears, z > 0.
-    ring_gear : InternalGear
+    ring_gear : Gear
         Ring gear, z < 0 (signed-z convention; required by ``validate``).
     k : int, optional
         Number of planets [-], >= 1, equally spaced. Default 3.
@@ -273,7 +269,7 @@ class PlanetaryGearTrainMeshing:
         None: derived from the profile shifts by the pair object.
     equalise_gs_12, equalise_gs_23 : bool, optional
         Forwarded to the pair objects (``equalise_gs=True`` fails for the
-        planet-ring pair, see ``InternalGearMeshing``).
+        planet-ring pair, see ``CylindricalFamily.correction_for_gs_equilibrium``).
     addendum_reduction_12, addendum_reduction_23 : bool, optional
         Forwarded to the pair objects.
     load_sharing_factor : float, optional
@@ -307,7 +303,7 @@ class PlanetaryGearTrainMeshing:
     phi_j + 180 (ring centre = sun centre).
 
     The negative z_ring is structural: it makes the signed tooth-number sum of
-    ``InternalGearMeshing`` a difference and makes rotation_dir_out =
+    the internal pair a difference and makes rotation_dir_out =
     +rotation_dir_in (ring and planet turn the same way). abs(z_ring) is used
     where a tooth count is meant (assembly condition); the signed value where
     a ratio is meant (i_0).
@@ -316,7 +312,7 @@ class PlanetaryGearTrainMeshing:
     mesh-stiffness or manufacturing-error load-sharing factor). Not covered:
     load distribution between planets and the real mesh, bearing and pin forces
     (``torques`` gives ideal torques only). This class computes no F_r, F_a or
-    F_n; ``meshing_12.forces`` and ``meshing_23.forces`` do.
+    F_n; ``CylindricalFamily.forces`` does, for ``meshing_12`` and ``meshing_23``.
 
     References
     ----------
@@ -334,9 +330,9 @@ class PlanetaryGearTrainMeshing:
     """
 
     def __init__(self,
-                 sun_gear: SpurHelicalGear,
-                 planet_gear: SpurHelicalGear,
-                 ring_gear: InternalGear,
+                 sun_gear: Gear,
+                 planet_gear: Gear,
+                 ring_gear: Gear,
                  k: int = 3,
                  label: str = "",
                  phi0_deg: float = 0.0,
@@ -360,21 +356,22 @@ class PlanetaryGearTrainMeshing:
 
         # --- the two tooth-contact problems (they run their own compatibility
         #     checks: mn / alpha_n / beta_n) --------------------------------
-        self.meshing_12 = SpurHelicalGearMeshing(
-            sun_gear, planet_gear,
+        # QUESTION(Q52): the train is not refactored yet (step 6); only the construction of its two pairs is moved onto GearPair.assemble (the family is that of the gears), everything else in this class is unchanged.
+        self.meshing_12 = GearPair.assemble(
+            sun_gear.family,
+            gear1=sun_gear, gear2=planet_gear,
             label=f"{label}:sun-planet",
             al=al_12,
             equalise_gs=equalise_gs_12,
             addendum_reduction=addendum_reduction_12,
-            driver="gear1",
         )
-        self.meshing_23 = InternalGearMeshing(
-            planet_gear, ring_gear,
+        self.meshing_23 = GearPair.assemble(
+            planet_gear.family,
+            gear1=planet_gear, gear2=ring_gear,
             label=f"{label}:planet-ring",
             al=al_23,
             equalise_gs=equalise_gs_23,
             addendum_reduction=addendum_reduction_23,
-            driver="gear1",
         )
 
         # --- resolved (not requested) centre distances -----------------------
@@ -815,17 +812,17 @@ class PlanetaryGearTrainMeshing:
         scaled by z_planet/z_sun (same Ft, different radius). Equal load sharing
         over the k planets is assumed; ``load_sharing_factor`` is not used here.
         Ft is on the reference diameter of the sun (ISO_6336-1_2019, 4.2.2,
-        Formula (1)); ``meshing_12.forces`` and ``meshing_23.forces`` use the
+        Formula (1)); ``CylindricalFamily.forces`` uses, for ``meshing_12`` and ``meshing_23``, the
         working pitch radius (see ``PlanetaryTorques``). The planetary
         class computes no F_r, F_a or F_n.
 
         Warnings
         --------
         Ft uses the reference diameter (ISO_6336-1_2019, 4.2.2, Formula (1)) while
-        ``meshing_12.forces`` uses the working pitch radius.
-        When z_sun > z_planet, ``meshing_12.forces(T_mesh_sun)`` takes the
+        ``CylindricalFamily.forces`` uses the working pitch radius.
+        When z_sun > z_planet, the force call on ``meshing_12`` with T_mesh_sun takes the
         working radius of the planet for the sun (the pair object gives gear1
-        the smaller working diameter, see ``SpurHelicalGearMeshing``), so its
+        the smaller working diameter, see ``CylindricalFamily.assemble_pair``), so its
         Ft and T_out differ from Ft here and from T_mesh_planet.
 
         References
@@ -924,13 +921,13 @@ class PlanetaryGearTrainMeshing:
             (ok, available, required) [-, mm, mm]. available = 2*al_12*sin(pi/k)
             is the distance between neighbouring planet axes; required =
             da_planet * Safety_Factor with da_planet the working tip diameter
-            of the planet (``meshing_12.gear2_w.da``) (P10). ok is True when
+            of the planet (``meshing_12.da2_w``) (P10). ok is True when
             available > required. For k < 2 the result is (True, inf, 0.0).
         """
         if self.k < 2:
             return (True, math.inf, 0.0)
         available = 2.0 * self.al_12 * math.sin(math.pi / self.k)
-        required = self.meshing_12.gear2_w.da * Safety_Factor
+        required = self.meshing_12.da2_w * Safety_Factor
         return (available > required, available, required)
 
 # TODO: later add the functions that give i0_max and k_max taking the neighbouring_condition into account
@@ -962,7 +959,7 @@ class PlanetaryGearTrainMeshing:
 
         Warnings
         --------
-        The list inherits the messages of ``InternalGearMeshing.validate``, in
+        The list inherits the messages of ``CylindricalFamily.validate_pair`` for the internal pair, in
         which the trimming test (z - z1) < 2 is always true for z < 0 (as
         coded), so the list is never empty for the signed ring this class
         requires and ``validate_or_raise`` raises.

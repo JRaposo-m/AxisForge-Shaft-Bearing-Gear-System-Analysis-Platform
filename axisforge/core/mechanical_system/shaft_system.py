@@ -50,8 +50,8 @@ class GearElement:
 
     Parameters
     ----------
-    gear         : geometry object exposing `.position` [mm] (SpurGear / HelicalGear
-                   / InternalGear), the axial coordinate of the CENTRE of the face width,
+    gear         : geometry object exposing `.position` [mm] (a ``Gear`` of the cylindrical
+                   family), the axial coordinate of the CENTRE of the face width,
                    and optionally `.b` (face width [mm]). No geometry is duplicated here.
     role         : "driver" | "driven"
     rotation_dir : +1 / -1 [-], sense of rotation about +X. Set explicitly ONLY for the kinematic

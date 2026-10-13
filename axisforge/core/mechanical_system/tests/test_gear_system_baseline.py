@@ -7,6 +7,8 @@ The expected values are the CSVs in ``tests/data/gears_baseline`` (vault note
 where the review found today's result wrong, the golden rows pin it and the physics check that it
 breaks is ``xfail(strict=True)`` with its question id (Qnn) and review row.
 """
+import math
+
 import pytest
 
 from axisforge.core.machine_elements.gears.tests import baseline_cases as bc
@@ -94,3 +96,31 @@ def test_alternative_tilting_moment_of_the_axial_force(case7):
     bending moment abs(F_a) r_w [N mm] (statics; no library source for its direction; how it maps
     onto ``ExternalMoment`` is not ruled, so only its presence is asked)."""
     assert case7.driver_shaft.external_moments and case7.driven_shaft.external_moments
+
+
+@pytest.mark.parametrize("driver", ("gear1", "gear2"))
+def test_internal_link_takes_the_declared_driver(driver):
+    """Q03: the link passes its ``driver`` to ``forces()`` as the pair did before step 3 (default
+    "gear1"), whatever gear ``gear_a`` wraps. Here ``gear_a`` wraps the RING of the pair of case 5
+    (z 20/-60, mn 2 mm, beta 15 deg): with the default the torque is still taken on the pinion."""
+    from axisforge.core.machine_elements.gears import GearPair
+    from axisforge.core.mechanical_system import GearElement, SpurHelicalGearSystem, SpurHelicalMeshLink
+
+    pinion = bc.gear(2.0, 20, b=20.0, beta_n_deg=15.0, label="pinion", position=bc.GEAR_POS)
+    ring = bc.gear(2.0, -60, b=20.0, beta_n_deg=15.0, label="ring", position=bc.GEAR_POS)
+    pair = GearPair.assemble(bc.FAMILY, gear1=pinion, gear2=ring)
+    s_ring, s_pinion = bc._shaft_system("shaft_ring"), bc._shaft_system("shaft_pinion")
+    ge_ring, ge_pinion = GearElement(ring, role="driver", label="g_ring"), GearElement(pinion, role="driven", label="g_pinion")
+    s_ring.add_gear(ge_ring)
+    s_pinion.add_gear(ge_pinion)
+    kw = {} if driver == "gear1" else {"driver": driver}
+    link = SpurHelicalMeshLink(s_ring, ge_ring, s_pinion, ge_pinion, pair, bc.PHI7, **kw)
+    loaded_ring, loaded_pinion = SpurHelicalGearSystem([s_ring, s_pinion], [link]).resolve(bc.T_NM * bc.OMEGA, bc.N_RPM, 1)
+
+    F = bc.FAMILY.forces(pair, bc.T_NM, bc.PHI7, 1, driver=driver)       # [N], [N m]
+    other = bc.FAMILY.forces(pair, bc.T_NM, bc.PHI7, 1, driver="gear2" if driver == "gear1" else "gear1")
+    assert F["Ft"] != pytest.approx(other["Ft"], rel=0.1)                # the driver matters for an internal pair
+    on_ring, on_pinion = bc.shaft_sums(loaded_ring), bc.shaft_sums(loaded_pinion)
+    assert math.hypot(*on_ring["Ft_vec"]) == pytest.approx(F["Ft"], rel=1e-12)
+    assert on_ring["Fa"] == pytest.approx(F["Fa"], rel=1e-12)
+    assert on_pinion["T_gear"] == pytest.approx(-F["T_out"], rel=1e-12)   # power-flow sign of the driven gear

@@ -11,6 +11,12 @@ A refactor edits the builders of this file (and, when attribute names change, a 
 the recorded rows); the expected values in ``tests/data/gears_baseline/*.csv`` never change, except
 for the rows that are ruled to change.
 
+Since step 3 the gears and pairs are ``Gear`` and ``GearPair`` of ``CylindricalFamily``. The rows
+were recorded on the classes that family replaces, so each object is recorded through the NAME MAP
+below (``recorded_gear``, ``recorded_pair``): recorded row name -> accessor on the new objects, in
+the recorded order. Every row is still compared; ``RENAMED_TEXT`` lists the few text rows that name
+a removed class.
+
 Units are those of AxisForge: lengths [mm], forces [N], torques [N m], angles [rad] in the gear
 objects and [deg] for ``phi_deg`` and the load angles, speeds [rpm], power [W].
 """
@@ -34,18 +40,9 @@ from axisforge.core.machine_elements.bearings import (
     CylindricalRollerFamily,
     DeepGrooveBallFamily,
 )
-from axisforge.core.machine_elements.gears.parallel_axis.gear_meshing.internal_meshing import (
-    InternalGearMeshing,
-)
-from axisforge.core.machine_elements.gears.parallel_axis.gear_meshing.spurhelical_meshing import (
-    SpurHelicalGearMeshing,
-)
-from axisforge.core.machine_elements.gears.parallel_axis.gear_properties.internal_gear import (
-    InternalGear,
-)
-from axisforge.core.machine_elements.gears.parallel_axis.gear_properties.spur_helical_gear import (
-    SpurHelicalGear,
-)
+from axisforge.core.machine_elements.gears import cylindrical
+from axisforge.core.machine_elements.gears.base import Gear, GearPair
+from axisforge.core.machine_elements.gears.cylindrical import CylindricalFamily, CylindricalGearData
 from axisforge.core.machine_elements.gears.parallel_axis.planetary_gear.planetary_gear_meshing import (
     PlanetaryGearTrainMeshing,
     PlanetaryMember,
@@ -201,14 +198,139 @@ class Recorder:
 
 
 # ----------------------------------------------------------------------------------------------
+# NAME MAP: recorded row name of the classes of commit 39c7133 -> accessor on Gear / GearPair
+# ----------------------------------------------------------------------------------------------
+FAMILY = CylindricalFamily()
+
+_GEAR_INPUTS = ("label", "material_id", "position", "mn", "z", "Ca", "Cf", "x", "b", "alpha_n_deg", "alpha", "beta_n_deg",
+                "beta", "haP", "cP", "hfP", "rfP", "Ra", "Rq", "Rz")
+# recorded attribute -> attribute of Gear, in the recorded order (the order of assignment in the old
+# constructors). The ring class had no Ca, Cf, betab, pb, rhoF, zn, de and named two quantities otherwise.
+GEAR_ROWS = {
+    "external": {n: n for n in (*_GEAR_INPUTS, "mt", "alphat", "betab", "rhoF", "pb", "pt", "pbt", "d", "r", "db", "rb",
+                                "da", "ra", "df", "rf", "zn", "de")},
+    "internal": {**{n: n for n in _GEAR_INPUTS if n not in ("Ca", "Cf")},
+                 **{n: n for n in ("mt", "mx", "pn", "pt", "pz", "px", "d", "r")}, "beta_b": "betab",
+                 **{n: n for n in ("db", "rb", "alphat", "tau", "pbt")}, "pbn": "pb",
+                 **{n: n for n in ("dv", "rv", "da", "ra", "df", "rf")}},
+}
+# rows added to the working copies ``gear1_w`` / ``gear2_w`` (i = 1, 2) after the gear rows: the working
+# data, all now stored on the pair (recorded name -> attribute of GearPair)
+WORKING_ROWS = {"k": "k", "al": "al", "alphatw": "alphatw", "dl": "dl{i}", "rl": "rl{i}", "alpha_a": "alpha_a{i}",
+                "epslon_a{i}": "epslon_a{i}", "galpha": "galpha{i}"}
+# pair rows from ``u`` on, same names and order for both kinds and for every constructor option
+_PAIR_TAIL = ("u", "k", "epslon_alpha", "b", "epslon_beta", "epslon_gamma", "galpha", "ReqI", "T1T2", "T1E", "T2A", "T1A",
+              "T1B", "T1C", "T1D", "T2E", "T2B", "T2C", "T2D", "AE", "AB", "AC", "AD", "rA1", "rB1", "rD1", "rA2", "rB2",
+              "rD2", "HV", "Ram", "Rrms", "RzS")
+
+# QUESTION(Q50): text rows of the baseline that name a class removed in step 3 and that the new code
+# cannot print: baseline value -> (value given now, number of such rows in cases 1-7). Every other
+# presentation row (__repr__ 'HelicalGearMeshing(', 'InternalGearMeshing(', summary()) is reproduced
+# verbatim by the family. The alternative is to rule new texts and replace the rows.
+RENAMED_TEXT = {
+    "\"AttributeError: 'InternalGear' object has no attribute 'zn'\"":
+        ("\"AttributeError: 'Gear' object has no attribute 'zn'\"", 6),
+}
+
+
+# QUESTION(Q03) / QUESTION(Q50): the pair stores no driver (D-0026 item 4), so the recorded rows `driver`
+# and `driven` of the 29 recorded pairs are an echo of the case input (they pass by construction):
+# (row names, number of rows in cases 1-7). What the driver CHANGES is compared in the forces() rows.
+ECHOED_ROWS = (("driver", "driven"), 58)
+
+
+class Recorded:
+    """One object of the old classes as the baseline recorded it, rebuilt from the new objects.
+
+    ``rows`` become the public attributes, in the recorded order (``Recorder.object_`` reads
+    ``vars()``); ``calls`` are the recorded methods, by name (``Recorder.call``); ``text`` gives the
+    recorded ``__repr__``.
+    """
+
+    def __init__(self, rows, text=None, **calls):
+        vars(self).update(rows)
+        vars(self).update(calls)    # callables are skipped by Recorder.object_
+        self._text = text
+
+    def __repr__(self):
+        return self._text() if self._text else object.__repr__(self)
+
+
+def recorded_gear(g):
+    """``Gear`` under the names of ``SpurHelicalGear`` (z > 0) or ``InternalGear`` (z < 0).
+
+    The checks that were methods of the old gear classes are now ``CylindricalFamily.undercutting``,
+    ``CylindricalFamily.values_at`` and, for the interference tests of a ring that are under
+    question Q24, private functions of ``cylindrical`` (entries of its ``_LEGACY`` table).
+    """
+    kind = cylindrical._kind(g.z)
+    rows = {name: getattr(g, attr) for name, attr in GEAR_ROWS[kind].items()}
+    calls = dict(validate=g.validate, validate_or_raise=g.validate_or_raise)
+    if kind == "external":
+        calls.update(undercutting=lambda: FAMILY.undercutting(g))
+    else:
+        calls.update(tip_below_base_circle=lambda: g.da <= g.db,     # inlined in the ring limits of validate()
+                     involute_interference=lambda z1, x1: cylindrical._involute_interference(g, z1, x1),
+                     trochoid_interference=lambda z1, x1: cylindrical._trochoid_interference(g, z1, x1),
+                     trimming_interference=lambda z1: cylindrical._trimming_interference(g, z1),
+                     validate_mesh=lambda z1, x1: cylindrical._validate_mesh(g, z1, x1),
+                     values_at=lambda dy: FAMILY.values_at(g, dy))
+    return Recorded(rows, **calls)
+
+
+def _recorded_working_gear(pair, i):
+    """Rows of the shallow copy ``gear{i}_w`` of the old pair classes: the gear with its working tip
+    diameter (now ``pair.da{i}_w``; the radius was da/2) followed by the working data of the pair."""
+    g = getattr(pair, f"gear{i}")
+    rows = {name: getattr(g, attr) for name, attr in GEAR_ROWS[cylindrical._kind(g.z)].items()}
+    rows["da"] = getattr(pair, f"da{i}_w")
+    rows["ra"] = rows["da"] / 2.0
+    rows.update((name.format(i=i), getattr(pair, attr.format(i=i))) for name, attr in WORKING_ROWS.items())
+    return Recorded(rows)
+
+
+def recorded_pair(pair, driver="gear1"):
+    """``GearPair`` under the names of ``SpurHelicalGearMeshing`` or ``InternalGearMeshing``.
+
+    ``driver`` is the driver the case declares. The pair no longer stores it (it is an argument of
+    ``CylindricalFamily.forces``), so the recorded rows ``driver`` / ``driven`` are the declared
+    value itself and ``forces`` passes it on. The order of the first rows is that of the old
+    constructors: with an imposed ``al`` the centre distance comes before the working pressure
+    angle, and an internal pair then has the backlash ``jbn``. ``new`` is the ``GearPair``.
+    """
+    head = ("al", "alphatw", "jbn", "x1", "x2", "inv_alphatw") if pair.al_imposed else ("inv_alphatw", "alphatw", "al", "x1", "x2")
+    rows = dict(driver=driver, driven="gear2" if driver == "gear1" else "gear1", label=pair.label, a=pair.a)
+    rows.update((n, getattr(pair, n)) for n in (*head, *_PAIR_TAIL) if not (n == "jbn" and pair.jbn is None))
+    # the consistency check of validate(): recorded as x_sum_* (external) or x_diff_* (internal)
+    what = "diff" if cylindrical._kind(pair.gear2.z) == "internal" else "sum"
+    _, rows[f"x_{what}_from_al"], rows[f"x_{what}_declared"] = pair.profile_shift_check
+    return Recorded(
+        dict(rows, gear1=pair.gear1, gear2=pair.gear2, gear1_w=_recorded_working_gear(pair, 1),
+             gear2_w=_recorded_working_gear(pair, 2), new=pair),
+        text=lambda: repr(pair), validate=pair.validate, validate_or_raise=pair.validate_or_raise, summary=pair.summary,
+        forces=lambda T, phi_deg=0.0, rotation_dir=1: FAMILY.forces(pair, T, phi_deg, rotation_dir, driver=driver),
+        correction_for_gs_equilibrium=lambda: FAMILY.correction_for_gs_equilibrium(pair.gear1, pair.gear2))
+
+
+def assemble_pair(g1, g2, driver="gear1", **kw):
+    """Pair of the cylindrical family for two gears, recorded with the declared ``driver``."""
+    return recorded_pair(GearPair.assemble(FAMILY, gear1=g1, gear2=g2, **kw), driver)
+
+
+# ----------------------------------------------------------------------------------------------
 # builders of the case objects
 # ----------------------------------------------------------------------------------------------
+def gear(mn, z, **kw):
+    """Assembled gear of the cylindrical family (z < 0: internal gear)."""
+    return Gear.assemble(FAMILY, CylindricalGearData(mn, z, **kw))
+
+
 def ext_gear(name, i, label, position=0.0):
     g = GEARPIE[name]
     # GEARpie gives the dedendum hfP; AxisForge takes the clearance cP = hfP - haP [multiples of mn]
-    return SpurHelicalGear(mn=g["m"], z=g["z"][i], x=g["x"][i], b=g["b"][i], alpha_n_deg=g["alpha"], beta_n_deg=g["beta"],
-                           haP=g["haP"], cP=g["hfP"] - g["haP"], rfP=g["rfP"], Ra=g["Ra"][i], Rq=g["Rq"][i], Rz=g["Rz"][i],
-                           label=label, position=position)
+    return gear(mn=g["m"], z=g["z"][i], x=g["x"][i], b=g["b"][i], alpha_n_deg=g["alpha"], beta_n_deg=g["beta"],
+                haP=g["haP"], cP=g["hfP"] - g["haP"], rfP=g["rfP"], Ra=g["Ra"][i], Rq=g["Rq"][i], Rz=g["Rz"][i],
+                label=label, position=position)
 
 
 def pinion_wheel(name, position=0.0):
@@ -216,9 +338,9 @@ def pinion_wheel(name, position=0.0):
 
 
 def make_internal(beta, mn=2.0, b=20.0):
-    pin = SpurHelicalGear(mn=mn, z=20, x=0.0, b=b, alpha_n_deg=20.0, beta_n_deg=beta, label="pinion")
-    # internal gear: negative number of teeth (sign convention of the class)
-    ring = InternalGear(mn=mn, z=-60, x=0.0, b=b, alpha_n_deg=20.0, beta_n_deg=beta, label="ring")
+    pin = gear(mn=mn, z=20, x=0.0, b=b, alpha_n_deg=20.0, beta_n_deg=beta, label="pinion")
+    # internal gear: negative number of teeth (sign convention of the family)
+    ring = gear(mn=mn, z=-60, x=0.0, b=b, alpha_n_deg=20.0, beta_n_deg=beta, label="ring")
     return pin, ring
 
 
@@ -254,15 +376,16 @@ class Case7(NamedTuple):
     -1) passed to ``resolve``; ``phi`` the angle of the line of centres a -> b [deg], from +Y toward
     +Z. ``sP``, ``sW`` are the pinion and wheel ``ShaftSystem`` (after ``resolve_case7``: the loaded
     copies returned by ``resolve``; the shafts given to the system stay in ``system.shafts``),
-    ``geP``, ``geW`` their ``GearElement``, ``p``, ``w`` the gears.
+    ``geP``, ``geW`` their ``GearElement``, ``p``, ``w`` the gears. ``mesh`` is the pair as recorded
+    (``recorded_pair``); the link holds the ``GearPair`` itself (``mesh.new``).
     """
     system: SpurHelicalGearSystem
-    mesh: SpurHelicalGearMeshing
+    mesh: Recorded
     link: SpurHelicalMeshLink
     sP: ShaftSystem
     sW: ShaftSystem
-    p: SpurHelicalGear
-    w: SpurHelicalGear
+    p: Gear
+    w: Gear
     geP: GearElement
     geW: GearElement
     P: float
@@ -301,9 +424,9 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear
     rot : int
         Sense of rotation of the source shaft about +X, +1 or -1 [-].
     alt : bool
-        Wheel source only. False: meshing built as ``(wheel, pinion, driver="gear1")``. True: built as
-        ``(pinion, wheel, driver="gear2")`` with ``gear_a`` = wheel, which violates the documented
-        ``gear_a`` rule of ``SpurHelicalMeshLink`` (cases 7e, 7f).
+        Wheel source only. False: pair built as ``(wheel, pinion)``, declared driver gear 1. True: built
+        as ``(pinion, wheel)``, declared driver gear 2, with ``gear_a`` = wheel: the external pair still
+        takes the torque on its gear 1, the pinion (cases 7e, 7f; question Q03).
     label : str or None
         Label of the system.
     distribute_loads : bool
@@ -326,14 +449,14 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear
     sW.add_gear(geW)
     kw = dict(phi_deg=PHI7, label="stage", distribute_loads=distribute_loads)
     if source == "pinion":
-        mesh = SpurHelicalGearMeshing(p, w, label="stage", driver="gear1")
-        link = SpurHelicalMeshLink(sP, geP, sW, geW, mesh, **kw)
+        mesh = assemble_pair(p, w, label="stage", driver="gear1")
+        link = SpurHelicalMeshLink(sP, geP, sW, geW, mesh.new, **kw)
     elif not alt:
-        mesh = SpurHelicalGearMeshing(w, p, label="stage", driver="gear1")
-        link = SpurHelicalMeshLink(sW, geW, sP, geP, mesh, **kw)
+        mesh = assemble_pair(w, p, label="stage", driver="gear1")
+        link = SpurHelicalMeshLink(sW, geW, sP, geP, mesh.new, **kw)
     else:
-        mesh = SpurHelicalGearMeshing(p, w, label="stage", driver="gear2")
-        link = SpurHelicalMeshLink(sW, geW, sP, geP, mesh, **kw)
+        mesh = assemble_pair(p, w, label="stage", driver="gear2")
+        link = SpurHelicalMeshLink(sW, geW, sP, geP, mesh.new, **kw)
     system = SpurHelicalGearSystem([sP, sW], [link], label=label)
     return Case7(system, mesh, link, sP, sW, p, w, geP, geW, T_NM * OMEGA, rot, PHI7)
 
@@ -355,6 +478,7 @@ def resolved_case7(source, rot, alt=False, distribute_loads=False):
 # recording of the pair cases (1-5)
 # ----------------------------------------------------------------------------------------------
 def record_gear(rec, name, g):
+    g = recorded_gear(g)
     rec.object_(name, g)
     for m in ("undercutting", "validate", "validate_or_raise"):
         rec.call(name, g, m)
@@ -369,7 +493,7 @@ def record_forces(rec, name, mesh, T, key):
 
 
 def record_pair(rec, name, mesh, T, key, forces=True):
-    rec.object_(name, mesh, skip=("gear1", "gear2", "gear1_w", "gear2_w"))
+    rec.object_(name, mesh, skip=("gear1", "gear2", "gear1_w", "gear2_w", "new"))
     for w in ("gear1_w", "gear2_w"):
         rec.object_(f"{name}.{w}", getattr(mesh, w))
     rec.add(name, "gear1.label", mesh.gear1.label)
@@ -389,17 +513,16 @@ def run_external(case, gname):
     rec.add("inputs", "T1 torque on gear1 / speed", f"{T_NM!r} N m / {N_RPM!r} rpm")
     record_gear(rec, "gear1(pinion)", p)
     record_gear(rec, "gear2(wheel)", w)
-    mesh = SpurHelicalGearMeshing(p, w, label=case, driver="gear1")
+    mesh = assemble_pair(p, w, label=case, driver="gear1")
     record_pair(rec, "mesh", mesh, T_NM, (case, "base"))
     R[(case, "mesh")] = mesh
-    # called on a fresh pair: it also sets x1, x2 on that pair
-    rec.call("mesh", SpurHelicalGearMeshing(p, w, driver="gear1"), "correction_for_gs_equilibrium")
-    # variants (all constructor options of SpurHelicalGearMeshing)
+    rec.call("mesh", mesh, "correction_for_gs_equilibrium")
+    # variants (all assembly options of the pair)
     for vname, kw in (("mesh_addendum_reduction", dict(addendum_reduction=True)),
                       ("mesh_equalise_gs", dict(equalise_gs=True)),
                       ("mesh_al_imposed_equal_a", dict(al=mesh.a))):
         try:
-            mv = SpurHelicalGearMeshing(p, w, label=vname, driver="gear1", **kw)
+            mv = assemble_pair(p, w, label=vname, driver="gear1", **kw)
         except Exception as e:
             rec.add(vname, "constructor!exception", f"{type(e).__name__}: {e}")
             continue
@@ -409,11 +532,11 @@ def run_external(case, gname):
     if case.startswith("case1"):
         # extra pair for the z1 + z2 > 60 branch of correction_for_gs_equilibrium (the GEARpie pair has 40)
         g = GEARPIE[gname]
-        pe = SpurHelicalGear(mn=g["m"], z=35, b=g["b"][0], label="extra_z35")
-        we = SpurHelicalGear(mn=g["m"], z=45, b=g["b"][1], label="extra_z45")
+        pe = gear(mn=g["m"], z=35, b=g["b"][0], label="extra_z35")
+        we = gear(mn=g["m"], z=45, b=g["b"][1], label="extra_z45")
         rec.add("inputs", "extra pair for equalise_gs branch z1+z2 > 60", "mn=4.5, z=35/45, x=0, b=14, default rack")
         try:
-            me = SpurHelicalGearMeshing(pe, we, label="extra_z80", equalise_gs=True)
+            me = assemble_pair(pe, we, label="extra_z80", equalise_gs=True)
             record_pair(rec, "mesh_extra_z35_z45_equalise_gs", me, T_NM, (case, "extra80"), forces=False)
             R[(case, "extra80")] = me
         except Exception as e:
@@ -429,13 +552,14 @@ def run_case3():
     rec.add("inputs", "intent", "wheel delivers the input torque T_wheel = 60.75 N m")
     variants = {V3[0]: (p, w, "gear2"), V3[1]: (w, p, "gear1"), V3[2]: (w, p, "gear2")}
     for vname, (g1, g2, drv) in variants.items():
-        mesh = SpurHelicalGearMeshing(g1, g2, label=vname, driver=drv)
+        mesh = assemble_pair(g1, g2, label=vname, driver=drv)
         record_pair(rec, vname, mesh, T_NM, (case, vname))
         R[(case, vname)] = mesh
     return rec
 
 
 def record_internal_gear(rec, name, ring, z1, x1):
+    ring = recorded_gear(ring)
     rec.object_(name, ring)
     for m in ("tip_below_base_circle", "validate", "validate_or_raise"):
         rec.call(name, ring, m)
@@ -454,17 +578,17 @@ def run_internal(case, beta):
     record_gear(rec, "gear1(pinion)", pin)
     record_internal_gear(rec, "gear2(ring)", ring, pin.z, pin.x)
     for drv in ("gear1", "gear2"):
-        mesh = InternalGearMeshing(pin, ring, label=case, driver=drv)
+        mesh = assemble_pair(pin, ring, label=case, driver=drv)
         record_pair(rec, f"mesh_driver_{drv}", mesh, T_NM, (case, drv))
         R[(case, drv)] = mesh
     base = R[(case, "gear1")]
-    rec.call("mesh_driver_gear1", InternalGearMeshing(pin, ring, driver="gear1"), "correction_for_gs_equilibrium")
+    rec.call("mesh_driver_gear1", base, "correction_for_gs_equilibrium")
     for vname, kw in (("mesh_addendum_reduction", dict(addendum_reduction=True)),
                       ("mesh_equalise_gs", dict(equalise_gs=True)),
                       ("mesh_al_imposed_equal_al", dict(al=base.al)),
                       ("mesh_al_imposed_equal_a", dict(al=base.a))):
         try:
-            mv = InternalGearMeshing(pin, ring, label=vname, driver="gear1", **kw)
+            mv = assemble_pair(pin, ring, label=vname, driver="gear1", **kw)
         except Exception as e:
             rec.add(vname, "constructor!exception", f"{type(e).__name__}: {e}")
             continue
@@ -480,9 +604,9 @@ def run_internal(case, beta):
 def run_planetary(case, beta):
     rec = Recorder(case)
     mn, b = 2.0, 20.0
-    sun = SpurHelicalGear(mn=mn, z=20, x=0.0, b=b, beta_n_deg=beta, label="sun")
-    planet = SpurHelicalGear(mn=mn, z=20, x=0.0, b=b, beta_n_deg=beta, label="planet")
-    ring = InternalGear(mn=mn, z=-60, x=0.0, b=b, beta_n_deg=beta, label="ring")
+    sun = gear(mn=mn, z=20, x=0.0, b=b, beta_n_deg=beta, label="sun")
+    planet = gear(mn=mn, z=20, x=0.0, b=b, beta_n_deg=beta, label="planet")
+    ring = gear(mn=mn, z=-60, x=0.0, b=b, beta_n_deg=beta, label="ring")
     rec.add("inputs", "chosen values", f"mn=2, sun z=20, planet z=20, ring z=-60, k=4 (k=3 violates the assembly condition, see variant k3), x=0, b=20, alpha_n=20 deg, beta={beta} deg, default rack, phi0=0")
     record_gear(rec, "sun", sun)
     record_gear(rec, "planet", planet)
@@ -490,8 +614,9 @@ def run_planetary(case, beta):
     pg = PlanetaryGearTrainMeshing(sun, planet, ring, k=4, label=case)
     R[(case, "train")] = pg
     rec.object_("planetary", pg, skip=("sun_gear", "planet_gear", "ring_gear", "meshing_12", "meshing_23"))
-    record_pair(rec, "planetary.meshing_12", pg.meshing_12, T_NM, (case, "m12"), forces=False)
-    record_pair(rec, "planetary.meshing_23", pg.meshing_23, T_NM, (case, "m23"), forces=False)
+    m12, m23 = recorded_pair(pg.meshing_12), recorded_pair(pg.meshing_23)   # the train takes the torque on gear 1 of each
+    record_pair(rec, "planetary.meshing_12", m12, T_NM, (case, "m12"), forces=False)
+    record_pair(rec, "planetary.meshing_23", m23, T_NM, (case, "m23"), forces=False)
     M = PlanetaryMember
     for j in range(pg.k):
         rec.call("planetary", pg, "planet_phi_deg", (j,))
@@ -522,8 +647,8 @@ def run_planetary(case, beta):
             rec.call("planetary", tq, "satisfies_torque_ordering", label=f"torques({mem.name}).satisfies_torque_ordering()")
     tq = R[(case, "torques", "SUN")]
     # docstring of torques(): T_mesh_sun / T_mesh_planet are the torques to pass to the forces() of each pair
-    rec.call("planetary.meshing_12", pg.meshing_12, "forces", (tq.T_mesh_sun, 0.0, 1), label="forces(T_mesh_sun, phi=0, rot=+1)")
-    rec.call("planetary.meshing_23", pg.meshing_23, "forces", (tq.T_mesh_planet, 0.0, 1), label="forces(T_mesh_planet, phi=0, rot=+1)")
+    rec.call("planetary.meshing_12", m12, "forces", (tq.T_mesh_sun, 0.0, 1), label="forces(T_mesh_sun, phi=0, rot=+1)")
+    rec.call("planetary.meshing_23", m23, "forces", (tq.T_mesh_planet, 0.0, 1), label="forces(T_mesh_planet, phi=0, rot=+1)")
     for m in ("coaxiality_error", "assembly_condition", "neighbouring_condition", "validate", "validate_or_raise", "summary"):
         rec.call("planetary", pg, m)
     rec.call("planetary", pg, "neighbouring_condition", (2.0,))
@@ -572,7 +697,8 @@ def run_case7(tag, source, rot, alt=False):
     for s in system.shafts:
         for k, v in system._resolved[id(s)].items():   # private record kept by resolve
             rec.add_value("system", f"_resolved[{s.name}].{k}", v)
-    rec.object_("link", link, skip=("shaft_a", "shaft_b", "gear_a", "gear_b", "meshing"))
+    # `driver` of the link was added in step 3 (it was an attribute of the pair): recorded in the rows of the pair
+    rec.object_("link", link, skip=("shaft_a", "shaft_b", "gear_a", "gear_b", "meshing", "driver"))
     rec.add("link", "shaft_a.name", link.shaft_a.name)
     rec.add("link", "shaft_b.name", link.shaft_b.name)
     rec.call("link", link, "validate")
@@ -904,6 +1030,8 @@ def equivalent(got, text):
         # QUESTION(Q02): text is compared exactly, including the numbers printed inside strings
         # (summary(), __repr__(), validate() messages, "constructor ok: al_12, al_23"); the
         # alternative is to compare the numbers found inside a string under the tolerances.
+        if text in RENAMED_TEXT:
+            return got == RENAMED_TEXT[text][0]     # QUESTION(Q50): the row names a removed class
         return got == text
     try:
         ref = float(text)

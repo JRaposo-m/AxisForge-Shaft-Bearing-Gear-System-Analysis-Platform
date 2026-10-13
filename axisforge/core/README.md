@@ -5,7 +5,7 @@ single-shaft and multi-shaft systems, applied loads and materials. A domain obje
 physical thing, can validate itself and owns the standard formulae that depend only on its own
 geometry (for example the basic dynamic load rating of a bearing). The package runs no solver,
 stores no solver result and draws nothing; a `ShaftSystem` holds the loads applied to it and
-`SpurHelicalGearSystem.resolve` writes the mesh loads onto its shafts. It imports nothing from
+`SpurHelicalGearSystem.resolve` returns loaded copies of its shafts with the mesh loads. It imports nothing from
 `mesh`, `solvers`, `results` or `outputs`. Detail of every class is in its docstring.
 
 ## Contents
@@ -26,16 +26,19 @@ core/
         family.py               concrete families, @register_family and classification decorators
         geometry.py             raceway and rolling-element curvature geometry
         capacity.py             basic dynamic load rating calculators (point and line contact)
-    gears/parallel_axis/
-      gear_properties/          geometry of one external or internal involute gear
-      gear_meshing/             external-external and external-internal pair, tooth forces
-      planetary_gear/           single-stage epicyclic train built from two pairs
+    gears/
+      base.py                   GearFamily (contract), @register_gear_family, Gear, GearPair (immutable once assembled)
+      cylindrical.py            CylindricalGearData, CylindricalFamily: external and internal involute gears
+                                (z < 0), their pair, checks and tooth forces, in the order of ISO 21771
+      cylindrical_capacity.py   placeholder (ISO 6336 element factors): contracts only, nothing computed
+      parallel_axis/planetary_gear/   single-stage epicyclic train built from two pairs
   mechanical_system/
     shaft_system.py             GearElement, ShaftSystem (bearings, gears, loads on one shaft)
     gear_system.py              SpurHelicalMeshLink, SpurHelicalGearSystem (power-flow graph)
 ```
 
-Tests of the bearing code are in `bearings/tests/` and `bearings/families/tests/`.
+Tests of the bearing code are in `bearings/tests/` and `bearings/families/tests/`; those of the
+gears in `gears/tests/` and of the systems in `mechanical_system/tests/`.
 
 ## Entry points
 
@@ -53,8 +56,9 @@ result types (import them from the module `planetary_gear_meshing`).
 | Assemble a bearing | `Bearing.assemble(family, catalog, geometry)` | immutable `Bearing`; `.C` [N] |
 | Capacity of an assembled bearing | `bearing.family.dynamic_capacity(bearing)`, `per_element_dynamic_capacity(bearing, Cr=None)` (keyword `Cr` or `Ca`, by family) | `(Q_ci, Q_ce)` [N]; overall rating [N] |
 | Switch on ISO/TS 16281 contact data | `geometry` with `contact=ContactAnalysis.ISO16281`, `e1`, `e2`, `nu1`, `nu2` | bearing with contact spring constants |
-| Gear geometry | `SpurHelicalGear(mn, z, ...)`, `InternalGear(mn, z, ...)` | gear object |
-| Gear pair | `SpurHelicalGearMeshing(gear1, gear2, ...)`, `InternalGearMeshing(...)`, `.forces(T_in)` | pair object; dict of forces |
+| Gear geometry | `Gear.assemble(CylindricalFamily(), CylindricalGearData(mn, z, x=..., b=..., ...))`; `z < 0` for an internal gear | immutable `Gear` |
+| Gear pair | `GearPair.assemble(family, gear1=..., gear2=..., al=None, addendum_reduction=False, label="")` | immutable `GearPair` (no shaft, driver or torque) |
+| Tooth forces of a pair | `pair.family.forces(pair, T, phi_deg, rotation_dir, driver="gear1")`, `T` in N m | dict of forces [N], output torque [N m] and force angles [deg] |
 | Planetary train | `PlanetaryGearTrainMeshing(sun_gear, planet_gear, ring_gear, k, ...)` | train object |
 | Loads | `RadialLoad`, `AxialLoad`, `TorqueLoad`, `ExternalMoment`, `DistributedRadialLoad` | load objects; `component(LoadPlane)` |
 | One shaft with its elements | `ShaftSystem(shaft, ...)`, `.add_bearing`, `.add_gear`, `.add_load`; `GearElement(gear, role, ...)` | `ShaftSystem` |
@@ -96,8 +100,10 @@ load decomposition is stated in the module docstring of `loads.py`.
 - `ShaftSection`, `Shoulder`, `Keyway`, `BearingCatalog` and the material blocks raise
   `ValueError` at construction. Gears, shafts, loads and systems expose `validate() -> list[str]`
   and, for most, `validate_or_raise()`.
-- A `Bearing` refuses attribute writes after `assemble()`. `BearingCatalog` and the material
-  blocks are frozen dataclasses.
+- A `Bearing`, a `Gear` and a `GearPair` refuse attribute writes after `assemble()`.
+  `BearingCatalog`, `CylindricalGearData` and the material blocks are frozen dataclasses.
+- `Gear.assemble` and `GearPair.assemble` do not run `validate()`; `validate()` of an internal
+  pair is never empty (open questions of the gears refactor).
 - Bearing families register themselves with `@register_family`; `@point_contact`,
   `@line_contact` and `@thrust` classify them. A new family is a new registered class; no
   table is edited.
@@ -117,7 +123,8 @@ Library keys as written in the docstrings (D-0023); clauses and equations are in
 |---|---|
 | `ISO_TS_16281_2008` | Contact spring constants and load-rating calculators of the bearing families |
 | `ISO_TR_1281` | Basic dynamic load rating, multi-row combination |
-| `ISO_6336-1_2019` | Involute gear geometry, meshing, gear-system forces |
+| `ISO_21771_2007`, `ISO_53_1998` | Involute gear geometry and meshing, basic rack (`gears/cylindrical.py`) |
+| `ISO_6336-1_2019` | Nominal tangential load, virtual number of teeth; planetary train and gear-system docstrings |
 | `Harris2007_vol1` | Rolling bearing geometry and load rating |
 | `Harris2007_vol2` | Shear modulus from the elastic constants (`materials/base.py`) |
 | `Onate2013_vol2` | Section properties of the shaft; elastic constants |

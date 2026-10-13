@@ -17,7 +17,7 @@ from axisforge.outputs.construction.shaft import (
     SECTION_COLUMNS, SHOULDER_COLUMNS, section_records, shaft_system_records, shaft_system_text,
     shoulder_records)
 
-# SpurHelicalGearMeshing attributes (the contact ratios exist only after gear_geometry() ran).
+# Attributes of a cylindrical ``GearPair``.
 MESH_ATTRIBUTES = [
     ("a", "mm", "reference centre distance a"),
     ("al", "mm", "working centre distance"),

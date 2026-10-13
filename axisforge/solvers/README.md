@@ -7,7 +7,7 @@ basic reference rating life, and the Grid Convergence Index of a mesh refinement
 objects from `core`, `mesh` and `config` and returns the containers of `results`. The package does
 not hold a library of results, does not print and does not plot; reports belong to `outputs`
 and studies to the repositories that use AxisForge. There is no gear solver here: gear geometry
-is in `core`.
+is in `core`, and `machine_elements/gears/` holds two placeholders that compute nothing.
 
 ## Contents
 
@@ -36,6 +36,9 @@ solvers/
             static_solvers/
                 postprocessing.py          ShaftPostProcessor, StressConcentration
                 static_failure.py          empty
+        gears/                             placeholders, not reviewed: every function raises NotImplementedError
+            iso6336.py                     contracts of the ISO 6336 load-capacity calculation
+            thermal.py                     contracts of the ISO/TR 14179-2 power loss and heat balance
         bearings/load_distribution/iso_16281/
             dispatch.py                    solver registry, selection by family capability
             numerics.py                    run_root, SciPy root-finder wrapper
@@ -46,7 +49,7 @@ solvers/
         convergence_solver.py              Richardson extrapolation, GCI, MeshConvergenceStudy
 ```
 
-Tests are in `tests/` folders next to the code (`shaft/fem_solvers/tests`, `iso_16281/tests`, `mesh/tests`). `solvers/mesh` is the mesh-convergence solver;
+Tests are in `tests/` folders next to the code (`shaft/fem_solvers/tests`, `iso_16281/tests`, `gears/tests`, `mesh/tests`). `solvers/mesh` is the mesh-convergence solver;
 mesh generation and elements are in `axisforge.mesh`.
 
 ## Entry points

@@ -15,7 +15,7 @@ two wheels) is recognised only if the SAME GearElement object is passed as gear_
 sharing it; see SpurHelicalMeshLink.torque_split.
 
 Units: forces [N], positions [mm], angles [deg] at the interface, power [W], speed [rpm]. Torque
-propagates and is stored in N m end to end (what meshing.forces() consumes and returns and what
+propagates and is stored in N m end to end (what CylindricalFamily.forces() consumes and returns and what
 the TorqueLoad objects created here carry); see the Warnings of core/loads.py (open review item U1).
 """
 
@@ -44,12 +44,12 @@ class SpurHelicalMeshLink  :
         Driver / driven shaft containers.
     gear_a, gear_b : GearElement
         The meshing gears on each shaft.
-    meshing : object
-        A *GearMeshing object exposing ``.al`` (centre distance [mm]) and
-        ``.forces(T_in [N m], phi_deg [deg], rotation_dir_in) -> dict``. ``gear_a`` must wrap the
-        gear on which ``forces()`` takes the torque: ``meshing.gear1`` for SpurHelicalGearMeshing
-        (whatever ``driver`` says), the gear named by ``meshing.driver`` for InternalGearMeshing.
-        Not checked.
+    meshing : GearPair
+        Pair exposing ``.al`` (centre distance [mm]) whose family has
+        ``forces(pair, T_in [N m], phi_deg [deg], rotation_dir_in, driver) -> dict``. ``gear_a``
+        must wrap the gear on which ``forces()`` takes the torque: ``meshing.gear1`` for an
+        external pair (whatever ``driver`` says), the gear named by ``driver`` for an internal
+        pair. Not checked.
     phi_deg : float
         Angular position of the line of centres (a -> b) in the GLOBAL frame [deg], +Y toward +Z.
         USER INPUT, not derived; stored modulo 360. Combined with meshing.al to place shaft_b
@@ -76,6 +76,9 @@ class SpurHelicalMeshLink  :
         where the face width is 0).
     label : str
         Reporting tag.
+    driver : str
+        "gear1" (default) or "gear2": the gear of ``meshing`` that delivers the input torque,
+        passed to ``forces()``. Used by an internal pair only. It is not derived from ``gear_a``.
     """
 
     def __init__(self, shaft_a: ShaftSystem, gear_a: GearElement,
@@ -83,7 +86,7 @@ class SpurHelicalMeshLink  :
                  meshing, phi_deg: float,
                  torque_split: float | None = None,
                  distribute_loads: bool = False,
-                 label: str = ""):
+                 label: str = "", *, driver: str = "gear1"):
         """Store the arguments; see the class docstring."""
 
         self.shaft_a             = shaft_a
@@ -98,6 +101,8 @@ class SpurHelicalMeshLink  :
         # Kv method B/C modules under database/, whose imports are broken.
         self.meshing_load_factor = 1.0
         self.label               = label
+        # QUESTION(Q03): the driver is given here as it was given to the pair before step 3 (default "gear1"), whatever gear `gear_a` wraps; the alternative derives it from the gear that the driving shaft carries (step 5, written power path).
+        self.driver              = driver
 
     def validate(self) -> list[str]:
         """Return the error messages (distinct shafts, torque_split in (0, 1], meshing interface); empty if valid."""
@@ -110,10 +115,14 @@ class SpurHelicalMeshLink  :
                 f"{tag}: torque_split must be in (0, 1] when set, "
                 f"got {self.torque_split}"
             )
-        for attr in ("al", "forces"):
-            if not hasattr(self.meshing, attr):
+        for attr, holder in (("al", self.meshing), ("forces", getattr(self.meshing, "family", None))):
+            if not hasattr(holder, attr):
                 errors.append(f"{tag}: meshing object lacks required '{attr}'")
         return errors
+
+    def _forces(self, T_in: float, rotation_dir_in: int) -> dict:
+        """forces() dict of the pair for the torque T_in [N m] on the driver of this link, turning in the sense rotation_dir_in."""
+        return self.meshing.family.forces(self.meshing, T_in, self.phi_deg, rotation_dir_in, driver=self.driver)
 
     def __repr__(self) -> str:
         """
@@ -211,7 +220,7 @@ class SpurHelicalGearSystem:
 
         Uses id(link.gear_a), i.e. Python object identity — NOT geometric
         or logical equality. Two GearElement instances wrapping the same
-        physical SpurHelicalGear are two different keys here unless they
+        physical gear are two different keys here unless they
         are literally the same object. This is the single mechanism that
         decides mode A (fan-out, torque_split applies) vs mode B
         (sequential/independent, 100% torque each) in resolve(). See the
@@ -373,15 +382,15 @@ class SpurHelicalGearSystem:
     def _resolve_link_mode_B(self, link: SpurHelicalMeshLink, T_in: float,
                              rotation_dir_in: int) -> dict:
         """Mode B (sequential / reuse): the driver delivers the FULL available torque T_in [N m]; returns the forces() dict."""
-        # QUESTION(Q03): forces() takes this torque on the gear ITS OWN rule names (SpurHelicalGearMeshing: gear1, the smaller working diameter, whatever `driver` says; InternalGearMeshing: the gear named by `driver`), which is not necessarily gear_a of the link.
-        return link.meshing.forces(T_in, link.phi_deg, rotation_dir_in)
+        # QUESTION(Q03): forces() takes this torque on the gear ITS OWN rule names (external pair: gear1, the smaller working diameter, whatever the driver; internal pair: the driver), which is not necessarily gear_a of the link.
+        return link._forces(T_in, rotation_dir_in)
 
     def _resolve_link_mode_A(self, link: SpurHelicalMeshLink, T_total: float,
                              rotation_dir_in: int) -> dict:
         """Mode A (simultaneous fan-out): this mesh takes torque_split of the total torque T_total [N m]; returns the forces() dict."""
         T_in = T_total * link.torque_split
         # QUESTION(Q03): as in mode B, forces() chooses the gear that takes T_in.
-        return link.meshing.forces(T_in, link.phi_deg, rotation_dir_in)
+        return link._forces(T_in, rotation_dir_in)
 
     # ------------------------------------------------------------------
     # Force dict -> Load objects
@@ -402,7 +411,7 @@ class SpurHelicalGearSystem:
         Parameters
         ----------
         F : dict
-            Result of meshing.forces(): Ft, Fr, Fa [N], T_out [N m] and the angles theta_* [deg].
+            Result of CylindricalFamily.forces(): Ft, Fr, Fa [N], T_out [N m] and the angles theta_* [deg].
         gear : GearElement
             Gear of this side; its position [mm] and face width b [mm] place the loads.
         side : str
@@ -420,18 +429,18 @@ class SpurHelicalGearSystem:
 
         Notes
         -----
-        Angles come from meshing.forces(): the radial force of the driver acts at phi, the radial
+        Angles come from CylindricalFamily.forces(): the radial force of the driver acts at phi, the radial
         force of the driven gear at phi + 180 deg; the tangential forces at 90 deg to them,
         signed by the sense of rotation (choice of this code, source to find).
 
         Warnings
         --------
-        With SpurHelicalGearMeshing (external pair), as coded, Fr of each gear points from its own
+        With an external pair, as coded, Fr of each gear points from its own
         centre toward the mesh point (driver at phi, driven at phi + 180 deg), i.e. opposite to the
         separating force on that gear (Harris2007_vol1, sec. 4.2.2, Fig. 4.4, PDF p. 95), and Ft
         has the same direction on the driver and on the driven gear (phi + 90 deg x rotation_dir of
         the driver shaft of the link, for both), so the two are not an action-reaction pair. With
-        InternalGearMeshing the same angle formulas give opposed Ft on the two gears, and the mesh
+        an internal pair the same angle formulas give opposed Ft on the two gears, and the mesh
         point lies at phi + 180 deg from both centres (centre distance = r2 - r1), so only the Fr
         of the gear on shaft_b points toward it. Whether the stored loads are meant as the forces
         of the mesh on each shaft is a question for the owner (open review item).
@@ -580,7 +589,7 @@ class SpurHelicalGearSystem:
         ``omega = rpm * 2 pi / 60`` [rad/s] and ``T_source = P / omega`` [N m]; no efficiency.
         For each link in topological order of the driver shaft: the available torque is T_out of
         the driver shaft (mode B, a driver gear used by one link) or the available torque times
-        torque_split (mode A, one GearElement shared by several links); meshing.forces() returns
+        torque_split (mode A, one GearElement shared by several links); CylindricalFamily.forces() returns
         the forces; shaft_b is placed at ``(y_a + al cos(phi), z_a + al sin(phi))`` [mm] with
         al = meshing.al and phi = radians(link.phi_deg); the torque and the sense of rotation of
         shaft_b are F["T_out"] and F["rotation_dir_out"]. Loads are tagged source="gear_mesh" and
@@ -593,9 +602,9 @@ class SpurHelicalGearSystem:
         shaft equal to -T_source (magnitude T_source) from the input up to the gear and zero
         beyond it.
 
-        Sign convention (SpurHelicalGearMeshing): driver gear +T_in, driven gear -T_out, power
+        Sign convention (external pair): driver gear +T_in, driven gear -T_out, power
         input -T_source (net torque of the source shaft is zero; the driven shaft nets -T_out and is
-        closed by a sink or by a load of the user). With InternalGearMeshing T_out = T_in u_eff is negative (u < 0), so
+        closed by a sink or by a load of the user). With an internal pair T_out = T_in u_eff is negative (u < 0), so
         the TorqueLoad on the driven gear is +abs(T_out) and the T_out recorded in ``_resolved``
         for that shaft, and passed on to the next mesh, is negative.
 
@@ -608,13 +617,12 @@ class SpurHelicalGearSystem:
         Per-shaft rpm is not computed: ShaftSystem.speed_rpm is not set and the ``rpm`` entry of
         ``_resolved`` is None.
 
-        SpurHelicalGearMeshing.forces() takes the torque as acting on gear1 with the working pitch
-        diameter 2 al/(u+1), u = max(z)/min(z), and returns T_out = T1 u (spurhelical_meshing.py);
-        it does not read ``meshing.driver``. The results are a consistent power balance only when
-        gear_a is the gear on which ``forces()`` takes the torque (see ``gear_a``) AND, for
-        SpurHelicalGearMeshing, gear1 is the pinion; this is not checked. With
-        SpurHelicalGearMeshing the sense of rotation is reversed at each mesh; InternalGearMeshing
-        keeps it.
+        For an external pair CylindricalFamily.forces() takes the torque as acting on gear1 with
+        the working pitch diameter 2 al/(u+1), u = max(z)/min(z), and returns T_out = T1 u
+        (cylindrical.py); it does not use the driver. The results are a consistent power balance
+        only when gear_a is the gear on which ``forces()`` takes the torque (see ``meshing``) AND,
+        for an external pair, gear1 is the pinion; this is not checked. With an external pair the
+        sense of rotation is reversed at each mesh; an internal pair keeps it.
 
         The signs of the TorqueLoad objects do not depend on the sense of rotation (power-flow
         signs: + on a driver gear, - at an entry), whereas the Ft directions do. For an external

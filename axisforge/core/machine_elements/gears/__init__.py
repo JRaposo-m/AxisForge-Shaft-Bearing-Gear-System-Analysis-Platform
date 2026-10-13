@@ -2,14 +2,20 @@
 """
 Single import point of the gear subsystem (eager re-export, as in bearings).
 
-Only the parallel-axis family exists (external and internal spur/helical
-gears, their pairs and the planetary train), so only its names are
-re-exported. Another family (bevel, worm, ...) would get its own sub-package
-and one more import line here.
+Exposes the family contract and the two assembled objects (``GearFamily``,
+``register_gear_family``, ``Gear``, ``GearPair``), the cylindrical family for
+external and internal involute gears (``CylindricalGearData``,
+``CylindricalFamily``) and the planetary train (``PlanetaryGearTrainMeshing``,
+still in ``parallel_axis/planetary_gear/``, a folder without ``__init__.py``).
 """
 from __future__ import annotations
 
-from .parallel_axis import *  # noqa: F401,F403 -- parallel_axis.__all__ is already the curated list
-from .parallel_axis import __all__ as _parallel_axis_names
+from .base import GearFamily, register_gear_family, Gear, GearPair
+from .cylindrical import CylindricalGearData, CylindricalFamily
+from .parallel_axis.planetary_gear.planetary_gear_meshing import PlanetaryGearTrainMeshing
 
-__all__ = list(_parallel_axis_names)
+__all__ = [
+    "GearFamily", "register_gear_family", "Gear", "GearPair",
+    "CylindricalGearData", "CylindricalFamily",
+    "PlanetaryGearTrainMeshing",
+]

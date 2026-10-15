@@ -31,11 +31,11 @@ def test_baseline_rows(case, obj):
 
 
 def test_rows_of_the_replaced_classes_are_counted():
-    """Q46: of the 1416 rows of cases 7a, 7b, 7e, 7f (7c, 7d deleted: Q03, answer 7; rows of forces()
-    deleted and rows of the hand and of the bending moments added: Q03, Q06, Q08), 8 are text that names a
-    replaced class (compared against the new text) and 12 are state of those classes written back as
-    recorded; with the 8 `driver` / `driven` rows of the four recorded pairs (Q50) that leaves 1388 rows
-    computed by the code."""
+    """Q46: of the 1428 rows of cases 7a, 7b, 7e, 7f (7c, 7d deleted: Q03, answer 7; rows of forces()
+    deleted and rows of the hand and of the bending moments added: Q03, Q06, Q08; rows of the sinks added and of
+    role / rotation_dir deleted: Q16, Q17), 8 are text that names a replaced class (compared against the new
+    text) and 12 are state of those classes written back as recorded; with the 8 `driver` / `driven` rows of
+    the four recorded pairs (Q50) that leaves 1400 rows computed by the code."""
     got = bc.run_baseline()[0]
     rows = [(c, i, obj, name, text) for c in CASES for i, (obj, name, text) in enumerate(bc.baseline_rows(c))]
     renamed = 0
@@ -50,18 +50,10 @@ def test_rows_of_the_replaced_classes_are_counted():
         assert len(hits) == count and set(hits) == {bc.fmt(value)}
         echoed += count
     declared = sum(1 for _, _, obj, name, _ in rows if name in bc.ECHOED_ROWS[0] and obj != "link")
-    assert (len(rows), len(rows) - renamed - echoed - declared, renamed, echoed, declared) == (1416, 1388, 8, 12, 8)
+    assert (len(rows), len(rows) - renamed - echoed - declared, renamed, echoed, declared) == (1428, 1400, 8, 12, 8)
 
 
-def _question(c):
-    """Question id of a case-7 check that FAILS today (None: the check passes today). Since Q03, Q05, Q06, Q07a,
-    Q08 (José, 2026-10-15) only the speed written on the loaded copies is open."""
-    if c.id in ("7.c9", "7.c14"):
-        return "Q09: X6, ShaftSystem.speed_rpm never set by resolve"
-    return None
-
-
-@pytest.mark.parametrize("c", bc.check_params("7", _question))
+@pytest.mark.parametrize("c", bc.check_params("7", lambda c: None))     # every check passes since block 4 (Q09)
 def test_physics_check(c):
     """Action = reaction, torque = moment of the mesh force, power, speed, separating radial force
     and reversal of the sense of rotation, on the loads stored by ``resolve``. No library source:
@@ -79,11 +71,12 @@ def case7(request):
     return bc.R[(request.param, "system")]
 
 
-def test_driven_shaft_torque_is_left_open(case7):
-    """Check 7.c6: the only TorqueLoad on the driven shaft is the one of its gear, the torque the mesh delivers
-    (``torque_Nm`` of that shaft) [N m]; the shaft is closed only by a sink or a load that the user adds."""
+def test_driven_shaft_is_closed_by_its_sink(case7):
+    """Check 7.c6 (Q16, José 2026-10-15): the TorqueLoad of the gear on the driven shaft is the torque the mesh
+    delivers (``torque_Nm`` of that shaft) [N m]; the sink at the right end takes it out, so the shaft nets zero."""
     sums = bc.shaft_sums(case7.driven_shaft)
-    assert sums["Tnet"] == sums["T_gear"] == pytest.approx(case7.T_driven_Nm, rel=1e-12)   # rho F_t / 1000 = -T_b
+    assert sums["T_gear"] == pytest.approx(case7.T_driven_Nm, rel=1e-12)          # rho F_t / 1000 = -T_b
+    assert sums["Tnet"] == pytest.approx(0.0, abs=1e-12)
 
 
 def test_tilting_moment_of_the_axial_force(case7):
@@ -110,13 +103,13 @@ def test_internal_stage_driven_by_the_ring(rot):
     ring = bc.gear(2.0, -60, b=20.0, beta_n_deg=15.0, hand=1, label="ring", position=bc.GEAR_POS)
     pair = GearPair.assemble(bc.FAMILY, gear1=pinion, gear2=ring)
     s_ring, s_pinion = bc._shaft_system("shaft_ring"), bc._shaft_system("shaft_pinion")
-    ge_ring, ge_pinion = GearElement(ring, role="driver", label="g_ring"), GearElement(pinion, role="driven", label="g_pinion")
+    ge_ring, ge_pinion = GearElement(ring, label="g_ring"), GearElement(pinion, label="g_pinion")
     s_ring.add_gear(ge_ring)
     s_pinion.add_gear(ge_pinion)
     stage = PairStage(pair=pair, shaft_a=s_ring, gear_a=ge_ring, shaft_b=s_pinion, gear_b=ge_pinion, phi_deg=bc.PHI7)
     system = Transmission([s_ring, s_pinion], [stage], source=s_ring, sinks=((s_pinion, 200.0),))
     resolved = system.resolve(bc.T_NM * bc.OMEGA, bc.N_RPM, rot)
-    assert system.warnings == ()
+    assert system.validate() == []
     assert resolved.torque_Nm == pytest.approx((rot * bc.T_NM, rot * bc.T_NM * 24 / 60), rel=1e-12)
     assert resolved.rotation == (rot, rot)
     assert all(ok for _, _, ok in resolved.checks), [name for name, _, ok in resolved.checks if not ok]

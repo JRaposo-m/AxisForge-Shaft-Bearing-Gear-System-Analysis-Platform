@@ -491,7 +491,7 @@ def test_renamed_text_rows_are_counted():
     # one by one in mechanical_system/tests/test_transmission_baseline.py
     renamed += sum(n for _, n in bc.RENAMED_PATTERNS.values())
     echoed += sum(n for _, n, _ in bc.ECHOED_ROWS_CASE7.values())
-    assert (total, total - echoed - renamed, renamed, echoed) == (7234, 7138, 14, 82)     # rows: total, computed, renamed text, echoed
+    assert (total, total - echoed - renamed, renamed, echoed) == (7246, 7150, 14, 82)     # rows: total, computed, renamed text, echoed
 
 
 # ----------------------------------------------------------------------------------------------

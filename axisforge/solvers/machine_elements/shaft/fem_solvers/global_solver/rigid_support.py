@@ -6,6 +6,7 @@ module, not an option of this one.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -136,13 +137,15 @@ class RigidSupportFEMSolver:
     settings : BeamModelSettings
         Beam theory (and, for Timoshenko, shear theory and integration method) of every element.
     distribute_gear_labels : set of str or None, optional
-        Gear labels whose gear-mesh point loads (``RadialLoad`` with ``source="gear_mesh"``) are
-        LEFT OUT of the load vector; ``{"*"}`` leaves out all of them. The solver does not create
-        the distributed load: a ``DistributedRadialLoad`` must already be in ``shaft_system`` (gear
-        system resolved with ``distribute=True``), and such loads are always assembled as
-        distributed, whatever this argument. With a label flagged and no distributed counterpart,
-        the radial gear force is missing from the solve. ``None`` or empty: every ``RadialLoad`` is
-        assembled as a point load.
+        Gear labels whose gear-mesh loads are to be taken as distributed over the face width;
+        ``{"*"}`` flags all of them. The solver does not create the distributed load: a
+        ``DistributedRadialLoad`` must already be in ``shaft_system`` (gear system resolved with
+        ``distribute_loads=True``), and such loads are always assembled as distributed, whatever
+        this argument. The gear-mesh point loads (``RadialLoad`` with ``source="gear_mesh"``) of a
+        flagged label are left out ONLY when a gear-mesh ``DistributedRadialLoad`` of that label is
+        on the shaft; otherwise they are assembled as point loads (Q11, José 2026-10-15), and a
+        flagged label with neither point nor distributed loads gives a ``UserWarning``. ``None`` or
+        empty: every ``RadialLoad`` is assembled as a point load.
     kGA_override : float or None, optional
         Transverse shear rigidity k G A [N] that replaces the value of every Timoshenko element
         (``shear_theory`` is then ignored); no effect for Euler-Bernoulli. Intended for plugging in a
@@ -233,10 +236,21 @@ class RigidSupportFEMSolver:
         K_red = K[np.ix_(free_dofs, free_dofs)]
         check_conditioning(K_red)
 
+        # Q11 (José, 2026-10-15): the point loads of a flagged gear label are dropped only when its
+        # distributed version is present, so a gear force is never missing from the solve
+        def gear_labels(loads):
+            return {ld.label.split(":")[0] for ld in loads if ld.source == "gear_mesh"}
+
+        distributed = gear_labels(shaft_system.distributed_radial_loads)
+        pointed = gear_labels(shaft_system.radial_loads)
+        flagged = (distributed | pointed) if self._distribute_all else set(self._distribute_labels)
+        for label in sorted(flagged - distributed - pointed):
+            warnings.warn(f"distribute_gear_labels: '{label}' has no gear-mesh load on shaft "
+                          f"'{shaft_system.name}'", stacklevel=2)
         load_cases = build_load_cases(
             shaft_system,
-            distribute_all=self._distribute_all,
-            distribute_labels=self._distribute_labels,
+            distribute_all=False,
+            distribute_labels=flagged & distributed,
         )
         n_dofs = 3 * len(x_nodes)
         estimator = QuadratureOrderEstimator(self._settings.beam_theory)

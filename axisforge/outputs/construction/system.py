@@ -97,8 +97,9 @@ def system_records(system, power_W: float | None = None) -> list[dict]:
         rows.append(kv_record(sec, "torque split", "mode B (100 %)" if stage.share == 1.0 else stage.share))
         if pair_stage:
             rows.append(kv_record(sec, "distribute loads", bool(stage.distribute_loads)))
-            rows.append(kv_record(sec, "driver gear", stage.gear_a.label or stage.gear_a.role))
-            rows.append(kv_record(sec, "driven gear", stage.gear_b.label or stage.gear_b.role))
+            # Q17 (José, 2026-10-15): the gear element has no role; the driver of a stage is its gear_a
+            rows.append(kv_record(sec, "driver gear", stage.gear_a.label or "gear_a"))
+            rows.append(kv_record(sec, "driven gear", stage.gear_b.label or "gear_b"))
             rows += attribute_rows(stage.pair, sec, MESH_ATTRIBUTES)
     if resolved is not None:
         for shaft, torque, rotation in zip(resolved.shafts, resolved.torque_Nm, resolved.rotation):

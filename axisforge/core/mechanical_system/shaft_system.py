@@ -1,11 +1,11 @@
 """
 Single-shaft container: the gears, bearings and loads placed on one shaft, with placement checks.
 
-GearElement binds a gear geometry object to a kinematic role (driver or driven). ShaftSystem holds
+GearElement places a gear geometry object on a shaft and names it. ShaftSystem holds
 every bearing, gear and load of one shaft, sorted by axial position, and validates their placement
 (supports, overlaps, shoulder keep-out, axial reaction path of a helical mesh). It has no knowledge
 of other shafts; Transmission.resolve() does not write on it: it returns a loaded copy
-(ShaftSystem.with_loads) that carries the mesh loads and the shaft_position (y, z).
+(ShaftSystem.with_loads) that carries the mesh loads, the speed and the shaft_position (y, z).
 
 Units: positions and lengths [mm] along the shaft axis x from the left end (x = 0); forces [N];
 speed [rpm]; design life [h]. The torque and moment unit is that of core/loads.py, which is an open
@@ -36,6 +36,10 @@ try:  # pragma: no cover
 except Exception:  # pragma: no cover
     DEFAULT_DESIGN_LIFE_HOURS = 20_000.0
 
+# Tolerance of the bounds check [0, L], relative to L [-] (Q42, José 2026-10-15): the rounding of a position
+# computed from the face width, so that a gear flush with a shaft end is accepted.
+_BOUNDS_RTOL = 1e-9
+
 
 
 # ===========================================================================
@@ -44,38 +48,29 @@ except Exception:  # pragma: no cover
 
 class GearElement:
     """
-    Binds a gear geometry object to its kinematic role on a shaft.
+    A gear placed on a shaft, with the name of its loads.
 
     Thin wrapper: it carries no geometry of its own, and ``position`` delegates to the gear.
 
     Parameters
     ----------
-    gear         : geometry object exposing `.position` [mm] (a ``Gear`` of the cylindrical
-                   family), the axial coordinate of the CENTRE of the face width,
-                   and optionally `.b` (face width [mm]). No geometry is duplicated here.
-    role         : "driver" | "driven"
-    rotation_dir : +1 / -1 [-], sense of rotation about +X. Set explicitly ONLY for the kinematic
-                   SOURCE gear of a Transmission; left None everywhere else.
-    label        : reporting tag.
+    gear : object
+        Geometry object exposing ``.position`` [mm] (a ``Gear`` of the cylindrical family), the
+        axial coordinate of the CENTRE of the face width, and optionally ``.b`` (face width [mm]).
+        No geometry is duplicated here.
+    label : str
+        Reporting tag; it names the mesh loads of the gear (``<label>:Fr`` ...).
 
     Notes
     -----
-    ``role`` and ``rotation_dir`` are not read by Transmission.resolve(): the driver and
-    driven sides are the gear_a and gear_b of each PairStage, and the sense of rotation
-    of the source is the argument ``rotation``. Both attributes are only validated and
-    printed. resolve() returns the computed senses in ``ResolvedTransmission.rotation`` and does
-    not write them here.
+    The element holds no kinematic role and no sense of rotation (Q17, José 2026-10-15): the
+    driving gear of a stage is its ``gear_a`` (``PairStage``) and the sense of each shaft is in
+    ``ResolvedTransmission.rotation``.
     """
 
-    _VALID_ROLES = ("driver", "driven")
-
-    def __init__(self, gear, role: str,
-                 rotation_dir: int | None = None, label: str = ""):
+    def __init__(self, gear, label: str = ""):
         """Store the arguments; see the class docstring."""
         self.gear = gear
-        # QUESTION(Q17): role and rotation_dir are read by nothing in resolve() (review question 4: keep GearElement, or position in the gear data and delete it); kept, their strings are baseline rows.
-        self.role = role
-        self.rotation_dir = rotation_dir
         self.label = label
 
     @property
@@ -84,18 +79,9 @@ class GearElement:
         return self.gear.position
 
     def validate(self) -> list[str]:
-        """Return the error messages (role, rotation_dir, and those of the gear); empty if valid."""
+        """Return the error messages of the gear; empty if valid."""
         errors: list[str] = []
         tag = self.label or "GearElement"
-
-        if self.role not in self._VALID_ROLES:
-            errors.append(
-                f"{tag}: role must be one of {self._VALID_ROLES}, got {self.role!r}"
-            )
-        if self.rotation_dir not in (None, 1, -1):
-            errors.append(
-                f"{tag}: rotation_dir must be +1, -1 or None, got {self.rotation_dir!r}"
-            )
         # Delegate to the underlying gear if it can validate itself.
         gear_validate = getattr(self.gear, "validate", None)
         if callable(gear_validate):
@@ -115,10 +101,9 @@ class GearElement:
         Returns
         -------
         str
-            Role, axial position [mm], rotation_dir and label.
+            Axial position [mm] and label.
         """
-        return (f"GearElement(role={self.role!r}, position={self.position:.2f} mm, "
-                f"rotation_dir={self.rotation_dir!r}, label={self.label!r})")
+        return f"GearElement(position={self.position:.2f} mm, label={self.label!r})"
 
 
 # ===========================================================================
@@ -146,9 +131,9 @@ class ShaftSystem:
     name : str
         Identifier used in messages and in the gear-system record.
     speed_rpm : float
-        Rotational speed of this shaft [rpm], >= 0 (checked in validate()). Default 0.0. It is not
-        set by Transmission.resolve(), which returns the speed of every shaft in
-        ``ResolvedTransmission.speed_rpm``; it holds whatever the caller assigns.
+        Rotational speed of this shaft [rpm], >= 0 (checked in validate()). Default 0.0.
+        Transmission.resolve() sets it on the loaded copies it returns (Q09), from the speeds of
+        the power path.
     design_life_hours : float
         Design life [h]. Default 20 000 h (see Warnings). Not read by any solver;
         only printed by outputs/construction/shaft.py.
@@ -207,10 +192,15 @@ class ShaftSystem:
     # Construction helpers (fail fast on out-of-bounds placement)
     # ------------------------------------------------------------------
 
-    def _check_axial_bounds(self, position: float, what: str) -> None:
-        """Raise ValueError if position [mm] is outside the shaft extent [0, L]."""
+    def _outside(self, position: float) -> bool:
+        """True if position [mm] is outside the shaft extent [0, L] by more than ``_BOUNDS_RTOL`` L (Q42)."""
         L = self.shaft.total_length
-        if not (0.0 <= position <= L):
+        return not (-_BOUNDS_RTOL * L <= position <= L * (1.0 + _BOUNDS_RTOL))
+
+    def _check_axial_bounds(self, position: float, what: str) -> None:
+        """Raise ValueError if position [mm] is outside the shaft extent [0, L] (tolerance: ``_outside``)."""
+        L = self.shaft.total_length
+        if self._outside(position):
             raise ValueError(
                 f"{self.name}: {what} position {position:.4f} mm is outside "
                 f"the shaft extent [0, {L:.4f}] mm"
@@ -230,18 +220,14 @@ class ShaftSystem:
 
     def add_load(self, load: Load) -> "ShaftSystem":
         """
-        Add a load (ValueError if outside [0, L] mm; a distributed load needs its whole span inside).
+        Add a load (ValueError if outside [0, L] mm; a distributed load needs its whole span inside),
+        with the tolerance of ``_check_axial_bounds`` (Q42).
 
         Returns self, so calls can be chained.
         """
         if isinstance(load, DistributedRadialLoad):
-            L = self.shaft.total_length
-            if load.x_lo < 0.0 or load.x_hi > L:
-                raise ValueError(
-                    f"{self.name}: DistributedRadialLoad '{load.label}' "
-                    f"[{load.x_lo:.4f}, {load.x_hi:.4f}] mm is outside "
-                    f"the shaft extent [0, {L:.4f}] mm"
-                )
+            self._check_axial_bounds(load.x_lo, f"DistributedRadialLoad '{load.label}' start")
+            self._check_axial_bounds(load.x_hi, f"DistributedRadialLoad '{load.label}' end")
         else:
             self._check_axial_bounds(load.position, "load")
         self._loads.append(load)
@@ -265,7 +251,7 @@ class ShaftSystem:
         ----------
         loads : list of Load
             Loads to add (positions [mm] from the left end of the shaft, forces [N], torques
-            [N m] as produced by the gear system). Stored as given: see Notes.
+            [N m] as produced by the gear system), each through ``add_load``.
         speed_rpm : float or None
             Rotational speed of the copy [rpm]; None keeps ``self.speed_rpm``.
         shaft_position : tuple of float or None
@@ -277,16 +263,17 @@ class ShaftSystem:
         ShaftSystem
             The loaded copy.
 
-        Notes
-        -----
-        The positions of ``loads`` are NOT checked against the shaft extent [0, L] here (as the
-        former ``set_gear_loads``); ``validate()`` of the copy reports a load outside the shaft.
+        Raises
+        ------
+        ValueError
+            If a load lies outside [0, L] (tolerance 1e-9 L; Q42, José 2026-10-15).
         """
         loaded = copy.copy(self)     # shallow: shaft, bearings and gear elements are shared
         loaded._bearings = list(self._bearings)
         loaded._gears = list(self._gears)
-        # QUESTION(Q42): the loads are stored without the [0, L] check of add_load, as set_gear_loads stored them; the alternative (plan section 4) passes them through add_load, which refuses a valid gear flush with the shaft end when x_hi = (L - b/2) + b/2 exceeds L by one rounding step, unless a tolerance is ruled.
-        loaded._loads = list(self._loads) + list(loads)
+        loaded._loads = list(self._loads)
+        for load in loads:
+            loaded.add_load(load)
         if speed_rpm is not None:
             loaded.speed_rpm = speed_rpm
         if shaft_position is not None:
@@ -561,25 +548,25 @@ class ShaftSystem:
         if self.speed_rpm < 0:
             errors.append(f"{tag}: speed_rpm must be >= 0, got {self.speed_rpm}")
 
-        # positions within [0, L]
+        # positions within [0, L], with the tolerance of add_load (Q42)
         for b in self._bearings:
-            if not (0.0 <= b.position <= L):
+            if self._outside(b.position):
                 errors.append(
                     f"{tag}: bearing position {b.position:.4f} mm outside [0, {L:.4f}]"
                 )
         for g in self._gears:
-            if not (0.0 <= g.position <= L):
+            if self._outside(g.position):
                 errors.append(
                     f"{tag}: gear position {g.position:.4f} mm outside [0, {L:.4f}]"
                 )
         for ld in self._loads:
             if isinstance(ld, DistributedRadialLoad):
-                if ld.x_lo < 0.0 or ld.x_hi > L:
+                if self._outside(ld.x_lo) or self._outside(ld.x_hi):
                     errors.append(
                         f"{tag}: DistributedRadialLoad '{ld.label}' "
                         f"[{ld.x_lo:.3f}, {ld.x_hi:.3f}] mm outside shaft extent [0, {L:.3f}] mm"
                     )
-            elif not (0.0 <= ld.position <= L):
+            elif self._outside(ld.position):
                 errors.append(
                     f"{tag}: load position {ld.position:.4f} mm outside [0, {L:.4f}]"
                 )

@@ -156,17 +156,13 @@ def gear_element_records(shaft_system) -> list[dict]:
     -------
     records : list of dict
         Rows ``{section, parameter, value, unit}``, section ``gear <label or i> (<shaft>)``.
-        Per ``GearElement``: role, rotation direction (``propagated`` when it is None),
-        axial position [mm] and every attribute of ``GEAR_ATTRIBUTES`` that the gear has
+        Per ``GearElement``: axial position [mm] and every attribute of ``GEAR_ATTRIBUTES`` that the gear has
         (lengths and diameters [mm], pressure and helix angle [deg] as the gear stores them).
         Empty if the shaft has no gear.
     """
     rows: list[dict] = []
     for i, ge in enumerate(shaft_system.gears, start=1):
         section = f"gear {ge.label or i} ({shaft_system.name})"
-        rows.append(kv_record(section, "role", ge.role))
-        rows.append(kv_record(section, "rotation direction",
-                              "propagated" if ge.rotation_dir is None else ge.rotation_dir))
         rows.append(kv_record(section, "axial position", ge.position, "mm"))
         rows += attribute_rows(ge.gear, section, GEAR_ATTRIBUTES)
     return rows

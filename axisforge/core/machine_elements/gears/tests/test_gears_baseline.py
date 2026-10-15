@@ -32,9 +32,9 @@ def test_baseline_rows(case, obj):
 def test_number_of_recorded_physics_checks():
     """The set of the baseline ``checks.csv`` (cases 1-7): 291 checks recorded. Gone: those of cases 3b, 3c,
     7c, 7d with the cases (Q03, answer 7), and the pair checks 1-5 on ``forces()``, deleted (Q03; the mesh
-    statics is tested on ``MeshForces``): 132 checks, 120 pass, 4 fail (7.c9, Q09), 8 info."""
+    statics is tested on ``MeshForces``): 132 checks, 128 pass, 0 fail (7.c9: Q09; 7.c6 a check since Q16), 4 info."""
     results = [c.result for c in bc.run_baseline()[1]]
-    assert (len(results), results.count("PASS"), results.count("FAIL"), results.count("INFO")) == (132, 120, 4, 8)
+    assert (len(results), results.count("PASS"), results.count("FAIL"), results.count("INFO")) == (132, 128, 0, 4)
 
 
 @pytest.mark.parametrize("c", bc.check_params("6", lambda c: None))

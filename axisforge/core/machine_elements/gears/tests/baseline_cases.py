@@ -98,6 +98,7 @@ SECTIONS = [(20.0, 20.0, "bearing_seat_A"), (65.0, 28.0, "body_left"), (30.0, 25
             (65.0, 28.0, "body_right"), (20.0, 20.0, "bearing_seat_B")]   # (length, diameter) [mm]
 PHI7 = 30.0           # [deg] line of centres a -> b, from +Y toward +Z
 GEAR_POS = 100.0      # [mm] axial position of both gears from the left end of their shaft
+SINK_X = 200.0        # [mm] output end of the driven shaft (right end), where its sink is (Q16)
 # Q03 (José, 2026-10-15, answer 7): runs 7c, 7d built the pair as (wheel, pinion), now refused by assemble;
 # they are deleted and 7e, 7f are the wheel-source runs
 RUNS7 = [("a_pinion_source_rot+1", "pinion", 1, False), ("b_pinion_source_rot-1", "pinion", -1, False),
@@ -476,8 +477,8 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear
     """
     p, w = pinion_wheel("H501", position=gear_pos)
     sP, sW = _shaft_system("shaft_pinion", ball_arrangement), _shaft_system("shaft_wheel", ball_arrangement)
-    geP = GearElement(p, role="driver" if source == "pinion" else "driven", label="g_pinion")
-    geW = GearElement(w, role="driver" if source == "wheel" else "driven", label="g_wheel")
+    geP = GearElement(p, label="g_pinion")
+    geW = GearElement(w, label="g_wheel")
     sP.add_gear(geP)
     sW.add_gear(geW)
     kw = dict(phi_deg=PHI7, label="stage", distribute_loads=distribute_loads)
@@ -490,7 +491,8 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear
     else:
         mesh = assemble_pair(p, w, label="stage", driver="gear2")
         link = PairStage(pair=mesh.new, shaft_a=sW, gear_a=geW, shaft_b=sP, gear_b=geP, **kw)
-    system = Transmission([sP, sW], [link], source=link.shaft_a, label=label)
+    # Q16 (José, 2026-10-15): the output shaft is closed by a sink at its right end
+    system = Transmission([sP, sW], [link], source=link.shaft_a, sinks=((link.shaft_b, SINK_X),), label=label)
     return Case7(system, mesh, link, sP, sW, p, w, geP, geW, T_NM * OMEGA, rot, PHI7)
 
 
@@ -498,8 +500,8 @@ def resolve_case7(c, sinks=()):
     """The ONE call of ``Transmission.resolve``: returns the ``Case7`` whose ``sP``, ``sW`` are the
     loaded copies (``system.shafts`` is ``[sP, sW]``, and the copies come in that order) and whose
     ``resolved`` is the ``ResolvedTransmission``. ``sinks``: ``(shaft of system.shafts, x [mm])``
-    pairs (none in the baseline cases); they are an argument of the ``Transmission``, so with sinks
-    the same shafts and path are given to a new one."""
+    pairs that replace the sink of ``build_case7`` (output shaft at ``SINK_X``); they are an argument
+    of the ``Transmission``, so the same shafts and path are given to a new one."""
     system = c.system
     if sinks:
         system = Transmission(system.shafts, system.path, system.source, sinks=sinks, label=system.label)
@@ -903,7 +905,7 @@ def physics_system(case):
         check("7.c13", case, f"driven shaft: Mx of stored Ft at the mesh point = stored TorqueLoad [N m], {lab}", Mb, B["T_gear"], scale=abs(B["T_gear"]), extra=True)
     # torque along the shaft
     check("7.c5", case, "driver shaft: sum of stored TorqueLoads = 0 [N m]", A["Tnet"], 0.0, scale=T_src)
-    CHECKS.append(Check("7.c6", case, "driven shaft: sum of stored TorqueLoads [N m] (open end; closed only by a user load)", B["Tnet"], 0.0, "INFO", ""))
+    check("7.c6", case, "driven shaft: sum of stored TorqueLoads = 0 [N m] (closed by its sink, Q16)", B["Tnet"], 0.0, scale=T_src)
     Tstore_b = c.T_driven_Nm
     check("7.c7", case, "driven-shaft torque T_out (resolved) = T_in*z_b/z_a [N m]", abs(Tstore_b), T_src * gb.z / ga.z, scale=T_src * gb.z / ga.z,
           note=f"resolved torque_Nm={Tstore_b!r}; z_a={ga.z}, z_b={gb.z}")
@@ -1046,3 +1048,17 @@ def check_params(ids, question):
         params.append(pytest.param(c, id=f"{i:03d}-{c.id}-{c.case}",
                                    marks=pytest.mark.xfail(strict=True, raises=AssertionError, reason=q) if q else ()))
     return params
+
+
+@pytest.fixture(scope="session")
+def s355():
+    """Register the material S355, the default material of a ``Shaft`` (AxisForge registers none), for the
+    tests that solve a real shaft with the FEM. Values of the shaft validation cases of AxisForge-Design-Studies
+    (EN 10025-2 S355: E 210 GPa, nu 0.3) [MPa, kg/m^3]."""
+    from axisforge.core.materials.base import (IsotropicElastic, Material, StrengthProperties,
+                                               available_materials, register)
+
+    if "S355" not in available_materials():
+        register(Material(material_id="S355", density=7850.0, elastic=IsotropicElastic(E=210_000.0, poisson_ratio=0.3),
+                          strength=StrengthProperties(Sut=590.0, Sy=355.0), description="EN 10025-2 S355"))
+    return "S355"

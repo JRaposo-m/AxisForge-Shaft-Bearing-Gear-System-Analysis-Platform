@@ -179,18 +179,21 @@ def test_path_is_checked_again_at_resolve(case7a):
 
 def test_the_driver_is_the_gear_on_the_input_shaft():
     """Q03: the stage has no ``driver``: gear_a (on shaft_a) drives, whichever gear of the pair it is. Cases 7a
-    (pinion = gear 1) and 7e (wheel = gear 2 on the source shaft) give no warning."""
-    assert bc.build_case7("pinion", 1).system.warnings == ()
+    (pinion = gear 1) and 7e (wheel = gear 2 on the source shaft) are valid."""
+    assert bc.build_case7("pinion", 1).system.validate() == []
     with pytest.raises(ValueError, match="gear 1 must be the pinion"):      # the pair of the deleted case 7c (Q03)
         bc.build_case7("wheel", 1)
-    assert bc.build_case7("wheel", 1, alt=True).system.warnings == ()
+    assert bc.build_case7("wheel", 1, alt=True).system.validate() == []
     assert not hasattr(bc.build_case7("pinion", 1).link, "driver")
 
 
-def test_gear_elements_outside_the_pair_or_the_shaft_are_warnings(case7a):
-    foreign = GearElement(bc.pinion_wheel("H501", position=bc.GEAR_POS)[1], role="driven", label="g_other")
-    system = Transmission([case7a.sP, case7a.sW], [_stage(case7a, gear_b=foreign)], source=case7a.sP)
-    assert [w.split(": ")[-1] for w in system.warnings] == [
+def test_gear_elements_outside_the_pair_or_the_shaft_are_errors(case7a):
+    """Q45 (José, 2026-10-15): a gear element that does not wrap a gear of the pair, or that is not on its shaft,
+    makes the written path invalid."""
+    foreign = GearElement(bc.pinion_wheel("H501", position=bc.GEAR_POS)[1], label="g_other")
+    with pytest.raises(ValueError) as error:
+        Transmission([case7a.sP, case7a.sW], [_stage(case7a, gear_b=foreign)], source=case7a.sP, sinks=((case7a.sW, 200.0),))
+    assert [line.split(": ")[-1] for line in str(error.value).splitlines()[1:]] == [
         "gear_a and gear_b are not the two gears of the pair", "gear element 'g_other' is not on shaft 'shaft_wheel'"]
 
 
@@ -246,7 +249,6 @@ def test_resolved_record_of_case_7a(case7a):
     assert resolved.rotation == (1, -1)
     assert all(T * rot > 0.0 for T, rot in zip(resolved.torque_Nm, resolved.rotation))
     assert [s.name for s in resolved.shafts] == ["shaft_pinion", "shaft_wheel"]
-    assert resolved.warnings == ()
     with pytest.raises(dataclasses.FrozenInstanceError):
         resolved.torque_Nm = ()
 
@@ -260,18 +262,13 @@ def test_speed_of_every_shaft_is_on_the_resolved_record():
     assert c.resolved.speed_rpm == pytest.approx((2175.0, 1450.0), rel=1e-12)
 
 
-def test_loaded_copies_keep_the_speed_the_user_set(case7a):
-    """Pins TODAY's behaviour (Q09): ``ShaftSystem.speed_rpm`` of the copies is the user's value, 0.0
-    by default, whatever the speed of the shaft."""
+def test_loaded_copies_carry_their_speed(case7a):
+    """Q09 (José, 2026-10-15): ``resolve`` writes the speed of each shaft on its loaded copy, whatever the user
+    set; the user's shaft keeps its own."""
     case7a.sW.speed_rpm = 123.0
     resolved = case7a.system.resolve(P_W, bc.N_RPM, 1)
-    assert [s.speed_rpm for s in resolved.shafts] == [0.0, 123.0]
-
-
-@xfail("Q09: X6, ShaftSystem.speed_rpm of the loaded copies is not set by resolve")
-def test_alternative_loaded_copies_carry_their_speed(case7a):
-    resolved = case7a.system.resolve(P_W, bc.N_RPM, 1)
     assert [s.speed_rpm for s in resolved.shafts] == pytest.approx([1450.0, 966.6666666666666], rel=1e-12)
+    assert case7a.sW.speed_rpm == 123.0
 
 
 @pytest.mark.parametrize("source, rot, alt", [("pinion", 1, False), ("pinion", -1, False), ("wheel", 1, True),
@@ -309,8 +306,7 @@ def test_stored_loads_are_those_of_the_mesh():
 # closure post-conditions: stored, never raised
 # ----------------------------------------------------------------------------------------------
 def test_closure_checks_of_case_7a():
-    """The closure checks of case 7a (rot +1): every one passes except the open end of the wheel shaft, which
-    has no sink (Q16): the torque the mesh delivers to it, -91.125 N m."""
+    """The closure checks of case 7a (rot +1): every one passes, the wheel shaft closed by its sink (Q16)."""
     resolved = bc.resolved_case7("pinion", 1).resolved
     assert [(name, ok) for name, _, ok in resolved.checks] == [
         ("stage: action = reaction, |F on gear_a + F on gear_b| [N]", True),
@@ -320,14 +316,9 @@ def test_closure_checks_of_case_7a():
         ("stage: radial force separates the gears, gear_a [N]", True),
         ("stage: radial force separates the gears, gear_b [N]", True),
         ("shaft 'shaft_pinion': sum of the torque loads [N m]", True),
-        ("shaft 'shaft_wheel': sum of the torque loads [N m]", False),
+        ("shaft 'shaft_wheel': sum of the torque loads [N m]", True),
         ("train: power leaving the end shafts - power entering [W]", True),
     ]
-    assert _check(resolved, "'shaft_wheel'")[0] == pytest.approx(91.125, rel=1e-12)
-
-
-def test_a_sink_closes_the_torque_of_the_output_shaft(case7a):
-    resolved = bc.resolve_case7(case7a, sinks=((case7a.sW, 200.0),)).resolved
     assert _check(resolved, "'shaft_wheel'") == (0.0, True)
 
 
@@ -339,7 +330,7 @@ def _internal_helical_stage(ring_drives, rot):
     ring = bc.gear(2.0, -60, b=20.0, beta_n_deg=15.0, hand=1, label="ring", position=bc.GEAR_POS)
     pair = GearPair.assemble(bc.FAMILY, gear1=pinion, gear2=ring)
     s_p, s_r = bc._shaft_system("shaft_pinion"), bc._shaft_system("shaft_ring")
-    ge_p, ge_r = GearElement(pinion, role="driver", label="g_pinion"), GearElement(ring, role="driven", label="g_ring")
+    ge_p, ge_r = GearElement(pinion, label="g_pinion"), GearElement(ring, label="g_ring")
     s_p.add_gear(ge_p)
     s_r.add_gear(ge_r)
     (sa, ga), (sb, gb) = ((s_r, ge_r), (s_p, ge_p)) if ring_drives else ((s_p, ge_p), (s_r, ge_r))
@@ -383,67 +374,39 @@ def test_axial_force_on_a_driving_ring():
 # ----------------------------------------------------------------------------------------------
 def _two_wheels_on_one_pinion_shaft(**shares):
     """Pinion shaft of case 7 driving TWO wheel shafts through two pinions (two gear elements) at
-    x = 100 mm, lines of centres at 30 and 210 deg."""
+    x = 100 and 140 mm, lines of centres at 30 and 210 deg."""
     c = bc.build_case7("pinion", 1)
-    p2, w2 = bc.pinion_wheel("H501", position=bc.GEAR_POS)
-    ge_p2, ge_w2 = GearElement(p2, role="driver", label="g_pinion2"), GearElement(w2, role="driven", label="g_wheel2")
+    p2, w2 = bc.pinion_wheel("H501", position=140.0)      # clear of the first pinion and of the shoulders
+    ge_p2, ge_w2 = GearElement(p2, label="g_pinion2"), GearElement(w2, label="g_wheel2")
     s_w2 = bc._shaft_system("shaft_wheel2")
     c.sP.add_gear(ge_p2)
     s_w2.add_gear(ge_w2)
     first = _stage(c, **({"share": shares["first"]} if shares else {}))
     second = PairStage(pair=GearPair.assemble(bc.FAMILY, gear1=p2, gear2=w2), shaft_a=c.sP, gear_a=ge_p2, shaft_b=s_w2,
                        gear_b=ge_w2, phi_deg=210.0, label="stage2", **({"share": shares["second"]} if shares else {}))
-    return Transmission([c.sP, c.sW, s_w2], [first, second], source=c.sP)
+    return Transmission([c.sP, c.sW, s_w2], [first, second], source=c.sP, sinks=((c.sW, 200.0), (s_w2, 200.0)))
 
 
 def test_shares_split_the_torque_of_a_shaft():
-    """Shares 0.7 and 0.3: the wheel shafts receive 0.7 and 0.3 of -91.125 N m, and the power closes."""
-    system = _two_wheels_on_one_pinion_shaft(first=0.7, second=0.3)
+    """Q40 (José, 2026-10-15): shares 0.4 and 0.6: the wheel shafts receive 0.4 and 0.6 of -91.125 N m, the
+    pinion shaft closes and the power closes."""
+    system = _two_wheels_on_one_pinion_shaft(first=0.4, second=0.6)
     resolved = system.resolve(P_W, bc.N_RPM, 1)
-    assert resolved.torque_Nm == pytest.approx((60.75, -0.7 * 91.125, -0.3 * 91.125), rel=1e-12)
-    assert system.warnings == () and _check(resolved, "train: power")[1]
-    assert _check(resolved, "'shaft_pinion'")[1]
+    assert resolved.torque_Nm == pytest.approx((60.75, -0.4 * 91.125, -0.6 * 91.125), rel=1e-12)
+    assert all(ok for _, _, ok in resolved.checks), [name for name, _, ok in resolved.checks if not ok]
 
 
-def test_default_share_gives_the_full_torque_to_each_stage():
-    """Pins TODAY's behaviour (Q40): two stages leaving one shaft with the default share each take
-    the whole torque (as two links with separate driver gears did); the transmission warns, the
-    pinion shaft does not close and the train delivers twice the input power."""
-    system = _two_wheels_on_one_pinion_shaft()
-    resolved = system.resolve(P_W, bc.N_RPM, 1)
-    assert resolved.torque_Nm == pytest.approx((60.75, -91.125, -91.125), rel=1e-12)
-    assert any("take 2.000000 times its torque" in w for w in system.warnings) and resolved.warnings == system.warnings
-    assert _check(resolved, "train: power") == (pytest.approx(P_W, rel=1e-9), False)
-    assert _check(resolved, "'shaft_pinion'") == (pytest.approx(60.75, rel=1e-9), False)
-
-
-@xfail("Q40: shares of the stages leaving one shaft must sum to 1")
-def test_alternative_shares_above_one_are_refused():
-    try:
+def test_shares_that_do_not_sum_to_one_are_refused():
+    """Q40: two stages leaving one shaft each with the whole torque (shares 1 + 1) would create power: refused
+    when the transmission is built."""
+    with pytest.raises(ValueError, match="the shares of the stages leaving shaft 'shaft_pinion' sum to 2.000000"):
         _two_wheels_on_one_pinion_shaft()
-    except ValueError:
-        return
-    raise AssertionError("two stages took the full torque of one shaft")
 
 
-def test_negative_power_is_accepted(case7a):
-    """Pins TODAY's behaviour (Q41): P < 0 is resolved with the signed torque (power flowing back: the gear on
-    the source shaft is driven, its tangential force reversed); magnitudes stay >= 0; the resolved record
-    carries a warning."""
-    resolved = case7a.system.resolve(-P_W, bc.N_RPM, 1)
-    assert resolved.torque_Nm == pytest.approx((-60.75, 91.125), rel=1e-12)
-    assert resolved.shafts[0].radial_loads[1].magnitude == pytest.approx(1659.831, abs=5e-4)
-    assert resolved.shafts[0].radial_loads[1].theta_deg == 120.0           # 300 deg when the pinion drives
-    assert any("is negative" in w for w in resolved.warnings)
-
-
-@xfail("Q41: P < 0 refused (validation level L6)")
-def test_alternative_negative_power_is_refused(case7a):
-    try:
+def test_negative_power_is_refused(case7a):
+    """Q41 (José, 2026-10-15): P < 0 is refused. FUTURE: braking / regenerative power with the D-0010 signs."""
+    with pytest.raises(ValueError, match="P_W must be >= 0"):
         case7a.system.resolve(-P_W, bc.N_RPM, 1)
-    except ValueError:
-        return
-    raise AssertionError("a negative power was resolved")
 
 
 # ----------------------------------------------------------------------------------------------
@@ -456,8 +419,7 @@ def _internal_then_external():
     pin, ring = (Gear.assemble(bc.FAMILY, dataclasses.replace(g.data, position=100.0)) for g in bc.make_internal(0.0, z1=24))
     p2, w2 = bc.pinion_wheel("C14", position=50.0)
     s1, s2, s3 = (bc._shaft_system(name) for name in ("shaft_1", "shaft_2", "shaft_3"))
-    ge = {name: GearElement(g, role=role, label=name) for name, g, role in (
-        ("pin", pin, "driver"), ("ring", ring, "driven"), ("p2", p2, "driver"), ("w2", w2, "driven"))}
+    ge = {name: GearElement(g, label=name) for name, g in (("pin", pin), ("ring", ring), ("p2", p2), ("w2", w2))}
     s1.add_gear(ge["pin"])
     s2.add_gear(ge["ring"])
     s2.add_gear(ge["p2"])
@@ -466,7 +428,7 @@ def _internal_then_external():
                       gear_b=ge["ring"], phi_deg=0.0, label="internal"),
             PairStage(pair=GearPair.assemble(bc.FAMILY, gear1=p2, gear2=w2), shaft_a=s2, gear_a=ge["p2"], shaft_b=s3,
                       gear_b=ge["w2"], phi_deg=90.0, label="external")]
-    return Transmission([s1, s2, s3], path, source=s1).resolve(P_W, bc.N_RPM, 1)
+    return Transmission([s1, s2, s3], path, source=s1, sinks=((s3, 200.0),)).resolve(P_W, bc.N_RPM, 1)
 
 
 def test_stage_after_an_internal_stage_is_driven_by_its_input_shaft():
@@ -474,7 +436,7 @@ def test_stage_after_an_internal_stage_is_driven_by_its_input_shaft():
     -T_b = -60.75 x (-60) / 24 = +151.875 N m, with the sense of shaft 1 (an internal mesh keeps it); stage 2 takes
     it on its pinion, which drives, and delivers -151.875 x 24 / 16 = -227.8125 N m to shaft 3, which turns the
     other way. Load magnitudes positive (F_r 1713.634 N, F_t 4149.587 N on the pinion of stage 2, = 2056.361 and
-    4979.504 N x 151.875 / 182.25 of the 20/-60 pair), every check of the meshes passes, power out = power in."""
+    4979.504 N x 151.875 / 182.25 of the 20/-60 pair), every closure check passes, power out = power in."""
     resolved = _internal_then_external()
     T2 = -(60.75 * -60 / 24)                                   # the mesh delivers -T_b, T_b = T_a z_b / z_a
     assert resolved.torque_Nm == pytest.approx((60.75, T2, -(T2 * 24 / 16)), rel=1e-12)
@@ -484,14 +446,14 @@ def test_stage_after_an_internal_stage_is_driven_by_its_input_shaft():
     assert (stage2["p2:Fr"], stage2["p2:Ft"]) == pytest.approx((1713.634, 4149.587), abs=5e-4)
     assert resolved.meshes[1].on_1[:2] == pytest.approx((-1713.634, -4149.587), abs=5e-4)     # the pinion drives
     assert all(ld.magnitude >= 0.0 for shaft in resolved.shafts for ld in shaft.radial_loads)
-    assert all(ok for name, _, ok in resolved.checks if "shaft_3" not in name), resolved.checks   # shaft 3: no sink
+    assert all(ok for _, _, ok in resolved.checks), resolved.checks
 
 
-def test_warnings_follow_the_current_state(case7a):
-    """``Transmission.warnings`` is read when asked: a gear element put on its shaft after the
-    transmission was built no longer gives a warning."""
-    foreign = GearElement(case7a.w, role="driven", label="g_late")
-    system = Transmission([case7a.sP, case7a.sW], [_stage(case7a, gear_b=foreign)], source=case7a.sP)
-    assert [w.split(": ")[-1] for w in system.warnings] == ["gear element 'g_late' is not on shaft 'shaft_wheel'"]
-    case7a.sW.add_gear(foreign)
-    assert system.warnings == ()
+def test_gear_element_holds_only_the_gear_and_its_label(case7a):
+    """Q17 (José, 2026-10-15): no role and no sense of rotation on the gear element (the driver of a stage is its
+    gear_a; the senses are in ``ResolvedTransmission.rotation``)."""
+    ge = GearElement(case7a.p, label="g")
+    assert (ge.gear, ge.label, ge.position) == (case7a.p, "g", bc.GEAR_POS)
+    assert not hasattr(ge, "role") and not hasattr(ge, "rotation_dir")
+    with pytest.raises(TypeError):
+        GearElement(case7a.p, role="driver")

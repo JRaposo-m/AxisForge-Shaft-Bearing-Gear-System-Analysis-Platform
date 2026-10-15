@@ -26,7 +26,7 @@ import pytest
 from axisforge.core.loads import AxialLoad, ExternalMoment, RadialLoad, TorqueLoad
 from axisforge.core.machine_elements.gears import GearPair
 from axisforge.core.machine_elements.gears.tests import baseline_cases as bc
-from axisforge.core.materials.base import IsotropicElastic, Material, StrengthProperties, available_materials, register
+from axisforge.core.machine_elements.gears.tests.baseline_cases import s355  # noqa: F401 (pytest fixture)
 from axisforge.core.mechanical_system import GearElement, PairStage, Transmission
 from axisforge.mesh.shaft.beam_model_settings import BeamModelSettings
 from axisforge.solvers.machine_elements.shaft.fem_solvers import RigidSupportFEMSolver
@@ -36,18 +36,13 @@ X_SINK = 200.0              # [mm] output end of shaft 3
 
 
 @pytest.fixture(scope="module")
-def two_stage():
-    """``(transmission, resolved)`` of the two-stage system described in the module docstring."""
-    if "S355" not in available_materials():
-        # the default material of a Shaft; AxisForge registers none. Values of the shaft validation
-        # cases of AxisForge-Design-Studies (EN 10025-2 S355: E 210 GPa, nu 0.3)
-        register(Material(material_id="S355", density=7850.0, elastic=IsotropicElastic(E=210_000.0, poisson_ratio=0.3),
-                          strength=StrengthProperties(Sut=590.0, Sy=355.0), description="EN 10025-2 S355"))
+def two_stage(s355):
+    """``(transmission, resolved)`` of the two-stage system described in the module docstring (shaft material
+    S355: fixture ``s355`` of baseline_cases)."""
     s1, s2, s3 = (bc._shaft_system(name) for name in ("shaft_1", "shaft_2", "shaft_3"))
     p1, w1 = bc.pinion_wheel("H501", position=X1)
     p2, w2 = bc.pinion_wheel("C14", position=X2)
-    elements = {name: GearElement(g, role=role, label=name) for name, g, role in (
-        ("g_p1", p1, "driver"), ("g_w1", w1, "driven"), ("g_p2", p2, "driver"), ("g_w2", w2, "driven"))}
+    elements = {name: GearElement(g, label=name) for name, g in (("g_p1", p1), ("g_w1", w1), ("g_p2", p2), ("g_w2", w2))}
     s1.add_gear(elements["g_p1"])
     s2.add_gear(elements["g_w1"])
     s2.add_gear(elements["g_p2"])       # shaft 2 carries the wheel of stage 1 and the pinion of stage 2
@@ -132,7 +127,7 @@ def test_two_stages_resolve_along_the_written_path(two_stage):
     output shaft is -T_a z_b / z_a (signed, T omega > 0 on every shaft), the speed the inverse ratio; the sense
     alternates. Every closure check passes (power conserved, action = reaction, separating radial forces)."""
     transmission, resolved = two_stage
-    assert transmission.warnings == () and transmission.validate() == []
+    assert transmission.validate() == []
     assert resolved.torque_Nm == pytest.approx((60.75, -91.125, 136.6875), rel=1e-12)
     assert resolved.speed_rpm == pytest.approx((1450.0, 966.6666666666666, 644.4444444444445), rel=1e-12)
     assert resolved.rotation == (1, -1, 1)

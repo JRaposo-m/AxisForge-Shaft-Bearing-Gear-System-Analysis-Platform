@@ -245,13 +245,23 @@ class PairStage:
         """
         Return the error messages of the stage; empty if valid.
 
-        Checked: the two gears occupy the same global axial position ``shaft_origin_x +
-        gear.position`` within ``TOL_GEOMETRY_mm`` (1e-9 mm, whatever the face widths: the overlap
-        of the two face widths is not used). ``shaft_origin_x`` is not propagated by ``resolve``:
-        it is the caller's to set on every shaft.
+        Checked (validation level L6; Q45, José 2026-10-15): ``gear_a`` and ``gear_b`` wrap the
+        two gears of the pair; each gear element is on its shaft; the two gears occupy the same
+        global axial position ``shaft_origin_x + gear.position`` within ``TOL_GEOMETRY_mm`` (1e-9 mm,
+        whatever the face widths: the overlap of the two face widths is not used).
+        ``shaft_origin_x`` is not propagated by ``resolve``: it is the caller's to set on every
+        shaft.
         """
         errors: list[str] = []
         tag = self.label or "PairStage"
+        pair = self.pair
+        gears = (self.gear_a.gear, self.gear_b.gear)
+        if not ((gears[0] is pair.gear1 and gears[1] is pair.gear2)
+                or (gears[0] is pair.gear2 and gears[1] is pair.gear1)):
+            errors.append(f"{tag}: gear_a and gear_b are not the two gears of the pair")
+        for shaft, element in ((self.shaft_a, self.gear_a), (self.shaft_b, self.gear_b)):
+            if not any(element is ge for ge in shaft.gears):
+                errors.append(f"{tag}: gear element '{element.label}' is not on shaft '{shaft.name}'")
         xa = self.shaft_a.shaft_origin_x + self.gear_a.position
         xb = self.shaft_b.shaft_origin_x + self.gear_b.position
         offset = abs(xa - xb)
@@ -264,26 +274,6 @@ class PairStage:
                 f"Check shaft_origin_x and gear.position on both shafts."
             )
         return errors
-
-    @property
-    def warnings(self) -> tuple[str, ...]:
-        """
-        Advisory messages of the stage; they never raise.
-
-        These are checks that the code before this module did not run (validation level L6:
-        the gear of each stage belongs to the pair and sits on its shaft).
-        """
-        # QUESTION(Q45): checks of the written path kept as warnings; the ruling makes them errors (block 4).
-        tag = self.label or "PairStage"
-        pair, found = self.pair, []
-        gears = (self.gear_a.gear, self.gear_b.gear)
-        if not ((gears[0] is pair.gear1 and gears[1] is pair.gear2)
-                or (gears[0] is pair.gear2 and gears[1] is pair.gear1)):
-            found.append(f"{tag}: gear_a and gear_b are not the two gears of the pair")
-        for shaft, element in ((self.shaft_a, self.gear_a), (self.shaft_b, self.gear_b)):
-            if not any(element is ge for ge in shaft.gears):
-                found.append(f"{tag}: gear element '{element.label}' is not on shaft '{shaft.name}'")
-        return tuple(found)
 
     def resolve(self, T_in_Nm: float, n_in_rpm: float, rot_in: int,
                 position_in_mm: tuple[float, float]) -> dict:
@@ -437,17 +427,14 @@ class ResolvedTransmission:
         Closure post-conditions ``(check, residual, ok)``, computed on the stored loads; they
         never raise. Per mesh: action = reaction, torque of each gear = moment of its mesh
         force, power of the mesh, separating radial force on each gear. Per shaft: the torque
-        loads sum to zero (fails for an output shaft with no sink, Q16). For the train: the power
-        leaving the end shafts equals the power entering. They are NECESSARY conditions, not
-        sufficient: they do not test the magnitudes against an independent calculation.
-    warnings : tuple of str
-        Advisory messages of the transmission and of this resolve; they never raise.
+        loads sum to zero. For the train: the power leaving the end shafts equals the power
+        entering. They are NECESSARY conditions, not sufficient: they do not test the magnitudes
+        against an independent calculation.
 
     Notes
     -----
-    Where the speed is and is not: the speed of every shaft is HERE, in ``speed_rpm``. It is
-    NOT written on the loaded copies: ``ShaftSystem.speed_rpm`` of each copy is the value the
-    user set on that shaft (0.0 by default), as before (Q09).
+    The speed of every shaft is in ``speed_rpm`` and is also written on its loaded copy,
+    ``ShaftSystem.speed_rpm`` (Q09, José 2026-10-15).
     """
 
     transmission: "Transmission"
@@ -457,7 +444,6 @@ class ResolvedTransmission:
     speed_rpm: tuple[float, ...]
     meshes: tuple[MeshForces, ...]
     checks: tuple[tuple[str, float, bool], ...]
-    warnings: tuple[str, ...]
 
     @property
     def label(self) -> str:
@@ -511,31 +497,27 @@ class Transmission:
         [N m] at x, so that the torques about the shaft axis sum to zero (equilibrium; no
         library source). The sum includes the TorqueLoads the user put on the shaft and those of
         the mesh; ExternalMoment (bending) is not a torque about the axis and is not included.
-        The load is labelled ``<shaft name>:T_out`` with source "gear_mesh"; it is the torque the
-        output (load, coupling) takes from the shaft. Default ``()``: no shaft is closed (a driven
-        shaft keeps the net torque that its mesh delivers).
+        The load is labelled ``<shaft name>:T_out`` with source "gear_mesh"; it is the reaction
+        torque of the output (load, coupling) on the shaft. Every output shaft (a shaft that
+        feeds no stage) needs one (Q16, José 2026-10-15).
     label : str
         Reporting tag.
-
-    Attributes
-    ----------
-    warnings : tuple of str
-        Advisory messages (a property, read from the current state of the shafts and stages);
-        they never raise (Q40, Q45).
 
     Raises
     ------
     ValueError
         At construction, if the written path is invalid (validation level L6): a message of a
-        stage; a stage whose shafts are not distinct or not in ``shafts``; a share outside
-        (0, 1]; a stage whose input shaft has no power yet; a shaft that receives power twice;
-        a shaft that receives none; the source or a sink shaft not in ``shafts``.
+        stage (``PairStage.validate``); a stage whose shafts are not distinct or not in
+        ``shafts``; a share outside (0, 1]; shares of the stages leaving one shaft that do not sum
+        to 1 (Q40); a stage whose input shaft has no power yet; a shaft that receives power twice;
+        a shaft that receives none; an output shaft without a sink (Q16); the source or a sink
+        shaft not in ``shafts``.
 
     Notes
     -----
     Stage contract. ``Transmission`` reads from a stage only: ``shafts``, a tuple of ANY length
     (two or more) of the ``ShaftSystem`` objects it links, the input shaft first; ``share``
-    [-]; ``label``; ``warnings`` (tuple of str); ``validate()`` (list of str); and
+    [-]; ``label``; ``validate()`` (list of str); and
     ``resolve(T_in_Nm, n_in_rpm, rot_in, position_in_mm)``, which returns a dict of tuples with
     one entry per shaft of ``stage.shafts``, in that order: ``loads`` (a list of loads each),
     ``torque_Nm`` [N m], ``rotation``, ``speed_rpm`` [rpm], ``position_mm`` ((y, z) [mm]), plus
@@ -548,10 +530,9 @@ class Transmission:
 
     Limits: each shaft receives power once (no recombination); one input shaft per stage.
 
-    Q40. Each stage takes ``share`` of the torque entering its input shaft. With the default
-    1.0 two stages leaving one shaft EACH take the whole torque, as the code before this module
-    did for two links with separate driver gears; the sum of the shares of a shaft above 1 is a
-    stored warning, not an error.
+    Each stage takes ``share`` of the torque entering its input shaft; the shares of the stages
+    leaving one shaft sum to 1 (power conservation; Q40, José 2026-10-15). FUTURE: a solver for the
+    load split of parallel paths (statically indeterminate).
     """
 
     def __init__(self, shafts, path, source: ShaftSystem,
@@ -562,8 +543,6 @@ class Transmission:
         self.source = source
         self.sinks = tuple(sinks)
         self.label = label
-        # Loaded copies returned by the last resolve(), read by validate() (Q43).
-        self._loaded: tuple[ShaftSystem, ...] | None = None
         self._raise_on_path_errors("Transmission")
 
     # ------------------------------------------------------------------
@@ -598,6 +577,18 @@ class Transmission:
                 powered.add(id(s))
         errors.extend(f"{tag}: shaft '{s.name}' receives no power (it is neither the source nor an "
                       f"output shaft of a stage)" for s in self.shafts if id(s) not in powered)
+        # Q40 (José, 2026-10-15): the stages leaving one shaft share its torque: shares summing to 1 conserve power
+        for shaft in self.shafts:
+            total = sum(stage.share for stage in self.path if stage.shafts[0] is shaft)
+            if total and abs(total - 1.0) > 1e-9:
+                errors.append(f"{tag}: the shares of the stages leaving shaft '{shaft.name}' sum to {total:.6f}, "
+                              f"not 1 (power conservation)")
+        # Q16 (José, 2026-10-15): every output shaft (one that feeds no stage) is closed by a sink
+        inputs = {id(stage.shafts[0]) for stage in self.path}
+        sinks = {id(s) for s, _ in self.sinks}
+        errors.extend(f"{tag}: output shaft '{s.name}' has no sink (give it in sinks=((shaft, x),), x the axial "
+                      f"position of its output [mm])" for s in self.shafts
+                      if id(s) in powered and id(s) not in inputs and id(s) not in sinks)
         errors.extend(f"{tag}: sink shaft {s.name!r} is not in this system" for s, _ in self.sinks
                       if id(s) not in mine)
         return errors
@@ -608,31 +599,16 @@ class Transmission:
         if errors:
             raise ValueError(f"{where}: invalid power path:\n" + "\n".join(f"  - {e}" for e in errors))
 
-    @property
-    def warnings(self) -> tuple[str, ...]:
-        """Advisory messages, read from the current state: those of the stages, and the shares leaving one shaft summing above 1."""
-        tag = self.label or "Transmission"
-        found = [f"{tag}: {w}" for stage in self.path for w in stage.warnings]
-        for shaft in self.shafts:
-            total = sum(stage.share for stage in self.path if stage.shafts[0] is shaft)
-            # QUESTION(Q40): shares of one shaft summing above 1 are kept (each stage with the default share takes the FULL torque, as two links with separate driver gears did); the alternative refuses a sum other than 1.
-            if total > 1.0 + 1e-6:
-                found.append(f"{tag}: the stages leaving shaft '{shaft.name}' take {total:.6f} times its "
-                             f"torque (sum of their shares); the power balance does not close")
-        return tuple(found)
-
     def validate(self) -> list[str]:
         """
-        Return the messages of the written path plus those of every ShaftSystem; empty if valid.
+        Return the messages of the written path plus those of every shaft given by the user;
+        empty if valid.
 
-        Before resolve() the shafts given by the user are validated; after a resolve(), the
-        loaded copies of the LAST resolve(), so that the checks that need the mesh loads still run
-        (a helical mesh needs a locating bearing: ShaftSystem.validate()). A load or a bearing
-        added to a user's shaft after resolve() is seen only after the next resolve().
+        The loaded copies are validated by ``resolve`` itself (Q43, José 2026-10-15): the checks
+        that need the mesh loads (a helical mesh needs a locating bearing) run there.
         """
         errors = self._path_errors()
-        # QUESTION(Q43): after resolve() the loaded copies of the last resolve() are validated, as when resolve() loaded the user's shafts in place; alternatives: resolve() validates the copies itself, or validate() only ever sees the user's shafts.
-        for s in (self.shafts if self._loaded is None else self._loaded):
+        for s in self.shafts:
             errors.extend(s.validate())
         return errors
 
@@ -659,7 +635,7 @@ class Transmission:
         Parameters
         ----------
         P_W : float
-            Power entering the source shaft [W]. Not validated (Q41).
+            Power entering the source shaft [W], >= 0 (Q41).
         n_rpm : float
             Speed of the source shaft [rpm], > 0.
         rotation : int
@@ -684,7 +660,8 @@ class Transmission:
         ------
         ValueError
             If the written path is invalid (the shafts and stages are mutable, so it is checked
-            again here), n_rpm <= 0 or rotation is not +1 or -1.
+            again here), P_W < 0 (Q41), n_rpm <= 0, rotation is not +1 or -1, or a loaded copy
+            fails ``ShaftSystem.validate()`` (one error with every message; Q43).
 
         Notes
         -----
@@ -710,10 +687,8 @@ class Transmission:
         shaft axis with the moment of the force at the pitch point (torque and bending moment,
         ``mesh_forces_to_shaft_loads``).
 
-        Warnings
-        --------
-        The speed of each shaft is in the returned record only; ``ShaftSystem.speed_rpm`` of the
-        copies is not set (Q09).
+        Each loaded copy carries the speed of its shaft (Q09) and is validated before it is
+        returned (Q43).
 
         References
         ----------
@@ -721,13 +696,15 @@ class Transmission:
         .. [2] ISO_21771_2007, 5.2.1-5.2.2, Eq. (52), (53) (checked): ratio and speeds.
         """
         self._raise_on_path_errors("Transmission.resolve")
+        # Q41 (José, 2026-10-15): power flows from the source; FUTURE: braking / regenerative power with the D-0010 signs
+        if P_W < 0.0:
+            raise ValueError(f"resolve: P_W must be >= 0, got {P_W} W (braking / regenerative power is not modelled)")
         if n_rpm <= 0.0:
             raise ValueError(f"resolve: rpm must be > 0, got {n_rpm}")
         if rotation not in (1, -1):
             raise ValueError(f"resolve: rotation must be +1 or -1, got {rotation}")
 
         omega = n_rpm * 2.0 * math.pi / 60.0      # [rad/s]
-        # QUESTION(Q41): P_W < 0 is accepted (power flowing back): the load magnitudes stay >= 0 and the angles of the tangential forces turn by 180 deg; the alternative (validation level L6) refuses P_W < 0.
         T_source = P_W / omega                    # [N m]; P in W, omega in rad/s
 
         index = {id(s): i for i, s in enumerate(self.shafts)}
@@ -752,7 +729,7 @@ class Transmission:
         for stage in self.path:
             ids = [index[id(s)] for s in stage.shafts]
             i_in = ids[0]
-            # QUESTION(Q40): each stage takes `share` of the torque entering its input shaft; with the default 1.0 several stages leaving one shaft each take the full torque.
+            # each stage takes `share` of the torque entering its input shaft (the shares of a shaft sum to 1: Q40)
             out = stage.resolve(torque[i_in] * stage.share, speed[i_in], rot[i_in], position[i_in])
             for k, i in enumerate(ids):
                 loads[i] += out["loads"][k]
@@ -762,7 +739,7 @@ class Transmission:
             meshes += out["meshes"]
             checks += out["checks"]
 
-        # QUESTION(Q16): the output torque is closed here only where a sink (shaft, x) is written; default: open end, as before. Its label and source differ from the hand-made "output_coupling" / "user" load of the studies.
+        # every output shaft has a sink (Q16, checked in _path_errors): the reaction torque of the output
         for sink_shaft, sink_x in self.sinks:
             i = index[id(sink_shaft)]
             # closure of the shaft: minus the sum of its torque loads [N m], user loads included
@@ -772,8 +749,14 @@ class Transmission:
 
         # one loaded copy per shaft, in the order of self.shafts; the user's shafts keep their
         # own loads and position
-        # QUESTION(Q09): speed_rpm is not passed, so every copy keeps the speed of the user's shaft (0.0 by default); the alternative is with_loads(..., speed_rpm=speed[i]) (case 7a: 1450 and 966.667 rpm).
-        loaded = tuple(s.with_loads(loads[i], shaft_position=position[i]) for i, s in enumerate(self.shafts))
+        # Q09 (José, 2026-10-15): each copy carries the speed of its shaft along the path
+        loaded = tuple(s.with_loads(loads[i], speed_rpm=speed[i], shaft_position=position[i])
+                       for i, s in enumerate(self.shafts))
+        # Q43 (José, 2026-10-15): the loaded copies are validated here, one error with every message
+        errors = [e for s in loaded for e in s.validate()]
+        if errors:
+            raise ValueError(f"{self.label or 'Transmission'}: invalid loaded shafts:\n"
+                             + "\n".join(f"  - {e}" for e in errors))
 
         # closure of each shaft and of the train (statics and power balance; no library source)
         for s in loaded:
@@ -785,13 +768,8 @@ class Transmission:
         checks.append(_closure("train: power leaving the end shafts - power entering [W]",
                                abs(P_out - P_W), abs(P_W)))
 
-        warnings = self.warnings
-        if P_W < 0.0:
-            warnings += (f"{self.label or 'Transmission'}: P_W = {P_W} W is negative",)
-        self._loaded = loaded
         return ResolvedTransmission(transmission=self, shafts=loaded, torque_Nm=tuple(torque), rotation=tuple(rot),
-                                    speed_rpm=tuple(speed), meshes=tuple(meshes), checks=tuple(checks),
-                                    warnings=warnings)
+                                    speed_rpm=tuple(speed), meshes=tuple(meshes), checks=tuple(checks))
 
     def __repr__(self) -> str:
         """Short text: label, number of shafts and of stages."""

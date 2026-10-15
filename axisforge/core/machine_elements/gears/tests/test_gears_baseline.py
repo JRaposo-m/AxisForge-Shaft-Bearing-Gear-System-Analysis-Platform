@@ -30,9 +30,10 @@ def test_baseline_rows(case, obj):
 
 
 def test_number_of_recorded_physics_checks():
-    """The set of the baseline ``checks.csv`` (cases 1-7): 291 checks, 143 pass, 136 fail, 12 info."""
+    """The set of the baseline ``checks.csv`` (cases 1-7): 291 checks recorded, of which the checks of
+    cases 3b, 3c, 7c, 7d are gone with the cases (Q03, answer 7): 223 checks, 131 pass, 84 fail, 8 info."""
     results = [c.result for c in bc.run_baseline()[1]]
-    assert (len(results), results.count("PASS"), results.count("FAIL"), results.count("INFO")) == (291, 143, 136, 12)
+    assert (len(results), results.count("PASS"), results.count("FAIL"), results.count("INFO")) == (223, 131, 84, 8)
 
 
 def _question(c):
@@ -42,9 +43,6 @@ def _question(c):
         return "Q05: row 17 / X3, F_t on the driver (both F_t of an external pair point the same way)"
     if c.id[0] in "123" and kind == "d":
         return "Q05: row 17 / X3, F_r direction (both F_r of an external pair point toward the mesh)"
-    if c.id == "3.a" and ("/3b_" in c.case or "/3c_" in c.case):
-        # gear 1 is the wheel: forces() still puts T on the smaller working diameter and T_out = T u
-        return "Q03: row 1 / X1, gear order and driver (output power 2.25 times the input)"
     if kind == "e" and c.case.endswith("/gear2"):
         # ring driving: with phi read as driver -> driven the radial forces separate (4.d, 5.d pass)
         # but the moment of F_t on the ring is +rot T_in; with phi read as gear1 -> gear2 it is the
@@ -84,9 +82,8 @@ def test_alternative_wheel_driver_takes_the_torque_on_the_wheel():
     assert F["T_out"] == pytest.approx(bc.T_NM * z_pinion / z_wheel, rel=bc.REL_TOL)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Q04: row 2 / X2, clearance cP in the tip diameter")
-def test_alternative_tip_diameter_without_clearance():
-    """ISO_21771_2007, 4.5.3, Eq. (33): d_a = d + 2 m_n (h_aP* + x) for k = 0, no clearance term [mm]."""
+def test_tip_diameter_without_clearance():
+    """Q04: ISO_21771_2007, 4.5.3, Eq. (33): d_a = d + 2 m_n (h_aP* + x) for k = 0, no clearance term [mm]."""
     p, _ = bc.pinion_wheel("C14")
     assert p.da == pytest.approx(p.d + 2.0 * p.mn * (p.haP + p.x), rel=bc.REL_TOL)
 

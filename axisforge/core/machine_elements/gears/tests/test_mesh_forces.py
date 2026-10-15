@@ -29,9 +29,8 @@ def pair(g1, g2):
 CASES = {
     "case1": pair(*bc.pinion_wheel("C14")),          # external spur, z 16/24
     "case2": pair(*bc.pinion_wheel("H501")),         # external helical, z 20/30, beta 15 deg
-    "case3b": pair(*bc.pinion_wheel("H501")[::-1]),  # the same gears, gear 1 = wheel (Q03)
     "case4": pair(*bc.make_internal(0.0)),           # internal spur, z 20/-60
-    "case5": pair(*bc.make_internal(15.0)),          # internal helical (Q21)
+    "case5": pair(*bc.make_internal(15.0)),          # internal helical, beta 15 deg
 }
 # hand arithmetic of the plan (header) and of units_and_conventions.md, C.5, to the printed digit
 CASE2_N = dict(F_tw_N=1659.831, F_r_N=674.505, F_a_N=449.236, F_bt_N=1791.646, F_bn_N=1847.109, F_t_nominal_N=1676.571)
@@ -82,16 +81,6 @@ def test_spur_pair_has_no_axial_force():
     assert m.F_a_N == 0.0 and m.on_1[2] == 0.0 and m.F_bn_N == m.F_bt_N
 
 
-def test_gear_1_is_the_wheel():
-    """Q03: with the torque on a gear 1 that is the WHEEL, the force is on the working diameter of
-    the wheel: F_tw = 2000 x 60.75 / 109.800309 = 1106.554 N (``forces()`` gives 1659.831 N)."""
-    p = CASES["case3b"]
-    m = FAMILY.mesh_forces(p, T, 1)
-    assert m.F_tw_N == pytest.approx(1106.554, abs=5e-4)
-    assert m.rho_mm == pytest.approx((54.900155, -36.600103), abs=5e-7)
-    assert FAMILY.forces(p, T)["Ft"] == pytest.approx(1659.831, abs=5e-4)
-
-
 # ----------------------------------------------------------------------------------------------
 # mesh frame and sign table (D-0010 items 14-16)
 # ----------------------------------------------------------------------------------------------
@@ -138,12 +127,12 @@ def test_action_equals_reaction(case, T1, rot):
     assert m.on_2 == tuple(-f for f in m.on_1)
 
 
-@pytest.mark.parametrize("case", ["case1", "case2", "case3b", "case4"])
+@pytest.mark.parametrize("case", CASES)
 @pytest.mark.parametrize("T1", [T, -T])
 def test_torque_is_the_moment_of_the_mesh_force(case, T1):
     """Steady rotation of each gear: T_i + rho_i F_i,t / 1000 = 0; with action = reaction this gives
-    T_2 = T_1 z_2 / z_1 with signed z (D-0010 item 13). Case 5 is left out: its working pitch circles
-    are not tangent today (Q21)."""
+    T_2 = T_1 z_2 / z_1 with signed z (D-0010 item 13). Case 5 included since its working pitch
+    circles are tangent (one base-cylinder rule, Q21)."""
     p = CASES[case]
     m = FAMILY.mesh_forces(p, T1, 1)
     assert -m.rho_mm[0] * m.on_1[1] / 1000.0 == pytest.approx(T1, rel=1e-12)
@@ -174,10 +163,10 @@ def test_mesh_forces_are_frozen():
 
 def test_normal_force_feeds_the_contact_inputs():
     """``MeshForces.F_bn_N`` is the load of ``contact_inputs``: at the start of meshing of case 2 the
-    load per unit length is 48.618 N/mm (the value pinned for F_bn = 1847.109 N in
+    load per unit length is 51.932 N/mm (the value pinned for F_bn = 1847.109 N in
     ``test_contact_inputs.py``), and the line loads times the summed line lengths give F_bn back."""
     p = CASES["case2"]
     m = FAMILY.mesh_forces(p, T, 1)
     out = FAMILY.contact_inputs(p, "gear1", bc.N_RPM, m.F_bn_N, n_points=5)
-    assert out["w_N_per_mm"][0] == pytest.approx(48.61842917026523, rel=1e-12)
+    assert out["w_N_per_mm"][0] == pytest.approx(51.93178223060986, rel=1e-12)
     assert out["w_N_per_mm"] * out["l_sum_mm"] == pytest.approx(m.F_bn_N, rel=1e-12)

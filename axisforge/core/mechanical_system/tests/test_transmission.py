@@ -175,7 +175,8 @@ def test_new_checks_of_the_path_are_warnings():
     """Q45: in cases 7e, 7f the gear on the source shaft is the wheel while ``forces()`` takes the
     torque on gear 1, the pinion. The new check says so and does not refuse the recorded case."""
     assert bc.build_case7("pinion", 1).system.warnings == ()
-    assert bc.build_case7("wheel", 1).system.warnings == ()        # gear 1 of that pair IS the wheel (Q03)
+    with pytest.raises(ValueError, match="gear 1 must be the pinion"):      # the pair of the deleted case 7c (Q03)
+        bc.build_case7("wheel", 1)
     (warning,) = bc.build_case7("wheel", 1, alt=True).system.warnings
     assert "is not the gear on which forces() takes the torque" in warning
 
@@ -242,9 +243,9 @@ def test_resolved_record_of_case_7a(case7a):
 
 
 def test_speed_of_every_shaft_is_on_the_resolved_record():
-    """ISO_21771_2007 Eq. (53): n_b = n_a z_a / z_b. Case 7a: 1450 and 966.667 rpm; case 7c (the wheel
+    """ISO_21771_2007 Eq. (53): n_b = n_a z_a / z_b. Case 7a: 1450 and 966.667 rpm; case 7e (the wheel
     shaft is the source; shafts in the order pinion, wheel): 2175 and 1450 rpm."""
-    a, c = bc.resolved_case7("pinion", 1), bc.resolved_case7("wheel", 1)
+    a, c = bc.resolved_case7("pinion", 1), bc.resolved_case7("wheel", 1, alt=True)
     assert a.resolved.speed_rpm == pytest.approx((1450.0, 1450.0 * 20 / 30), rel=1e-12)
     assert a.resolved.speed_rpm[1] == pytest.approx(966.667, abs=5e-4)
     assert c.resolved.speed_rpm == pytest.approx((2175.0, 1450.0), rel=1e-12)
@@ -266,22 +267,15 @@ def test_alternative_loaded_copies_carry_their_speed(case7a):
 
 def test_meshes_are_the_mesh_under_d0010_not_the_stored_loads():
     """The ``MeshForces`` of each stage puts the torque on the gear of the source shaft. Case 7a:
-    F_tw 1659.831 N, F_a 449.236 N (stored axial load: 444.750 N, Q07a). Case 7c and 7e (the wheel
-    shaft is the source): F_tw 1106.554 N, where the stored Ft is 1659.831 N (Q03)."""
+    F_tw 1659.831 N, F_a 449.236 N (stored axial load: 444.750 N, Q07a). Case 7e (the wheel shaft is
+    the source): F_tw 1106.554 N, where the stored Ft is 1659.831 N (Q03)."""
     a = bc.resolved_case7("pinion", 1)
     (mesh,) = a.resolved.meshes
     assert (mesh.F_tw_N, mesh.F_a_N) == pytest.approx((1659.831, 449.236), abs=5e-4)
     assert a.sP.axial_loads[0].magnitude == pytest.approx(444.750, abs=5e-4)
-    for alt in (False, True):
-        c = bc.resolved_case7("wheel", 1, alt=alt)
-        assert c.resolved.meshes[0].F_tw_N == pytest.approx(1106.554, abs=5e-4)
-        assert c.sW.radial_loads[1].magnitude == pytest.approx(1659.831, abs=5e-4)
-    # the same physical mesh whichever gear is called gear 1. Force on the WHEEL (the driver): gear 1 in
-    # 7c, gear 2 in 7e, whose mesh frame has e_c and e_t reversed (e_c runs from gear 1 to gear 2). The
-    # axial components are not compared: the default hand is that of GEAR 1, another gear in 7e (Q08).
-    plain, alt = (bc.resolved_case7("wheel", 1, alt=x).resolved.meshes[0] for x in (False, True))
-    assert plain.on_1[:2] == pytest.approx((-alt.on_2[0], -alt.on_2[1]), rel=1e-12)
-    assert plain.rho_mm[0] == pytest.approx(-alt.rho_mm[1], rel=1e-12)
+    c = bc.resolved_case7("wheel", 1, alt=True)
+    assert c.resolved.meshes[0].F_tw_N == pytest.approx(1106.554, abs=5e-4)
+    assert c.sW.radial_loads[1].magnitude == pytest.approx(1659.831, abs=5e-4)
 
 
 @xfail("Q07a: row 19 / X4, the stored axial load is Ft tan(beta), not F_bt tan(beta_b)")
@@ -327,13 +321,13 @@ def test_a_sink_closes_the_torque_of_the_output_shaft(case7a):
 
 def test_closure_checks_that_fail_with_the_other_sense_or_source():
     """Case 7b (rot -1): the stored torques are not the moments of the stored Ft (Q05), residual 2 T.
-    Case 7c (wheel source): the train gives 20755 W = 2.25 P for P = 9224.5 W in (Q03), the power of
+    Case 7e (wheel source): the train gives 20755 W = 2.25 P for P = 9224.5 W in (Q03), the power of
     the mesh has the residual P + 2.25 P (Q03 + Q05), and the torque of a gear is not the moment of
     its force at the geometric radius."""
     b = bc.resolved_case7("pinion", -1).resolved
     assert _check(b, "torque of gear_a") == (pytest.approx(121.5, rel=1e-9), False)
     assert _check(b, "torque of gear_b") == (pytest.approx(182.25, rel=1e-9), False)
-    c = bc.resolved_case7("wheel", 1).resolved
+    c = bc.resolved_case7("wheel", 1, alt=True).resolved
     assert _check(c, "train: power") == (pytest.approx(20755.12821548182 - P_W, rel=1e-9), False)
     assert _check(c, "power of the mesh") == (pytest.approx(3.25 * P_W, rel=1e-9), False)
     assert not _check(c, "torque of gear_a")[1] and not _check(c, "torque of gear_b")[1]

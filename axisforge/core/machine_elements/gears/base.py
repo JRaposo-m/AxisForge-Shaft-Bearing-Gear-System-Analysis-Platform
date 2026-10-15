@@ -375,7 +375,8 @@ class GearPair(_Assembled):
     label : str
         Name used in the summary.
     warnings : tuple of str
-        Advisory messages of the family; they never raise. No family produces one yet.
+        Advisory messages of the family; they never raise (cylindrical family: an imposed
+        centre distance that leaves a backlash, see ``CylindricalFamily.assemble_pair``).
 
     Notes
     -----

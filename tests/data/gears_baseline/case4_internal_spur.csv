@@ -31,8 +31,8 @@ case4_internal_spur,gear1(pinion),d,40.0,mm,axisforge/core/machine_elements/gear
 case4_internal_spur,gear1(pinion),r,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,
 case4_internal_spur,gear1(pinion),db,37.58770483143634,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,
 case4_internal_spur,gear1(pinion),rb,18.79385241571817,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,
-case4_internal_spur,gear1(pinion),da,45.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,
-case4_internal_spur,gear1(pinion),ra,22.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,
+case4_internal_spur,gear1(pinion),da,44.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,gear1(pinion),ra,22.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,gear1(pinion),df,35.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,
 case4_internal_spur,gear1(pinion),rf,17.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,
 case4_internal_spur,gear1(pinion),zn,20.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,
@@ -75,8 +75,8 @@ case4_internal_spur,gear2(ring),pbt,5.904262868187098,mm,axisforge/core/machine_
 case4_internal_spur,gear2(ring),pbn,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:209,
 case4_internal_spur,gear2(ring),dv,120.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:211,
 case4_internal_spur,gear2(ring),rv,60.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:212,
-case4_internal_spur,gear2(ring),da,115.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:213,
-case4_internal_spur,gear2(ring),ra,57.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:214,
+case4_internal_spur,gear2(ring),da,116.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:213,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,gear2(ring),ra,58.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:214,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,gear2(ring),df,125.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:215,
 case4_internal_spur,gear2(ring),rf,62.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:216,
 case4_internal_spur,gear2(ring),tip_below_base_circle(),False,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:284,
@@ -113,39 +113,39 @@ case4_internal_spur,mesh_driver_gear1,x1,0.0,-,axisforge/core/machine_elements/g
 case4_internal_spur,mesh_driver_gear1,x2,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:166,
 case4_internal_spur,mesh_driver_gear1,u,-3.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:181,
 case4_internal_spur,mesh_driver_gear1,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
-case4_internal_spur,mesh_driver_gear1,epslon_alpha,2.500896847804439,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:565,
+case4_internal_spur,mesh_driver_gear1,epslon_alpha,1.949662300052656,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:565,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:569,
 case4_internal_spur,mesh_driver_gear1,epslon_beta,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:570,
-case4_internal_spur,mesh_driver_gear1,epslon_gamma,2.500896847804439,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:572,
-case4_internal_spur,mesh_driver_gear1,galpha,-12.595659070395595,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw))
-case4_internal_spur,mesh_driver_gear1,ReqI,5.130302149885034,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:583,
+case4_internal_spur,mesh_driver_gear1,epslon_gamma,1.949662300052656,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:572,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,galpha,11.511318723705138,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q22, Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,ReqI,10.260604299772375,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:583,Q22 (José 2026-10-15)
 case4_internal_spur,mesh_driver_gear1,T1T2,-13.680805733026757,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:586,
-case4_internal_spur,mesh_driver_gear1,T1E,12.370978594121175,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:588,
-case4_internal_spur,mesh_driver_gear1,T2A,-11.285831931490012,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:590,
-case4_internal_spur,mesh_driver_gear1,T1A,-2.3949738015367448,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:592,
-case4_internal_spur,mesh_driver_gear1,T1B,6.466715725934076,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:593,
+case4_internal_spur,mesh_driver_gear1,T1E,11.436394159708046,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:588,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,T2A,-13.605881169032736,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:590,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,T1A,-0.07492456399709191,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:592,"Q04, Q27, Q21, answer 10 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,T1B,5.5321312915209475,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:593,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1,T1C,6.8404028665133785,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:594,
-case4_internal_spur,mesh_driver_gear1,T1D,3.5092890666503536,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:595,
-case4_internal_spur,mesh_driver_gear1,T2E,-26.05178432714793,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:596,
-case4_internal_spur,mesh_driver_gear1,T2B,-20.14752145896083,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:597,
+case4_internal_spur,mesh_driver_gear1,T1D,5.829338304190006,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:595,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,T2E,-25.117199892737872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:596,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,T2B,-19.212937024550776,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:597,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1,T2C,-20.52120859954013,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:598,
-case4_internal_spur,mesh_driver_gear1,T2D,-17.190094799677112,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:599,
-case4_internal_spur,mesh_driver_gear1,AE,14.76595239565792,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:601,
-case4_internal_spur,mesh_driver_gear1,AB,8.861689527470821,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:602,
-case4_internal_spur,mesh_driver_gear1,AC,9.235376668050122,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:603,
+case4_internal_spur,mesh_driver_gear1,T2D,-19.510144037219835,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:599,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,AE,11.511318723705138,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:601,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,AB,5.607055855518039,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:602,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,AC,6.915327430512008,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:603,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1,AD,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:604,
-case4_internal_spur,mesh_driver_gear1,rA1,18.94583828005093,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:606,
-case4_internal_spur,mesh_driver_gear1,rB1,19.87529373125939,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:607,
-case4_internal_spur,mesh_driver_gear1,rD1,19.11868192049618,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:608,
-case4_internal_spur,mesh_driver_gear1,rA2,62.109383061196084,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:609,
-case4_internal_spur,mesh_driver_gear1,rB2,58.94386615107671,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:610,
-case4_internal_spur,mesh_driver_gear1,rD2,59.87322121410746,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:611,
-case4_internal_spur,mesh_driver_gear1,HV,0.19092616960437309,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:614,
+case4_internal_spur,mesh_driver_gear1,rA1,18.794001764235468,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:606,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,rB1,19.591155281157384,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:607,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,rD1,19.677145974162322,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:608,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,rA2,61.723202509801055,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:609,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,rB2,59.66176093585594,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:610,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,rD2,59.565232700993576,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:611,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,HV,0.10766076632422344,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:614,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1,Ram,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:619,
 case4_internal_spur,mesh_driver_gear1,Rrms,1.4142135623730951,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:620,
 case4_internal_spur,mesh_driver_gear1,RzS,8.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:621,
-case4_internal_spur,mesh_driver_gear1,x_diff_from_al,-0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:189,
-case4_internal_spur,mesh_driver_gear1,x_diff_declared,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:192,
+case4_internal_spur,mesh_driver_gear1,x_sum_from_al,-0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:189,"renamed, Q26 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,x_sum_declared,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:192,"renamed, Q26 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1.gear1_w,label,'pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear1_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear1_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
@@ -177,8 +177,8 @@ case4_internal_spur,mesh_driver_gear1.gear1_w,d,40.0,mm,axisforge/core/machine_e
 case4_internal_spur,mesh_driver_gear1.gear1_w,r,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear1_w,db,37.58770483143634,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear1_w,rb,18.79385241571817,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear1.gear1_w,da,45.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear1.gear1_w,ra,22.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case4_internal_spur,mesh_driver_gear1.gear1_w,da,44.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1.gear1_w,ra,22.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1.gear1_w,df,35.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear1_w,rf,17.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear1_w,zn,20.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
@@ -188,9 +188,9 @@ case4_internal_spur,mesh_driver_gear1.gear1_w,al,40.00000000000001,mm,axisforge/
 case4_internal_spur,mesh_driver_gear1.gear1_w,alphatw,0.34906585039886606,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear1_w,dl,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:532,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear1_w,rl,20.000000000000004,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:534,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear1.gear1_w,alpha_a,0.5821502482585388,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear1.gear1_w,epslon_a1,0.9367089255810781,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:562,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear1.gear1_w,galpha,5.5305757276077925,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case4_internal_spur,mesh_driver_gear1.gear1_w,alpha_a,0.5466590767387979,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1.gear1_w,epslon_a1,0.778419151687317,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:562,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1.gear1_w,galpha,4.595991293193127,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1.gear2_w,label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear2_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear2_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
@@ -226,8 +226,8 @@ case4_internal_spur,mesh_driver_gear1.gear2_w,pbt,5.904262868187098,mm,axisforge
 case4_internal_spur,mesh_driver_gear1.gear2_w,pbn,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:209,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear2_w,dv,120.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:211,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear2_w,rv,60.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:212,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear1.gear2_w,da,115.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear1.gear2_w,ra,57.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case4_internal_spur,mesh_driver_gear1.gear2_w,da,116.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1.gear2_w,ra,58.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1.gear2_w,df,125.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear2_w,rf,62.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear2_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
@@ -235,17 +235,17 @@ case4_internal_spur,mesh_driver_gear1.gear2_w,al,40.00000000000001,mm,axisforge/
 case4_internal_spur,mesh_driver_gear1.gear2_w,alphatw,0.34906585039886606,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear2_w,dl,120.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:532,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear2_w,rl,60.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:534,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear1.gear2_w,alpha_a,0.1975579181241667,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear1.gear2_w,epslon_a2,-1.564187922223361,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:563,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear1.gear2_w,galpha,-9.235376668050119,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case4_internal_spur,mesh_driver_gear1.gear2_w,alpha_a,0.23679076726893622,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1.gear2_w,epslon_a2,-1.171243148365339,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:563,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1.gear2_w,galpha,-6.915327430512023,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1,gear1.label,'pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py,reference gear 1
 case4_internal_spur,mesh_driver_gear1,gear2.label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py,reference gear 2
 case4_internal_spur,mesh_driver_gear1,validate().len,2,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_driver_gear1,validate()[0],"'ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0).'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_driver_gear1,validate()[1],'ring: trimming interference — tooth difference z2-z1=-80 < 2.',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_driver_gear1,validate_or_raise()!exception,"'ValueError: ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0).\nring: trimming interference — tooth difference z2-z1=-80 < 2.'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:781,"EXCEPTION; traceback tail: File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\gear_meshing\internal_meshing.py"", line 785, in validate_or_raise | raise ValueError(""\n"".join(errors)) | ValueError: ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0). | ring: trimming interference — tooth difference z2-z1=-80 < 2."
-case4_internal_spur,mesh_driver_gear1,summary(),"'── case4_internal_spur ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 115.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 2.5009\n  εβ    : 0.0000\n  εγ    : 2.5009\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,
-case4_internal_spur,mesh_driver_gear1,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=2.5009)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,
+case4_internal_spur,mesh_driver_gear1,summary(),"'── case4_internal_spur ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 116.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 1.9497\n  εβ    : 0.0000\n  εγ    : 1.9497\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear1,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=1.9497)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).Ft",3037.4999999999995,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
 case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).Fr",1105.5595865835899,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
 case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
@@ -297,39 +297,39 @@ case4_internal_spur,mesh_driver_gear2,x1,0.0,-,axisforge/core/machine_elements/g
 case4_internal_spur,mesh_driver_gear2,x2,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:166,
 case4_internal_spur,mesh_driver_gear2,u,-3.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:181,
 case4_internal_spur,mesh_driver_gear2,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
-case4_internal_spur,mesh_driver_gear2,epslon_alpha,2.500896847804439,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:565,
+case4_internal_spur,mesh_driver_gear2,epslon_alpha,1.949662300052656,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:565,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:569,
 case4_internal_spur,mesh_driver_gear2,epslon_beta,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:570,
-case4_internal_spur,mesh_driver_gear2,epslon_gamma,2.500896847804439,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:572,
-case4_internal_spur,mesh_driver_gear2,galpha,-12.595659070395595,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw))
-case4_internal_spur,mesh_driver_gear2,ReqI,5.130302149885034,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:583,
+case4_internal_spur,mesh_driver_gear2,epslon_gamma,1.949662300052656,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:572,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,galpha,11.511318723705138,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q22, Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,ReqI,10.260604299772375,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:583,Q22 (José 2026-10-15)
 case4_internal_spur,mesh_driver_gear2,T1T2,-13.680805733026757,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:586,
-case4_internal_spur,mesh_driver_gear2,T1E,12.370978594121175,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:588,
-case4_internal_spur,mesh_driver_gear2,T2A,-11.285831931490012,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:590,
-case4_internal_spur,mesh_driver_gear2,T1A,-2.3949738015367448,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:592,
-case4_internal_spur,mesh_driver_gear2,T1B,6.466715725934076,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:593,
+case4_internal_spur,mesh_driver_gear2,T1E,11.436394159708046,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:588,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,T2A,-13.605881169032736,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:590,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,T1A,-0.07492456399709191,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:592,"Q04, Q27, Q21, answer 10 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,T1B,5.5321312915209475,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:593,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2,T1C,6.8404028665133785,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:594,
-case4_internal_spur,mesh_driver_gear2,T1D,3.5092890666503536,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:595,
-case4_internal_spur,mesh_driver_gear2,T2E,-26.05178432714793,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:596,
-case4_internal_spur,mesh_driver_gear2,T2B,-20.14752145896083,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:597,
+case4_internal_spur,mesh_driver_gear2,T1D,5.829338304190006,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:595,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,T2E,-25.117199892737872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:596,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,T2B,-19.212937024550776,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:597,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2,T2C,-20.52120859954013,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:598,
-case4_internal_spur,mesh_driver_gear2,T2D,-17.190094799677112,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:599,
-case4_internal_spur,mesh_driver_gear2,AE,14.76595239565792,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:601,
-case4_internal_spur,mesh_driver_gear2,AB,8.861689527470821,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:602,
-case4_internal_spur,mesh_driver_gear2,AC,9.235376668050122,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:603,
+case4_internal_spur,mesh_driver_gear2,T2D,-19.510144037219835,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:599,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,AE,11.511318723705138,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:601,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,AB,5.607055855518039,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:602,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,AC,6.915327430512008,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:603,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2,AD,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:604,
-case4_internal_spur,mesh_driver_gear2,rA1,18.94583828005093,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:606,
-case4_internal_spur,mesh_driver_gear2,rB1,19.87529373125939,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:607,
-case4_internal_spur,mesh_driver_gear2,rD1,19.11868192049618,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:608,
-case4_internal_spur,mesh_driver_gear2,rA2,62.109383061196084,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:609,
-case4_internal_spur,mesh_driver_gear2,rB2,58.94386615107671,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:610,
-case4_internal_spur,mesh_driver_gear2,rD2,59.87322121410746,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:611,
-case4_internal_spur,mesh_driver_gear2,HV,0.19092616960437309,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:614,
+case4_internal_spur,mesh_driver_gear2,rA1,18.794001764235468,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:606,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,rB1,19.591155281157384,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:607,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,rD1,19.677145974162322,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:608,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,rA2,61.723202509801055,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:609,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,rB2,59.66176093585594,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:610,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,rD2,59.565232700993576,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:611,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,HV,0.10766076632422344,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:614,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2,Ram,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:619,
 case4_internal_spur,mesh_driver_gear2,Rrms,1.4142135623730951,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:620,
 case4_internal_spur,mesh_driver_gear2,RzS,8.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:621,
-case4_internal_spur,mesh_driver_gear2,x_diff_from_al,-0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:189,
-case4_internal_spur,mesh_driver_gear2,x_diff_declared,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:192,
+case4_internal_spur,mesh_driver_gear2,x_sum_from_al,-0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:189,"renamed, Q26 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,x_sum_declared,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:192,"renamed, Q26 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2.gear1_w,label,'pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear1_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear1_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
@@ -361,8 +361,8 @@ case4_internal_spur,mesh_driver_gear2.gear1_w,d,40.0,mm,axisforge/core/machine_e
 case4_internal_spur,mesh_driver_gear2.gear1_w,r,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear1_w,db,37.58770483143634,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear1_w,rb,18.79385241571817,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear2.gear1_w,da,45.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear2.gear1_w,ra,22.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case4_internal_spur,mesh_driver_gear2.gear1_w,da,44.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2.gear1_w,ra,22.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2.gear1_w,df,35.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear1_w,rf,17.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear1_w,zn,20.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
@@ -372,9 +372,9 @@ case4_internal_spur,mesh_driver_gear2.gear1_w,al,40.00000000000001,mm,axisforge/
 case4_internal_spur,mesh_driver_gear2.gear1_w,alphatw,0.34906585039886606,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear1_w,dl,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:532,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear1_w,rl,20.000000000000004,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:534,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear2.gear1_w,alpha_a,0.5821502482585388,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear2.gear1_w,epslon_a1,0.9367089255810781,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:562,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear2.gear1_w,galpha,5.5305757276077925,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case4_internal_spur,mesh_driver_gear2.gear1_w,alpha_a,0.5466590767387979,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2.gear1_w,epslon_a1,0.778419151687317,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:562,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2.gear1_w,galpha,4.595991293193127,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2.gear2_w,label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear2_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear2_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
@@ -410,8 +410,8 @@ case4_internal_spur,mesh_driver_gear2.gear2_w,pbt,5.904262868187098,mm,axisforge
 case4_internal_spur,mesh_driver_gear2.gear2_w,pbn,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:209,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear2_w,dv,120.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:211,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear2_w,rv,60.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:212,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear2.gear2_w,da,115.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear2.gear2_w,ra,57.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case4_internal_spur,mesh_driver_gear2.gear2_w,da,116.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2.gear2_w,ra,58.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2.gear2_w,df,125.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear2_w,rf,62.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear2_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
@@ -419,17 +419,17 @@ case4_internal_spur,mesh_driver_gear2.gear2_w,al,40.00000000000001,mm,axisforge/
 case4_internal_spur,mesh_driver_gear2.gear2_w,alphatw,0.34906585039886606,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear2_w,dl,120.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:532,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear2_w,rl,60.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:534,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear2.gear2_w,alpha_a,0.1975579181241667,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear2.gear2_w,epslon_a2,-1.564187922223361,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:563,working copy (shallow copy + working data)
-case4_internal_spur,mesh_driver_gear2.gear2_w,galpha,-9.235376668050119,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case4_internal_spur,mesh_driver_gear2.gear2_w,alpha_a,0.23679076726893622,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2.gear2_w,epslon_a2,-1.171243148365339,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:563,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2.gear2_w,galpha,-6.915327430512023,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2,gear1.label,'pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py,reference gear 1
 case4_internal_spur,mesh_driver_gear2,gear2.label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py,reference gear 2
 case4_internal_spur,mesh_driver_gear2,validate().len,2,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_driver_gear2,validate()[0],"'ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0).'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_driver_gear2,validate()[1],'ring: trimming interference — tooth difference z2-z1=-80 < 2.',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_driver_gear2,validate_or_raise()!exception,"'ValueError: ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0).\nring: trimming interference — tooth difference z2-z1=-80 < 2.'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:781,"EXCEPTION; traceback tail: File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\gear_meshing\internal_meshing.py"", line 785, in validate_or_raise | raise ValueError(""\n"".join(errors)) | ValueError: ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0). | ring: trimming interference — tooth difference z2-z1=-80 < 2."
-case4_internal_spur,mesh_driver_gear2,summary(),"'── case4_internal_spur ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 115.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 2.5009\n  εβ    : 0.0000\n  εγ    : 2.5009\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,
-case4_internal_spur,mesh_driver_gear2,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=2.5009)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,
+case4_internal_spur,mesh_driver_gear2,summary(),"'── case4_internal_spur ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 116.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 1.9497\n  εβ    : 0.0000\n  εγ    : 1.9497\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_driver_gear2,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=1.9497)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).Ft",1012.4999999999999,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
 case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).Fr",368.51986219453,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
 case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
@@ -482,39 +482,39 @@ case4_internal_spur,mesh_addendum_reduction,x1,0.0,-,axisforge/core/machine_elem
 case4_internal_spur,mesh_addendum_reduction,x2,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:166,
 case4_internal_spur,mesh_addendum_reduction,u,-3.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:181,
 case4_internal_spur,mesh_addendum_reduction,k,8.881784197001252e-15,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
-case4_internal_spur,mesh_addendum_reduction,epslon_alpha,2.5008968478044338,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:565,
+case4_internal_spur,mesh_addendum_reduction,epslon_alpha,1.9496623000515536,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:565,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:569,
 case4_internal_spur,mesh_addendum_reduction,epslon_beta,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:570,
-case4_internal_spur,mesh_addendum_reduction,epslon_gamma,2.5008968478044338,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:572,
-case4_internal_spur,mesh_addendum_reduction,galpha,-12.595659070395627,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw))
-case4_internal_spur,mesh_addendum_reduction,ReqI,5.130302149885034,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:583,
+case4_internal_spur,mesh_addendum_reduction,epslon_gamma,1.9496623000515536,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:572,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,galpha,11.511318723698636,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q22, Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,ReqI,10.260604299772375,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:583,Q22 (José 2026-10-15)
 case4_internal_spur,mesh_addendum_reduction,T1T2,-13.680805733026757,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:586,
-case4_internal_spur,mesh_addendum_reduction,T1E,12.370978594121143,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:588,
-case4_internal_spur,mesh_addendum_reduction,T2A,-11.285831931490012,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:590,
-case4_internal_spur,mesh_addendum_reduction,T1A,-2.3949738015367448,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:592,
-case4_internal_spur,mesh_addendum_reduction,T1B,6.466715725934044,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:593,
+case4_internal_spur,mesh_addendum_reduction,T1E,11.436394159706023,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:588,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,T2A,-13.605881169037215,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:590,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,T1A,-0.07492456399261371,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:592,"Q04, Q27, Q21, answer 10 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,T1B,5.532131291518924,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:593,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction,T1C,6.8404028665133785,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:594,
-case4_internal_spur,mesh_addendum_reduction,T1D,3.5092890666503536,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:595,
-case4_internal_spur,mesh_addendum_reduction,T2E,-26.0517843271479,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:596,
-case4_internal_spur,mesh_addendum_reduction,T2B,-20.147521458960803,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:597,
+case4_internal_spur,mesh_addendum_reduction,T1D,5.829338304194485,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:595,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,T2E,-25.11719989273585,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:596,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,T2B,-19.21293702454875,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:597,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction,T2C,-20.52120859954013,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:598,
-case4_internal_spur,mesh_addendum_reduction,T2D,-17.190094799677112,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:599,
-case4_internal_spur,mesh_addendum_reduction,AE,14.765952395657887,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:601,
-case4_internal_spur,mesh_addendum_reduction,AB,8.861689527470789,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:602,
-case4_internal_spur,mesh_addendum_reduction,AC,9.235376668050122,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:603,
+case4_internal_spur,mesh_addendum_reduction,T2D,-19.510144037224315,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:599,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,AE,11.511318723698636,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:601,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,AB,5.607055855511538,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:602,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,AC,6.91532743050753,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:603,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction,AD,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:604,
-case4_internal_spur,mesh_addendum_reduction,rA1,18.94583828005093,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:606,
-case4_internal_spur,mesh_addendum_reduction,rB1,19.87529373125938,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:607,
-case4_internal_spur,mesh_addendum_reduction,rD1,19.11868192049618,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:608,
-case4_internal_spur,mesh_addendum_reduction,rA2,62.10938306119607,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:609,
-case4_internal_spur,mesh_addendum_reduction,rB2,58.94386615107671,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:610,
-case4_internal_spur,mesh_addendum_reduction,rD2,59.87322121410745,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:611,
-case4_internal_spur,mesh_addendum_reduction,HV,0.19092616960437264,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:614,
+case4_internal_spur,mesh_addendum_reduction,rA1,18.79400176423545,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:606,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,rB1,19.591155281156816,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:607,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,rD1,19.67714597416365,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:608,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,rA2,61.72320250980024,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:609,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,rB2,59.6617609358574,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:610,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,rD2,59.56523270099292,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:611,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,HV,0.1076607663240966,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:614,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction,Ram,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:619,
 case4_internal_spur,mesh_addendum_reduction,Rrms,1.4142135623730951,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:620,
 case4_internal_spur,mesh_addendum_reduction,RzS,8.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:621,
-case4_internal_spur,mesh_addendum_reduction,x_diff_from_al,-0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:189,
-case4_internal_spur,mesh_addendum_reduction,x_diff_declared,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:192,
+case4_internal_spur,mesh_addendum_reduction,x_sum_from_al,-0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:189,"renamed, Q26 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,x_sum_declared,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:192,"renamed, Q26 (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction.gear1_w,label,'pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
@@ -546,8 +546,8 @@ case4_internal_spur,mesh_addendum_reduction.gear1_w,d,40.0,mm,axisforge/core/mac
 case4_internal_spur,mesh_addendum_reduction.gear1_w,r,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,db,37.58770483143634,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,rb,18.79385241571817,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
-case4_internal_spur,mesh_addendum_reduction.gear1_w,da,44.999999999999964,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
-case4_internal_spur,mesh_addendum_reduction.gear1_w,ra,22.499999999999982,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case4_internal_spur,mesh_addendum_reduction.gear1_w,da,43.9999999999979,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction.gear1_w,ra,21.99999999999895,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction.gear1_w,df,35.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,rf,17.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,zn,20.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
@@ -557,9 +557,9 @@ case4_internal_spur,mesh_addendum_reduction.gear1_w,al,40.00000000000001,mm,axis
 case4_internal_spur,mesh_addendum_reduction.gear1_w,alphatw,0.34906585039886606,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,dl,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:532,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,rl,20.000000000000004,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:534,working copy (shallow copy + working data)
-case4_internal_spur,mesh_addendum_reduction.gear1_w,alpha_a,0.5821502482585377,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,working copy (shallow copy + working data)
-case4_internal_spur,mesh_addendum_reduction.gear1_w,epslon_a1,0.9367089255810729,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:562,working copy (shallow copy + working data)
-case4_internal_spur,mesh_addendum_reduction.gear1_w,galpha,5.5305757276077605,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case4_internal_spur,mesh_addendum_reduction.gear1_w,alpha_a,0.5466590767387195,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction.gear1_w,epslon_a1,0.7784191516869754,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:562,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction.gear1_w,galpha,4.595991293191109,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction.gear2_w,label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
@@ -595,8 +595,8 @@ case4_internal_spur,mesh_addendum_reduction.gear2_w,pbt,5.904262868187098,mm,axi
 case4_internal_spur,mesh_addendum_reduction.gear2_w,pbn,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:209,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,dv,120.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:211,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,rv,60.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:212,working copy (shallow copy + working data)
-case4_internal_spur,mesh_addendum_reduction.gear2_w,da,115.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
-case4_internal_spur,mesh_addendum_reduction.gear2_w,ra,57.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case4_internal_spur,mesh_addendum_reduction.gear2_w,da,116.0000000000021,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction.gear2_w,ra,58.00000000000105,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction.gear2_w,df,125.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,rf,62.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,k,8.881784197001252e-15,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
@@ -604,17 +604,17 @@ case4_internal_spur,mesh_addendum_reduction.gear2_w,al,40.00000000000001,mm,axis
 case4_internal_spur,mesh_addendum_reduction.gear2_w,alphatw,0.34906585039886606,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,dl,120.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:532,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,rl,60.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:534,working copy (shallow copy + working data)
-case4_internal_spur,mesh_addendum_reduction.gear2_w,alpha_a,0.1975579181241667,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,working copy (shallow copy + working data)
-case4_internal_spur,mesh_addendum_reduction.gear2_w,epslon_a2,-1.564187922223361,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:563,working copy (shallow copy + working data)
-case4_internal_spur,mesh_addendum_reduction.gear2_w,galpha,-9.235376668050119,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case4_internal_spur,mesh_addendum_reduction.gear2_w,alpha_a,0.2367907672690115,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction.gear2_w,epslon_a2,-1.1712431483645782,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:563,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction.gear2_w,galpha,-6.915327430507532,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction,gear1.label,'pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py,reference gear 1
 case4_internal_spur,mesh_addendum_reduction,gear2.label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py,reference gear 2
 case4_internal_spur,mesh_addendum_reduction,validate().len,2,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_addendum_reduction,validate()[0],"'ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0).'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_addendum_reduction,validate()[1],'ring: trimming interference — tooth difference z2-z1=-80 < 2.',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_addendum_reduction,validate_or_raise()!exception,"'ValueError: ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0).\nring: trimming interference — tooth difference z2-z1=-80 < 2.'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:781,"EXCEPTION; traceback tail: File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\gear_meshing\internal_meshing.py"", line 785, in validate_or_raise | raise ValueError(""\n"".join(errors)) | ValueError: ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0). | ring: trimming interference — tooth difference z2-z1=-80 < 2."
-case4_internal_spur,mesh_addendum_reduction,summary(),"'── mesh_addendum_reduction ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 115.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 2.5009\n  εβ    : 0.0000\n  εγ    : 2.5009\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,
-case4_internal_spur,mesh_addendum_reduction,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=2.5009)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,
+case4_internal_spur,mesh_addendum_reduction,summary(),"'── mesh_addendum_reduction ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 116.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 1.9497\n  εβ    : 0.0000\n  εγ    : 1.9497\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_addendum_reduction,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=1.9497)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).Ft",3037.4999999999995,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
 case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).Fr",1105.5595865835899,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
 case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
@@ -638,39 +638,39 @@ case4_internal_spur,mesh_al_imposed_equal_al,x2,0.0,-,axisforge/core/machine_ele
 case4_internal_spur,mesh_al_imposed_equal_al,inv_alphatw,0.014904383867336446,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:178,
 case4_internal_spur,mesh_al_imposed_equal_al,u,-3.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:181,
 case4_internal_spur,mesh_al_imposed_equal_al,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
-case4_internal_spur,mesh_al_imposed_equal_al,epslon_alpha,2.5008968478044395,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:565,
+case4_internal_spur,mesh_al_imposed_equal_al,epslon_alpha,1.9496623000526525,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:565,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:569,
 case4_internal_spur,mesh_al_imposed_equal_al,epslon_beta,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:570,
-case4_internal_spur,mesh_al_imposed_equal_al,epslon_gamma,2.5008968478044395,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:572,
-case4_internal_spur,mesh_al_imposed_equal_al,galpha,-12.595659070395598,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw))
-case4_internal_spur,mesh_al_imposed_equal_al,ReqI,5.130302149885035,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:583,
+case4_internal_spur,mesh_al_imposed_equal_al,epslon_gamma,1.9496623000526525,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:572,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,galpha,11.511318723705122,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q22, Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,ReqI,10.26060429977236,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:583,Q22 (José 2026-10-15)
 case4_internal_spur,mesh_al_imposed_equal_al,T1T2,-13.68080573302676,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:586,
-case4_internal_spur,mesh_al_imposed_equal_al,T1E,12.370978594121175,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:588,
-case4_internal_spur,mesh_al_imposed_equal_al,T2A,-11.285831931490012,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:590,
-case4_internal_spur,mesh_al_imposed_equal_al,T1A,-2.3949738015367483,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:592,
-case4_internal_spur,mesh_al_imposed_equal_al,T1B,6.466715725934076,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:593,
+case4_internal_spur,mesh_al_imposed_equal_al,T1E,11.436394159708046,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:588,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,T2A,-13.605881169032736,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:590,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,T1A,-0.07492456399707592,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:592,"Q04, Q27, Q21, answer 10 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,T1B,5.5321312915209475,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:593,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al,T1C,6.840402866513379,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:594,
-case4_internal_spur,mesh_al_imposed_equal_al,T1D,3.50928906665035,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:595,
-case4_internal_spur,mesh_al_imposed_equal_al,T2E,-26.051784327147935,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:596,
-case4_internal_spur,mesh_al_imposed_equal_al,T2B,-20.14752145896084,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:597,
+case4_internal_spur,mesh_al_imposed_equal_al,T1D,5.829338304190022,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:595,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,T2E,-25.117199892737858,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:596,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,T2B,-19.21293702455076,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:597,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al,T2C,-20.521208599540135,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:598,
-case4_internal_spur,mesh_al_imposed_equal_al,T2D,-17.190094799677112,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:599,
-case4_internal_spur,mesh_al_imposed_equal_al,AE,14.765952395657923,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:601,
-case4_internal_spur,mesh_al_imposed_equal_al,AB,8.861689527470825,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:602,
-case4_internal_spur,mesh_al_imposed_equal_al,AC,9.235376668050128,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:603,
+case4_internal_spur,mesh_al_imposed_equal_al,T2D,-19.510144037219835,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:599,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,AE,11.511318723705122,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:601,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,AB,5.607055855518023,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:602,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,AC,6.915327430511983,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:603,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al,AD,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:604,
-case4_internal_spur,mesh_al_imposed_equal_al,rA1,18.94583828005093,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:606,
-case4_internal_spur,mesh_al_imposed_equal_al,rB1,19.87529373125939,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:607,
-case4_internal_spur,mesh_al_imposed_equal_al,rD1,19.118681920496176,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:608,
-case4_internal_spur,mesh_al_imposed_equal_al,rA2,62.109383061196084,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:609,
-case4_internal_spur,mesh_al_imposed_equal_al,rB2,58.94386615107671,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:610,
-case4_internal_spur,mesh_al_imposed_equal_al,rD2,59.87322121410746,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:611,
-case4_internal_spur,mesh_al_imposed_equal_al,HV,0.19092616960437322,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:614,
+case4_internal_spur,mesh_al_imposed_equal_al,rA1,18.794001764235468,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:606,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,rB1,19.591155281157384,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:607,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,rD1,19.67714597416233,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:608,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,rA2,61.723202509801055,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:609,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,rB2,59.66176093585594,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:610,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,rD2,59.56523270099357,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:611,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,HV,0.10766076632422289,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:614,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al,Ram,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:619,
 case4_internal_spur,mesh_al_imposed_equal_al,Rrms,1.4142135623730951,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:620,
 case4_internal_spur,mesh_al_imposed_equal_al,RzS,8.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:621,
-case4_internal_spur,mesh_al_imposed_equal_al,x_diff_from_al,-0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:189,
-case4_internal_spur,mesh_al_imposed_equal_al,x_diff_declared,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:192,
+case4_internal_spur,mesh_al_imposed_equal_al,x_sum_from_al,-0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:189,"renamed, Q26 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,x_sum_declared,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:192,"renamed, Q26 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,label,'pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
@@ -702,8 +702,8 @@ case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,d,40.0,mm,axisforge/core/ma
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,r,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,db,37.58770483143634,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,rb,18.79385241571817,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,da,45.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,ra,22.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,da,44.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,ra,22.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,df,35.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,rf,17.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,zn,20.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
@@ -713,9 +713,9 @@ case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,al,40.00000000000001,mm,axi
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,alphatw,0.3490658503988661,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,dl,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:532,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,rl,20.000000000000004,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:534,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,alpha_a,0.5821502482585388,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,epslon_a1,0.9367089255810779,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:562,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,galpha,5.530575727607791,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,alpha_a,0.5466590767387979,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,epslon_a1,0.7784191516873186,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:562,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,galpha,4.595991293193137,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
@@ -751,8 +751,8 @@ case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,pbt,5.904262868187098,mm,ax
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,pbn,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:209,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,dv,120.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:211,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,rv,60.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:212,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,da,115.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,ra,57.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,da,116.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,ra,58.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,df,125.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,rf,62.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
@@ -760,17 +760,17 @@ case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,al,40.00000000000001,mm,axi
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,alphatw,0.3490658503988661,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,dl,120.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:532,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,rl,60.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:534,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,alpha_a,0.1975579181241667,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,epslon_a2,-1.5641879222233617,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:563,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,galpha,-9.235376668050122,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,alpha_a,0.23679076726893622,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,epslon_a2,-1.171243148365334,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:563,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,galpha,-6.915327430511995,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al,gear1.label,'pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py,reference gear 1
 case4_internal_spur,mesh_al_imposed_equal_al,gear2.label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py,reference gear 2
 case4_internal_spur,mesh_al_imposed_equal_al,validate().len,2,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_al_imposed_equal_al,validate()[0],"'ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0).'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_al_imposed_equal_al,validate()[1],'ring: trimming interference — tooth difference z2-z1=-80 < 2.',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_al_imposed_equal_al,validate_or_raise()!exception,"'ValueError: ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0).\nring: trimming interference — tooth difference z2-z1=-80 < 2.'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:781,"EXCEPTION; traceback tail: File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\gear_meshing\internal_meshing.py"", line 785, in validate_or_raise | raise ValueError(""\n"".join(errors)) | ValueError: ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0). | ring: trimming interference — tooth difference z2-z1=-80 < 2."
-case4_internal_spur,mesh_al_imposed_equal_al,summary(),"'── mesh_al_imposed_equal_al ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 115.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 2.5009\n  εβ    : 0.0000\n  εγ    : 2.5009\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,
-case4_internal_spur,mesh_al_imposed_equal_al,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=2.5009)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,
+case4_internal_spur,mesh_al_imposed_equal_al,summary(),"'── mesh_al_imposed_equal_al ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 116.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 1.9497\n  εβ    : 0.0000\n  εγ    : 1.9497\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_al,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=1.9497)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).Ft",3037.4999999999995,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
 case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).Fr",1105.55958658359,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
 case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
@@ -793,39 +793,39 @@ case4_internal_spur,mesh_al_imposed_equal_a,x2,0.0,-,axisforge/core/machine_elem
 case4_internal_spur,mesh_al_imposed_equal_a,inv_alphatw,0.01490438386733639,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:178,
 case4_internal_spur,mesh_al_imposed_equal_a,u,-3.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:181,
 case4_internal_spur,mesh_al_imposed_equal_a,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
-case4_internal_spur,mesh_al_imposed_equal_a,epslon_alpha,2.5008968478044347,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:565,
+case4_internal_spur,mesh_al_imposed_equal_a,epslon_alpha,1.9496623000521311,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:565,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:569,
 case4_internal_spur,mesh_al_imposed_equal_a,epslon_beta,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:570,
-case4_internal_spur,mesh_al_imposed_equal_a,epslon_gamma,2.5008968478044347,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:572,
-case4_internal_spur,mesh_al_imposed_equal_a,galpha,-12.595659070395568,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw))
-case4_internal_spur,mesh_al_imposed_equal_a,ReqI,5.130302149885024,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:583,
+case4_internal_spur,mesh_al_imposed_equal_a,epslon_gamma,1.9496623000521311,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:572,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,galpha,11.51131872370204,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q22, Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,ReqI,10.260604299770048,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:583,Q22 (José 2026-10-15)
 case4_internal_spur,mesh_al_imposed_equal_a,T1T2,-13.68080573302673,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:586,
-case4_internal_spur,mesh_al_imposed_equal_a,T1E,12.370978594121175,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:588,
-case4_internal_spur,mesh_al_imposed_equal_a,T2A,-11.285831931490012,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:590,
-case4_internal_spur,mesh_al_imposed_equal_a,T1A,-2.394973801536718,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:592,
-case4_internal_spur,mesh_al_imposed_equal_a,T1B,6.466715725934076,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:593,
+case4_internal_spur,mesh_al_imposed_equal_a,T1E,11.436394159708046,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:588,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,T2A,-13.605881169032736,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:590,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,T1A,-0.07492456399399394,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:592,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,T1B,5.5321312915209475,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:593,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a,T1C,6.840402866513366,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:594,
-case4_internal_spur,mesh_al_imposed_equal_a,T1D,3.50928906665038,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:595,
-case4_internal_spur,mesh_al_imposed_equal_a,T2E,-26.051784327147907,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:596,
-case4_internal_spur,mesh_al_imposed_equal_a,T2B,-20.14752145896081,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:597,
+case4_internal_spur,mesh_al_imposed_equal_a,T1D,5.829338304193104,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:595,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,T2E,-25.117199892734774,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:596,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,T2B,-19.212937024547678,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:597,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a,T2C,-20.521208599540095,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:598,
-case4_internal_spur,mesh_al_imposed_equal_a,T2D,-17.190094799677112,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:599,
-case4_internal_spur,mesh_al_imposed_equal_a,AE,14.765952395657893,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:601,
-case4_internal_spur,mesh_al_imposed_equal_a,AB,8.861689527470794,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:602,
-case4_internal_spur,mesh_al_imposed_equal_a,AC,9.235376668050083,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:603,
+case4_internal_spur,mesh_al_imposed_equal_a,T2D,-19.510144037219835,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:599,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,AE,11.51131872370204,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:601,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,AB,5.6070558555149415,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:602,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,AC,6.91532743050736,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:603,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a,AD,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:604,
-case4_internal_spur,mesh_al_imposed_equal_a,rA1,18.945838280050925,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:606,
-case4_internal_spur,mesh_al_imposed_equal_a,rB1,19.87529373125939,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:607,
-case4_internal_spur,mesh_al_imposed_equal_a,rD1,19.118681920496183,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:608,
-case4_internal_spur,mesh_al_imposed_equal_a,rA2,62.10938306119608,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:609,
-case4_internal_spur,mesh_al_imposed_equal_a,rB2,58.94386615107671,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:610,
-case4_internal_spur,mesh_al_imposed_equal_a,rD2,59.87322121410745,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:611,
-case4_internal_spur,mesh_al_imposed_equal_a,HV,0.1909261696043719,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:614,
+case4_internal_spur,mesh_al_imposed_equal_a,rA1,18.794001764235453,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:606,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,rB1,19.591155281157384,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:607,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,rD1,19.677145974163242,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:608,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,rA2,61.7232025097998,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:609,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,rB2,59.66176093585594,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:610,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,rD2,59.565232700992574,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:611,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,HV,0.10766076632412802,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:614,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a,Ram,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:619,
 case4_internal_spur,mesh_al_imposed_equal_a,Rrms,1.4142135623730951,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:620,
 case4_internal_spur,mesh_al_imposed_equal_a,RzS,8.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:621,
-case4_internal_spur,mesh_al_imposed_equal_a,x_diff_from_al,6.100625381432462e-15,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:189,
-case4_internal_spur,mesh_al_imposed_equal_a,x_diff_declared,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:192,
+case4_internal_spur,mesh_al_imposed_equal_a,x_sum_from_al,6.100625381432462e-15,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:189,"renamed, Q26 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,x_sum_declared,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:192,"renamed, Q26 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,label,'pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
@@ -857,8 +857,8 @@ case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,d,40.0,mm,axisforge/core/mac
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,r,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,db,37.58770483143634,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,rb,18.79385241571817,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,da,45.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,ra,22.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,da,44.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,ra,22.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,df,35.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,rf,17.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,zn,20.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
@@ -868,9 +868,9 @@ case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,al,40.0,mm,axisforge/core/ma
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,alphatw,0.34906585039886545,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,dl,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:532,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,rl,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:534,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,alpha_a,0.5821502482585388,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,epslon_a1,0.9367089255810802,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:562,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,galpha,5.530575727607805,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,alpha_a,0.5466590767387979,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,epslon_a1,0.7784191516875797,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:562,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,galpha,4.595991293194677,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
@@ -906,8 +906,8 @@ case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,pbt,5.904262868187098,mm,axi
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,pbn,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:209,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,dv,120.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:211,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,rv,60.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:212,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,da,115.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,ra,57.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,working copy (shallow copy + working data)
+case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,da,116.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,ra,58.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,df,125.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,rf,62.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
@@ -915,17 +915,17 @@ case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,al,40.0,mm,axisforge/core/ma
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,alphatw,0.34906585039886545,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,dl,119.99999999999999,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:532,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,rl,59.99999999999999,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:534,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,alpha_a,0.1975579181241667,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,epslon_a2,-1.5641879222233546,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:563,working copy (shallow copy + working data)
-case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,galpha,-9.235376668050082,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,pair: path length; working gear: rb*(tan(alpha_a)-tan(alphatw)); working copy (shallow copy + working data)
+case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,alpha_a,0.23679076726893622,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,epslon_a2,-1.1712431483645513,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:563,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,galpha,-6.915327430507372,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a,gear1.label,'pinion',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py,reference gear 1
 case4_internal_spur,mesh_al_imposed_equal_a,gear2.label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py,reference gear 2
 case4_internal_spur,mesh_al_imposed_equal_a,validate().len,2,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_al_imposed_equal_a,validate()[0],"'ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0).'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_al_imposed_equal_a,validate()[1],'ring: trimming interference — tooth difference z2-z1=-80 < 2.',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,
 case4_internal_spur,mesh_al_imposed_equal_a,validate_or_raise()!exception,"'ValueError: ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0).\nring: trimming interference — tooth difference z2-z1=-80 < 2.'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:781,"EXCEPTION; traceback tail: File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\gear_meshing\internal_meshing.py"", line 785, in validate_or_raise | raise ValueError(""\n"".join(errors)) | ValueError: ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0). | ring: trimming interference — tooth difference z2-z1=-80 < 2."
-case4_internal_spur,mesh_al_imposed_equal_a,summary(),"'── mesh_al_imposed_equal_a ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 115.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 2.5009\n  εβ    : 0.0000\n  εγ    : 2.5009\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,
-case4_internal_spur,mesh_al_imposed_equal_a,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=2.5009)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,
+case4_internal_spur,mesh_al_imposed_equal_a,summary(),"'── mesh_al_imposed_equal_a ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 116.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 1.9497\n  εβ    : 0.0000\n  εγ    : 1.9497\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,"Q04, Q27 (José 2026-10-15)"
+case4_internal_spur,mesh_al_imposed_equal_a,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=1.9497)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).Ft",3037.5,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
 case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).Fr",1105.559586583588,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
 case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,

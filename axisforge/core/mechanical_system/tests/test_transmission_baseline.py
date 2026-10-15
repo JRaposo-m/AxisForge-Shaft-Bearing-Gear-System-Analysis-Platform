@@ -31,9 +31,10 @@ def test_baseline_rows(case, obj):
 
 
 def test_rows_of_the_replaced_classes_are_counted():
-    """Q46: of the 2232 rows of cases 7a-7f, 12 are text that names a replaced class (compared against
-    the new text) and 18 are state of those classes written back as recorded; with the 12 `driver` /
-    `driven` rows of the six recorded pairs (Q50) that leaves 2190 rows computed by the code."""
+    """Q46: of the 1488 rows of cases 7a, 7b, 7e, 7f (7c, 7d deleted: Q03, answer 7), 8 are text that
+    names a replaced class (compared against the new text) and 12 are state of those classes written
+    back as recorded; with the 8 `driver` / `driven` rows of the four recorded pairs (Q50) that leaves
+    1460 rows computed by the code."""
     got = bc.run_baseline()[0]
     rows = [(c, i, obj, name, text) for c in CASES for i, (obj, name, text) in enumerate(bc.baseline_rows(c))]
     renamed = 0
@@ -48,7 +49,7 @@ def test_rows_of_the_replaced_classes_are_counted():
         assert len(hits) == count and set(hits) == {bc.fmt(value)}
         echoed += count
     declared = sum(1 for _, _, obj, name, _ in rows if name in bc.ECHOED_ROWS[0] and obj != "link")
-    assert (len(rows), len(rows) - renamed - echoed - declared, renamed, echoed, declared) == (2232, 2190, 12, 18, 12)
+    assert (len(rows), len(rows) - renamed - echoed - declared, renamed, echoed, declared) == (1488, 1460, 8, 12, 8)
 
 
 Q03 = "Q03: row 1 / X1, gear order and driver"
@@ -57,7 +58,7 @@ Q05 = "Q05: row 17 / X3"
 
 def _question(c):
     """Question id of a case-7 check that FAILS today (None: the check passes today)."""
-    wheel_source = c.case[5] in "cdef"      # case7c..7f: the wheel shaft receives the power
+    wheel_source = c.case[5] in "ef"      # case7e, 7f: the wheel shaft receives the power
     # with the wheel as source the geometric radius of the wheel differs from the one the code uses
     wrong_radius = wheel_source and "geometric radii" in c.desc
     if c.id in ("7.b", "7.b2"):

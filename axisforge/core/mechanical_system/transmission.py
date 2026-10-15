@@ -330,7 +330,7 @@ class PairStage:
         ``(y_a + a_w cos(phi), z_a + a_w sin(phi))`` [mm]. Its speed is
         ``n_a abs(z_a / z_b)`` with the tooth numbers of the gears on the two shafts
         (ISO_21771_2007, 5.2.2, Eq. (53)). Its torque and sense of rotation are T_out and
-        rotation_dir_out of ``CylindricalFamily.forces`` (Q03: T_out = T u with u = max/min for
+        rotation_dir_out of ``CylindricalFamily.forces`` (Q03: T_out = T u with u = z2 / z1 for
         an external pair, whichever gear is on ``shaft_a``).
 
         The ``MeshForces`` is the same mesh under D-0010: the torque ``rot_in T_in_Nm`` is put
@@ -351,7 +351,7 @@ class PairStage:
           power).
         """
         pair = self.pair
-        # QUESTION(Q03): forces() takes this torque on the gear ITS OWN rule names (external pair: gear 1, the smaller working diameter, whatever the driver; internal pair: the declared driver), which is not necessarily the gear on shaft_a.
+        # QUESTION(Q03): forces() takes this torque on the gear ITS OWN rule names (external pair: gear 1, the pinion, whatever the driver; internal pair: the declared driver), which is not necessarily the gear on shaft_a.
         F = pair.family.forces(pair, T_in_Nm, self.phi_deg, rot_in, driver=self.driver)
 
         # place shaft_b relative to shaft_a along the line of centres [mm] (phi from +Y toward +Z)
@@ -365,7 +365,7 @@ class PairStage:
 
         # no slip at the pitch point: n_b / n_a = z_a / z_b, a magnitude (ISO_21771_2007 Eq. (53))
         n_out_rpm = n_in_rpm * abs(self.gear_a.gear.z / self.gear_b.gear.z)
-        # QUESTION(Q03): T_out = T u as returned by forces() becomes the torque entering shaft_b (cases 7c-7f: 91.125 N m where the tooth numbers give 40.5 N m).
+        # QUESTION(Q03): T_out = T u as returned by forces() becomes the torque entering shaft_b (cases 7e, 7f: 91.125 N m where the tooth numbers give 40.5 N m).
         T_out_Nm, rot_out = F["T_out"], F["rotation_dir_out"]
 
         # the same mesh under D-0010 (new numbers; not used for the loads). The shaft applies to the
@@ -433,7 +433,7 @@ class ResolvedTransmission:
         and gear elements with the user's shafts.
     torque_Nm : tuple of float
         Torque entering each shaft [N m]: P / omega on the source shaft, the output torque of
-        its stage on every other shaft. It inherits Q03 (cases 7c-7f: 91.125 N m where the
+        its stage on every other shaft. It inherits Q03 (cases 7e, 7f: 91.125 N m where the
         tooth numbers give 40.5 N m) and is negative after an internal stage (Q47).
     rotation : tuple
         Sense of rotation of each shaft about +X, +1 or -1 [-]. The value of the source shaft
@@ -443,8 +443,8 @@ class ResolvedTransmission:
         Speed of each shaft [rpm], a magnitude: the speed given on the source shaft, then
         n z_a / z_b down the path with the tooth numbers of the gears on the shafts
         (ISO_21771_2007, 5.2.2, Eq. (53)). A kinematic value: it does NOT inherit Q03, while
-        ``torque_Nm`` does (case 7c: 2175 / 1450 rpm), which is why the power of the train does
-        not close in cases 7c-7f.
+        ``torque_Nm`` does (case 7e: 2175 / 1450 rpm), which is why the power of the train does
+        not close in cases 7e, 7f.
     meshes : tuple of MeshForces
         The meshes of the stages, in path order, under D-0010 (new numbers, NOT what the stored
         loads are built from: see ``PairStage.resolve``). The sign of ``on_1[2]``, ``on_2[2]``
@@ -454,7 +454,7 @@ class ResolvedTransmission:
         never raise. Per mesh: action = reaction, torque of each gear = moment of its mesh
         force, power of the mesh. Per shaft: the torque loads sum to zero. For the train: the
         power leaving the end shafts equals the power entering. Several fail on today's loads
-        (Q03, Q05, Q21 for a helical internal pair, Q47, and Q16 for a shaft with no sink).
+        (Q03, Q05, Q47, and Q16 for a shaft with no sink).
         They are NECESSARY conditions, not sufficient: a passing check does not make a load
         right. Case 7a passes "torque of gear = moment" with the stored torque AND the stored
         F_t of the pinion both reversed against D-0010; the radial part of "action = reaction"

@@ -820,10 +820,9 @@ class PlanetaryGearTrainMeshing:
         --------
         Ft uses the reference diameter (ISO_6336-1_2019, 4.2.2, Formula (1)) while
         ``CylindricalFamily.forces`` uses the working pitch radius.
-        When z_sun > z_planet, the force call on ``meshing_12`` with T_mesh_sun takes the
-        working radius of the planet for the sun (the pair object gives gear1
-        the smaller working diameter, see ``CylindricalFamily.assemble_pair``), so its
-        Ft and T_out differ from Ft here and from T_mesh_planet.
+        A train with z_sun > z_planet cannot be built: ``meshing_12`` has the sun as gear 1
+        and ``CylindricalFamily.assemble_pair`` refuses a gear 1 larger than gear 2 (Q03,
+        José 2026-10-15).
 
         References
         ----------

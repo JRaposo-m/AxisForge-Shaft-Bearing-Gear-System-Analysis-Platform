@@ -38,104 +38,9 @@ def _kind(z) -> str:
 # modules this file replaces; each is reached only through ``_legacy(name, z)``. An entry is
 # deleted (and its baseline rows become exception rows) when José rules its question.
 # ==================================================================================================
-def _base_cylinder_external(mn, z, alpha, beta, d):
-    alphat = np.arctan(np.tan(alpha) / np.cos(beta))      # ISO_21771_2007, 4.3.5, Eq. (13)
-    betab = np.arcsin(np.sin(beta) * np.cos(alpha))       # ISO_21771_2007, 4.3.3, Eq. (5)-(7)
-    db = d * np.cos(alphat)                               # ISO_21771_2007, 4.3.10, Eq. (19)-(20)
-    return alphat, betab, db
-
-
-def _base_cylinder_internal(mn, z, alpha, beta, d):
-    # QUESTION(Q21): I1 / row 3, entry `base_cylinder`: not the rule of ISO_21771_2007 Eq. (5)-(7), (13), (19) above.
-    betab = np.arcsin(np.sin(beta) * np.cos(alpha))       # product of Eq. (5)-(7): beta_b > beta
-    db = abs(z) * mn * np.cos(alpha) / np.cos(betab)
-    alphat = np.arccos(db / d)
-    return alphat, betab, db
-
-
 def _virtual_teeth_external(mn, z, beta):
     zn = z / (np.cos(beta) ** 3)    # teeth of the spur gear equivalent in the normal section
     return {"zn": zn, "de": mn * zn}
-
-
-def _alphatw_from_x_sum_external(gear1, gear2, x_sum):
-    alpha  = gear1.alpha     # normal pressure angle
-    alphat = gear1.alphat    # transverse pressure angle
-    z_sum  = gear1.z + gear2.z
-    inv_alphatw = (
-        np.tan(alphat) - alphat
-        + 2 * np.tan(alpha) * x_sum / z_sum
-    )
-    # inverse involute: no method is printed (ISO_21771_2007, Eq. (18) is the definition only).
-    # Bracket 1e-6 .. 0.7 rad (0.7 rad = 40.1 deg bounds the working pressure angle).
-    alphatw = optimize.brentq(_inv_residual, 1e-6, 0.7, args=(inv_alphatw,))
-    al = (
-        gear1.db + gear2.db
-    ) / (2 * np.cos(alphatw))
-    return alphatw, al
-
-
-def _alphatw_from_x_sum_internal(gear1, gear2, x_sum):
-    # QUESTION(Q21): I1, entry `alphatw_from_x_sum`: alpha_t and beta of the ring, and another expression of a_w than the external pair.
-    alphat = gear2.alphat    # of the RING (differs from that of gear 1 when beta != 0: Q21)
-    beta   = gear2.beta
-    z_sum  = gear2.z + gear1.z   # signed: -(abs(z2) - z1)
-    alpha  = gear1.alpha
-    inv_alphatw = (
-        np.tan(alphat) - alphat
-        + 2 * np.tan(alpha) * x_sum / z_sum
-    )
-    alphatw = optimize.brentq(_inv_residual, 1e-6, 0.7, args=(inv_alphatw,))
-    al = gear2.mn * np.cos(alphat) * abs(z_sum) / (2 * np.cos(beta) * np.cos(alphatw))
-    return alphatw, al
-
-
-def _alphatw_from_al_external(gear1, gear2, a, al):
-    # QUESTION(Q21): I1, entry `alphatw_from_al`: alpha_t of gear 1 (the internal entry below takes that of the ring).
-    return np.arccos(a * np.cos(gear1.alphat) / al), None   # no backlash value for an external pair
-
-
-def _alphatw_from_al_internal(gear1, gear2, a, al):
-    # QUESTION(Q21): I1, entry `alphatw_from_al`: alpha_t and beta of the ring.
-    z_sum = gear2.z + gear1.z
-    alphatw = np.arccos(abs(z_sum) * gear2.mn * np.cos(gear2.alphat) / (
-        2 * al * np.cos(gear2.beta)))
-    inv_alphat = np.tan(gear2.alphat) - gear2.alphat
-    inv_alphatw = np.tan(alphatw) - alphatw
-    sum_x = (gear1.z + gear2.z) * (inv_alphatw - inv_alphat) / (2 * np.tan(gear1.alpha))
-    # normal backlash [mm] from the profile shift left over by the imposed centre distance
-    # QUESTION(Q57): jbn = (x1 + x2 - sum_x) 2 mn sin(alpha_n); ISO_21771_2007, 5.3, Eq. (63) as transcribed gives (sum_x - (x1 + x2)) 2 mn sin(alpha_n), the opposite sign (case 5 with al x 1.002: +0.0529 mm here).
-    jbn = (gear1.x + gear2.x - sum_x) * (2 * gear1.mn * np.sin(gear1.alpha))
-    return alphatw, jbn
-
-
-def _working_pitch_diameters_external(al, u, db1, db2, alphatw):
-    return 2 * al / (u + 1), 2 * u * al / (u + 1)   # by position: gear 1 always gets the smaller one
-
-
-def _working_pitch_diameters_internal(al, u, db1, db2, alphatw):
-    return db1 / np.cos(alphatw), db2 / np.cos(alphatw)   # ISO_21771_2007, Eq. (56)-(57), third form
-
-
-def _galpha_internal(galpha1, galpha2, da1, db1, da2, db2, z2, al, alphatw):
-    # QUESTION(Q22): I2 / row 45, entry `galpha`: the sign factor is on the tip term of the ring only, not on 2 a_w sin(alpha_wt).
-    return 1/2 * ((da1**2 - db1**2)**(1/2) + z2/abs(z2) * ((da2**2 - db2**2)**(1/2) - 2 * al * np.sin(alphatw)))
-
-
-def _profile_shift_check_external(gear1, gear2, inv_alphatw):
-    # QUESTION(Q26): I6, entry `profile_shift_check`: the sum x1 + x2 with z1 + z2 (the internal entry below uses differences).
-    # inv_alphatw = inv_alphat + 2*tan(alpha)*(x1+x2)/(z1+z2)   (ISO_21771_2007, 5.3, Eq. (62))
-    z_sum = gear1.z + gear2.z
-    inv_alphat = np.tan(gear1.alphat) - gear1.alphat
-    return "x1+x2", (inv_alphatw - inv_alphat) * z_sum / (2 * np.tan(gear1.alpha)), gear1.x + gear2.x
-
-
-def _profile_shift_check_internal(gear1, gear2, inv_alphatw):
-    # QUESTION(Q26): I6, entry `profile_shift_check`.
-    # compares a DIFFERENCE built with z2 - z1, while the centre distance comes from x1 + x2 and z2 + z1
-    z_diff = gear2.z - gear1.z
-    inv_alphat = np.tan(gear1.alphat) - gear1.alphat
-    return "x2-x1", (inv_alphatw - inv_alphat) * z_diff / (2 * np.tan(gear1.alpha)), gear2.x - gear1.x
 
 
 def _force_input_external(pair, driver):
@@ -303,30 +208,12 @@ def _summary_head_internal(pair):
 
 
 _LEGACY = {
-    # QUESTION(Q21): I1 / row 3. A helical ring gets beta_b = arcsin(sin beta / cos alpha_n), d_b from it and alpha_t = arccos(d_b/d); ISO_21771_2007 Eq. (5)-(7), (13), (19) print one rule for both kinds (the external one).
-    "base_cylinder": {"external": _base_cylinder_external, "internal": _base_cylinder_internal},
     # QUESTION(Q25): I5 / row 5. A ring has no virtual number of teeth, so equalise_gs raises AttributeError for an internal pair (Q13).
     "virtual_teeth": {"external": _virtual_teeth_external, "internal": lambda mn, z, beta: {}},
     # QUESTION(Q55): the helix-angle range is checked for an external gear only; a ring accepts any beta.
     "beta_range": {"external": _beta_range_external, "internal": lambda data, tag: []},
     # QUESTION(Q55): limits of one gear differ by kind: undercut (external only) against da < d and da > db (ring only).
     "gear_limits": {"external": _gear_limits_external, "internal": _gear_limits_internal},
-    # QUESTION(Q21): I1. The internal pair takes alpha_t and beta of the RING (the external pair those of gear 1) and another expression of a_w; the two agree at beta = 0.
-    "alphatw_from_x_sum": {"external": _alphatw_from_x_sum_external, "internal": _alphatw_from_x_sum_internal},
-    # QUESTION(Q21): I1, same choice of gear with an imposed centre distance; the internal pair also stores a backlash jbn (Q57).
-    "alphatw_from_al": {"external": _alphatw_from_al_external, "internal": _alphatw_from_al_internal},
-    # QUESTION(Q03): row 1 / X1. External u = max/min >= 1 whatever the order of the gears; ISO_21771_2007 Eq. (52) is u = z2/z1, signed (what the internal pair does).
-    "u": {"external": lambda z1, z2: max(z1, z2) / min(z1, z2), "internal": lambda z1, z2: z2 / z1},
-    # QUESTION(Q03): row 1 / X1. External working pitch diameters by position (gear 1 the smaller); under d_b/cos(alpha_wt) they are exchanged when z1 > z2 (cases 3b, 3c).
-    "working_pitch_diameters": {"external": _working_pitch_diameters_external,
-                                "internal": _working_pitch_diameters_internal},
-    # QUESTION(Q23): I3. Factor of the tip alteration k, and the share of k taken by gear 2: (z1+z2)/2 on both gears (external) against (z2-z1)/2 on gear 1 only (internal). No library source for either.
-    "tip_alteration": {"external": lambda z1, z2: ((z1 + z2) / 2.0, 1.0),
-                       "internal": lambda z1, z2: ((z2 - z1) / 2.0, 0.0)},
-    # QUESTION(Q22): I2 / row 45. Internal galpha has an unsigned 2 a_w sin(alpha_wt) term (negative result); ISO_21771_2007 Eq. (77) puts the sign factor on the whole bracket (= the stored AE).
-    "galpha": {"external": lambda galpha1, galpha2, *_: galpha1 + galpha2, "internal": _galpha_internal},
-    # QUESTION(Q26): I6. The internal check compares x2 - x1 with a value built on z2 - z1, so it reports an al that the family itself derived (case 5).
-    "profile_shift_check": {"external": _profile_shift_check_external, "internal": _profile_shift_check_internal},
     # QUESTION(Q03): row 1 / X1. The external pair ignores the driver and takes the torque on gear 1; the internal pair takes it on the driver.
     "force_input": {"external": _force_input_external, "internal": _force_input_internal},
     # QUESTION(Q24): I4 / row 4. Interference tests with no library source; trimming is always true for z2 < 0 and trochoid fires for most pairs, so validate_or_raise() raises for every internal pair.
@@ -412,7 +299,7 @@ def _henriot_shifts(gear1, gear2, a):
 
     def equation_x2(x2_v):
         inv_aw = inv_alphat + 2.0 * np.tan(alpha) * (x1 + x2_v) / (z1 + z2)
-        alphatw_v = optimize.brentq(_inv_residual, 1e-6, 0.7, args=(inv_aw,))
+        alphatw_v = optimize.brentq(_inv_residual, 1e-6, 1.5, args=(inv_aw,))   # bracket of every inverse involute (José, 2026-10-15)
         al_v      = a * np.cos(alphat) / np.cos(alphatw_v)
         return (_gs1B(ra2 + x2_v * mn, rb2, al_v, alphatw_v)
               - _gs2A(ra1 + x1  * mn, rb1, al_v, alphatw_v))
@@ -612,14 +499,15 @@ class CylindricalFamily(GearFamily):
             pn, pt : normal and transverse pitch [mm] (4.4.2, Eq. (24), (23)).
             px, pz : axial pitch and lead [mm]; infinite for beta = 0 (4.4, Eq. (27); 4.3.2, Eq. (4)).
             d, r : reference diameter and radius [mm] (4.2.4, Eq. (1), with abs(z)).
-            alphat : transverse pressure angle [rad] (4.3.5, Eq. (13); by kind, Q21).
-            betab : base helix angle [rad] (4.3.3, Eq. (5)-(7); by kind, Q21).
-            db, rb : base diameter and radius [mm] (4.3.10, Eq. (19)-(20); by kind, Q21).
+            alphat : transverse pressure angle [rad] (4.3.5, Eq. (13)).
+            betab : base helix angle, sin(beta_b) = sin(beta) cos(alpha_n) [rad] (4.3.3, Eq. (5)-(7)).
+            db, rb : base diameter and radius [mm] (4.3.10, Eq. (19)-(20)).
             tau : angular pitch, 2 pi / abs(z) [rad] (4.4, Eq. (21)).
             rhoF : root fillet radius of the basic rack, rfP mn [mm] (ISO_53_1998, Table 2, times mn).
             pb, pbt : normal and transverse base pitch [mm] (4.4.5, Eq. (29), (28)).
             dv, rv : diameter and radius of the V-circle, d + 2 (z/abs(z)) x mn [mm] (4.5.1, Eq. (32)).
-            da, ra : tip diameter and radius [mm] (4.5.3, Eq. (33), PLUS the clearance cP: Q04).
+            da, ra : tip diameter and radius, d + 2 (z/abs(z)) mn (haP + x) [mm] (4.5.3, Eq. (33)
+            with k = 0; no clearance term: cP is in the root only).
             df, rf : root diameter and radius [mm] (4.5.4, Eq. (34)).
             zn, de : virtual number of teeth z / cos(beta)**3 [-] and mn zn [mm]; external gear
             only (Q25). ISO_6336-1_2019, 9.3.1, Formula (81) (unchecked). ``de`` is not the d_e
@@ -634,15 +522,9 @@ class CylindricalFamily(GearFamily):
         -----
         The factor z/abs(z) of the standard (-1 for an internal gear) puts the tip inside and
         the root outside the reference circle of a ring. ``da`` carries no tip alteration k: the
-        working tip diameters with k are pair quantities (``assemble_pair``).
-
-        Warnings
-        --------
-        - Q04 / Q27: da = d + 2 (z/abs(z)) mn (haP + cP + x). Eq. (33) has no clearance term, so
-          the teeth are longer than the standard ones by cP mn and a pair at its reference centre
-          distance has no bottom clearance.
-        - Q21: for a helical ring the base helix angle is larger than the reference helix angle
-          and alphat, db, pbt differ from those of the external gear it meshes with.
+        working tip diameters with k are pair quantities (``assemble_pair``). The base cylinder
+        follows one rule for both kinds, so a ring and the pinion it meshes with have the same
+        alphat, betab and pbt (the condition of clause 5 for two gears in mesh).
 
         References
         ----------
@@ -665,11 +547,12 @@ class CylindricalFamily(GearFamily):
         px = np.pi * mx
 
         d = mt * abs(z)
-        alphat, betab, db = _legacy("base_cylinder", z)(mn, z, alpha, beta, d)
+        alphat = np.arctan(np.tan(alpha) / np.cos(beta))     # ISO_21771_2007, 4.3.5, Eq. (13)
+        betab = np.arcsin(np.sin(beta) * np.cos(alpha))      # ISO_21771_2007, 4.3.3, Eq. (5)-(7)
+        db = d * np.cos(alphat)                              # ISO_21771_2007, 4.3.10, Eq. (19)-(20)
 
-        # QUESTION(Q04): row 2 / X2. The tip carries the clearance cP; ISO_21771_2007, 4.5.3, Eq. (33) is d + 2 (z/|z|) (x mn + haP mn + k mn), no clearance term.
-        # QUESTION(Q27): I7. Same for a ring (case 4: tip 115 mm against 116 mm), which puts the start of contact 2.39 mm beyond the base-tangent point instead of 0.07 mm.
-        da = d + 2 * mn * s * (data.haP + data.cP + x)
+        # tip: addendum haP mn (no clearance: cP belongs to the dedendum hfP of the root, Eq. (34))
+        da = d + 2 * mn * s * (data.haP + x)                 # ISO_21771_2007, 4.5.3, Eq. (33), k = 0
         df = d + 2 * mn * s * (x - hfP)
         dv = d + 2 * s * x * mn
 
@@ -732,20 +615,23 @@ class CylindricalFamily(GearFamily):
         Parameters
         ----------
         gear1 : Gear
-            External gear (the pinion in the formulas).
+            The pinion: external, abs(z1) <= abs(z2) (indices of ISO_21771_2007: 1 = pinion,
+            2 = wheel).
         gear2 : Gear
-            Mating gear, external or internal (z < 0); same module, normal pressure angle and
-            helix angle as ``gear1``.
+            The wheel, external, or the ring, internal (z < 0); same module, normal pressure angle
+            and helix angle as ``gear1``.
         label : str, optional
             Name used in the summary.
         al : float or None, optional
-            Working centre distance a_w [mm]. None: derived from x1 + x2 (zero backlash). A
-            value: imposed; the working pressure angle is back-calculated.
+            Working centre distance a_w [mm], positive. None: derived from x1 + x2 (zero
+            backlash). A value: imposed; the working pressure angle is back-calculated and the
+            backlash ``jbn`` that it leaves is stored.
         equalise_gs : bool, optional
             If True and ``al`` is None, the profile shifts are first taken from
             ``correction_for_gs_equilibrium`` (Q13: it raises for every pair of the baseline).
         addendum_reduction : bool, optional
-            Apply the tip alteration k to the working tip diameters. Default False (k = 0).
+            Apply the tip alteration k to the working tip diameters of both gears. Default False
+            (k = 0).
 
         Returns
         -------
@@ -753,30 +639,33 @@ class CylindricalFamily(GearFamily):
             ``(gear1, gear2, attributes)``; the attributes set on the ``GearPair`` are:
 
             label; al_imposed : whether ``al`` was given.
-            a : reference centre distance, (d2 + (z2/abs(z2)) d1) / 2 [mm] (not printed in
-            ISO 21771 clause 5).
+            a : reference centre distance, (d2 + (z2/abs(z2)) d1) / 2 [mm], positive (not printed
+            in ISO 21771 clause 5).
             al : working centre distance a_w [mm], positive for both kinds (5.2.5, Eq. (58)).
             alphatw, inv_alphatw : transverse working pressure angle alpha_wt and its involute
-            [rad] (5.2.3-5.2.4, Eq. (54), (55); by kind, Q21).
-            jbn : normal backlash [mm]; internal pair with ``al`` imposed only, else None. Its
-            sign is opposite to ISO_21771_2007, 5.3, Eq. (63) (Q57).
+            [rad] (5.2.3-5.2.4, Eq. (54), (55)).
+            jbn : normal backlash [mm] when ``al`` is imposed, else None (5.3, Eq. (63) with
+            x_E = the declared x). jbn > 0: clearance between the non-working flanks; jbn < 0: the
+            flanks would overlap at that a_w (the teeth must be thinned). An a_w larger than the
+            zero-backlash one gives jbn > 0 for an external pair and jbn < 0 for an internal pair.
             x1, x2 : profile shift coefficients used [-].
-            u : gear ratio [-] (5.2.1, Eq. (52); by kind, Q03).
-            k : tip alteration coefficient [-] (4.5.2 gives no value; no library source).
-            dl1, dl2, rl1, rl2 : working pitch diameters d_w and radii [mm] (Eq. (56)-(57); by
-            kind, Q03).
-            da1_w, da2_w : working tip diameters, with k [mm] (Eq. (33) plus cP: Q04).
+            u : gear ratio z2 / z1, signed (negative for an internal pair) [-] (5.2.1, Eq. (52)).
+            k : tip alteration coefficient [-] (4.5.2; the value from a_w, see Notes).
+            dl1, dl2, rl1, rl2 : working pitch diameters d_w = d_b / cos(alpha_wt) and radii [mm]
+            (Eq. (56)-(57), third form).
+            da1_w, da2_w : working tip diameters, d + 2 (z/abs(z)) mn (haP + x + k) [mm] (Eq. (33)).
             alpha_a1, alpha_a2 : transverse pressure angles at the tips [rad].
             epslon_a1, epslon_a2 : addendum contact ratios of gear 1 and gear 2 [-]; that of
-            a ring is negative as stored (case 4: -1.564) and is subtracted in epslon_alpha.
+            a ring is negative as stored and is subtracted in epslon_alpha.
             epslon_alpha, epslon_beta, epslon_gamma : transverse contact ratio, overlap ratio
             and total contact ratio [-] (5.4.7, Eq. (88)-(97)).
             b : common face width, min(b1, b2) [mm].
             galpha1, galpha2 : addendum parts of the path of contact, rb (tan(alpha_a) -
-            tan(alpha_wt)) [mm]; galpha2 of a ring is negative as stored (case 4: -9.235 mm).
-            galpha : length of the path of contact [mm] (5.4.5.2,
-            Eq. (77)-(80); by kind, Q22).
-            ReqI : reduced radius of curvature at the pitch point, transverse plane [mm].
+            tan(alpha_wt)) [mm]; galpha2 of a ring is negative as stored.
+            galpha : length of the path of contact [mm], positive, equal to ``AE`` (5.4.5.2,
+            Eq. (77)).
+            ReqI : reduced radius of curvature at the pitch point, transverse plane,
+            1 / (1/rho_C1 + 1/rho_C2) with rho_C2 < 0 for a ring [mm] (Eq. (81)-(82) and NOTE).
             T1T2, T1E, T2A, T1A, T1B, T1C, T1D, T2E, T2B, T2C, T2D : distances along the line of
             action from the base-tangent points T1, T2 to the points A..E of the path [mm]. They
             are the transverse radii of curvature of the flanks at those points: 5.4.5.3,
@@ -786,41 +675,56 @@ class CylindricalFamily(GearFamily):
             equation, no library source).
             HV : gear loss factor [-] (ISO_TR_14179-2_2001, 5.2.4, Eq. (14); unchecked, Q53).
             Ram, Rrms, RzS : (Ra1 + Ra2)/2, sqrt(Rq1**2 + Rq2**2), Rz1 + Rz2 [um] (no source).
-            profile_shift_check : (wording, value implied by al, declared value) of the
-            consistency check of ``validate_pair`` (5.3, Eq. (62); by kind, Q26).
+            profile_shift_check : (x1 + x2 implied by a_w, declared x1 + x2) [-] (5.3, Eq. (62),
+            signed z1 + z2).
+            warnings : one message "profile shifts do not match the centre distance ..." with the
+            sum implied by the imposed a_w, the declared sum and jbn, when abs(jbn) >= 1e-9 mm;
+            else empty. It becomes ``GearPair.warnings`` and does not raise: an imposed a_w that
+            does not match the shifts is a warning, not an error (Q26 + Q57, José 2026-10-15).
 
         Raises
         ------
         ValueError
             If the gears differ in module, normal pressure angle or helix angle (relative
-            tolerance 1e-6), or if gear 2 is internal and abs(z2) <= z1.
+            tolerance 1e-6), if gear 1 is internal (z1 < 0), if gear 2 is internal and
+            abs(z2) <= z1, or if abs(z1) > abs(z2) (gear 1 must be the pinion).
         RuntimeError, AttributeError
             From ``correction_for_gs_equilibrium`` when ``equalise_gs`` is True.
 
         Notes
         -----
-        Sign factor s2 = z2/abs(z2). For an internal pair (s2 = -1) the segments measured from
-        T2 and T1T2 are negative, as the NOTE of ISO_21771_2007, 5.4.5.3 states for T1T2 and the
-        radii of curvature of the ring. A is the start of the path on the tip circle of gear 2
-        and E its end on the tip circle of gear 1, i.e. the names are those of gear 1 driving;
-        they are stored once, whatever gear drives. A negative ``T1A`` means that the path
-        starts beyond the base-tangent point of gear 1 (interference); it is stored, not refused.
+        One expression per quantity for both kinds, with the sign factor s2 = z2/abs(z2) and the
+        signed sum z1 + z2 (negative for an internal pair). The stored centre distances a, a_w
+        are positive; ISO 21771 makes them negative for an internal pair, hence the factor s2
+        wherever their signed value enters (k).
+
+        Working pressure angle: with a_w derived, inv(alpha_wt) = inv(alpha_t) + 2 tan(alpha_n)
+        (x1 + x2) / (z1 + z2) (Eq. (55)) and a_w = (d_b2 + s2 d_b1) / (2 cos(alpha_wt))
+        (Eq. (58)); with a_w imposed, cos(alpha_wt) = a cos(alpha_t) / a_w (Eq. (54)). The
+        inverse involute has no printed method (Eq. (18) is the definition): brentq on
+        [1e-6, 1.5] rad (José, 2026-10-15).
+
+        Tip alteration (Q23, José 2026-10-15): k = s2 (a_w - a) / mn - (x1 + x2), the same on
+        both gears, when ``addendum_reduction``; it makes the bottom clearance at a_w equal to
+        cP mn on both sides (4.5.2: k < 0 shortens the addendum; no equation for k is printed
+        there). For an internal pair k can be positive and then lengthens both tips (z 20/-60,
+        x 0.2/0.2: k = +0.040, T1A 0.94 -> 0.55 mm). DIN 3960 / Niemann practice not checked (no
+        library source yet).
+
+        For an internal pair (s2 = -1) the segments measured from T2 and T1T2 are negative, as
+        the NOTE of ISO_21771_2007, 5.4.5.3 states for T1T2 and the radii of curvature of the
+        ring. A is the start of the path on the tip circle of gear 2 and E its end on the tip
+        circle of gear 1, i.e. the names are those of gear 1 driving; they are stored once,
+        whatever gear drives. A negative ``T1A`` means that the path starts beyond the
+        base-tangent point of gear 1 (interference); it is stored, not refused.
 
         ``rA1``, ``rB1``, ``rD1`` are the radii of gear 1 at A, B, D; ``rA2``, ``rB2``, ``rD2``
         are the radii of gear 2 at E, D, B (mirrored names).
 
-        Warnings
-        --------
-        - Q03: for an external pair u = max(z)/min(z) and gear 1 gets the smaller working
-          diameter whatever its number of teeth; ``HV`` uses z1 and u in the same way.
-        - Q22: ``ReqI`` is 1 / (1/rho_C1 + 1/rho_C2) with a POSITIVE radius for a ring
-          (ISO_21771_2007, Eq. (82) makes rho_C2 negative), and ``galpha`` of an internal pair is
-          not its ``AE``.
-        - Q23: the factor of k and the gear that takes it differ by kind.
-
         References
         ----------
-        .. [1] ISO_21771_2007, 5.2-5.4, Eq. (52)-(97) (checked by a second reader).
+        .. [1] ISO_21771_2007, 4.5.2-4.5.3, Eq. (33); 5.2-5.4, Eq. (52)-(97) (checked by a second
+           reader).
         .. [2] ISO_TR_14179-2_2001, 5.2.4, Eq. (14) (clause map only).
         """
         # --- the two gears must have the same basic rack size and helix (ISO 21771, clause 5) ---
@@ -843,55 +747,83 @@ class CylindricalFamily(GearFamily):
             )
 
         z1, z2 = gear1.z, gear2.z
+        # Q03 (José, 2026-10-15), D-0010 item 10: gear 1 is the pinion, an external gear
+        if z1 < 0:
+            raise ValueError(f"gear 1 must be the external gear (pinion), got z1={z1}; give the ring as gear2.")
         s2 = z2 / abs(z2)   # +1 external pair, -1 internal pair
         if s2 < 0 and abs(z2) <= z1:   # the pinion must fit inside the ring
             raise ValueError(
                 f"Internal gear must have more teeth than the external gear "
                 f"(z2={z2} <= z1={z1})."
             )
+        # geometric indices, 1 = pinion, 2 = wheel; the driver is not the pair's
+        if abs(z1) > abs(z2):
+            raise ValueError(
+                f"gear 1 must be the pinion: |z1| <= |z2|, got z1={z1}, z2={z2}. "
+                "Give the smaller gear as gear1; which gear drives is set by the power path."
+            )
 
         # --- reference centre distance: sum of the reference radii, difference for an internal pair ---
         a = (gear2.d + s2 * gear1.d) / 2.0
 
+        # the two gears share alpha_n, beta and (one base-cylinder rule) alpha_t, beta_b and p_bt
+        alpha  = gear1.alpha     # normal pressure angle
+        alphat = gear1.alphat    # transverse pressure angle
+        betab  = gear1.betab     # base helix angle
+        m      = gear1.mn
+
         # --- working centre distance and transverse working pressure angle ---
         al_imposed = al is not None
-        jbn = None
         if al_imposed:
-            alphatw, jbn = _legacy("alphatw_from_al", z2)(gear1, gear2, a, al)
+            # the working pitch circles roll on the same base circles: a_w cos(alpha_wt) = a cos(alpha_t) (Eq. (54))
+            alphatw = np.arccos(a * np.cos(alphat) / al)
             x1, x2 = gear1.x, gear2.x
         else:
             if equalise_gs:
                 x1, x2 = self.correction_for_gs_equilibrium(gear1, gear2)
             else:
                 x1, x2 = gear1.x, gear2.x
-            alphatw, al = _legacy("alphatw_from_x_sum", z2)(gear1, gear2, x1 + x2)
-        inv_alphatw = np.tan(alphatw) - alphatw
+            # zero backlash, Eq. (55) with the signed tooth sum (z1 + z2 < 0 for a ring)
+            inv_alphatw = _involute(alphat) + 2 * np.tan(alpha) * (x1 + x2) / (z1 + z2)
+            # inverse involute: no method is printed (Eq. (18) is the definition only); 1.5 rad bounds any working angle
+            alphatw = optimize.brentq(_inv_residual, 1e-6, 1.5, args=(inv_alphatw,))
+            # Eq. (58): base radii added for an external pair, subtracted for a ring; a_w > 0
+            al = (gear2.db + s2 * gear1.db) / (2 * np.cos(alphatw))
+        inv_alphatw = _involute(alphatw)
 
-        u = _legacy("u", z2)(z1, z2)
+        # sum of profile shifts that a_w needs for zero backlash (Eq. (62), signed z1 + z2)
+        x_sum_from_al = (inv_alphatw - _involute(alphat)) * (z1 + z2) / (2 * np.tan(alpha))
+        jbn = None
+        warnings_ = []
+        if al_imposed:
+            # normal backlash left by the declared shifts at the imposed a_w: Eq. (63) solved for j_bn with
+            # x_E = the declared x; jbn > 0: clearance between the non-working flanks, jbn < 0: the flanks
+            # would overlap at that a_w (the teeth must be thinned)
+            jbn = (x_sum_from_al - (x1 + x2)) * 2 * m * np.sin(alpha)
+            # Q26 + Q57 (José, 2026-10-15): zero backlash for now, a mismatch is ONE warning (not a validate error);
+            # 1e-9 mm is far above the rounding of a derived a_w (1e-14)
+            if abs(jbn) >= 1e-9:
+                warnings_.append(
+                    f"profile shifts do not match the centre distance: declared x1 + x2 = {x1 + x2:.4f}, "
+                    f"al = {al:.4f} mm implies x1 + x2 = {x_sum_from_al:.4f} for zero backlash "
+                    f"(ISO_21771_2007 Eq. (62)); normal backlash jbn = {jbn:.6f} mm (Eq. (63)).")
 
-        # QUESTION(Q21): I1. alphat, betab and pbt of GEAR 1 are used from here on, while alphatw and al of a helical internal pair came from alphat of the ring: its two gears have different base pitches (case 5: 6.0870 against 6.1418 mm).
-        alpha  = gear1.alpha     # normal pressure angle
-        alphat = gear1.alphat    # transverse pressure angle
-        beta   = gear1.beta      # helix angle
-        betab  = gear1.betab     # base helix angle
-        m      = gear1.mn
+        u = z2 / z1   # Eq. (52), signed
 
-        # --- tip alteration coefficient k (the code names the MAAG Gear Book; no library source) ---
-        k_factor, k_share_2 = _legacy("tip_alteration", z2)(z1, z2)
+        # --- tip alteration coefficient k (Eq. (33): + k mn on both tips, k < 0 shortens) ---
         if addendum_reduction:
-            k = k_factor * (
-                (_involute(alphatw) - _involute(alphat)) / np.tan(alpha)
-                - 1.0 / np.cos(beta) * (np.cos(alphat) / np.cos(alphatw) - 1.0)
-            )
+            # (a_w - a) / mn - (x1 + x2) with the signed centre distances of ISO (negative for a ring): factor s2
+            k = s2 * (al - a) / m - (x1 + x2)
         else:
             k = 0.0
 
-        dl1, dl2 = _legacy("working_pitch_diameters", z2)(al, u, gear1.db, gear2.db, alphatw)
+        # working pitch circles: the circles on which the two gears roll, d_w = d_b / cos(alpha_wt) (Eq. (56)-(57))
+        dl1, dl2 = gear1.db / np.cos(alphatw), gear2.db / np.cos(alphatw)
         rl1, rl2 = dl1 / 2, dl2 / 2
 
-        # --- working tip diameters, with k; the clearance cP is in them as in Gear.da (Q04) ---
-        da1 = gear1.d + 2 * m * (gear1.haP + gear1.cP + x1 - k)
-        da2 = gear2.d + s2 * 2 * m * (gear2.haP + gear2.cP + x2 - k_share_2 * k)
+        # --- working tip diameters, Eq. (33) with k (the clearance cP is in the root only) ---
+        da1 = gear1.d + 2 * m * (gear1.haP + x1 + k)
+        da2 = gear2.d + s2 * 2 * m * (gear2.haP + x2 + k)
         ra1, ra2 = da1 / 2.0, da2 / 2.0
         db1, db2 = gear1.db, gear2.db
         rb1, rb2 = gear1.rb, gear2.rb
@@ -914,18 +846,20 @@ class CylindricalFamily(GearFamily):
 
         galpha1 = rb1 * (np.tan(alpha_a1) - np.tan(alphatw))
         galpha2 = rb2 * (np.tan(alpha_a2) - np.tan(alphatw))
-        galpha = _legacy("galpha", z2)(galpha1, galpha2, da1, db1, da2, db2, z2, al, alphatw)
+        # Eq. (77) with the stored (positive) a_w: s2 on the ring tip term AND on 2 a_w sin(alpha_wt);
+        # for an external pair it is galpha1 + galpha2
+        galpha = 1/2 * ((da1**2 - db1**2)**(1/2) + s2 * ((da2**2 - db2**2)**(1/2) - 2 * al * np.sin(alphatw)))
 
-        # reduced radius of curvature at the pitch point C, transverse plane: rho_C = r_w sin(alpha_wt)
-        # QUESTION(Q22): I2 / row 45. Plus-sign sum with a positive ring radius; with rho_C2 negative (ISO_21771_2007, Eq. (82)) the internal value is larger by a factor that depends on u (case 4: 5.130 against 10.261 mm, factor 2.000; case 5: 1.987).
+        # reduced radius of curvature at the pitch point C, transverse plane: rho_C = r_w sin(alpha_wt),
+        # negative for the concave flank of a ring (Eq. (82) NOTE, D-0010 item 8)
         ReqI = 1 / (1 / (rl1 * np.sin(alphatw))
-                    + 1 / (rl2 * np.sin(alphatw)))
+                    + 1 / (s2 * rl2 * np.sin(alphatw)))
 
         # --- path of contact: distances along the line of action (signed with s2 on the side of gear 2) ---
         T1T2 = s2 * al * np.sin(alphatw)
         T1E = (ra1**2 - rb1**2) ** (1 / 2)          # end of contact E: tip circle of gear 1
         T2A = s2 * ((ra2**2 - rb2**2) ** (1 / 2))   # start of contact A: tip circle of gear 2
-        # QUESTION(Q15): a negative T1A (start of contact beyond the base-tangent point T1: interference) is stored, not refused; baseline case 4 has T1A = -2.395 mm.
+        # QUESTION(Q15): a negative T1A (start of contact beyond the base-tangent point T1: interference) is stored, not refused; baseline case 4 has T1A = -0.0749 mm.
         T1A = T1T2 - T2A
         T1B = T1E - pbt                             # B, D: one transverse base pitch from E and from A
         T1C = rb1 * np.tan(alphatw)                 # pitch point C
@@ -962,7 +896,8 @@ class CylindricalFamily(GearFamily):
             rA1=rA1, rB1=rB1, rD1=rD1, rA2=rA2, rB2=rB2, rD2=rD2, HV=HV,
             Ram=(gear1.Ra + gear2.Ra) / 2, Rrms=(gear1.Rq**2 + gear2.Rq**2) ** (1 / 2),
             RzS=(gear1.Rz + gear2.Rz),
-            profile_shift_check=_legacy("profile_shift_check", z2)(gear1, gear2, inv_alphatw),
+            profile_shift_check=(x_sum_from_al, x1 + x2),
+            warnings=warnings_,
         )
 
     @staticmethod
@@ -1020,16 +955,15 @@ class CylindricalFamily(GearFamily):
         -------
         list of str
             One message per violation; empty if the pair is valid. (1) The messages of both gears,
-            each twice. (2) Only when ``al`` was imposed: profile shift implied by ``al`` against
-            the declared one, tolerance 1e-4 (by kind, Q26). (3) epslon_alpha < 1.0; a value
+            each twice. (2) epslon_alpha < 1.0; a value
             below 1.2 adds a message starting "Warning:" to the same list, so
-            ``validate_or_raise`` raises on it. (4) Interference, by kind (Q24): external pair,
+            ``validate_or_raise`` raises on it. (3) Interference, by kind (Q24): external pair,
             -T1A > T1C and its mirror; internal pair, the involute, trochoid and trimming tests.
 
         Warnings
         --------
         The list is never empty for an internal pair (Q24): ``validate_or_raise`` raises for all
-        of them. None of the limits of (3) and (4) has a library source; ISO_21771_2007, 5.4.6
+        of them. None of the limits of (2) and (3) has a library source; ISO_21771_2007, 5.4.6
         states that interference of internal pairs is outside its scope.
         """
         errors: list[str] = []
@@ -1037,15 +971,6 @@ class CylindricalFamily(GearFamily):
         # QUESTION(Q56): each gear message appears twice (today the pair validated the gears and then its working copies of them); the alternative is once.
         gear_errors = pair.gear1.validate() + pair.gear2.validate()
         errors.extend(gear_errors + gear_errors)
-
-        if pair.al_imposed:
-            wording, from_al, declared = pair.profile_shift_check
-            if abs(from_al - declared) > 1e-4:
-                errors.append(
-                    f"Profile shift inconsistency: declared {wording}={declared:.4f} "
-                    f"but al={pair.al:.4f} mm implies {wording}={from_al:.4f}. "
-                    "Adjust x1, x2, or al so they are consistent."
-                )
 
         if pair.epslon_alpha < 1.0:
             errors.append(
@@ -1170,7 +1095,7 @@ class CylindricalFamily(GearFamily):
                 "This selects which gear delivers input torque — it is independent "
                 "of gear1/gear2 being external/internal."
             )
-        # QUESTION(Q03): row 1 / X1. For an external pair the torque is put on gear 1 (the smaller working diameter) and T_out = T u with u = max/min, whatever `driver` says (cases 3b, 3c: 20755 W out for 9224.5 W in).
+        # QUESTION(Q03): row 1 / X1. For an external pair the torque is always put on gear 1 (the pinion since Q03 answer 7) and T_out = T u, whatever `driver` says (case 3a, wheel declared driver: F_t 1659.8 N instead of 1106.6 N).
         rl_in, beta_in, u_eff = _legacy("force_input", pair.gear2.z)(pair, driver)
 
         # F_t on the WORKING pitch radius of the gear that takes the torque; T [N m] / r [m] gives [N]
@@ -1262,13 +1187,7 @@ class CylindricalFamily(GearFamily):
         --------
         These are the D-0010 definitions, NOT the numbers of ``forces()``, which the shaft loads
         of today still use: ``F_a_N`` is 449.236 N where ``forces()`` gives ``Fa`` 444.750 N
-        (Q07a), ``F_bn_N`` 1847.109 N where ``Fn`` is 1791.646 N = ``F_bt_N`` (Q07b), and for an
-        external pair built with z1 > z2 the torque is taken on the working diameter of gear 1
-        itself (Q03). For a helical internal pair the base cylinder of gear 1 is used; the ring
-        has another one today (Q21), so ``rho_mm`` and the stored working radii disagree and the
-        torque balance of the ring is off: case 5, 60.75 N m on the pinion, rho_2 = -61.932 mm
-        against the stored r_w2 = 62.117 mm, moment of the mesh force on the ring -183.344 N m
-        against T z2/z1 = -182.25 N m (0.6 %). A spur internal pair (case 4) is exact.
+        (Q07a), ``F_bn_N`` 1847.109 N where ``Fn`` is 1791.646 N = ``F_bt_N`` (Q07b).
 
         References
         ----------
@@ -1282,14 +1201,12 @@ class CylindricalFamily(GearFamily):
         if hand1 not in (1, -1):
             raise ValueError(f"hand1 must be +1 (right-hand) or -1 (left-hand), got {hand1!r}")
         g1, z2 = pair.gear1, pair.gear2.z
-        # QUESTION(Q03): working pitch diameter of gear 1 from ITS base circle (ISO_21771_2007 Eq. (56), third form), not the stored pair.dl1, which is the smaller of the two diameters whatever the order of an external pair (case 3b: 109.800 against 73.200 mm).
-        d_w1 = g1.db / np.cos(pair.alphatw)
+        d_w1 = pair.dl1                        # working pitch diameter of gear 1, d_b1 / cos(alpha_wt)
         T = abs(T1_Nm)
         # 2000 = 2 (diameter -> radius) x 1000 (mm -> m): T [N m] / r [m] gives [N]
         F_tw = 2000.0 * T / d_w1
         F_r = F_tw * np.tan(pair.alphatw)
         F_bt = 2000.0 * T / g1.db
-        # QUESTION(Q21): base helix angle of gear 1; a helical ring has another beta_b today (case 5: 14.08 against 15.99 deg).
         F_a = F_bt * np.tan(g1.betab)          # = F_tw tan(beta_w): one normal force, three cylinders
         F_bn = F_bt / np.cos(g1.betab)
         F_t_nominal = 2000.0 * T / g1.d        # reference cylinder: ISO 6336-1 Formula (1)
@@ -1351,11 +1268,11 @@ class CylindricalFamily(GearFamily):
 
         B and D bound the zone of single tooth contact of ONE transverse section (a spur pair)
         for 1 < eps_alpha < 2; a helical pair with eps_gamma >= 2 (baseline case 2) never has a
-        single tooth pair in contact. For eps_alpha >= 2 (baseline case 4) B and D are still E
+        single tooth pair in contact. For eps_alpha >= 2 B and D are still E
         minus and A plus one base pitch, and D comes before B.
 
         Assumptions: rigid, unmodified involute flanks; the tip circle is the end of the active
-        profile (Q04: with the clearance cP in the tip diameter).
+        profile.
 
         References
         ----------
@@ -1405,21 +1322,16 @@ class CylindricalFamily(GearFamily):
         rho_y1 = T1C + g_y and rho_y2 = T1T2 - rho_y1. At the stored points they are the stored
         segments T1A..T1E and T2A, T2B, T2D, T2E. A radius is zero at its base-tangent point
         (start of the involute) and changes sign beyond it, where there is no involute: the
-        values returned there are not radii of a flank (baseline case 4 starts 2.39 mm beyond T1,
+        values returned there are not radii of a flank (baseline case 4 starts 0.075 mm beyond T1,
         Q15: rho1 < 0 and a negative reduced radius, returned without a warning by this function).
 
-        Internal pair: with the negative radius of the ring the reduced radius at C is NOT the
-        stored ``ReqI``, which takes the ring radius as positive (Q22): case 4 gives 10.261 mm here
-        against ``ReqI`` = 5.130 mm = 1 / (1/rho1 + 1/abs(rho2)). For an external pair the two agree.
-        Helical internal pair (Q21): rho_y2 at C differs from the stored ``T2C``, because the base
-        circles of the two gears come from different transverse pressure angles.
+        At C the reduced radius is the stored ``ReqI`` and rho_y2 the stored ``T2C``, for both kinds.
 
         Normal plane: an involute helicoid is a developable surface, with zero curvature along
         the contact line. The transverse profile is an oblique section of it, inclined at beta_b
         to the flank normal, so its radius rho_t is the radius of curvature of that section and
         not a principal radius; by Meusnier's theorem the principal radius, in the plane normal
-        to the contact line, is rho_n = rho_t / cos(beta_b). The base helix angle is that of
-        gear 1 (Q21: the ring of a helical internal pair has another one today).
+        to the contact line, is rho_n = rho_t / cos(beta_b) (beta_b is the same for both gears).
 
         Assumptions: rigid, unmodified involute flanks; no deflection.
 
@@ -1433,12 +1345,10 @@ class CylindricalFamily(GearFamily):
         g_y = np.asarray(g_y, dtype=float)
         rho1 = pair.T1C + g_y      # Eq. (81) at C, plus the distance travelled along the line of action
         # Eq. (87): rho_y1 + rho_y2 = T1T2 at every point; T1T2 < 0 for an internal pair, so the ring radius is negative
-        # QUESTION(Q21): I1. For a helical internal pair T1T2 - T1C is not the stored T2C (case 5: -20.3998 against -20.4606 mm).
         rho2 = pair.T1T2 - rho1
-        # QUESTION(Q22): I2 / row 45. Reduced radius with the SIGNED ring radius (ISO_21771_2007, Eq. (82) NOTE); the stored ReqI takes it positive (case 4 at C: 10.261 here, ReqI 5.130 mm).
+        # reduced radius with the SIGNED ring radius (ISO_21771_2007, Eq. (82) NOTE)
         rho_red = 1.0 / (1.0 / rho1 + 1.0 / rho2)
         # QUESTION(Q34): normal-plane radii as rho_t / cos(beta_b): derived (developable helicoid, Meusnier), no library page; the alternative is to return the transverse radii only.
-        # QUESTION(Q21): I1. beta_b of gear 1; the ring of a helical internal pair has another one today (case 5: 14.08 against 15.99 deg).
         cos_betab = np.cos(pair.gear1.betab)
         return {"rho1_t_mm": rho1, "rho2_t_mm": rho2, "rho_red_t_mm": rho_red,
                 "rho1_n_mm": rho1 / cos_betab, "rho2_n_mm": rho2 / cos_betab, "rho_red_n_mm": rho_red / cos_betab}
@@ -1490,9 +1400,6 @@ class CylindricalFamily(GearFamily):
         omega rho_y / cos(beta_b) is omega times the normal-plane radius, not a component of
         the flank velocity (Q38).
 
-        Helical internal pair (Q21): the base circles of the two gears follow different rules
-        today, so the sliding speed at C is not zero (case 5 at 1450 rpm: -0.0062 m/s).
-
         Driver: ISO 21771 writes 5.6 for the pinion driving. The speeds themselves do not depend
         on the driver; only the names A and E of the two ends do (``path_points``).
 
@@ -1508,8 +1415,7 @@ class CylindricalFamily(GearFamily):
             raise ValueError(f"n1_rpm must be > 0, got {n1_rpm}.")
         rho = CylindricalFamily.curvature_radii(pair, g_y)
         omega1 = n1_rpm * 2.0 * np.pi / 60.0   # [rpm] -> [rad/s]
-        # QUESTION(Q03): u = z2 / z1, signed (ISO_21771_2007, Eq. (52)); the stored pair.u of an external pair is max(z)/min(z).
-        u = pair.gear2.z / pair.gear1.z
+        u = pair.u                             # z2 / z1, signed (ISO_21771_2007, Eq. (52))
         # QUESTION(Q38): returned: omega rho_y, the flank speed perpendicular to the contact line (case 2 at C: 2.0922 m/s); not returned: the component along the line, omega1 rb1 sin(beta_b) (1.2522 m/s, equal on both flanks); GEARpie's vr1, vr2 are omega rho_y / cos(beta_b) (2.1570 m/s), not a velocity component.
         u1 = omega1 * rho["rho1_t_mm"] / 1000.0        # [rad/s] [mm] -> [m/s]
         u2 = omega1 / u * rho["rho2_t_mm"] / 1000.0    # omega2 = omega1 / u; ring: u < 0 and rho_y2 < 0, u2 > 0
@@ -1525,7 +1431,7 @@ class CylindricalFamily(GearFamily):
         is spread with ONE load per unit length over all the contact lines present. A tooth pair
         then carries the fraction (length of its contact line) / (sum of the lengths). For a
         spur pair this is 1 in the zone of single contact and 1/2 in the two zones of double
-        contact (1/2 and 1/3 for 2 <= eps_alpha < 3, baseline case 4).
+        contact (1/2 and 1/3 for 2 <= eps_alpha < 3).
 
         Parameters
         ----------
@@ -1560,8 +1466,7 @@ class CylindricalFamily(GearFamily):
         over the tooth pairs k is 1 at every position.
 
         Assumptions: teeth of equal, constant stiffness per unit length (rigid limit), no
-        modifications, no misalignment, no friction; common face width b = min(b1, b2) of aligned gears; transverse base pitch of
-        gear 1 (Q21).
+        modifications, no misalignment, no friction; common face width b = min(b1, b2) of aligned gears.
 
         References
         ----------
@@ -1573,7 +1478,6 @@ class CylindricalFamily(GearFamily):
         """
         # QUESTION(Q30): load-sharing model = one load per unit length on all contact lines (rigid, equal teeth); alternatives: mesh stiffness (ISO_6336-1_2019, clause 9, not written) or a measured/FE share.
         g_y = np.asarray(g_y, dtype=float)
-        # QUESTION(Q21): I1. Base pitch and base helix angle of gear 1, as the stored path points; the ring of a helical internal pair has others today (case 5: 6.087 against 6.142 mm, 14.08 against 15.99 deg).
         pbt = pair.gear1.pbt
         betab = pair.gear1.betab
         s = g_y + pair.AC                          # distance from the stored A (C is at AC from A)
@@ -1654,7 +1558,7 @@ class CylindricalFamily(GearFamily):
         UserWarning
             If the radius of curvature of an external flank is zero or negative on a returned
             step: the path starts beyond a base-tangent point, where there is no involute
-            (baseline cases 4 and 5, Q15 / Q27). The numbers are returned unchanged (Q39).
+            (baseline case 4, Q15). The numbers are returned unchanged (Q39).
 
         Notes
         -----
@@ -1663,16 +1567,13 @@ class CylindricalFamily(GearFamily):
         standard gives v_n; the relation s(t) is derived from it (no library sentence).
 
         Helical pair: a step is the contact point in the transverse section at MID face width.
-        A tooth pair is in contact over g_alpha + b tan(beta_b) of travel (case 2: 24.78 mm); the
-        record covers g_alpha (19.01 mm, 77 %). ``share`` and ``l_mm`` describe the whole contact
+        A tooth pair is in contact over g_alpha + b tan(beta_b) of travel (case 2: 21.44 mm); the
+        record covers g_alpha (15.68 mm, 73 %). ``share`` and ``l_mm`` describe the whole contact
         line, the radii and speeds only its mid point, and the load per unit length is uniform by
         the model. Along the line the path position spans +-b tan(beta_b)/2: in case 2 at C,
         +-2.88 mm, rho1 from 10.90 to 16.66 mm (+-21 %) and a sliding speed of +-0.73 m/s at the
         line ends against 0 recorded; at A and E the recorded point is the END of a half-length
         line. The record is fair for a two-dimensional slice at mid face, not for the line (Q36).
-
-        Helical internal pair (Q21): the sliding speed recorded at C is not zero (case 5:
-        -0.0062 m/s at 1450 rpm) and the normal speeds of the two flanks differ by 0.9 %.
 
         Assumptions: those of the four functions above; steady speed and constant F_bn.
 
@@ -1688,7 +1589,6 @@ class CylindricalFamily(GearFamily):
         if F_bn_N < 0:
             raise ValueError(f"F_bn_N must be >= 0, got {F_bn_N}.")
         points = CylindricalFamily.path_points(pair, driver)
-        # QUESTION(Q21): I1. Base radius of gear 1; in a helical internal pair omega2 rb2 is not omega1 rb1 today (case 5: ratio 1.0090).
         v_n = n1_rpm * 2.0 * np.pi / 60.0 * pair.gear1.rb   # [rad/s] [mm] = [mm/s], speed of the contact point along the path
         if t_s is None:
             if n_points < 2:
@@ -1704,7 +1604,7 @@ class CylindricalFamily(GearFamily):
         g_y = points["A"] + np.sign(points["E"] - points["A"]) * s
 
         radii = CylindricalFamily.curvature_radii(pair, g_y)
-        # QUESTION(Q39): steps where an external flank has no involute (rho <= 0: the path starts beyond a base-tangent point, Q15 / Q27) are returned with a warning; the alternatives are to refuse the pair or to cut the path at the base-tangent point.
+        # QUESTION(Q39): steps where an external flank has no involute (rho <= 0: the path starts beyond a base-tangent point, Q15) are returned with a warning; the alternatives are to refuse the pair or to cut the path at the base-tangent point.
         if np.any(radii["rho1_t_mm"] <= 0.0) or (pair.gear2.z > 0 and np.any(radii["rho2_t_mm"] <= 0.0)):
             warnings.warn("contact_inputs: the path of contact passes a base-tangent point; the radii of curvature, "
                           "speeds and reduced radius of the steps beyond it do not describe an involute flank.",

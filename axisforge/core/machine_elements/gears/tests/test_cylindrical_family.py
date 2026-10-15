@@ -1,7 +1,8 @@
 """Tests of the gear family contract (``base``) and of the cylindrical family (``cylindrical``).
 
-Three groups: the contract (registry, immutable objects, one family for external and internal
-gears, bad inputs); closed-form identities of the involute geometry; and one test per entry of
+Four groups: the contract (registry, immutable objects, one family for external and internal
+gears, bad inputs); closed-form identities of the involute geometry; the geometry rulings of
+2026-10-15 (closed forms, relations between stored quantities, SDP Table 4-4); and one test per entry of
 ``cylindrical._LEGACY`` and per other unruled item, which pins TODAY's value on a baseline case. Where
 the review gives the alternative as a relation between quantities of the code, that relation is a
 second test marked ``xfail(strict=True)`` with its question id. The numbers are those of the
@@ -31,22 +32,27 @@ def xfail(question):
     return pytest.mark.xfail(strict=True, raises=AssertionError, reason=question)
 
 
+# the four baseline pairs: C14 external spur (z 16/24, mn 4.5 mm), H501 external helical (z 20/30,
+# mn 3.5 mm, beta 15 deg), internal spur and internal helical (z 20/-60, mn 2 mm, beta 0 / 15 deg)
+PAIRS = {"case1": pair(*bc.pinion_wheel("C14")), "case2": pair(*bc.pinion_wheel("H501")),
+         "case4": pair(*bc.make_internal(0.0)), "case5": pair(*bc.make_internal(15.0))}
+# internal pair z 20/-60, mn 2 mm, x 0.2/0.2 (x1 + x2 != 0; no baseline case)
+INTERNAL_SHIFTED = (bc.gear(2.0, 20, x=0.2, b=20.0), bc.gear(2.0, -60, x=0.2, b=20.0))
+
+
 @pytest.fixture(scope="module")
 def case2():
-    """H501 helical pair (z 20/30, mn 3.5 mm, beta 15 deg)."""
-    return pair(*bc.pinion_wheel("H501"))
+    return PAIRS["case2"]
 
 
 @pytest.fixture(scope="module")
 def case4():
-    """Internal spur pair (z 20/-60, mn 2 mm)."""
-    return pair(*bc.make_internal(0.0))
+    return PAIRS["case4"]
 
 
 @pytest.fixture(scope="module")
 def case5():
-    """Internal helical pair (z 20/-60, mn 2 mm, beta 15 deg)."""
-    return pair(*bc.make_internal(15.0))
+    return PAIRS["case5"]
 
 
 # ----------------------------------------------------------------------------------------------
@@ -120,6 +126,8 @@ def test_bad_inputs():
         pair(g, bc.gear(2.0, 30, beta_n_deg=10.0))
     with pytest.raises(ValueError, match="Internal gear must have more teeth"):
         pair(g, bc.gear(2.0, -20))
+    with pytest.raises(ValueError, match=r"gear 1 must be the pinion: \|z1\| <= \|z2\|"):
+        pair(bc.gear(2.0, 30, b=10.0), g)
     with pytest.raises(ValueError, match="driver must be 'gear1' or 'gear2'"):
         FAMILY.forces(pair(g, bc.gear(2.0, 30, b=10.0)), 10.0, driver="pinion")
 
@@ -156,7 +164,6 @@ def test_line_of_action_identities(beta, case4):
         assert p.AD == pytest.approx(p.gear1.pbt, rel=1e-12) and p.AE - p.AB == pytest.approx(p.gear1.pbt, rel=1e-12)
         assert p.dl2 / p.dl1 == pytest.approx(abs(p.gear2.z) / p.gear1.z, rel=1e-12)
         assert p.inv_alphatw == pytest.approx(math.tan(p.alphatw) - p.alphatw, rel=1e-12)
-    assert ext.galpha == pytest.approx(ext.AE, rel=1e-12)              # external pair: path of contact = A to E
     assert ext.epslon_alpha == pytest.approx(ext.AE / ext.gear1.pbt, rel=1e-12)
 
 
@@ -168,6 +175,172 @@ def test_values_at_the_reference_diameter(case5):
         assert v["alpha_yt"] == pytest.approx(g.alphat, rel=1e-12)
         assert v["beta_y"] == pytest.approx(g.beta, rel=1e-12) and v["p_yt"] == pytest.approx(g.pt, rel=1e-12)
         assert math.copysign(1.0, v["L_y"]) == math.copysign(1.0, g.z)
+
+
+# ----------------------------------------------------------------------------------------------
+# geometry rulings of 2026-10-15 (Q04, Q27, Q21, Q22, Q26, Q57, Q23, Q03): one expression per
+# quantity with signed z; each test is a closed form, a relation between stored quantities or a
+# published value
+# ----------------------------------------------------------------------------------------------
+def _bottom_clearances(p):
+    """Radial gaps [mm] between each tip circle and the root circle of the mate, at the working
+    centre distance: (tip of gear 1 / root of gear 2, tip of gear 2 / root of gear 1). External
+    pair: a_w - r_a1 - r_f2 and a_w - r_a2 - r_f1; internal pair (the pinion inside the ring):
+    r_f2 - a_w - r_a1 and r_a2 - a_w - r_f1."""
+    ra1, ra2, rf1, rf2 = p.da1_w / 2.0, p.da2_w / 2.0, p.gear1.rf, p.gear2.rf
+    if p.gear2.z > 0:
+        return p.al - ra1 - rf2, p.al - ra2 - rf1
+    return rf2 - p.al - ra1, ra2 - p.al - rf1
+
+
+@pytest.mark.parametrize("z2", (60, -60))
+def test_bottom_clearance_at_the_reference_centre_distance(z2):
+    """Q04, Q27: the tip is d + 2 (z/abs(z)) mn (haP + x) (ISO_21771_2007, 4.5.3, Eq. (33)) and the
+    root d + 2 (z/abs(z)) mn (x - haP - cP) (Eq. (34)), so with x = 0 (a_w = a) each tip clears the
+    root of its mate by the bottom clearance cP mn of the basic rack [mm]."""
+    p = pair(bc.gear(2.0, 20, b=10.0), bc.gear(2.0, z2, b=10.0))
+    assert p.al == pytest.approx(p.a, rel=1e-12)
+    cP_mn = p.gear1.cP * p.gear1.mn                           # 0.25 x 2 mm = 0.5 mm
+    assert _bottom_clearances(p) == (pytest.approx(cP_mn, abs=1e-9), pytest.approx(cP_mn, abs=1e-9))
+    for g in (p.gear1, p.gear2):
+        assert g.da == pytest.approx(g.d + 2.0 * math.copysign(1.0, g.z) * g.mn * (g.haP + g.x), rel=REL)
+
+
+def test_case_1_transverse_contact_ratio_is_gearpies():
+    """Q04: with the ISO tip, baseline case 1 (C14, z 16/24, x 0.1817/0.1715) has eps_alpha 1.4624, the
+    value of GEARpie (CLASSES of the GEARpie runner, baseline/arrays)."""
+    assert PAIRS["case1"].epslon_alpha == pytest.approx(1.4624308892703048, rel=1e-9)
+
+
+def test_ring_has_the_base_cylinder_of_its_pinion(case5):
+    """Q21: sin(beta_b) = sin(beta) cos(alpha_n), alpha_t from tan(alpha_n) / cos(beta) and d_b = d cos(alpha_t)
+    for both kinds (ISO_21771_2007, Eq. (5)-(7), (13), (19)): two gears in mesh have the same base helix
+    angle, transverse pressure angle and transverse base pitch."""
+    pinion, ring = case5.gear1, case5.gear2
+    assert ring.betab == pytest.approx(math.asin(math.sin(math.radians(15.0)) * math.cos(math.radians(20.0))), rel=REL)
+    for name in ("betab", "alphat", "pbt"):
+        assert getattr(ring, name) == pytest.approx(getattr(pinion, name), rel=REL)
+    assert ring.db == pytest.approx(ring.d * math.cos(ring.alphat), rel=REL)
+
+
+@pytest.mark.parametrize("beta", (0.0, 15.0))
+def test_working_pitch_circles_roll_on_each_other(beta):
+    """Q21, Q03: d_w = d_b / cos(alpha_wt) for each gear (ISO_21771_2007, Eq. (56)-(57)); the working
+    pitch circles are tangent at C: d_w2 + s2 d_w1 = 2 a_w (s2 = -1 for a ring)."""
+    for p in (pair(*bc.pinion_wheel("H501" if beta else "C14")), pair(*bc.make_internal(beta))):
+        s2 = math.copysign(1.0, p.gear2.z)
+        assert p.dl1 == pytest.approx(p.gear1.db / math.cos(p.alphatw), rel=REL)
+        assert p.dl2 == pytest.approx(p.gear2.db / math.cos(p.alphatw), rel=REL)
+        assert p.dl2 + s2 * p.dl1 == pytest.approx(2.0 * p.al, rel=1e-12)
+
+
+def test_gear_ratio_is_signed(case2, case4):
+    """Q03: u = z2 / z1 (ISO_21771_2007, 5.2.1, Eq. (52)), negative for an internal pair."""
+    assert case2.u == 1.5 and case4.u == -3.0
+
+
+def test_gear_1_must_be_the_pinion():
+    """Q03 (José answer 7): gear 1 is the pinion. The pairs of the deleted baseline cases 3b, 3c and
+    7c, 7d (H501 with the wheel, z 30, as gear 1) are refused; the same mesh is built with the pinion
+    as gear 1 (cases 3a, 7e, 7f)."""
+    pinion, wheel = bc.pinion_wheel("H501")
+    with pytest.raises(ValueError, match=r"gear 1 must be the pinion: \|z1\| <= \|z2\|, got z1=30, z2=20"):
+        pair(wheel, pinion)                                                  # cases 3b, 3c
+    for rot in (1, -1):
+        with pytest.raises(ValueError, match="gear 1 must be the pinion"):
+            bc.build_case7("wheel", rot)                                     # cases 7c, 7d
+    with pytest.raises(ValueError, match=r"gear 1 must be the external gear \(pinion\), got z1=-60"):
+        pair(bc.gear(2.0, -60), bc.gear(2.0, 20))                            # a ring as gear 1 (D-0010 item 10)
+    assert pair(pinion, bc.gear(3.5, 20, beta_n_deg=15.0)).u == 1.0        # equal tooth numbers are accepted
+
+
+@pytest.mark.parametrize("case", PAIRS)
+def test_length_of_the_path_of_contact_is_A_to_E(case):
+    """Q22: g_alpha = 1/2 (sqrt(d_a1**2 - d_b1**2) + s2 (sqrt(d_a2**2 - d_b2**2) - 2 a_w sin(alpha_wt)))
+    (ISO_21771_2007, Eq. (77), stored a_w positive), positive and equal to the stored distance A-E for
+    both kinds; for an external pair it is the sum of the two addendum parts."""
+    p = PAIRS[case]
+    assert p.galpha > 0.0
+    assert p.galpha == pytest.approx(p.AE, rel=1e-12)
+    if p.gear2.z > 0:
+        assert p.galpha == pytest.approx(p.galpha1 + p.galpha2, rel=1e-12)
+    assert p.epslon_alpha == pytest.approx(p.galpha / p.gear1.pbt, rel=1e-12)    # Eq. (90)
+
+
+@pytest.mark.parametrize("case", PAIRS)
+def test_reduced_radius_at_the_pitch_point_uses_the_signed_ring_radius(case):
+    """Q22: ReqI = 1 / (1/rho_C1 + 1/rho_C2) with rho_C = r_w sin(alpha_wt), rho_C2 < 0 for a ring
+    (ISO_21771_2007, Eq. (81)-(82) and NOTE; D-0010 item 8): the stored T1C, T2C, and the reduced radius
+    of ``curvature_radii`` at C [mm]. Case 4: 10.2606 mm."""
+    p = PAIRS[case]
+    assert p.ReqI == pytest.approx(1.0 / (1.0 / p.T1C + 1.0 / p.T2C), rel=1e-12)
+    assert p.ReqI == pytest.approx(FAMILY.curvature_radii(p, 0.0)["rho_red_t_mm"], rel=1e-12)
+    if case == "case4":
+        assert p.ReqI == pytest.approx(10.260604299772375, rel=1e-9)
+
+
+@pytest.mark.parametrize("which", ("case2", "case5", "internal_x0.2"))
+def test_pair_at_the_centre_distance_derived_from_its_shifts_is_consistent(which):
+    """Q26, Q57: imposing the centre distance the family derived from x1 + x2 gives the same working
+    pressure angle, no profile shift message (ISO_21771_2007, Eq. (62) with the signed z1 + z2), zero
+    backlash and no warning, for both kinds."""
+    p = PAIRS[which] if which in PAIRS else pair(*INTERNAL_SHIFTED)
+    again = pair(p.gear1, p.gear2, al=p.al)
+    assert again.alphatw == pytest.approx(p.alphatw, rel=1e-10)
+    assert again.jbn == pytest.approx(0.0, abs=1e-9) and again.warnings == ()
+    assert p.jbn is None
+    assert again.profile_shift_check[0] == pytest.approx(p.gear1.x + p.gear2.x, abs=1e-9)
+
+
+@pytest.mark.parametrize("which, sign", (("case2", 1.0), ("case5", -1.0), ("internal_x0.2", -1.0)))
+def test_backlash_of_a_larger_imposed_centre_distance(which, sign):
+    """Q57, Q26: with a_w larger than the zero-backlash centre distance a_w0 the normal backlash j_bn of
+    ISO_21771_2007, 5.3, Eq. (63) is positive for an external pair and negative for an internal pair
+    (moving the pinion away from the ring centre pushes its teeth into the ring). To first order
+    abs(j_bn) = 2 (a_w - a_w0) sin(alpha_wt) cos(beta_b) (ISO_21771_2007, 5.5.2-5.5.3, Eq. (102), (104):
+    backlash from a change of centre distance). The pair is built and carries ONE warning with the sum implied by
+    a_w (Eq. (62)) and j_bn; ``validate()`` has no message for it (lead decision, 2026-10-15)."""
+    p = PAIRS[which] if which in PAIRS else pair(*INTERNAL_SHIFTED)
+    for factor, rel in ((1.002, 2e-2), (1.0 + 1e-6, 1e-5)):
+        q = pair(p.gear1, p.gear2, al=p.al * factor)
+        assert math.copysign(1.0, q.jbn) == sign
+        assert abs(q.jbn) == pytest.approx(2.0 * (q.al - p.al) * math.sin(q.alphatw) * math.cos(q.gear1.betab), rel=rel)
+        assert len(q.warnings) == 1 and q.warnings[0].startswith("profile shifts do not match the centre distance")
+        assert "implies x1 + x2" in q.warnings[0] and "jbn" in q.warnings[0]
+        assert q.validate() == p.validate()             # the mismatch adds nothing to validate()
+        assert "warning: profile shifts do not match" in q.summary()
+
+
+def test_tip_alteration_gives_the_bottom_clearance_at_the_working_centre_distance():
+    """Q23: k = s2 (a_w - a) / mn - (x1 + x2), the same k on both tips, d_a = d + 2 (z/abs(z)) mn (haP + x + k)
+    (ISO_21771_2007, 4.5.2, Eq. (33): k < 0 shortens the addendum): with addendum_reduction both
+    bottom clearances at a_w are cP mn, external (case 1, x 0.1817/0.1715) and internal (z 20/-60,
+    x 0.2/0.2). Without it, k = 0 and each clearance is cP mn + k mn (here k < 0 for the external pair,
+    the tips are shortened; k > 0 for the internal one). No library source needed: geometry of the
+    two circles."""
+    for gears in ((PAIRS["case1"].gear1, PAIRS["case1"].gear2), INTERNAL_SHIFTED):
+        p = pair(*gears, addendum_reduction=True)
+        cP_mn = p.gear1.cP * p.gear1.mn
+        assert p.k != 0.0
+        assert _bottom_clearances(p) == (pytest.approx(cP_mn, abs=1e-9), pytest.approx(cP_mn, abs=1e-9))
+        assert p.da1_w == pytest.approx(p.gear1.da + 2.0 * p.gear1.mn * p.k, rel=REL)
+        assert p.da2_w == pytest.approx(p.gear2.da + 2.0 * math.copysign(1.0, p.gear2.z) * p.gear2.mn * p.k, rel=REL)
+        plain = pair(*gears)
+        assert plain.k == 0.0
+        assert _bottom_clearances(plain) == (pytest.approx(cP_mn + p.k * p.gear1.mn, abs=1e-9),) * 2
+
+
+def test_tip_alteration_of_sdp_table_4_4():
+    """Q23, Q04: SDP-SI "Elements of Metric Gear Technology", Table 4-4 (external spur, m 3 mm, 20 deg,
+    z 12/24, x 0.6/0.36, tip from the working centre distance): alpha_w 26.0886 deg, a_w 56.4999 mm,
+    d_a 44.840/79.400 mm, d_f 32.100/66.660 mm (printed rounding); k = -0.12671 in the ISO sign (vault
+    ``80_Inbox/2026-10-15/internal_gears_validation_khk.md``)."""
+    p = pair(bc.gear(3.0, 12, x=0.6), bc.gear(3.0, 24, x=0.36), addendum_reduction=True)
+    assert math.degrees(p.alphatw) == pytest.approx(26.0886, abs=5e-5)
+    assert p.al == pytest.approx(56.4999, abs=5e-5)
+    assert (p.da1_w, p.da2_w) == (pytest.approx(44.840, abs=5e-4), pytest.approx(79.400, abs=5e-4))
+    assert (p.gear1.df, p.gear2.df) == (pytest.approx(32.100, abs=5e-4), pytest.approx(66.660, abs=5e-4))
+    assert p.k == pytest.approx(-0.12671, abs=5e-6)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -190,22 +363,6 @@ def test_every_legacy_entry_has_both_kinds_and_a_test():
     assert all(set(entry) == {"external", "internal"} for entry in cylindrical._LEGACY.values())
     tested = {name[len("test_legacy_"):] for name in globals() if name.startswith("test_legacy_")}
     assert set(cylindrical._LEGACY) <= tested
-
-
-def test_legacy_base_cylinder(case5):
-    """Q21 (I1): base helix angle, base diameter and transverse pressure angle of a helical ring."""
-    ring = case5.gear2
-    assert ring.betab == pytest.approx(0.27903642861272426, rel=REL)        # 15.99 deg for beta = 15 deg
-    assert ring.db == pytest.approx(117.30013345227457, rel=REL)
-    assert ring.alphat == pytest.approx(0.3356586244277489, rel=REL)
-    assert ring.betab > ring.beta                                            # larger than the reference helix angle
-
-
-@xfail("Q21: I1 / row 3, one rule for the base helix angle of both kinds (ISO_21771_2007, Eq. (5)-(7))")
-def test_alternative_ring_has_the_base_helix_angle_of_its_pinion(case5):
-    """Two gears in mesh have the same base helix angle and transverse pressure angle (clause 5)."""
-    assert case5.gear2.betab == pytest.approx(case5.gear1.betab, rel=REL)
-    assert case5.gear2.alphat == pytest.approx(case5.gear1.alphat, rel=REL)
 
 
 def test_legacy_virtual_teeth(case5):
@@ -235,118 +392,14 @@ def test_legacy_gear_limits():
     assert bc.gear(2.0, 8, label="g").validate() == ["g: gear is undercut — z=8, mn=2.0, alpha=20.0°, beta=0.0°, x=0.0"]
     assert FAMILY.undercutting(bc.gear(2.0, 8)) and not FAMILY.undercutting(bc.gear(2.0, 20))
     assert bc.gear(2.0, -60, x=-2.0, label="g").validate() == [
-        "g: tip diameter da=123.0000 ≥ pitch diameter d=120.0000. Internal gear addendum must reduce da below d."]
-
-
-def test_legacy_alphatw_from_x_sum(case5):
-    """Q21 (I1): the internal pair takes alpha_t of the ring; baseline case 5."""
-    assert case5.alphatw == pytest.approx(0.3356586244277506, rel=REL)
-    assert case5.alphatw == pytest.approx(case5.gear2.alphat, rel=1e-10)     # x1 + x2 = 0: that of the ring
-    assert case5.al == pytest.approx(41.41104721640335, rel=REL)
-    assert case5.dl2 - case5.dl1 == pytest.approx(83.19148633657922, rel=REL)   # against 2 al = 82.822 mm
-
-
-@xfail("Q21: I1, the working pitch circles of a helical internal pair are not tangent (dw2 - dw1 != 2 a_w)")
-def test_alternative_internal_working_pitch_circles_are_tangent(case5):
-    assert case5.dl2 - case5.dl1 == pytest.approx(2.0 * case5.al, rel=1e-9)
-
-
-def test_legacy_alphatw_from_al(case2, case5):
-    """Q21 (I1): imposing the centre distance the family derived gives the same working pressure angle;
-    only an internal pair gets a backlash ``jbn`` (zero here)."""
-    again = pair(case5.gear1, case5.gear2, al=case5.al)
-    assert again.alphatw == pytest.approx(case5.alphatw, rel=REL)
-    assert again.jbn == pytest.approx(0.0, abs=bc.ABS_TOL)
-    assert case5.jbn is None
-    assert pair(case2.gear1, case2.gear2, al=case2.al).jbn is None
-    assert pair(case2.gear1, case2.gear2, al=case2.al).alphatw == pytest.approx(case2.alphatw, rel=1e-10)
-
-
-def test_legacy_u(case2, case4):
-    """Q03 (X1): u = max/min for an external pair whatever the order; z2/z1 (signed) for an internal pair."""
-    swapped = pair(case2.gear2, case2.gear1)                # gear 1 = wheel (z 30), gear 2 = pinion (z 20)
-    assert case2.u == swapped.u == 1.5
-    assert case4.u == -3.0
-
-
-@xfail("Q03: row 1 / X1, u = z2/z1 (ISO_21771_2007, 5.2.1, Eq. (52))")
-def test_alternative_gear_ratio_follows_the_order_of_the_gears(case2):
-    swapped = pair(case2.gear2, case2.gear1)
-    assert swapped.u == pytest.approx(swapped.gear2.z / swapped.gear1.z, rel=REL)
-
-
-def test_legacy_working_pitch_diameters(case2):
-    """Q03 (X1): gear 1 of an external pair gets the smaller working diameter even when it is the wheel."""
-    swapped = pair(case2.gear2, case2.gear1)
-    assert swapped.gear1.z > swapped.gear2.z
-    assert swapped.dl1 == pytest.approx(case2.dl1, rel=REL) and swapped.dl1 == pytest.approx(73.20020604719922, rel=REL)
-    assert swapped.dl1 < swapped.dl2
-
-
-@xfail("Q03: row 1 / X1, d_w = d_b / cos(alpha_wt) for each gear (ISO_21771_2007, Eq. (56)-(57))")
-def test_alternative_working_pitch_diameter_belongs_to_its_gear(case2):
-    swapped = pair(case2.gear2, case2.gear1)
-    assert swapped.dl1 == pytest.approx(swapped.gear1.db / math.cos(swapped.alphatw), rel=1e-9)
-
-
-def test_legacy_tip_alteration(case2):
-    """Q23 (I3): factor of k and the gear that takes it. External: (z1 + z2)/2, both tips; internal:
-    (z2 - z1)/2, tip of gear 1 only."""
-    assert cylindrical._LEGACY["tip_alteration"]["external"](20, 30) == (25.0, 1.0)
-    assert cylindrical._LEGACY["tip_alteration"]["internal"](20, -60) == (-40.0, 0.0)
-    ext = pair(case2.gear1, case2.gear2, addendum_reduction=True)
-    assert ext.k == pytest.approx(0.008973779105703877, rel=REL)
-    m = ext.gear1.mn
-    assert ext.da1_w == pytest.approx(ext.gear1.da - 2 * m * ext.k, rel=REL)
-    assert ext.da2_w == pytest.approx(ext.gear2.da - 2 * m * ext.k, rel=REL)
-    internal = pair(bc.gear(2.0, 20, x=0.3, b=20.0), bc.gear(2.0, -60, x=0.1, b=20.0), addendum_reduction=True)
-    assert internal.k != 0.0
-    assert internal.da1_w == pytest.approx(internal.gear1.da - 2 * 2.0 * internal.k, rel=REL)
-    assert internal.da2_w == pytest.approx(internal.gear2.da, rel=REL)          # the ring keeps its tip
-
-
-def test_legacy_galpha(case4):
-    """Q22 (I2): the pair ``galpha`` of an internal pair is negative and is not its A-E distance."""
-    assert case4.galpha == pytest.approx(-12.595659070395595, rel=REL)
-    assert case4.AE == pytest.approx(14.76595239565792, rel=REL)
-
-
-@xfail("Q22: I2 / row 45, g_alpha of an internal pair = its A-E distance (ISO_21771_2007, Eq. (77))")
-def test_alternative_internal_path_of_contact_is_A_to_E(case4):
-    assert case4.galpha == pytest.approx(case4.AE, rel=1e-9)
-
-
-def test_reduced_radius_of_an_internal_pair(case4):
-    """Q22 (I2): ``ReqI`` is the plus-sign sum with a positive ring radius; baseline case 4."""
-    assert case4.ReqI == pytest.approx(5.130302149885034, rel=REL)
-
-
-@xfail("Q22: I2 / row 45, rho_C2 of a ring is negative (ISO_21771_2007, Eq. (82)): 10.261 mm in case 4")
-def test_alternative_reduced_radius_with_the_signed_ring_radius(case4):
-    """With the stored signed segments rho_C1 = T1C > 0 and rho_C2 = T2C < 0."""
-    assert case4.ReqI == pytest.approx(1.0 / (1.0 / case4.T1C + 1.0 / case4.T2C), rel=1e-9)
-
-
-def test_legacy_profile_shift_check(case2, case5):
-    """Q26 (I6): the internal check reports the centre distance that the family itself derived."""
-    assert case2.profile_shift_check[0] == "x1+x2" and case5.profile_shift_check[0] == "x2-x1"
-    assert case5.profile_shift_check[1] == pytest.approx(0.3574235135793648, rel=REL)
-    again = pair(case5.gear1, case5.gear2, al=case5.al)
-    assert again.validate()[0] == ("Profile shift inconsistency: declared x2-x1=0.0000 but al=41.4110 mm implies "
-                                   "x2-x1=0.3574. Adjust x1, x2, or al so they are consistent.")
-    assert not any("Profile shift" in m for m in pair(case2.gear1, case2.gear2, al=case2.al).validate())
-
-
-@xfail("Q26: I6, an internal pair at the centre distance derived from its own profile shifts is consistent")
-def test_alternative_internal_pair_accepts_its_own_centre_distance(case5):
-    assert not any("Profile shift" in m for m in pair(case5.gear1, case5.gear2, al=case5.al).validate())
+        "g: tip diameter da=124.0000 ≥ pitch diameter d=120.0000. Internal gear addendum must reduce da below d."]
 
 
 def test_legacy_force_input(case2, case5):
     """Q03 (X1): the driver changes the forces of an internal pair and not those of an external pair
     (the alternative for the external pair is ``test_alternative_wheel_driver_takes_the_torque_on_the_wheel``)."""
     assert FAMILY.forces(case2, bc.T_NM, driver="gear2") == FAMILY.forces(case2, bc.T_NM, driver="gear1")
-    assert FAMILY.forces(case5, bc.T_NM, driver="gear1")["Ft"] == pytest.approx(2960.4069103569436, rel=REL)
+    assert FAMILY.forces(case5, bc.T_NM, driver="gear1")["Ft"] == pytest.approx(2933.999697353043, rel=1e-11)   # Q21: r_w1 of one base-cylinder rule
     ring_drives = FAMILY.forces(case5, bc.T_NM, driver="gear2")
     assert ring_drives["Ft"] == pytest.approx(977.9998991176811, rel=REL)
     assert ring_drives["T_out"] == pytest.approx(-20.25, rel=REL)
@@ -354,15 +407,15 @@ def test_legacy_force_input(case2, case5):
 
 def test_legacy_interference(case2, case4):
     """Q24 (I4): every internal pair carries the trimming message (and here the trochoid one), so
-    ``validate_or_raise`` raises; an external pair is tested by -T1A > T1C."""
+    ``validate_or_raise`` raises; an external pair is tested by -T1A > T1C (z 7/60 with the ISO tip, Q04)."""
     assert case4.validate() == ["ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0).",
                                 "ring: trimming interference — tooth difference z2-z1=-80 < 2."]
     with pytest.raises(ValueError, match="trimming interference"):
         case4.validate_or_raise()
     assert case2.validate() == []
-    low = pair(bc.gear(2.0, 8, b=10.0, label="p"), bc.gear(2.0, 60, b=10.0, label="w"))
-    assert low.validate()[-1] == ("Involute interference on gear1 (pinion): path of approach 3.7124 mm > limit "
-                                  "2.7362 mm. Reduce haP, increase x1, or increase z1.")
+    low = pair(bc.gear(2.0, 7, b=10.0, label="p"), bc.gear(2.0, 60, b=10.0, label="w"))
+    assert low.validate()[-1] == ("Involute interference on gear1 (pinion): path of approach 2.8746 mm > limit "
+                                  "2.3941 mm. Reduce haP, increase x1, or increase z1.")
 
 
 @xfail("Q24: I4 / row 4, the trimming test (z2 - z1 < 2 with the signed z2) is true for every internal pair")
@@ -391,32 +444,28 @@ def test_renamed_text_rows_are_counted():
     echoed = sum(1 for c in cases for obj, name, _ in bc.baseline_rows(c) if name in names and obj != "link")
     renamed = sum(n for _, n in bc.RENAMED_TEXT.values())
     total = sum(len(bc.baseline_rows(c)) for c in cases)
-    assert echoed == count == 58
+    assert echoed == count == 50                 # 8 rows deleted with cases 3b, 3c, 7c, 7d (Q03, answer 7)
     # Q46 (step 5): the rows of case 7 that are text or state of the two replaced system classes, counted
     # one by one in mechanical_system/tests/test_transmission_baseline.py
     renamed += sum(n for _, n in bc.RENAMED_PATTERNS.values())
     echoed += sum(n for _, n, _ in bc.ECHOED_ROWS_CASE7.values())
-    assert (total, total - echoed - renamed, renamed, echoed) == (7181, 7087, 18, 76)     # rows: computed, renamed text, echoed
+    assert (total, total - echoed - renamed, renamed, echoed) == (6075, 5999, 14, 62)     # rows: total, computed, renamed text, echoed
 
 
 # ----------------------------------------------------------------------------------------------
 # other unruled items kept as today
 # ----------------------------------------------------------------------------------------------
-def test_ring_tip_diameter_carries_the_clearance(case4):
-    """Q27 (I7): ring of baseline case 4, d = 120 mm, tip 115 mm = d - 2 mn (haP + cP)."""
-    assert case4.gear2.da == pytest.approx(115.0, rel=REL)
-
-
-@xfail("Q27: I7 / row 2, ring tip without the clearance (ISO_21771_2007, 4.5.3, Eq. (33)): 116 mm")
-def test_alternative_ring_tip_diameter_without_clearance(case4):
+def test_ring_tip_diameter_without_the_clearance(case4):
+    """Q27: ring of baseline case 4, d = 120 mm, tip 116 mm = d - 2 mn (haP + x) (ISO_21771_2007, 4.5.3, Eq. (33))."""
     ring = case4.gear2
+    assert ring.da == pytest.approx(116.0, rel=REL)
     assert ring.da == pytest.approx(ring.d - 2.0 * ring.mn * (ring.haP + ring.x), rel=REL)
 
 
 def test_assemble_does_not_validate(case4):
     """Q51 / Q15: baseline case 4 assembles although its path starts beyond the base-tangent point
-    (T1A < 0) and its ``validate()`` is not empty."""
-    assert case4.T1A == pytest.approx(-2.3949738015367448, rel=REL)
+    (T1A < 0, 0.075 mm with the ISO tip) and its ``validate()`` is not empty."""
+    assert case4.T1A == pytest.approx(-0.07492456399709191, rel=1e-9)
     assert case4.validate() != []
 
 

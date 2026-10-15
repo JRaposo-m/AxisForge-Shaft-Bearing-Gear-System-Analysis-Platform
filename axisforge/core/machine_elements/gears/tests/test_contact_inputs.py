@@ -4,21 +4,19 @@
 Four groups: against the values the pair already stores (segments, ``ReqI``, radii to the path
 points); closed forms of ISO_21771_2007 (5.4.5.3, 5.4.7, 5.4.8, 5.6); bad inputs; and GEARpie's
 arrays as LITERAL values, copied by ``scripts/questions_values_step4.py`` (vault) from
-``baseline/arrays/gearpie_case{1,2,3}_GFS_*.csv``. Open items carry their question id; the
-alternative of an unruled one is a second test marked ``xfail(strict=True)``. Every GEARpie number
+``baseline/arrays/gearpie_case{1,2,3}_GFS_*.csv``. Open items carry their question id. Every GEARpie number
 below is a row "LITERAL" of ``scripts/questions_values_step4.csv`` (same folder of the vault).
 
 Position along the path: g_y [mm] from the pitch point C, positive toward the tip of gear 1.
 Units: lengths [mm], speeds [m/s], forces [N], load per unit length [N/mm], time [s].
 """
-import dataclasses
 import math
 import warnings
 
 import numpy as np
 import pytest
 
-from axisforge.core.machine_elements.gears import CylindricalFamily, Gear, GearPair
+from axisforge.core.machine_elements.gears import CylindricalFamily, GearPair
 from axisforge.core.machine_elements.gears.tests import baseline_cases as bc
 
 FAMILY = CylindricalFamily()
@@ -32,27 +30,17 @@ def pair(g1, g2):
     return GearPair.assemble(FAMILY, gear1=g1, gear2=g2)
 
 
-def xfail(question):
-    return pytest.mark.xfail(strict=True, raises=AssertionError, reason=question)
-
-
 def same(got, expected):
     """Equality at the baseline tolerance, absolute 1e-12 mm (or m/s) near zero."""
     return got == pytest.approx(expected, rel=REL, abs=1e-12)
 
 
 CASES = {
-    "case1": pair(*bc.pinion_wheel("C14")),      # external spur, z 16/24, mn 4.5 mm, eps_alpha 1.766
+    "case1": pair(*bc.pinion_wheel("C14")),      # external spur, z 16/24, mn 4.5 mm, eps_alpha 1.462
     "case2": pair(*bc.pinion_wheel("H501")),     # external helical, z 20/30, mn 3.5 mm, beta 15 deg
-    "case4": pair(*bc.make_internal(0.0)),       # internal spur, z 20/-60, mn 2 mm, eps_alpha 2.501
-    "case5": pair(*bc.make_internal(15.0)),      # internal helical (Q21)
+    "case4": pair(*bc.make_internal(0.0)),       # internal spur, z 20/-60, mn 2 mm, eps_alpha 1.950 (T1A < 0: Q15)
+    "case5": pair(*bc.make_internal(15.0)),      # internal helical, beta 15 deg
 }
-CONSISTENT = ("case1", "case2", "case4")         # case 5: the two gears have base circles from different rules (Q21)
-
-
-def without_tip_clearance(p):
-    """Same gears with cP = 0: the tip diameter of GEARpie and of ISO_21771_2007, Eq. (33) (Q04)."""
-    return pair(*(Gear.assemble(FAMILY, dataclasses.replace(g.data, cP=0.0)) for g in (p.gear1, p.gear2)))
 
 
 # ----------------------------------------------------------------------------------------------
@@ -83,11 +71,11 @@ def test_gear_2_driving_exchanges_A_with_E_and_B_with_D(case):
 
 
 def test_path_points_pinned_on_case_2_and_case_4():
-    """Units guard [mm]. Case 4 (eps_alpha 2.5): D comes before B."""
+    """Units guard [mm]. Case 4 (eps_alpha 1.95 < 2): B comes before D."""
     g = FAMILY.path_points(CASES["case2"], "gear1")
-    assert same(g["A"], -9.310625603875703) and same(g["E"], 9.700028839113521)
+    assert same(g["A"], -7.548430643298625) and same(g["E"], 8.126598199162627)
     g = FAMILY.path_points(CASES["case4"], "gear1")
-    assert same(g["D"], -3.331113799863025) and same(g["B"], -0.3736871405793023) and g["D"] < g["B"]
+    assert same(g["D"], -1.0110645623249095) and same(g["B"], -1.3082715749939684) and g["B"] < g["D"]
 
 
 # ----------------------------------------------------------------------------------------------
@@ -101,23 +89,16 @@ def test_radii_at_the_path_points_are_the_stored_segments(case):
     rho = FAMILY.curvature_radii(p, [g[k] for k in "ABCDE"])
     for i, k in enumerate("ABCDE"):
         assert same(rho["rho1_t_mm"][i], getattr(p, "T1" + k))
-        if not (case == "case5" and k == "C"):   # Q21: pinned below
-            assert same(rho["rho2_t_mm"][i], getattr(p, "T2" + k))
+        assert same(rho["rho2_t_mm"][i], getattr(p, "T2" + k))      # case 5 at C too: one base-cylinder rule (Q21)
     assert np.all(same(rho["rho1_t_mm"] + rho["rho2_t_mm"], p.T1T2))
     assert np.all(np.sign(rho["rho2_t_mm"]) == np.sign(p.gear2.z))   # D-0010 item 8: concave ring flank negative
 
 
-def test_helical_ring_radius_at_the_pitch_point_is_not_the_stored_T2C():
-    """Q21 (I1): T1T2 - T1C against the stored T2C = -rb2 tan(alphatw), case 5."""
-    p = CASES["case5"]
-    assert same(FAMILY.curvature_radii(p, 0.0)["rho2_t_mm"], -20.399809022388247)
-    assert same(p.T2C, -20.460646227033372)
-
-
-@xfail("Q21: I1 / row 3, one base circle rule for both gears: rho_C2 = T2C in a helical internal pair")
-def test_helical_ring_radius_at_the_pitch_point_under_one_base_circle_rule():
+def test_helical_ring_radius_at_the_pitch_point_is_the_stored_T2C():
+    """Q21: with one base-cylinder rule T1T2 - T1C is the stored T2C = -rb2 tan(alphatw) [mm], case 5."""
     p = CASES["case5"]
     assert same(FAMILY.curvature_radii(p, 0.0)["rho2_t_mm"], p.T2C)
+    assert same(p.T2C, -p.gear2.rb * math.tan(p.alphatw))
 
 
 @pytest.mark.parametrize("case", CASES)
@@ -128,27 +109,6 @@ def test_radii_to_the_path_points_follow_from_the_radii_of_curvature(case):
     for attr, i, k in (("rA1", 1, "A"), ("rB1", 1, "B"), ("rD1", 1, "D"), ("rA2", 2, "E"), ("rB2", 2, "D"), ("rD2", 2, "B")):
         rho = FAMILY.curvature_radii(p, g[k])[f"rho{i}_t_mm"]
         assert same(math.hypot(rho, getattr(p, f"gear{i}").rb), getattr(p, attr))
-
-
-@pytest.mark.parametrize("case", ["case1", "case2"])
-def test_reduced_radius_at_the_pitch_point_is_the_stored_ReqI_for_an_external_pair(case):
-    p = CASES[case]
-    assert same(FAMILY.curvature_radii(p, 0.0)["rho_red_t_mm"], p.ReqI)
-
-
-def test_reduced_radius_of_an_internal_pair_uses_the_signed_ring_radius():
-    """Q22 (I2): 10.261 mm with rho_C2 < 0 against the stored ReqI = 5.130 mm (positive ring radius), case 4."""
-    p = CASES["case4"]
-    rho = FAMILY.curvature_radii(p, 0.0)
-    assert rho["rho2_t_mm"] < 0.0
-    assert same(rho["rho_red_t_mm"], 10.260604299770065)
-    assert same(p.ReqI, 1.0 / (1.0 / rho["rho1_t_mm"] + 1.0 / abs(rho["rho2_t_mm"])))
-
-
-@xfail("Q22: I2 / row 45, the stored ReqI of an internal pair with the signed ring radius")
-def test_stored_ReqI_of_an_internal_pair_with_the_signed_ring_radius():
-    p = CASES["case4"]
-    assert same(p.ReqI, FAMILY.curvature_radii(p, 0.0)["rho_red_t_mm"])
 
 
 def test_normal_plane_radii_are_the_transverse_ones_over_cos_betab():
@@ -165,13 +125,13 @@ def test_normal_plane_radii_are_the_transverse_ones_over_cos_betab():
 # ----------------------------------------------------------------------------------------------
 # surface speeds
 # ----------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("case", CONSISTENT)
+@pytest.mark.parametrize("case", CASES)
 def test_no_sliding_at_the_pitch_point(case):
     v = FAMILY.surface_speeds(CASES[case], 0.0, N1)
     assert abs(v["vg_m_per_s"]) < 1e-12 and same(v["u1_m_per_s"], v["ue_m_per_s"])
 
 
-@pytest.mark.parametrize("case", CONSISTENT)
+@pytest.mark.parametrize("case", CASES)
 def test_sliding_speed_is_proportional_to_the_distance_from_the_pitch_point(case):
     """ISO_21771_2007, Eq. (108): abs(vg) = abs(omega1 g_alpha_y (1 + 1/u)), u = z2 / z1 signed."""
     p = CASES[case]
@@ -187,21 +147,20 @@ def test_surface_speeds_pinned_on_case_2():
     """Units guard [m/s]: at C both flanks move at the pitch-line speed times sin(alphatw)."""
     p = CASES["case2"]
     v = FAMILY.surface_speeds(p, 0.0, N1)
-    assert same(v["ue_m_per_s"], 2.0922410756969576)
+    assert same(v["ue_m_per_s"], 2.0922410756989587)
     assert v["ue_m_per_s"] == pytest.approx(OMEGA1 * p.rl1 / 1000.0 * math.sin(p.alphatw), rel=1e-12)
     v = FAMILY.surface_speeds(p, FAMILY.path_points(p, "gear1")["A"], N1)
-    assert same(v["u1_m_per_s"], 0.6784817474863454) and same(v["u2_m_per_s"], 3.0347472945040326)
-    assert same(v["vg_m_per_s"], -2.356265547017687)
+    assert same(v["u1_m_per_s"], 0.9460598533682053) and same(v["u2_m_per_s"], 2.856361890586128)
+    assert same(v["vg_m_per_s"], -1.9103020372179227)
 
 
-def test_helical_internal_pair_slides_at_the_pitch_point_today():
-    """Q21 (I1): the two base circles follow different rules, so u1 != u2 at C (case 5, 1450 rpm)."""
-    assert same(FAMILY.surface_speeds(CASES["case5"], 0.0, N1)["vg_m_per_s"], -0.006158495266848973)
-
-
-@xfail("Q21: I1 / row 3, one base circle rule for both gears: no sliding at the pitch point of a helical internal pair")
 def test_helical_internal_pair_does_not_slide_at_the_pitch_point():
-    assert abs(FAMILY.surface_speeds(CASES["case5"], 0.0, N1)["vg_m_per_s"]) < 1e-12
+    """Q21: one base-cylinder rule for both gears. Case 5 at 1450 rpm: no sliding at C (abs 1e-12 m/s), and
+    the two base circles unroll the same length of the line of action, omega2 rb2 = omega1 rb1 with
+    omega2 = omega1 / u (ISO_21771_2007, Eq. (105): v_n is common to both flanks)."""
+    p = CASES["case5"]
+    assert abs(FAMILY.surface_speeds(p, 0.0, N1)["vg_m_per_s"]) < 1e-12
+    assert abs(OMEGA1 / p.u) * p.gear2.rb == pytest.approx(OMEGA1 * p.gear1.rb, rel=1e-12)
 
 
 @pytest.mark.parametrize("n1_rpm", [0.0, -1450.0])
@@ -216,15 +175,6 @@ def test_internal_pair_slides_less_than_the_external_pair_of_the_same_teeth():
     internal = FAMILY.surface_speeds(CASES["case4"], 2.0, N1)
     assert internal["u2_m_per_s"] > 0.0
     assert same(internal["vg_m_per_s"], OMEGA1 * 2.0 * (1.0 - 20.0 / 60.0) / 1000.0)
-
-
-def test_speeds_use_the_signed_ratio_of_the_tooth_numbers_whatever_the_order_of_the_gears():
-    """Q03: with gear 1 = wheel the stored pair.u is still 1.5; the speeds take z2 / z1 = 2/3 (case 3b)."""
-    p = CASES["case2"]
-    swapped = pair(p.gear2, p.gear1)
-    assert swapped.u == 1.5
-    v = FAMILY.surface_speeds(swapped, 0.0, N1 / 1.5)        # the wheel at 966.67 rpm: same mesh as case 2
-    assert same(v["u1_m_per_s"], 2.0922410756969576) and same(v["u2_m_per_s"], 2.0922410756969576)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -252,8 +202,10 @@ def test_single_contact_zone_length_gives_the_transverse_contact_ratio():
 
 
 def test_pair_with_a_contact_ratio_above_two_shares_between_two_and_three_tooth_pairs():
-    """Baseline case 4, eps_alpha 2.5: no zone of single contact."""
-    p = CASES["case4"]
+    """Internal spur pair z 40/-120, mn 2 mm, alpha_n 15 deg (no baseline case), eps_alpha 2.48: no zone of
+    single contact."""
+    p = pair(bc.gear(2.0, 40, b=20.0, alpha_n_deg=15.0), bc.gear(2.0, -120, b=20.0, alpha_n_deg=15.0))
+    assert 2.0 < p.epslon_alpha < 3.0 and p.T1A > 0.0
     g = FAMILY.path_points(p, "gear1")
     ls = FAMILY.load_sharing(p, np.linspace(g["A"], g["E"], 2001))
     assert set(ls["n_pairs"]) == {2, 3} and set(ls["share"]) == {0.5, 1.0 / 3.0}
@@ -268,7 +220,7 @@ def test_shares_of_the_tooth_pairs_in_contact_add_up_to_one(case):
     assert np.all(shares == pytest.approx(1.0, rel=1e-12))
 
 
-@pytest.mark.parametrize("case", CONSISTENT)
+@pytest.mark.parametrize("case", CASES)
 def test_path_length_and_contact_lines_agree_with_the_contact_ratio(case):
     """eps_alpha = g_alpha / p_bt (ISO_21771_2007, Eq. (90)); the sum of the contact lines averaged over one base
     pitch is eps_alpha b / cos(beta_b); one tooth pair carries the whole force over one base pitch of travel."""
@@ -293,7 +245,7 @@ def test_helical_contact_line_is_never_longer_than_l_max():
     assert same(ls["l_mm"][1], l_max) and same(l_max, 23.711986287751117)
     # Q36: reference section at mid face width, so half of the line is already in contact at A and still at E
     assert same(ls["l_mm"][0], 11.855993143875557) and same(ls["l_mm"][2], ls["l_mm"][0])
-    assert same(ls["share"][1], 0.6241319808663442) and same(ls["l_sum_mm"][1], 37.991942433132515)
+    assert same(ls["share"][1], 0.9415836882820195) and same(ls["l_sum_mm"][1], 25.18308949363298)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -320,10 +272,10 @@ def test_contact_inputs_pinned_on_case_2():
     """Units guard: time [s] of the travel A..E at 1450 rpm, load per unit length [N/mm] for F_bn = 1847.1 N."""
     p = CASES["case2"]
     out = FAMILY.contact_inputs(p, "gear1", N1, F_BN_CASE2, n_points=5)
-    assert same(out["t_s"][-1], 0.0036923808304758256)
+    assert same(out["t_s"][-1], 0.0030445125489303704)
     # ISO_21771_2007, Eq. (105): the contact point moves along the line of action at v_n = omega1 rb1
     assert same(out["t_s"][-1], p.AE / (OMEGA1 * p.gear1.rb))
-    assert same(out["w_N_per_mm"][0], 48.61842917026523) and same(out["w_N_per_mm"][1], 38.948836672957405)
+    assert same(out["w_N_per_mm"][0], 51.93178223060986) and same(out["w_N_per_mm"][1], 46.05440498753953)
     assert np.all(same(FAMILY.contact_inputs(p, "gear1", N1, 2.0 * F_BN_CASE2, n_points=5)["w_N_per_mm"], 2.0 * out["w_N_per_mm"]))
 
 
@@ -352,27 +304,28 @@ def test_times_with_gear_2_driving_start_at_the_tip_of_gear_1():
     assert scalar["g_y_mm"].shape == (1,) and same(scalar["w_N_per_mm"][0], out["w_N_per_mm"][1])
 
 
-@pytest.mark.parametrize("case, beyond_T1_mm", [("case4", -2.3949738015367448), ("case5", -2.9490702916539657)])
-def test_path_that_starts_beyond_a_base_tangent_point_is_returned_with_a_warning(case, beyond_T1_mm):
-    """Q39 (with Q15, Q27): the first steps of the internal baseline pairs have rho1 < 0, where flank 1 has no
-    involute; the numbers are returned as they are (case 4 at A: reduced radius -1.976 mm, u1 -0.364 m/s)."""
-    p = CASES[case]
+def test_path_that_starts_beyond_a_base_tangent_point_is_returned_with_a_warning():
+    """Q39 (with Q15): the first step of baseline case 4 has rho1 < 0 (A is 0.075 mm beyond T1 with the ISO
+    tip, Q27), where flank 1 has no involute; the numbers are returned as they are (at A: reduced radius
+    -0.0745 mm, u1 -0.0114 m/s)."""
+    p = CASES["case4"]
     with pytest.warns(UserWarning, match="base-tangent point"):
         out = FAMILY.contact_inputs(p, "gear1", N1, 1000.0, n_points=51)
-    assert same(out["rho1_t_mm"][0], beyond_T1_mm) and same(out["rho1_t_mm"][0], p.T1A)
+    assert out["rho1_t_mm"][0] == pytest.approx(-0.07492456399709191, rel=1e-9) and same(out["rho1_t_mm"][0], p.T1A)
     assert out["rho_red_t_mm"][0] < 0.0 and out["u1_m_per_s"][0] < 0.0
-    if case == "case4":
-        assert same(out["rho_red_t_mm"][0], -1.9757075958774997) and same(out["u1_m_per_s"][0], -0.3636615515216463)
-        assert same(out["w_N_per_mm"][0], 16.666666666666668)
-        assert (out["rho1_t_mm"] <= 0.0).sum() == 9                    # 16 % of the path
+    assert out["rho_red_t_mm"][0] == pytest.approx(-0.07451423068780436, rel=1e-9)
+    assert out["u1_m_per_s"][0] == pytest.approx(-0.011376818891622977, rel=1e-9)
+    assert same(out["w_N_per_mm"][0], 25.0)                            # two tooth pairs at A, b = 20 mm
+    assert (out["rho1_t_mm"] <= 0.0).sum() == 1                        # the first step only
 
 
-@pytest.mark.parametrize("case", ["case1", "case2"])
+@pytest.mark.parametrize("case", ["case1", "case2", "case5"])
 def test_path_between_the_base_tangent_points_gives_no_warning(case):
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         out = FAMILY.contact_inputs(CASES[case], "gear1", N1, 1000.0, n_points=51)
-    assert out["rho1_t_mm"].min() > 0.0 and out["rho2_t_mm"].min() > 0.0
+    # flank 2 is an involute where its radius has the sign of z2 (negative: the concave ring flank)
+    assert out["rho1_t_mm"].min() > 0.0 and (np.sign(CASES[case].gear2.z) * out["rho2_t_mm"]).min() > 0.0
 
 
 @pytest.mark.filterwarnings("ignore:contact_inputs. the path of contact passes a base-tangent point")
@@ -424,8 +377,7 @@ def test_path_points_refuses_an_unknown_driver():
 # ----------------------------------------------------------------------------------------------
 # Each number of the two tables below is written by scripts/questions_values_step4.py (vault folder
 # 80_Inbox/2026-10-13/gears_refactor_steps0-5) into questions_values_step4.csv, rows "LITERAL".
-# GEARpie's tip has no clearance cP (Q04), so its A and E are not those of today's pair and its path index is not
-# comparable. Each row names a point of the line of action by the radius of curvature of flank 1,
+# GEARpie's tip is that of the pair (no clearance cP, Q04); each row still names a point of the line of action by the radius of curvature of flank 1,
 # R1 = T1A + xd [mm] (CLASSES/LOAD_SHARING.py:99), which is the same point in both codes: g_y = R1 - T1C.
 # Rows: (case, speed of gear 1 [rpm], R1 [mm], vr1, vr2, vr, vg [m/s], gs1, gs2, SRR [-]) at the first, middle
 # and last index of the arrays (case 3 = the pair of case 2 with the wheel driving at 1450 rpm).
@@ -468,8 +420,7 @@ def test_speeds_against_gearpie_at_the_same_point_of_the_line_of_action(case, n1
 
 
 # GEARpie's load per unit length fnx = fbn / lsum [N/mm] (CLASSES/FORCES_SPEEDS.py:72, ANSWER_LS = "N": the same
-# rigid model). It depends on the length of the path, so it is compared on the same gears built with cP = 0
-# (GEARpie's tip). Rows: (case, fbn [N], R1 [mm], fnx at the column at mid face width, fnx at column 0).
+# rigid model). It depends on the length of the path, which is GEARpie's since Q04. Rows: (case, fbn [N], R1 [mm], fnx at the column at mid face width, fnx at column 0).
 GEARPIE_LOAD = [
     ("case1", 1795.7999910531016, 4.294584993943477, 64.1357139661822, 64.1357139661822),
     ("case1", 1795.7999910531016, 13.99875981828456, 128.2714279323644, 128.2714279323644),
@@ -481,8 +432,9 @@ GEARPIE_LOAD = [
 
 
 @pytest.mark.parametrize("case, fbn, R1, fnx_mid, fnx_0", GEARPIE_LOAD)
-def test_load_per_unit_length_against_gearpie_on_gears_without_tip_clearance(case, fbn, R1, fnx_mid, fnx_0):
-    p = without_tip_clearance(CASES[case])
+def test_load_per_unit_length_against_gearpie(case, fbn, R1, fnx_mid, fnx_0):
+    """Q04: the tip of the family is GEARpie's (ISO_21771_2007, Eq. (33), no cP), so the same pair has the same path."""
+    p = CASES[case]
     g_y = R1 - p.T1C
     assert fbn / FAMILY.load_sharing(p, g_y)["l_sum_mm"] == pytest.approx(fnx_mid, rel=1e-9)
     # Q36: GEARpie's column 0 is the section at the face end where the tooth enters; its line has its mid-face
@@ -491,12 +443,7 @@ def test_load_per_unit_length_against_gearpie_on_gears_without_tip_clearance(cas
     assert fbn / FAMILY.load_sharing(p, g_y - back)["l_sum_mm"] == pytest.approx(fnx_0, rel=1e-9)
 
 
-def test_load_per_unit_length_of_todays_pair_is_not_gearpies():
-    """Q04: with the clearance cP in the tip the path is longer (eps_alpha 1.766 against 1.462, case 1), so GEARpie's
-    start of meshing (R1 = 4.2946 mm) is 2.12 mm inside today's path, and the zone of single contact is shorter."""
-    p = CASES["case1"]
-    g = FAMILY.path_points(p, "gear1")
-    assert same((4.294584993943477 - p.T1C) - g["A"], without_tip_clearance(p).T1A - p.T1A)
-    assert (4.294584993943477 - p.T1C) - g["A"] == pytest.approx(2.12, abs=0.01)
-    assert same(g["D"] - g["B"], (2.0 - p.epslon_alpha) * p.gear1.pbt)
-    assert g["D"] - g["B"] < (2.0 - 1.4624308892703048) * p.gear1.pbt
+def test_start_of_meshing_is_gearpies():
+    """Q04: with the tip of ISO_21771_2007, Eq. (33), GEARpie's start of meshing (R1 = 4.2946 mm, its first index) is
+    the stored A (T1A) of case 1."""
+    assert CASES["case1"].T1A == pytest.approx(4.294584993943477, rel=1e-9)

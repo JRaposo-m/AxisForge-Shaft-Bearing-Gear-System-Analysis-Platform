@@ -91,16 +91,18 @@ GEARPIE = {
     "H501": dict(alpha=20.0, beta=15.0, m=3.5, z=(20, 30), x=(0.1809, 0.0891), b=(23.0, 23.0), haP=1.0, hfP=1.25, rfP=0.38,
                  Ra=(0.6, 0.6), Rq=(0.7, 0.7), Rz=(4.8, 4.8)),
 }
-V3 = ("3a_gear1=pinion_gear2=wheel_driver=gear2", "3b_gear1=wheel_gear2=pinion_driver=gear1",
-      "3c_gear1=wheel_gear2=pinion_driver=gear2")
+# Q03 (José, 2026-10-15, answer 7): gear 1 must be the pinion, so the recorded variants 3b and 3c
+# (gear 1 = wheel) are refused by assemble; their rows are deleted (test_gear_1_must_be_the_pinion)
+V3 = ("3a_gear1=pinion_gear2=wheel_driver=gear2",)
 # case 7: shaft and bearing inputs copied from AxisForge-Design-Studies
 # validation/shafts/fem_stepped_distributed_gear/construction.py (SECTIONS :107-113, bearings :119-125)
 SECTIONS = [(20.0, 20.0, "bearing_seat_A"), (65.0, 28.0, "body_left"), (30.0, 25.0, "gear_seat"),
             (65.0, 28.0, "body_right"), (20.0, 20.0, "bearing_seat_B")]   # (length, diameter) [mm]
 PHI7 = 30.0           # [deg] line of centres a -> b, from +Y toward +Z
 GEAR_POS = 100.0      # [mm] axial position of both gears from the left end of their shaft
+# Q03 (José, 2026-10-15, answer 7): runs 7c, 7d built the pair as (wheel, pinion), now refused by assemble;
+# they are deleted and 7e, 7f are the wheel-source runs
 RUNS7 = [("a_pinion_source_rot+1", "pinion", 1, False), ("b_pinion_source_rot-1", "pinion", -1, False),
-         ("c_wheel_source_rot+1", "wheel", 1, False), ("d_wheel_source_rot-1", "wheel", -1, False),
          ("e_wheel_source_rot+1_ALT", "wheel", 1, True), ("f_wheel_source_rot-1_ALT", "wheel", -1, True)]
 OMEGA = N_RPM * 2.0 * math.pi / 60.0   # [rad/s]
 
@@ -241,9 +243,9 @@ RENAMED_TEXT = {
 
 
 # QUESTION(Q03) / QUESTION(Q50): the pair stores no driver (D-0026 item 4), so the recorded rows `driver`
-# and `driven` of the 29 recorded pairs are an echo of the case input (they pass by construction):
+# and `driven` of the 25 recorded pairs (29 before Q03 answer 7) are an echo of the case input (they pass by construction):
 # (row names, number of rows in cases 1-7). What the driver CHANGES is compared in the forces() rows.
-ECHOED_ROWS = (("driver", "driven"), 58)
+ECHOED_ROWS = (("driver", "driven"), 50)   # 58 recorded; 8 deleted with cases 3b, 3c, 7c, 7d (Q03, answer 7)
 
 # QUESTION(Q46): text rows of case 7 that name one of the two classes ``Transmission`` and ``PairStage``
 # replace: regular expression of the baseline text -> (text given now, built from the groups; number
@@ -252,18 +254,18 @@ ECHOED_ROWS = (("driver", "driven"), 58)
 RENAMED_PATTERNS = {
     # __repr__ of the system: its `resolved=True` was state of the system; the result is now a separate record
     r"\"GearSystem\(label='(.*)', shafts=(\d+), links=(\d+), resolved=True\)\"":
-        ("\"Transmission(label='{0}', shafts={1}, stages={2})\"", 6),
+        ("\"Transmission(label='{0}', shafts={1}, stages={2})\"", 4),
     # __repr__ of the link: torque_split=None (the full torque) is now share=1.0 (Q40)
     r"\"SpurHelicalMeshLink\((.*), torque_split=None, label='(.*)'\)\"":
-        ("\"PairStage({0}, share=1.0, label='{1}')\"", 6),
+        ("\"PairStage({0}, share=1.0, label='{1}')\"", 4),
 }
 
 # QUESTION(Q46): rows of case 7 that record STATE of the replaced classes with no counterpart of the
 # same value; they are written back as recorded (they pass by construction):
 # (object, row name ending) -> (recorded value, number of rows in cases 7a-7f, what holds it now).
 ECHOED_ROWS_CASE7 = {
-    ("link", "meshing_load_factor"): (1.0, 6, "removed: a constant 1.0 read by no live code"),
-    ("system", "].rpm"): (None, 12, "ResolvedTransmission.speed_rpm, a number (Q09)"),
+    ("link", "meshing_load_factor"): (1.0, 4, "removed: a constant 1.0 read by no live code"),
+    ("system", "].rpm"): (None, 8, "ResolvedTransmission.speed_rpm, a number (Q09)"),
 }
 
 
@@ -324,14 +326,14 @@ def recorded_pair(pair, driver="gear1"):
     ``CylindricalFamily.forces``), so the recorded rows ``driver`` / ``driven`` are the declared
     value itself and ``forces`` passes it on. The order of the first rows is that of the old
     constructors: with an imposed ``al`` the centre distance comes before the working pressure
-    angle, and an internal pair then has the backlash ``jbn``. ``new`` is the ``GearPair``.
+    angle, then the backlash ``jbn`` (both kinds since Q57). ``new`` is the ``GearPair``.
     """
     head = ("al", "alphatw", "jbn", "x1", "x2", "inv_alphatw") if pair.al_imposed else ("inv_alphatw", "alphatw", "al", "x1", "x2")
     rows = dict(driver=driver, driven="gear2" if driver == "gear1" else "gear1", label=pair.label, a=pair.a)
     rows.update((n, getattr(pair, n)) for n in (*head, *_PAIR_TAIL) if not (n == "jbn" and pair.jbn is None))
-    # the consistency check of validate(): recorded as x_sum_* (external) or x_diff_* (internal)
-    what = "diff" if cylindrical._kind(pair.gear2.z) == "internal" else "sum"
-    _, rows[f"x_{what}_from_al"], rows[f"x_{what}_declared"] = pair.profile_shift_check
+    # x1 + x2 implied by al (Eq. (62)) and declared, both kinds (Q26: the rows x_diff_* of an internal
+    # pair are renamed x_sum_*)
+    rows["x_sum_from_al"], rows["x_sum_declared"] = pair.profile_shift_check
     return Recorded(
         dict(rows, gear1=pair.gear1, gear2=pair.gear2, gear1_w=_recorded_working_gear(pair, 1),
              gear2_w=_recorded_working_gear(pair, 2), new=pair),
@@ -454,8 +456,9 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear
     rot : int
         Sense of rotation of the source shaft about +X, +1 or -1 [-].
     alt : bool
-        Wheel source only. False: pair built as ``(wheel, pinion)``, declared driver gear 1. True: built
-        as ``(pinion, wheel)``, declared driver gear 2, with ``gear_a`` = wheel: the external pair still
+        Wheel source only. False: pair built as ``(wheel, pinion)``, which ``assemble_pair`` refuses
+        (gear 1 must be the pinion, Q03 answer 7; the deleted cases 7c, 7d). True: built as
+        ``(pinion, wheel)``, declared driver gear 2, with ``gear_a`` = wheel: the external pair still
         takes the torque on its gear 1, the pinion (cases 7e, 7f; question Q03).
     label : str or None
         Label of the system.
@@ -582,12 +585,13 @@ def run_external(case, gname):
 
 
 def run_case3():
-    """Same pair as case 2, wheel as driver. Records every way the API lets the driver be expressed."""
+    """Same pair as case 2, wheel as driver: gear 1 = pinion, declared driver gear 2 (the only way left
+    after Q03, answer 7)."""
     case = "case3_helical_wheel_driver"
     rec = Recorder(case)
     p, w = pinion_wheel("H501")
     rec.add("inputs", "intent", "wheel delivers the input torque T_wheel = 60.75 N m")
-    variants = {V3[0]: (p, w, "gear2"), V3[1]: (w, p, "gear1"), V3[2]: (w, p, "gear2")}
+    variants = {V3[0]: (p, w, "gear2")}
     for vname, (g1, g2, drv) in variants.items():
         mesh = assemble_pair(g1, g2, label=vname, driver=drv)
         record_pair(rec, vname, mesh, T_NM, (case, vname))
@@ -1002,7 +1006,7 @@ def physics_system(case):
 def physics_rotation_reversal(sysres):
     """Checks 7.x: reversing the sense of rotation of the source (same gears, so the same helix hand)
     reverses Ft and the axial thrust and leaves Fr unchanged. No library source (symmetry)."""
-    for (ta, tb) in (("a_pinion_source_rot+1", "b_pinion_source_rot-1"), ("c_wheel_source_rot+1", "d_wheel_source_rot-1")):
+    for (ta, tb) in (("a_pinion_source_rot+1", "b_pinion_source_rot-1"), ("e_wheel_source_rot+1_ALT", "f_wheel_source_rot-1_ALT")):
         a, b = sysres[ta], sysres[tb]
         for sh in ("A", "B"):
             check("7.x1", f"{ta} vs {tb}", f"{sh}: Ft vector reverses when the sense of rotation reverses (|Ft(+) + Ft(-)|/|Ft|) [-]",

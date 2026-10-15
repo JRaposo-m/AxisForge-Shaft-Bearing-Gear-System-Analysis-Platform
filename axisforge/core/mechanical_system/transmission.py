@@ -384,7 +384,7 @@ class PairStage:
     def __repr__(self) -> str:
         """Text of the stage: names of the two shafts, phi [deg], share [-] and label."""
         return (f"PairStage({self.shaft_a.name} -> {self.shaft_b.name}, "
-                f"phi={self.phi_deg:.1f}°, share={self.share!r}, label={self.label!r})")
+                f"phi={self.phi_deg:.1f} deg, share={self.share!r}, label={self.label!r})")
 
 
 # ===========================================================================
@@ -451,19 +451,21 @@ class ResolvedTransmission:
         return self.transmission.label
 
     def summary(self) -> str:
-        """Multi-line text: shafts, stages, source and, per shaft in the order of the power path, torque [N m], sense of rotation and axis position [mm]."""
+        """Multi-line text: shafts, stages, source and, per shaft in the order of the power path, the
+        signed torque that enters it [N m] (``torque_Nm``), sense of rotation and axis position [mm]."""
         tr = self.transmission
-        # QUESTION(Q46): the words "links" and "T_out" are those of the recorded text of the class this one replaces.
-        lines = [f"── {tr.label or 'Transmission'} ──────────────────────────────────────────────",
-                 f"  shafts: {len(self.shafts)}   links: {len(tr.path)}   source: {tr.source.name}"]
+        # Q46 (José, 2026-10-15): text of this class (stages; T_in = the signed torque that ENTERS the shaft). ASCII only.
+        header = f"-- {tr.label or 'Transmission'} "
+        lines = [header + "-" * max(0, 56 - len(header)),
+                 f"  shafts: {len(self.shafts)}   stages: {len(tr.path)}   source: {tr.source.name}"]
         # the shafts in the order they receive power: the source, then the output shafts of each stage
         index = {id(s): i for i, s in enumerate(tr.shafts)}
         for i in [index[id(tr.source)]] + [index[id(s)] for stage in tr.path for s in stage.shafts[1:]]:
             y, z = self.shafts[i].shaft_position
-            t_str = f"{self.torque_Nm[i]:.3f} N·m"
-            lines.append(f"    {self.shafts[i].name:<12} T_out={t_str:<14} "
+            t_str = f"{self.torque_Nm[i]:.3f} N m"
+            lines.append(f"    {self.shafts[i].name:<12} T_in={t_str:<14} "
                          f"rot={self.rotation[i]!s:<3} pos=(y={y:.2f}, z={z:.2f}) mm")
-        lines.append("────────────────────────────────────────────────────────")
+        lines.append("-" * 56)
         return "\n".join(lines)
 
     def __repr__(self) -> str:
@@ -526,7 +528,8 @@ class Transmission:
     become the state of those shafts. ``PairStage`` is the only implementation; a stage that
     links more than two shafts (a planetary stage) is accepted by this contract and none
     exists. In the same way the members of a ``PlanetaryArrangement`` are a tuple of any length
-    (Q44: that class is not written yet).
+    (Q44, José 2026-10-15: keep - the stage contract is a documented duck type until the
+    planetary stage exists, then a Stage protocol; that class is not written yet).
 
     Limits: each shaft receives power once (no recombination); one input shaft per stage.
 

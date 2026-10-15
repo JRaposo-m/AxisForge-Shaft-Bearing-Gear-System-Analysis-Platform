@@ -160,14 +160,3 @@ def test_mesh_forces_are_frozen():
     m = FAMILY.mesh_forces(CASES["case2"], T, 1)
     with pytest.raises(AttributeError):
         m.F_bn_N = 0.0
-
-
-def test_normal_force_feeds_the_contact_inputs():
-    """``MeshForces.F_bn_N`` is the load of ``contact_inputs``: at the start of meshing of case 2 the
-    load per unit length is 51.932 N/mm (the value pinned for F_bn = 1847.109 N in
-    ``test_contact_inputs.py``), and the line loads times the summed line lengths give F_bn back."""
-    p = CASES["case2"]
-    m = FAMILY.mesh_forces(p, T, 1)
-    out = FAMILY.contact_inputs(p, "gear1", bc.N_RPM, m.F_bn_N, n_points=5)
-    assert out["w_N_per_mm"][0] == pytest.approx(51.93178223060986, rel=1e-12)
-    assert out["w_N_per_mm"] * out["l_sum_mm"] == pytest.approx(m.F_bn_N, rel=1e-12)

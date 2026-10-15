@@ -1,7 +1,7 @@
 """Golden tests of the gear classes against the baseline of commit 39c7133 (cases 1-6b), and the
 physics checks of the planetary train that need no standard (the mesh statics: ``test_mesh_forces.py``).
 
-The expected values are the CSVs in ``tests/data/gears_baseline`` (vault note
+The expected values are the CSVs in ``gears/tests/data/gears_baseline`` (vault note
 ``gears_mechsys_review_2026-10-12/baseline/_baseline.md``); the case objects are built in
 ``baseline_cases``. The code reproduces TODAY's results: where the review found today's result
 wrong, the test pins it and the physics check that it breaks is ``xfail(strict=True)`` with its
@@ -27,6 +27,17 @@ def test_baseline_rows(case, obj):
     """Every CSV row of one recorded object (attributes, return values, exception text, validate()
     messages) is reproduced under the equivalence rule (``baseline_cases.REL_TOL``)."""
     assert bc.mismatches(case, obj) == []
+
+
+def test_equivalence_rule_of_q02():
+    """Q02 (José, 2026-10-15): floats within rel 1e-12 (abs 1e-9 near zero); in a text the words are
+    exact and the printed numbers follow the float rule."""
+    assert bc.equivalent(1.0 + 5e-13, "1.0") and not bc.equivalent(1.0 + 5e-12, "1.0")
+    assert bc.equivalent(5e-10, "0.0") and not bc.equivalent(5e-9, "0.0")
+    assert bc.equivalent("a=12.500000000000002 mm, z=-24", "a=12.5 mm, z=-24")
+    assert not bc.equivalent("a=12.6 mm, z=-24", "a=12.5 mm, z=-24")
+    assert not bc.equivalent("b=12.5 mm, z=-24", "a=12.5 mm, z=-24")
+    assert not bc.equivalent("a=12.5 mm", "a=12.5 mm, z=-24")
 
 
 def test_number_of_recorded_physics_checks():

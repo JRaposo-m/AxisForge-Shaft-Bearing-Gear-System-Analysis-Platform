@@ -6,17 +6,23 @@ gears, bad inputs); closed-form identities of the involute geometry; the geometr
 ``cylindrical._LEGACY`` and per other unruled item, which pins TODAY's value on a baseline case. Where
 the review gives the alternative as a relation between quantities of the code, that relation is a
 second test marked ``xfail(strict=True)`` with its question id. The numbers are those of the
-baseline CSVs (``tests/data/gears_baseline``) or of ``scripts/questions_values_step3.py`` (vault).
+baseline CSVs (``gears/tests/data/gears_baseline``) or of ``scripts/questions_values_step3.py``
+(vault).
 Units: lengths [mm], angles [rad], torques [N m], forces [N].
 """
 import dataclasses
 import math
 
-import numpy as np
 import pytest
 
 from axisforge.core.machine_elements.gears import (
-    CylindricalFamily, CylindricalGearData, Gear, GearFamily, GearPair, cylindrical)
+    CylindricalFamily,
+    CylindricalGearData,
+    Gear,
+    GearFamily,
+    GearPair,
+    cylindrical,
+)
 from axisforge.core.machine_elements.gears.base import _GEAR_FAMILY_REGISTRY
 from axisforge.core.machine_elements.gears.tests import baseline_cases as bc
 
@@ -370,13 +376,9 @@ def test_every_legacy_entry_has_both_kinds_and_a_test():
 
 
 def test_legacy_virtual_teeth(case5):
-    """Q25 (I5): a ring has no virtual number of teeth, so the Henriot split raises AttributeError."""
+    """Q25 (deferred): a ring has no virtual number of teeth."""
     assert case5.gear1.zn == pytest.approx(20 / math.cos(math.radians(15.0)) ** 3, rel=REL)
     assert not hasattr(case5.gear2, "zn") and not hasattr(case5.gear2, "de")
-    with pytest.raises(AttributeError):
-        FAMILY.correction_for_gs_equilibrium(case5.gear1, case5.gear2)
-    with pytest.raises(AttributeError):
-        pair(case5.gear1, case5.gear2, equalise_gs=True)
 
 
 def test_legacy_beta_range():
@@ -465,33 +467,25 @@ def test_new_internal_cases_are_valid(case):
     assert p.warnings == ()
 
 
-def test_legacy_text(case2, case4):
-    """Q50: the texts keep the class names of the two pair classes the family replaces."""
-    assert repr(case2).startswith("HelicalGearMeshing(z1=20, z2=30, ")
-    assert repr(case4).startswith("InternalGearMeshing(z1=20, z2=-60, ")
-    assert case2.summary().splitlines()[0].startswith("── HelicalGearMeshing ─")
-    assert case4.summary().splitlines()[1] == "  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°"
+def test_one_pair_text_for_both_kinds(case2, case4):
+    """Q50 (José, 2026-10-15): one text for external and internal pairs, named ``GearPair``; the kind is the
+    sign of z2. ASCII only."""
+    assert repr(case2).startswith("GearPair(z1=20, z2=30, mn=3.5, beta=15.0 deg, ")
+    assert repr(case4).startswith("GearPair(z1=20, z2=-60, ")
+    lines = case4.summary().splitlines()
+    assert lines[1:3] == ["  gear1     : z=20, mn=2.0, x=0.0, beta=0.0 deg", "  gear2     : z=-60, mn=2.0, x=0.0, beta=0.0 deg"]
+    assert len(lines) == len(case2.summary().splitlines())
+    assert all(t.isascii() for t in (repr(case2), case2.summary(), repr(case4), case4.summary()))
 
 
-def test_renamed_text_rows_are_counted():
-    """Q50: the baseline rows that name a removed class and are compared against the new text."""
+def test_echoed_rows_are_counted():
+    """Q03: the rows `driver` / `driven` of the pairs are the declared argument, not a result of the code."""
     cases = [p.stem for p in sorted(bc.DATA_DIR.glob("*.csv"))]
-    got = bc.run_baseline()[0]
-    for old, (new, count) in bc.RENAMED_TEXT.items():
-        hits = [(c, i) for c in cases for i, (_, _, text) in enumerate(bc.baseline_rows(c)) if text == old]
-        assert len(hits) == count
-        assert all(got[c][i][2] == new for c, i in hits)
-    # the rows `driver` / `driven` of the pairs are the declared argument, not a result of the code
     names, count = bc.ECHOED_ROWS
     echoed = sum(1 for c in cases for obj, name, _ in bc.baseline_rows(c) if name in names and obj != "link")
-    renamed = sum(n for _, n in bc.RENAMED_TEXT.values())
     total = sum(len(bc.baseline_rows(c)) for c in cases)
-    assert echoed == count == 70                 # 8 rows deleted with cases 3b, 3c, 7c, 7d (Q03), 20 added in 4n, 5n (Q15)
-    # Q46 (step 5): the rows of case 7 that are text or state of the two replaced system classes, counted
-    # one by one in mechanical_system/tests/test_transmission_baseline.py
-    renamed += sum(n for _, n in bc.RENAMED_PATTERNS.values())
-    echoed += sum(n for _, n, _ in bc.ECHOED_ROWS_CASE7.values())
-    assert (total, total - echoed - renamed, renamed, echoed) == (7246, 7150, 14, 82)     # rows: total, computed, renamed text, echoed
+    # 7224 rows: 7246 after block 4, less 18 deleted by Q13 and 4 by Q46
+    assert (total, total - echoed, echoed, count) == (7224, 7154, 70, 70)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -531,10 +525,9 @@ def test_gear_messages_appear_once_in_the_pair():
     assert sum("undercut" in m for m in low.validate()) == 1
 
 
-def test_henriot_split_returns_non_physical_shifts_for_some_pairs():
-    """Q13: outside the baseline the split does not raise; for z 12/54 (mn 2 mm, x = 0) it returns
-    x1 = -x2 = 4.55, a profile shift of 4.5 modules (not usable)."""
-    x1, x2 = FAMILY.correction_for_gs_equilibrium(bc.gear(2.0, 12, b=20.0, check=False), bc.gear(2.0, 54, b=20.0))
-    assert (x1, x2) == (pytest.approx(4.548969365135395, rel=1e-9), pytest.approx(-4.548969365135395, rel=1e-9))
-    with pytest.raises(RuntimeError, match="no solution for x2"):
-        FAMILY.correction_for_gs_equilibrium(*bc.pinion_wheel("H501"))
+def test_henriot_split_is_deleted(case2):
+    """Q13 (José, 2026-10-15): the Henriot split of the profile shifts is deleted; the pair takes the shifts of the
+    gear data."""
+    with pytest.raises(TypeError):
+        pair(case2.gear1, case2.gear2, equalise_gs=True)
+    assert not hasattr(FAMILY, "correction_for_gs_equilibrium") and not hasattr(cylindrical, "_henriot_shifts")

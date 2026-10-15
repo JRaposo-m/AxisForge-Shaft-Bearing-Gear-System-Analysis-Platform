@@ -76,7 +76,7 @@ class MeshForces:
         Transverse force along the line of action, 2000 abs(T_1) / d_b1 [N], >= 0.
     F_bn_N : float
         Force normal to the flanks, F_bt / cos(beta_b) [N], >= 0: the load of the tooth contact
-        (``CylindricalFamily.contact_inputs(F_bn_N=...)``).
+        (``axisforge.solvers.machine_elements.gears.contact_inputs(F_bn_N=...)``).
     F_t_nominal_N : float
         Nominal tangential force at the REFERENCE cylinder, 2000 abs(T_1) / d_1 [N], >= 0: the
         input of the rating formulae, never a shaft load.
@@ -414,7 +414,7 @@ class GearPair(_Assembled):
             2026-10-15, answer 3).
         **pair_inputs
             Keyword arguments forwarded to ``family.assemble_pair`` (for the cylindrical family:
-            ``gear1``, ``gear2``, ``label``, ``al``, ``equalise_gs``, ``addendum_reduction``).
+            ``gear1``, ``gear2``, ``label``, ``al``, ``addendum_reduction``).
 
         Returns
         -------

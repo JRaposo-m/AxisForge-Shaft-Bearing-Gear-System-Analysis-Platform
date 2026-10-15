@@ -2,14 +2,14 @@
 39c7133 (cases 7a-7f, recorded on the system classes that ``Transmission`` and ``PairStage``
 replace), and the physics checks of the stored shaft loads that need no standard.
 
-The expected values are the CSVs in ``tests/data/gears_baseline`` (vault note
+The expected values are the CSVs in
+``axisforge/core/machine_elements/gears/tests/data/gears_baseline`` (vault note
 ``gears_mechsys_review_2026-10-12/baseline/_baseline.md``); the case objects are built in
 ``axisforge.core.machine_elements.gears.tests.baseline_cases``. The code reproduces TODAY's results:
 where the review found today's result wrong, the golden rows pin it and the physics check that it
 breaks is ``xfail(strict=True)`` with its question id (Qnn) and review row.
 """
 import math
-import re
 
 import pytest
 
@@ -30,27 +30,14 @@ def test_baseline_rows(case, obj):
     assert bc.mismatches(case, obj) == []
 
 
-def test_rows_of_the_replaced_classes_are_counted():
-    """Q46: of the 1428 rows of cases 7a, 7b, 7e, 7f (7c, 7d deleted: Q03, answer 7; rows of forces()
-    deleted and rows of the hand and of the bending moments added: Q03, Q06, Q08; rows of the sinks added and of
-    role / rotation_dir deleted: Q16, Q17), 8 are text that names a replaced class (compared against the new
-    text) and 12 are state of those classes written back as recorded; with the 8 `driver` / `driven` rows of
-    the four recorded pairs (Q50) that leaves 1400 rows computed by the code."""
-    got = bc.run_baseline()[0]
-    rows = [(c, i, obj, name, text) for c in CASES for i, (obj, name, text) in enumerate(bc.baseline_rows(c))]
-    renamed = 0
-    for pattern, (now, count) in bc.RENAMED_PATTERNS.items():
-        hits = [(c, i, re.fullmatch(pattern, text)) for c, i, _, _, text in rows if re.fullmatch(pattern, text)]
-        assert len(hits) == count
-        assert all(got[c][i][2] == now.format(*m.groups()) for c, i, m in hits)
-        renamed += count
-    echoed = 0
-    for (obj, ending), (value, count, _) in bc.ECHOED_ROWS_CASE7.items():
-        hits = [text for _, _, o, name, text in rows if o == obj and name.endswith(ending)]
-        assert len(hits) == count and set(hits) == {bc.fmt(value)}
-        echoed += count
-    declared = sum(1 for _, _, obj, name, _ in rows if name in bc.ECHOED_ROWS[0] and obj != "link")
-    assert (len(rows), len(rows) - renamed - echoed - declared, renamed, echoed, declared) == (1428, 1400, 8, 12, 8)
+def test_rows_of_case7_are_counted():
+    """Rows of cases 7a, 7b, 7e, 7f (7c, 7d deleted: Q03, answer 7; rows of forces() deleted and rows of the hand
+    and of the bending moments added: Q03, Q06, Q08; rows of the sinks added and of role / rotation_dir
+    deleted: Q16, Q17; the 4 `meshing_load_factor` rows deleted: Q46): all computed by the code but the 8
+    `driver` / `driven` rows of the four recorded pairs (Q03)."""
+    rows = [(obj, name) for c in CASES for obj, name, _ in bc.baseline_rows(c)]
+    declared = sum(1 for obj, name in rows if name in bc.ECHOED_ROWS[0] and obj != "link")
+    assert (len(rows), len(rows) - declared, declared) == (1424, 1416, 8)
 
 
 @pytest.mark.parametrize("c", bc.check_params("7", lambda c: None))     # every check passes since block 4 (Q09)

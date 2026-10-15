@@ -32,10 +32,10 @@ def _kind(z) -> str:
 
 
 # ==================================================================================================
-# _LEGACY: what today's external and internal classes do DIFFERENTLY and no ruling has unified.
-# One entry per quantity, one expression per kind of teeth, carried unchanged from the four
-# modules this file replaces; each is reached only through ``_legacy(name, z)``. An entry is
-# deleted (and its baseline rows become exception rows) when José rules its question.
+# _LEGACY: what the external and internal gears do DIFFERENTLY, kept by a ruling (Q25 deferred, Q55
+# keep). One entry per quantity, one expression per kind of teeth, carried unchanged from the four
+# modules this file replaces; each is reached only through ``_legacy(name, z)``. The texts of the
+# pair are one for both kinds (Q50, José 2026-10-15).
 # ==================================================================================================
 def _virtual_teeth_external(mn, z, beta):
     zn = z / (np.cos(beta) ** 3)    # teeth of the spur gear equivalent in the normal section
@@ -161,127 +161,19 @@ def _internal_interference(pair) -> list[str]:
     return errors
 
 
-def _summary_head_external(pair):
-    g1, g2 = pair.gear1, pair.gear2
-    return "HelicalGearMeshing", [
-        f"  gear1 : z={g1.z}, mn={g1.mn}, x={g1.x}, β={g1.beta_n_deg}°",
-        f"  gear2 : z={g2.z}, mn={g2.mn}, x={g2.x}, β={g2.beta_n_deg}°",
-    ]
-
-
-def _summary_head_internal(pair):
-    g1, g2 = pair.gear1, pair.gear2
-    return "InternalGearMeshing", [
-        f"  gear1 (ext): z={g1.z}, mn={g1.mn}, x={g1.x}, β={g1.beta_n_deg}°",
-        f"  gear2 (int): z={g2.z}, mn={g2.mn}, x={g2.x}, β={g2.beta_n_deg}°",
-        f" da2 : {pair.da2_w:.4f} mm",
-        f" T1C : {pair.T1C:.4f} mm   (pinion tip contact point)",
-    ]
-
-
 _LEGACY = {
-    # QUESTION(Q25): I5 / row 5. A ring has no virtual number of teeth, so equalise_gs raises AttributeError for an internal pair (Q13).
+    # QUESTION(Q25): deferred (José, 2026-10-15): no z_n for a ring until the rating step (check the sign ISO 6336 expects, Q29).
     "virtual_teeth": {"external": _virtual_teeth_external, "internal": lambda mn, z, beta: {}},
     # Q55 (José, 2026-10-15): keep. The helix-angle range is checked for an external gear only.
     "beta_range": {"external": _beta_range_external, "internal": lambda data, tag: []},
     # Q55 (José, 2026-10-15): keep. Undercut (external gear) against da < d and da > db (ring).
     "gear_limits": {"external": _gear_limits_external, "internal": _gear_limits_internal},
-    # QUESTION(Q50): presentation text of the two classes this family replaces, recorded by the baseline (class names in __repr__ and summary(), two extra lines for an internal pair).
-    "text": {"external": _summary_head_external, "internal": _summary_head_internal},
 }
 
 
 def _legacy(name: str, z):
     """Entry of ``_LEGACY`` for the kind of teeth given by the sign of ``z``."""
     return _LEGACY[name][_kind(z)]
-
-
-def _henriot_shifts(gear1, gear2, a):
-    """Profile shifts (x1, x2) [-] that equalise the specific sliding at the two ends of the path (Henriot).
-
-    Carried verbatim from the external pair. Returns shifts for some pairs (x1 = 4.5 for
-    z = 12/54), raises ``RuntimeError`` for others (every external pair of the baseline) and
-    ``AttributeError`` for an internal pair (first line: a ring has no ``zn``). Known defects, not
-    repaired: ``rb`` is written without the factor 1/2 and the pitch radius uses mt, not mn; the
-    unknown is added to tip radii that already hold the declared shift. No library source
-    (ISO_21771_2007, 5.3: the split of the sum "may be decided", no rule).
-    """
-    # QUESTION(Q13): rows 5, 46. Kept as it is today (raises for every baseline pair); the alternative is to delete equalise_gs or to repair it against a source.
-    z1, z2   = gear1.zn, gear2.zn
-    ra1, ra2 = gear1.mt * z1 / 2.0 + gear1.mn * (gear1.haP + gear1.cP + gear1.x), gear2.mt * z2 / 2.0 + gear2.mn * (gear2.haP + gear2.cP + gear2.x)
-    rb1, rb2 = gear1.mt * z1 * np.cos(gear1.alphat), gear2.mt * z2 * np.cos(gear2.alphat)
-    mn       = gear1.mn
-    alphat   = gear1.alphat
-
-    def _gs1B(ra2_v, rb2_v, a_v, alphat_v):
-        sq  = np.sqrt(max(ra2_v**2 - rb2_v**2, 0.0))
-        den = a_v * np.sin(alphat_v) - sq
-        if abs(den) < 1e-12:
-            return np.inf
-        return abs(1.0 - (z1 / z2) * sq / den)
-
-    def _gs2A(ra1_v, rb1_v, a_v, alphat_v):
-        sq  = np.sqrt(max(ra1_v**2 - rb1_v**2, 0.0))
-        den = a_v * np.sin(alphat_v) - sq
-        if abs(den) < 1e-12:
-            return np.inf
-        return abs((z2 / z1) * sq / den - 1.0)
-
-    def _solve_direct(z1_v, z2_v, ra1_v, ra2_v, rb1_v, rb2_v, a_v, alphat_v):
-        def equation(x):
-            return (_gs1B(ra2_v - x * mn, rb2_v, a_v, alphat_v)
-                  - _gs2A(ra1_v + x * mn, rb1_v, a_v, alphat_v))
-
-        x_lim = min(
-            (ra2_v - rb2_v) / mn * 0.9,
-            (a_v * np.sin(alphat_v) - 1e-3) / mn
-        )
-        xs   = np.linspace(-x_lim * 0.8, x_lim * 0.8, 400)
-        vals = [equation(xi) for xi in xs]
-        bracket = [(xs[i], xs[i+1])
-                   for i in range(len(vals)-1)
-                   if vals[i] * vals[i+1] < 0]
-        if not bracket:
-            raise RuntimeError(
-                "correction_for_gs_equilibrium: no solution found. "
-                "Check gear geometry."
-            )
-        return optimize.brentq(equation, bracket[0][0], bracket[0][1], xtol=1e-10)
-
-    # --- z1 + z2 > 60: x2 = -x1, centre distance kept ---
-    if (z1 + z2) > 60:
-        x = _solve_direct(z1, z2, ra1, ra2, rb1, rb2, a, alphat)
-        return x, -x
-
-    # --- z1 + z2 <= 60: x1 against a hypothetical mate with 60 - z1 teeth, then x2 ---
-    z2_h  = 60 - z1
-    a_h   = gear1.mt / 2.0 * (z1 + z2_h)
-    ra2_h = gear1.mt / 2.0 * z2_h + mn
-    rb2_h = gear1.mt / 2.0 * z2_h * np.cos(alphat)
-
-    x1 = _solve_direct(z1, z2_h, ra1, ra2_h, rb1, rb2_h, a_h, alphat)
-
-    inv_alphat = np.tan(alphat) - alphat
-    alpha = gear1.alpha
-
-    def equation_x2(x2_v):
-        inv_aw = inv_alphat + 2.0 * np.tan(alpha) * (x1 + x2_v) / (z1 + z2)
-        alphatw_v = optimize.brentq(_inv_residual, 1e-6, 1.5, args=(inv_aw,))   # bracket of every inverse involute (José, 2026-10-15)
-        al_v      = a * np.cos(alphat) / np.cos(alphatw_v)
-        return (_gs1B(ra2 + x2_v * mn, rb2, al_v, alphatw_v)
-              - _gs2A(ra1 + x1  * mn, rb1, al_v, alphatw_v))
-
-    xs2   = np.linspace(-1.5, 1.5, 600)
-    vals2 = [equation_x2(xi) for xi in xs2]
-    bracket2 = [(xs2[i], xs2[i+1])
-                for i in range(len(vals2)-1)
-                if vals2[i] * vals2[i+1] < 0]
-    if not bracket2:
-        raise RuntimeError(
-            "correction_for_gs_equilibrium (z≤60): no solution for x2."
-        )
-    x2 = optimize.brentq(equation_x2, bracket2[0][0], bracket2[0][1], xtol=1e-10)
-    return x1, x2
 
 
 # ==================================================================================================
@@ -344,10 +236,10 @@ class CylindricalGearData:
 
     References
     ----------
-    .. [1] ISO_53_1998, Table 2.
+    .. [1] ISO_53_1998, Table 2, p. 3 (PDF p. 5).
     .. [2] ISO_21771_2007, 4.1.5 (sign of z), 4.2.9 (profile shift).
     """
-    # QUESTION(Q18): the classes this record replaces cited "ISO 53:2013" for the rack defaults; the edition held and checked is ISO_53_1998, Table 2 (text only, same numbers).
+    # Q18 (José, 2026-10-15): keep - the rack defaults are those of ISO_53_1998, Table 2 (the edition held).
     mn: float
     z: int
     _: KW_ONLY
@@ -416,7 +308,9 @@ class CylindricalFamily(GearFamily):
     ``assemble_gear`` gives the geometry of one gear (clause 4), ``assemble_pair`` that of two gears
     in mesh (clause 5), ``validate_gear`` / ``validate_pair`` the limits (clause 7 and checks with
     no library source), ``mesh_forces`` the forces of the mesh for a torque (D-0010,
-    ``MeshForces``), ``contact_inputs`` the contact data along the path of contact. An internal pair is a pair whose gear 2 has z < 0.
+    ``MeshForces``), ``path_points``, ``curvature_radii``, ``surface_speeds`` the geometry and
+    kinematics along the path of contact (the load sharing and the contact inputs are in
+    ``axisforge.solvers.machine_elements.gears.contact``). An internal pair is a pair whose gear 2 has z < 0.
 
     Notes
     -----
@@ -430,13 +324,14 @@ class CylindricalFamily(GearFamily):
 
     Warnings
     --------
-    - Q28 (finding I8): for an internal pair with a_w > 0, ISO_21771_2007 Eq. (56) first form,
+    - Q28 (José, 2026-10-15: keep, note only; finding I8): for an internal pair with a_w > 0, ISO_21771_2007 Eq. (56) first form,
       (64), (65), (68), (69) and Eq. (92) first form do not hold as printed (two readers). None of
       them is coded here: the signed segments ``T1A``..``T2E`` and the form d_b / cos(alpha_wt)
       are used instead.
-    - Q29 (finding I9): ISO_6336-1_2019, Table 2, footnote a, makes a, d, d_a and z_2 negative
-      for internal gearing; here, as in ISO 21771, only z is signed. A rating formula that
-      contains a, d or u must be checked for the sign it expects.
+    - Q29 (José, 2026-10-15: keep, note for the rating step; finding I9): ISO_6336-1_2019,
+      Table 2, footnote a, makes a, d, d_a and z_2 negative for internal gearing; here, as in
+      ISO 21771, only z is signed. A rating formula that contains a, d, d_a, z2 or u must be
+      checked for the sign it expects.
 
     References
     ----------
@@ -587,7 +482,7 @@ class CylindricalFamily(GearFamily):
     # The pair (ISO 21771 clause 5)
     # ----------------------------------------------------------------------------------------------
     def assemble_pair(self, gear1: Gear, gear2: Gear, *, label: str = "", al: float | None = None,
-                      equalise_gs: bool = False, addendum_reduction: bool = False) -> tuple[Gear, Gear, dict]:
+                      addendum_reduction: bool = False) -> tuple[Gear, Gear, dict]:
         """Working centre distance and pressure angle, contact ratios and path of contact of two gears in mesh.
 
         Parameters
@@ -604,9 +499,6 @@ class CylindricalFamily(GearFamily):
             Working centre distance a_w [mm], positive. None: derived from x1 + x2 (zero
             backlash). A value: imposed; the working pressure angle is back-calculated and the
             backlash ``jbn`` that it leaves is stored.
-        equalise_gs : bool, optional
-            If True and ``al`` is None, the profile shifts are first taken from
-            ``correction_for_gs_equilibrium`` (Q13: it raises for every pair of the baseline).
         addendum_reduction : bool, optional
             Apply the tip alteration k to the working tip diameters of both gears. Default False
             (k = 0).
@@ -668,8 +560,6 @@ class CylindricalFamily(GearFamily):
             tolerance 1e-6), if gear 1 is internal (z1 < 0), if gear 2 is internal and
             abs(z2) <= z1, if abs(z1) > abs(z2) (gear 1 must be the pinion), or if a helical
             external pair has equal hands or a helical internal pair opposite hands (Q08).
-        RuntimeError, AttributeError
-            From ``correction_for_gs_equilibrium`` when ``equalise_gs`` is True.
 
         Notes
         -----
@@ -677,6 +567,10 @@ class CylindricalFamily(GearFamily):
         signed sum z1 + z2 (negative for an internal pair). The stored centre distances a, a_w
         are positive; ISO 21771 makes them negative for an internal pair, hence the factor s2
         wherever their signed value enters (k).
+
+        The profile shifts are those of the gear data: the pair does not split a sum x1 + x2
+        between its gears (Q13, José 2026-10-15: the Henriot split is deleted; ISO_21771_2007, 5.3
+        prints no rule). FUTURE: a profile-shift split from a source (DIN 3992 / Niemann) if needed.
 
         Working pressure angle: with a_w derived, inv(alpha_wt) = inv(alpha_t) + 2 tan(alpha_n)
         (x1 + x2) / (z1 + z2) (Eq. (55)) and a_w = (d_b2 + s2 d_b1) / (2 cos(alpha_wt))
@@ -768,10 +662,7 @@ class CylindricalFamily(GearFamily):
             alphatw = np.arccos(a * np.cos(alphat) / al)
             x1, x2 = gear1.x, gear2.x
         else:
-            if equalise_gs:
-                x1, x2 = self.correction_for_gs_equilibrium(gear1, gear2)
-            else:
-                x1, x2 = gear1.x, gear2.x
+            x1, x2 = gear1.x, gear2.x
             # zero backlash, Eq. (55) with the signed tooth sum (z1 + z2 < 0 for a ring)
             inv_alphatw = _involute(alphat) + 2 * np.tan(alpha) * (x1 + x2) / (z1 + z2)
             # inverse involute: no method is printed (Eq. (18) is the definition only); 1.5 rad bounds any working angle
@@ -873,7 +764,7 @@ class CylindricalFamily(GearFamily):
         rB2 = ((T2A - AD)**2 + rb2**2) ** (1 / 2)
         rD2 = ((T2A - AB)**2 + rb2**2) ** (1 / 2)
 
-        # QUESTION(Q53): gear loss factor "according to Ohlendorf"; the source ISO_TR_14179-2_2001, 5.2.4, Eq. (14) is a clause-map citation, the equation was not transcribed or checked.
+        # QUESTION(Q53): deferred (José, 2026-10-15): gear loss factor "according to Ohlendorf", unchecked until the thermal/efficiency step; then transcribe ISO_TR_14179-2_2001, 5.2.4, Eq. (14) and check it (also for u < 0 and z1 > z2).
         HV = (np.pi * (u + 1) / (z1 * u * np.cos(betab)) *
               (1 - epslon_alpha + epslon_a1**2 +
                epslon_a2**2))
@@ -892,34 +783,6 @@ class CylindricalFamily(GearFamily):
             profile_shift_check=(x_sum_from_al, x1 + x2),
             warnings=warnings_,
         )
-
-    @staticmethod
-    def correction_for_gs_equilibrium(gear1: Gear, gear2: Gear) -> tuple[float, float]:
-        """Profile shifts x1, x2 that equalise the maximum specific sliding (Henriot procedure).
-
-        Parameters
-        ----------
-        gear1, gear2 : Gear
-            The two gears of the pair.
-
-        Returns
-        -------
-        tuple of float
-            (x1, x2) [-].
-
-        Raises
-        ------
-        RuntimeError
-            If no sign change of the sliding difference is found (every external pair of the
-            baseline).
-        AttributeError
-            For an internal pair: a ring has no virtual number of teeth ``zn``.
-
-        Warnings
-        --------
-        Q13: not usable as it is; see ``_henriot_shifts``. No library source.
-        """
-        return _henriot_shifts(gear1, gear2, (gear1.d + gear2.d) / 2.0)
 
     # ----------------------------------------------------------------------------------------------
     # Limits and checks (ISO 21771 clause 7; most have no library source)
@@ -990,32 +853,34 @@ class CylindricalFamily(GearFamily):
     # ----------------------------------------------------------------------------------------------
     # Text
     # ----------------------------------------------------------------------------------------------
+    # Q50 (José, 2026-10-15): one text for external and internal pairs; the kind is the sign of z2
+    # (ISO_21771_2007, 4.1.5). ASCII only, as the Gear text, so that it prints on a cp1252 console.
     def pair_summary(self, pair) -> str:
         """Multi-line text with the main data of the pair (lengths [mm], angles [deg])."""
-        name, head = _legacy("text", pair.gear2.z)(pair)
-        lines = [
-            f"── {pair.label or name} ─────────────────────────────────",
-            *head,
-            f"  u     : {pair.u:.4f}",
-            f"  a     : {pair.a:.4f} mm   (reference centre distance)",
-            f"  al    : {pair.al:.4f} mm   (working centre distance)",
-            f"  αtw   : {np.degrees(pair.alphatw):.4f}°",
-            f"  dl1   : {pair.dl1:.4f} mm",
-            f"  dl2   : {pair.dl2:.4f} mm",
-            f"  εα    : {pair.epslon_alpha:.4f}",
-            f"  εβ    : {pair.epslon_beta:.4f}",
-            f"  εγ    : {pair.epslon_gamma:.4f}",
-            "────────────────────────────────────────────────────",
+        header = f"-- {pair.label or 'GearPair'} "
+        lines = [header + "-" * max(0, 52 - len(header))]
+        lines += [f"  gear{i}     : z={g.z}, mn={g.mn}, x={g.x}, beta={g.beta_n_deg} deg"
+                  for i, g in ((1, pair.gear1), (2, pair.gear2))]
+        lines += [
+            f"  u         : {pair.u:.4f}",
+            f"  a         : {pair.a:.4f} mm   (reference centre distance)",
+            f"  al        : {pair.al:.4f} mm   (working centre distance)",
+            f"  alpha_tw  : {np.degrees(pair.alphatw):.4f} deg",
+            f"  dl1       : {pair.dl1:.4f} mm",
+            f"  dl2       : {pair.dl2:.4f} mm",
+            f"  eps_alpha : {pair.epslon_alpha:.4f}",
+            f"  eps_beta  : {pair.epslon_beta:.4f}",
+            f"  eps_gamma : {pair.epslon_gamma:.4f}",
+            "-" * 52,
         ]
         return "\n".join(lines)
 
     def pair_repr(self, pair) -> str:
         """One-line representation: tooth numbers, module, helix angle, al, alphatw, eps_gamma."""
-        name, _ = _legacy("text", pair.gear2.z)(pair)
         return (
-            f"{name}(z1={pair.gear1.z}, z2={pair.gear2.z}, "
-            f"mn={pair.gear1.mn}, β={pair.gear1.beta_n_deg}°, al={pair.al:.4f} mm, "
-            f"αtw={np.degrees(pair.alphatw):.4f}°, εγ={pair.epslon_gamma:.4f})"
+            f"GearPair(z1={pair.gear1.z}, z2={pair.gear2.z}, "
+            f"mn={pair.gear1.mn}, beta={pair.gear1.beta_n_deg} deg, al={pair.al:.4f} mm, "
+            f"alpha_tw={np.degrees(pair.alphatw):.4f} deg, eps_gamma={pair.epslon_gamma:.4f})"
         )
 
     # ----------------------------------------------------------------------------------------------
@@ -1114,8 +979,8 @@ class CylindricalFamily(GearFamily):
     # ----------------------------------------------------------------------------------------------
     # Contact inputs along the path of contact (ISO 21771, 5.4.3-5.4.8 and 5.6; the load has no library source)
     # ----------------------------------------------------------------------------------------------
-    # QUESTION(Q31): surface_speeds and contact_inputs take a speed or a force, which D-0026 item 7 puts in solvers/; all five are kept here as pure functions of the pair that store nothing. The plan (section 2.4) puts path_points, curvature_radii, surface_speeds here; load_sharing and contact_inputs come from card G5 items 1 and 3, and the plan names the slot solvers/machine_elements/gears/contact.py for load sharing.
-    # QUESTION(Q37): with them this file passes the 1200 lines at which D-0026 keeps "one file per clause group" as the fallback; it is not split (alternative: load_sharing and contact_inputs as module functions of the solvers slot of Q31).
+    # Q31, Q37 (José, 2026-10-15): the geometry of the path stays here; load_sharing and contact_inputs, which take a
+    # force or a time, are functions of axisforge.solvers.machine_elements.gears.contact (no split of this file by clause)
     @staticmethod
     def path_points(pair, driver: str) -> dict[str, float]:
         """Points A, B, C, D, E of the path of contact for a given driving gear, as positions g_y.
@@ -1218,6 +1083,9 @@ class CylindricalFamily(GearFamily):
         to the flank normal, so its radius rho_t is the radius of curvature of that section and
         not a principal radius; by Meusnier's theorem the principal radius, in the plane normal
         to the contact line, is rho_n = rho_t / cos(beta_b) (beta_b is the same for both gears).
+        The tangent of the transverse profile is the principal direction across the contact line,
+        so Euler's factor is 1 and only Meusnier's cos(beta_b) acts: the relation is exact, not an
+        approximation.
 
         Assumptions: rigid, unmodified involute flanks; no deflection.
 
@@ -1234,7 +1102,7 @@ class CylindricalFamily(GearFamily):
         rho2 = pair.T1T2 - rho1
         # reduced radius with the SIGNED ring radius (ISO_21771_2007, Eq. (82) NOTE)
         rho_red = 1.0 / (1.0 / rho1 + 1.0 / rho2)
-        # QUESTION(Q34): normal-plane radii as rho_t / cos(beta_b): derived (developable helicoid, Meusnier), no library page; the alternative is to return the transverse radii only.
+        # Q34 (José, 2026-10-15): keep - normal-plane radii rho_n = rho_t / cos(beta_b), derived in the Notes (developable helicoid, Meusnier)
         cos_betab = np.cos(pair.gear1.betab)
         return {"rho1_t_mm": rho1, "rho2_t_mm": rho2, "rho_red_t_mm": rho_red,
                 "rho1_n_mm": rho1 / cos_betab, "rho2_n_mm": rho2 / cos_betab, "rho_red_n_mm": rho_red / cos_betab}
@@ -1266,7 +1134,8 @@ class CylindricalFamily(GearFamily):
             external gear 2, rho_y2 < 0 for a ring).
             vg_m_per_s : sliding speed u1 - u2 [m/s], SIGNED: positive where flank 1 is the faster
             (g_y > 0, addendum of gear 1), zero at C.
-            ue_m_per_s : entrainment speed (u1 + u2) / 2 [m/s].
+            ue_m_per_s : entrainment speed (u1 + u2) / 2 [m/s], the mean speed (GEARpie's ``vsumc``
+            is the sum u1 + u2, twice this value; Q35).
 
         Notes
         -----
@@ -1302,199 +1171,9 @@ class CylindricalFamily(GearFamily):
         rho = CylindricalFamily.curvature_radii(pair, g_y)
         omega1 = n1_rpm * 2.0 * np.pi / 60.0   # [rpm] -> [rad/s]
         u = pair.u                             # z2 / z1, signed (ISO_21771_2007, Eq. (52))
-        # QUESTION(Q38): returned: omega rho_y, the flank speed perpendicular to the contact line (case 2 at C: 2.0922 m/s); not returned: the component along the line, omega1 rb1 sin(beta_b) (1.2522 m/s, equal on both flanks); GEARpie's vr1, vr2 are omega rho_y / cos(beta_b) (2.1570 m/s), not a velocity component.
+        # Q38 (José, 2026-10-15): keep - omega rho_y, across the contact line (case 2 at C: 2.0922 m/s); the along-line
+        # component omega1 rb1 sin(beta_b) (1.2522 m/s) becomes an extra key only if a model needs it
         u1 = omega1 * rho["rho1_t_mm"] / 1000.0        # [rad/s] [mm] -> [m/s]
         u2 = omega1 / u * rho["rho2_t_mm"] / 1000.0    # omega2 = omega1 / u; ring: u < 0 and rho_y2 < 0, u2 > 0
-        # QUESTION(Q35): entrainment speed taken as the mean (u1 + u2) / 2 and the sliding speed signed as u1 - u2 (Eq. (106) prints plus-minus); no numbered equation for the first.
+        # Q35 (José, 2026-10-15): keep - ue = (u1 + u2) / 2 (GEARpie's vsumc is the sum u1 + u2, a factor 2), vg = u1 - u2 signed
         return {"u1_m_per_s": u1, "u2_m_per_s": u2, "vg_m_per_s": u1 - u2, "ue_m_per_s": (u1 + u2) / 2.0}
-
-    @staticmethod
-    def load_sharing(pair, g_y) -> dict[str, np.ndarray]:
-        """Share of the normal tooth force carried by one tooth pair at positions g_y of the path.
-
-        Several tooth pairs, one transverse base pitch apart along the line of action, are in
-        contact at the same time. The model: the teeth are rigid and equal, so the normal force
-        is spread with ONE load per unit length over all the contact lines present. A tooth pair
-        then carries the fraction (length of its contact line) / (sum of the lengths). For a
-        spur pair this is 1 in the zone of single contact and 1/2 in the two zones of double
-        contact (1/2 and 1/3 for 2 <= eps_alpha < 3).
-
-        Parameters
-        ----------
-        pair : GearPair
-            Pair of this family.
-        g_y : float or array_like
-            Position [mm] of the contact point of the tooth pair in the transverse section at
-            MID FACE WIDTH, from C, positive toward the tip of gear 1.
-
-        Returns
-        -------
-        dict
-            share : fraction of the normal force on this tooth pair [-]; zero where it has no
-            contact.
-            l_mm : length of the contact line of this tooth pair [mm].
-            l_sum_mm : sum of the lengths of all contact lines present at that instant [mm].
-            n_pairs : number of tooth pairs in contact at that instant [-].
-
-        Notes
-        -----
-        Contact lines: in the plane of action (length g_alpha along the path, width b) the
-        contact lines are straight, inclined at beta_b to the gear axes. With s the distance from
-        the stored point A of the mid-face point of a line, the line covers the path interval
-        [s - b tan(beta_b)/2, s + b tan(beta_b)/2]; the part of it inside [0, g_alpha], divided by
-        sin(beta_b), is its length. A spur pair has l = b for 0 <= s <= g_alpha. The largest value
-        is the l_max of ISO_21771_2007, Eq. (98)-(99). The neighbouring tooth pairs are at
-        s + k p_bt. With the mid-face section as the reference the result depends neither on the
-        driver nor on the hand of helix.
-
-        A helical tooth pair is in contact before its mid-face point reaches A and after it leaves
-        E (by b tan(beta_b)/2): ``share`` is not zero just outside the path. The sum of ``share``
-        over the tooth pairs k is 1 at every position.
-
-        Assumptions: teeth of equal, constant stiffness per unit length (rigid limit), no
-        modifications, no misalignment, no friction; common face width b = min(b1, b2) of aligned gears.
-
-        References
-        ----------
-        .. [1] ISO_21771_2007, 5.4.8, p. 39-40, Eq. (98)-(99): contact lines at beta_b, their
-           largest length; the sum of the lengths is defined in words only (checked).
-        .. [2] Uniform load per unit length and the lengths along the path: derived, no library
-           source. GEARpie uses the same model (CLASSES/LOAD_SHARING.py:62-90,
-           CLASSES/FORCES_SPEEDS.py:72), with the section at the face end as its first column.
-        """
-        # QUESTION(Q30): load-sharing model = one load per unit length on all contact lines (rigid, equal teeth); alternatives: mesh stiffness (ISO_6336-1_2019, clause 9, not written) or a measured/FE share.
-        g_y = np.asarray(g_y, dtype=float)
-        pbt = pair.gear1.pbt
-        betab = pair.gear1.betab
-        s = g_y + pair.AC                          # distance from the stored A (C is at AC from A)
-        # QUESTION(Q36): helical pair, the contact-line length is that of the line whose MID-FACE point is at g_y; the alternative reference is the face end where the tooth enters (GEARpie column 0), which needs the driver.
-        half = 0.5 * pair.b * np.tan(betab)        # half of the path interval covered by one contact line [mm]
-        tol = 1e-9 * pbt                           # the ends A and E count as in contact: sums of stored segments round at 1e-15 relative
-
-        def line_length(s):
-            if betab == 0.0:
-                return np.where((s >= -tol) & (s <= pair.AE + tol), pair.b, 0.0)   # spur: the whole face width
-            inside = np.clip(np.minimum(s + half, pair.AE) - np.maximum(s - half, 0.0), 0.0, None)
-            return inside / np.sin(betab)
-
-        # every tooth pair that can touch while this one is within reach of the path
-        n_max = int(np.ceil((pair.AE + 2.0 * half) / pbt))
-        lengths = np.array([line_length(s + k * pbt) for k in range(-n_max, n_max + 1)])
-        l_own, l_sum = lengths[n_max], lengths.sum(axis=0)
-        share = np.divide(l_own, l_sum, out=np.zeros_like(l_sum), where=l_sum > 0.0)
-        return {"share": share, "l_mm": l_own, "l_sum_mm": l_sum, "n_pairs": (lengths > 0.0).sum(axis=0)}
-
-    @staticmethod
-    def contact_inputs(pair, driver: str, n1_rpm: float, F_bn_N: float, *, n_points: int | None = None,
-                       t_s=None) -> dict[str, np.ndarray]:
-        """Everything a contact calculation needs at each step of a contact point along the path.
-
-        One record per step, from the start of meshing A to its end E for the given driver, of
-        the contact point in ONE transverse section: where it is and when, the two equivalent
-        cylinders, how fast the surfaces move, and the load per unit length of contact line.
-        These are the inputs of a line contact (Hertz, EHL) that changes along the path. For a
-        spur pair this is the whole life of a tooth pair; for a helical pair it is the section at
-        mid face width only (Notes).
-
-        Parameters
-        ----------
-        pair : GearPair
-            Pair of this family.
-        driver : str
-            "gear1" or "gear2": the driving gear (fixes A, E and the direction of travel).
-        n1_rpm : float
-            Rotational speed of GEAR 1 [rpm], > 0 (a magnitude, as in ``surface_speeds``),
-            whichever gear drives.
-        F_bn_N : float
-            Total force normal to the flanks transmitted by the mesh [N], >= 0 (F_bn = F_bt /
-            cos(beta_b)). An argument: no force is derived from a torque here (``MeshForces.F_bn_N`` of
-            ``mesh_forces`` is this force).
-        n_points : int, optional
-            Number of equally spaced steps from A to E, both included (>= 2).
-        t_s : array_like, optional
-            Times of the steps [s], t = 0 at A; finite, at least one, all within the time of
-            travel from A to E.
-            Exactly one of ``n_points`` and ``t_s`` is given.
-
-        Returns
-        -------
-        dict
-            Arrays of equal length, one entry per step:
-
-            s_mm : distance travelled from A along the path [mm].
-            t_s : time since A [s].
-            g_y_mm : position from the pitch point C, positive toward the tip of gear 1 [mm].
-            rho1_t_mm, rho2_t_mm, rho_red_t_mm, rho1_n_mm, rho2_n_mm, rho_red_n_mm : radii of
-            curvature, signed (``curvature_radii``) [mm].
-            u1_m_per_s, u2_m_per_s, vg_m_per_s, ue_m_per_s : surface, sliding and entrainment speeds
-            (``surface_speeds``) [m/s].
-            share, l_mm, l_sum_mm, n_pairs : load share and contact-line lengths
-            (``load_sharing``) [-], [mm], [mm], [-].
-            w_N_per_mm : load per unit length of contact line, share F_bn / l [N/mm].
-
-        Raises
-        ------
-        ValueError
-            If ``driver`` is not "gear1" or "gear2", if n1_rpm <= 0, if F_bn_N < 0, if not
-            exactly one of ``n_points`` and ``t_s`` is given, if n_points < 2, or if ``t_s`` is
-            empty, not finite or outside the travel from A to E.
-
-        Notes
-        -----
-        Time and position: the contact point moves along the line of action at the normal speed
-        of the flanks, v_n = omega1 r_b1 (ISO_21771_2007, Eq. (105)), so s = omega1 r_b1 t. The
-        standard gives v_n; the relation s(t) is derived from it (no library sentence).
-
-        Helical pair: a step is the contact point in the transverse section at MID face width.
-        A tooth pair is in contact over g_alpha + b tan(beta_b) of travel (case 2: 21.44 mm); the
-        record covers g_alpha (15.68 mm, 73 %). ``share`` and ``l_mm`` describe the whole contact
-        line, the radii and speeds only its mid point, and the load per unit length is uniform by
-        the model. Along the line the path position spans +-b tan(beta_b)/2: in case 2 at C,
-        +-2.88 mm, rho1 from 10.90 to 16.66 mm (+-21 %) and a sliding speed of +-0.73 m/s at the
-        line ends against 0 recorded; at A and E the recorded point is the END of a half-length
-        line. The record is fair for a two-dimensional slice at mid face, not for the line (Q36).
-
-        Every step is on the two involutes for a pair that passed ``validate_pair`` (assembled
-        with ``check=True``): T1A >= 0 and s2 T2E >= 0 keep A..E between the base-tangent points
-        (Q39), so the radii are those of the flanks and no warning is needed. A pair assembled with
-        ``check=False`` (an equivalence record such as old case 4) may give rho <= 0 at the ends;
-        the numbers are returned as they are.
-
-        Assumptions: those of the four functions above; steady speed and constant F_bn.
-
-        References
-        ----------
-        .. [1] ISO_21771_2007, 5.6.1, Eq. (105), p. 42 (checked).
-        .. [2] Load per unit length: no library source.
-        """
-        if (n_points is None) == (t_s is None):
-            raise ValueError("give exactly one of n_points and t_s.")
-        if n1_rpm <= 0:
-            raise ValueError(f"n1_rpm must be > 0, got {n1_rpm}.")
-        if F_bn_N < 0:
-            raise ValueError(f"F_bn_N must be >= 0, got {F_bn_N}.")
-        points = CylindricalFamily.path_points(pair, driver)
-        v_n = n1_rpm * 2.0 * np.pi / 60.0 * pair.gear1.rb   # [rad/s] [mm] = [mm/s], speed of the contact point along the path
-        if t_s is None:
-            if n_points < 2:
-                raise ValueError(f"n_points must be >= 2, got {n_points}.")
-            s = np.linspace(0.0, pair.AE, n_points)
-        else:
-            s = v_n * np.atleast_1d(np.asarray(t_s, dtype=float))
-            if s.size == 0 or not np.all(np.isfinite(s)):
-                raise ValueError("t_s must hold at least one time, all finite.")
-            if s.min() < 0.0 or s.max() > pair.AE * (1.0 + 1e-12):   # 1e-12: rounding of t = AE / v_n given back as a time
-                raise ValueError(f"t_s must lie in [0, {pair.AE / v_n:.6g}] s, the travel from A to E.")
-        # from A toward E: increasing g_y when gear 1 drives (root to tip of the driving flank), decreasing when gear 2 drives
-        g_y = points["A"] + np.sign(points["E"] - points["A"]) * s
-
-        radii = CylindricalFamily.curvature_radii(pair, g_y)
-        sharing = CylindricalFamily.load_sharing(pair, g_y)
-        # QUESTION(Q32): the Hertz half-width b is not computed here; it belongs to slippy_bridge (D-0019), from w_N_per_mm, rho_red_n_mm and E'.
-        # QUESTION(Q33): the flanks are given as local equivalent cylinders (the radii), not as involute surfaces.
-        return {"s_mm": s, "t_s": s / v_n, "g_y_mm": g_y,
-                **radii,
-                **CylindricalFamily.surface_speeds(pair, g_y, n1_rpm),
-                **sharing,
-                # share F_bn / l with share = l / l_sum: written without l, which is zero at the ends of a helical line
-                "w_N_per_mm": F_bn_N / sharing["l_sum_mm"]}

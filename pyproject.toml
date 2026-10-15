@@ -33,7 +33,7 @@ include = ["axisforge*", "mesh*"]
 
 [tool.pytest.ini_options]
 pythonpath = [".", "axisforge"]
-testpaths = ["tests"]
+testpaths = ["axisforge"]
 addopts = "-v"
 
 [tool.ruff]

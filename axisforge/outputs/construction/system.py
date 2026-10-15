@@ -48,17 +48,17 @@ def system_records(system, power_W: float | None = None) -> list[dict]:
     -------
     records : list of dict
         Rows ``{section, parameter, value, unit}`` (``kv_record`` schema). Section
-        ``gear system``: label, number of shafts, number of mesh links (the stages of the
-        path), source shaft, resolved (bool); with ``power_W`` also power [W] and, if the source
-        shaft has ``speed_rpm > 0``, its torque [N m] = ``power_W / omega`` with
-        ``omega = speed_rpm * 2 pi / 60`` [rad/s]. One section ``mesh ...`` per stage: torque
-        split (the ``share`` of the stage [-]; the text "mode B (100 %)" when it is 1.0) and,
+        ``gear system``: label, number of shafts, number of stages (of the path), source shaft,
+        resolved (bool); with ``power_W`` also power [W] and, if the source shaft has
+        ``speed_rpm > 0``, the MAGNITUDE of its torque [N m] = ``power_W / omega`` with
+        ``omega = speed_rpm * 2 pi / 60`` [rad/s]. One section ``mesh ...`` per stage: share
+        of the torque (``share`` of the stage [-], 1.0 = the full torque) and,
         for a ``PairStage``, line-of-centres angle ``phi_deg`` [deg],
         ``distribute_loads``, driver and driven gear, and the attributes of ``MESH_ATTRIBUTES``
         of the pair (distances [mm], angle ``alphatw`` [rad], ratios without unit). For a
-        ``ResolvedTransmission``, one section ``resolved shaft <name>`` per shaft: torque
-        ``T_out`` [N m] entering it and rotation direction. Then ``shaft_system_records`` of
-        every shaft.
+        ``ResolvedTransmission``, one section ``resolved shaft <name>`` per shaft: the torque
+        entering it [N m], SIGNED about +X (``torque_Nm``, D-0010 item 12), and rotation
+        direction. Then ``shaft_system_records`` of every shaft.
 
     Notes
     -----
@@ -80,7 +80,7 @@ def system_records(system, power_W: float | None = None) -> list[dict]:
     source = system.source
     rows = [kv_record(s, "label", system.label),
             kv_record(s, "number of shafts", len(system.shafts)),
-            kv_record(s, "number of mesh links", len(system.path)),
+            kv_record(s, "number of stages", len(system.path)),
             kv_record(s, "source shaft", source.name),
             kv_record(s, "resolved", resolved is not None)]
     if power_W is not None:
@@ -93,8 +93,8 @@ def system_records(system, power_W: float | None = None) -> list[dict]:
         pair_stage = hasattr(stage, "pair")       # a PairStage; another stage type has only the common rows
         if pair_stage:
             rows.append(kv_record(sec, "line of centres angle phi", stage.phi_deg, "deg"))
-        # QUESTION(Q46): row name and the text "mode B (100 %)" are those written for the replaced link when it took the full torque (torque_split=None); now share = 1.0. The alternative is the number.
-        rows.append(kv_record(sec, "torque split", "mode B (100 %)" if stage.share == 1.0 else stage.share))
+        # Q46 (José, 2026-10-15): the share of the stage as a number (1.0 = the full torque of the shaft)
+        rows.append(kv_record(sec, "share of the torque", stage.share))
         if pair_stage:
             rows.append(kv_record(sec, "distribute loads", bool(stage.distribute_loads)))
             # Q17 (José, 2026-10-15): the gear element has no role; the driver of a stage is its gear_a
@@ -104,7 +104,7 @@ def system_records(system, power_W: float | None = None) -> list[dict]:
     if resolved is not None:
         for shaft, torque, rotation in zip(resolved.shafts, resolved.torque_Nm, resolved.rotation):
             sec = f"resolved shaft {shaft.name}"
-            rows.append(kv_record(sec, "torque T_out", torque, "N m"))
+            rows.append(kv_record(sec, "torque entering the shaft", torque, "N m"))
             rows.append(kv_record(sec, "rotation direction", rotation))
     for shaft in (system.shafts if resolved is None else resolved.shafts):
         rows += shaft_system_records(shaft)

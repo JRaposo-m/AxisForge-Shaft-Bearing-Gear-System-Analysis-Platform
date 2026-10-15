@@ -267,9 +267,6 @@ class PlanetaryGearTrainMeshing:
     al_12, al_23 : float or None, optional
         Working centre distance of the sun-planet and planet-ring pairs [mm];
         None: derived from the profile shifts by the pair object.
-    equalise_gs_12, equalise_gs_23 : bool, optional
-        Forwarded to the pair objects (``equalise_gs=True`` fails for the
-        planet-ring pair, see ``CylindricalFamily.correction_for_gs_equilibrium``).
     addendum_reduction_12, addendum_reduction_23 : bool, optional
         Forwarded to the pair objects.
     load_sharing_factor : float, optional
@@ -337,10 +334,8 @@ class PlanetaryGearTrainMeshing:
                  label: str = "",
                  phi0_deg: float = 0.0,
                  al_12: float | None = None,
-                 equalise_gs_12: bool = False,
                  addendum_reduction_12: bool = False,
                  al_23: float | None = None,
-                 equalise_gs_23: bool = False,
                  addendum_reduction_23: bool = False,
                  load_sharing_factor: float = 1.0):
         """Build the two pair objects and the train data; see the class docstring."""
@@ -356,7 +351,7 @@ class PlanetaryGearTrainMeshing:
 
         # --- the two tooth-contact problems (they run their own compatibility
         #     checks: mn / alpha_n / beta_n) --------------------------------
-        # QUESTION(Q52): the train is not refactored yet (step 6); only the construction of its two pairs is moved onto GearPair.assemble (the family is that of the gears), everything else in this class is unchanged.
+        # QUESTION(Q52): deferred (José, 2026-10-15): the train is refactored in step 6; only the construction of its two pairs is moved onto GearPair.assemble (the family is that of the gears), everything else in this class is unchanged.
         # check=False (José, 2026-10-15, answer 3): the train validates its pairs in its own validate() until
         # step 6 (Q52); the planet-ring pair of the 20/-60 spur train fails the checks of Q39 / Q24
         self.meshing_12 = GearPair.assemble(
@@ -364,7 +359,6 @@ class PlanetaryGearTrainMeshing:
             gear1=sun_gear, gear2=planet_gear,
             label=f"{label}:sun-planet",
             al=al_12,
-            equalise_gs=equalise_gs_12,
             addendum_reduction=addendum_reduction_12,
         )
         self.meshing_23 = GearPair.assemble(
@@ -372,7 +366,6 @@ class PlanetaryGearTrainMeshing:
             gear1=planet_gear, gear2=ring_gear,
             label=f"{label}:planet-ring",
             al=al_23,
-            equalise_gs=equalise_gs_23,
             addendum_reduction=addendum_reduction_23,
         )
 

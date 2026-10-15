@@ -8,19 +8,20 @@ reproduce are dropped (``unit``, ``source_file_line``, ``note``: text typed or l
 recording script, not results of the gear code), and the GEARpie runner is left out.
 
 A refactor edits the builders of this file (and, when attribute names change, a name map applied to
-the recorded rows); the expected values in ``tests/data/gears_baseline/*.csv`` never change, except
+the recorded rows); the expected values in ``gears/tests/data/gears_baseline/*.csv`` never change, except
 for the rows that are ruled to change.
 
 Since step 3 the gears and pairs are ``Gear`` and ``GearPair`` of ``CylindricalFamily``. The rows
 were recorded on the classes that family replaces, so each object is recorded through the NAME MAP
 below (``recorded_gear``, ``recorded_pair``): recorded row name -> accessor on the new objects, in
-the recorded order. Every row is still compared; ``RENAMED_TEXT`` lists the few text rows that name
-a removed class.
+the recorded order. Every row is compared; the text rows (``__repr__``, ``summary()``) hold the texts
+of ``GearPair`` (Q50, José 2026-10-15: rows replaced in the baseline).
 
 Since step 5 the system of case 7 is a ``Transmission`` with one ``PairStage`` and its result a
 ``ResolvedTransmission``. The rows of the ``system`` and ``link`` objects are recorded in
-``run_case7`` under the names of the two classes they replace; ``RENAMED_PATTERNS`` and
-``ECHOED_ROWS_CASE7`` list the rows that are text or state of those classes.
+``run_case7`` under the names of the two classes they replace; their text rows hold the texts of
+``Transmission``, ``PairStage`` and ``ResolvedTransmission``, and their rows of state with no
+counterpart are replaced or deleted (Q46, José 2026-10-15).
 
 Units are those of AxisForge: lengths [mm], forces [N], torques [N m], angles [rad] in the gear
 objects and [deg] for ``phi_deg`` and the load angles, speeds [rpm], power [W].
@@ -64,15 +65,14 @@ from axisforge.core.mechanical_system.transmission import (
     Transmission,
 )
 
-# <repo>/tests/data/gears_baseline: the case CSVs copied from the vault (question Q01)
-DATA_DIR = Path(__file__).resolve().parents[5] / "tests" / "data" / "gears_baseline"
+# the case CSVs copied from the vault, next to the tests that read them (Q01, José 2026-10-15)
+DATA_DIR = Path(__file__).resolve().parent / "data" / "gears_baseline"
 
-# QUESTION(Q02): equivalence tolerances. The rule of _baseline.md with its two amendments taken as
-# defaults: relative 1e-12 on every float; absolute 1e-9 (in the unit of the quantity) whenever
-# abs(baseline) < 1e-9, not only when the baseline is exactly 0 (several recorded values are
-# rounding residue, e.g. k 8.9e-15, jbn 1.7e-14, coaxiality_error 4.3e-14); the brentq expression
-# of alphatw is untouched, so 1e-12 also holds downstream of alphatw (the alternative of amendment
-# 2 is 1e-10 there).
+# Q02 (José, 2026-10-15): keep - equivalence tolerances of the unchanged quantities: relative 1e-12 on
+# every float; absolute 1e-9 (in the unit of the quantity) whenever abs(baseline) < 1e-9 (several
+# recorded values are rounding residue, e.g. k 8.9e-15, jbn 1.7e-14, coaxiality_error 4.3e-14); the
+# numbers printed inside a string are compared under the same tolerances. A quantity that a ruling
+# changes gets a new golden value (row edited in place), not compared with the old one.
 REL_TOL = 1e-12
 ABS_TOL = 1e-9
 ABS_TOL_BELOW = 1e-9
@@ -232,42 +232,10 @@ _PAIR_TAIL = ("u", "k", "epslon_alpha", "b", "epslon_beta", "epslon_gamma", "gal
               "T1B", "T1C", "T1D", "T2E", "T2B", "T2C", "T2D", "AE", "AB", "AC", "AD", "rA1", "rB1", "rD1", "rA2", "rB2",
               "rD2", "HV", "Ram", "Rrms", "RzS")
 
-# QUESTION(Q50): text rows of the baseline that name a class removed in step 3 and that the new code
-# cannot print: baseline value -> (value given now, number of such rows in cases 1-7). Every other
-# presentation row (__repr__ 'HelicalGearMeshing(', 'InternalGearMeshing(', summary()) is reproduced
-# verbatim by the family. The alternative is to rule new texts and replace the rows.
-RENAMED_TEXT = {
-    "\"AttributeError: 'InternalGear' object has no attribute 'zn'\"":
-        ("\"AttributeError: 'Gear' object has no attribute 'zn'\"", 6),
-}
-
-
-# QUESTION(Q50): the pair stores no driver (D-0026 item 4; Q03), so the recorded rows `driver`
-# and `driven` of the 25 recorded pairs (29 before Q03 answer 7) are an echo of the case input (they pass by construction):
-# (row names, number of rows in cases 1-7). The pair holds no driver since Q03; the driver of case 7 is
-# the gear on the source shaft.
+# Q03 (José, 2026-10-15): the pair stores no driver (D-0026 item 4), so the recorded rows `driver`
+# and `driven` of the recorded pairs are an echo of the case input (they pass by construction):
+# (row names, number of rows in cases 1-7). The driver of case 7 is the gear on the source shaft.
 ECHOED_ROWS = (("driver", "driven"), 70)   # 50 + 20: 58 recorded less 8 of cases 3b, 3c, 7c, 7d (Q03, answer 7), plus 20 of cases 4n, 5n (Q15)
-
-# QUESTION(Q46): text rows of case 7 that name one of the two classes ``Transmission`` and ``PairStage``
-# replace: regular expression of the baseline text -> (text given now, built from the groups; number
-# of such rows in cases 7a-7f). The summary() text is reproduced verbatim. The alternative is to
-# rule new texts and replace the rows.
-RENAMED_PATTERNS = {
-    # __repr__ of the system: its `resolved=True` was state of the system; the result is now a separate record
-    r"\"GearSystem\(label='(.*)', shafts=(\d+), links=(\d+), resolved=True\)\"":
-        ("\"Transmission(label='{0}', shafts={1}, stages={2})\"", 4),
-    # __repr__ of the link: torque_split=None (the full torque) is now share=1.0 (Q40)
-    r"\"SpurHelicalMeshLink\((.*), torque_split=None, label='(.*)'\)\"":
-        ("\"PairStage({0}, share=1.0, label='{1}')\"", 4),
-}
-
-# QUESTION(Q46): rows of case 7 that record STATE of the replaced classes with no counterpart of the
-# same value; they are written back as recorded (they pass by construction):
-# (object, row name ending) -> (recorded value, number of rows in cases 7a-7f, what holds it now).
-ECHOED_ROWS_CASE7 = {
-    ("link", "meshing_load_factor"): (1.0, 4, "removed: a constant 1.0 read by no live code"),
-    ("system", "].rpm"): (None, 8, "ResolvedTransmission.speed_rpm, a number (Q09)"),
-}
 
 
 class Recorded:
@@ -333,8 +301,7 @@ def recorded_pair(pair, driver="gear1"):
     return Recorded(
         dict(rows, gear1=pair.gear1, gear2=pair.gear2, gear1_w=_recorded_working_gear(pair, 1),
              gear2_w=_recorded_working_gear(pair, 2), new=pair),
-        text=lambda: repr(pair), validate=pair.validate, validate_or_raise=pair.validate_or_raise, summary=pair.summary,
-        correction_for_gs_equilibrium=lambda: FAMILY.correction_for_gs_equilibrium(pair.gear1, pair.gear2))
+        text=lambda: repr(pair), validate=pair.validate, validate_or_raise=pair.validate_or_raise, summary=pair.summary)
 
 
 def assemble_pair(g1, g2, driver="gear1", check=True, **kw):
@@ -547,10 +514,8 @@ def run_external(case, gname):
     mesh = assemble_pair(p, w, label=case, driver="gear1")
     record_pair(rec, "mesh", mesh)
     R[(case, "mesh")] = mesh
-    rec.call("mesh", mesh, "correction_for_gs_equilibrium")
-    # variants (all assembly options of the pair)
+    # variants (all assembly options of the pair; equalise_gs deleted: Q13)
     for vname, kw in (("mesh_addendum_reduction", dict(addendum_reduction=True)),
-                      ("mesh_equalise_gs", dict(equalise_gs=True)),
                       ("mesh_al_imposed_equal_a", dict(al=mesh.a))):
         try:
             mv = assemble_pair(p, w, label=vname, driver="gear1", **kw)
@@ -559,18 +524,6 @@ def run_external(case, gname):
             continue
         record_pair(rec, vname, mv)
         R[(case, vname)] = mv
-    if case.startswith("case1"):
-        # extra pair for the z1 + z2 > 60 branch of correction_for_gs_equilibrium (the GEARpie pair has 40)
-        g = GEARPIE[gname]
-        pe = gear(mn=g["m"], z=35, b=g["b"][0], label="extra_z35")
-        we = gear(mn=g["m"], z=45, b=g["b"][1], label="extra_z45")
-        rec.add("inputs", "extra pair for equalise_gs branch z1+z2 > 60", "mn=4.5, z=35/45, x=0, b=14, default rack")
-        try:
-            me = assemble_pair(pe, we, label="extra_z80", equalise_gs=True)
-            record_pair(rec, "mesh_extra_z35_z45_equalise_gs", me)
-            R[(case, "extra80")] = me
-        except Exception as e:
-            rec.add("mesh_extra_z35_z45_equalise_gs", "constructor!exception", f"{type(e).__name__}: {e}")
     return rec
 
 
@@ -611,9 +564,7 @@ def run_internal(case, beta, z1=20, check=True):
         record_pair(rec, f"mesh_driver_{drv}", mesh)
         R[(case, drv)] = mesh
     base = R[(case, "gear1")]
-    rec.call("mesh_driver_gear1", base, "correction_for_gs_equilibrium")
     for vname, kw in (("mesh_addendum_reduction", dict(addendum_reduction=True)),
-                      ("mesh_equalise_gs", dict(equalise_gs=True)),
                       ("mesh_al_imposed_equal_al", dict(al=base.al)),
                       ("mesh_al_imposed_equal_a", dict(al=base.a))):
         try:
@@ -681,8 +632,7 @@ def run_planetary(case, beta):
     rec.call("planetary", pg, "neighbouring_condition", (2.0,))
     rec.add("planetary", "t (property)", pg.t)
     rec.add("planetary", "__repr__()", repr(pg))
-    for vname, kw in (("equalise_gs_23", dict(equalise_gs_23=True)), ("equalise_gs_12", dict(equalise_gs_12=True)),
-                      ("addendum_reduction_12_and_23", dict(addendum_reduction_12=True, addendum_reduction_23=True)),
+    for vname, kw in (("addendum_reduction_12_and_23", dict(addendum_reduction_12=True, addendum_reduction_23=True)),
                       ("k3_assembly_violation", dict(k=3))):
         try:
             pv = PlanetaryGearTrainMeshing(sun, planet, ring, **{"k": 4, "label": vname, **kw})
@@ -723,24 +673,26 @@ def run_case7(tag, source, rot, alt=False):
     system, mesh, link, sP, sW, geP, geW, resolved = c.system, c.mesh, c.link, c.sP, c.sW, c.geP, c.geW, c.resolved
     rec.call("system", system, "validate", label="validate() AFTER resolve")
     rec.call("system", resolved, "summary")
-    rec.add("system", "__repr__()", repr(system))      # RENAMED_PATTERNS
+    rec.add("system", "__repr__()", repr(system))      # text of Transmission (Q46)
     rec.add("system", "label", system.label)
     # NAME MAP of the private record `_resolved` of the replaced system: per shaft, in the order of
-    # system.shafts, the fields of the ResolvedTransmission and the position written on the loaded copy
-    for s, copy, T, rot_s in zip(system.shafts, resolved.shafts, resolved.torque_Nm, resolved.rotation):
+    # system.shafts, the fields of the ResolvedTransmission and the position written on the loaded copy;
+    # `rpm` was None in the replaced record, now the speed of the shaft (Q09, Q46)
+    for s, copy, T, rot_s, n in zip(system.shafts, resolved.shafts, resolved.torque_Nm, resolved.rotation,
+                                    resolved.speed_rpm):
         for k, v in dict(name=s.name, T_out_Nm=T, rotation_dir=rot_s, shaft_position=copy.shaft_position,
-                         rpm=ECHOED_ROWS_CASE7[("system", "].rpm")][0]).items():
+                         rpm=n).items():
             rec.add_value("system", f"_resolved[{s.name}].{k}", v)
     # NAME MAP of the link: recorded attribute -> field of the PairStage (the `driver` is recorded in the rows of the pair)
-    # torque_split was None for a link that took the full torque: share = 1.0 (Q40)
+    # torque_split was None for a link that took the full torque: share = 1.0 (Q40); meshing_load_factor,
+    # a constant 1.0 read by no live code, has no counterpart (rows deleted: Q46)
     for k, v in dict(phi_deg=link.phi_deg, torque_split=None if link.share == 1.0 else link.share,
-                     distribute_loads=link.distribute_loads,
-                     meshing_load_factor=ECHOED_ROWS_CASE7[("link", "meshing_load_factor")][0], label=link.label).items():
+                     distribute_loads=link.distribute_loads, label=link.label).items():
         rec.add_value("link", k, v)
     rec.add("link", "shaft_a.name", link.shaft_a.name)
     rec.add("link", "shaft_b.name", link.shaft_b.name)
     rec.call("link", link, "validate")
-    rec.add("link", "__repr__()", repr(link))      # RENAMED_PATTERNS
+    rec.add("link", "__repr__()", repr(link))      # text of PairStage (Q46)
     record_pair(rec, "mesh", mesh)
     for nm, s, ge in (("shaft_pinion", sP, geP), ("shaft_wheel", sW, geW)):
         rec.object_(nm, s, skip=("shaft",))
@@ -972,7 +924,7 @@ def run_baseline():
 
 @functools.lru_cache(maxsize=None)
 def baseline_rows(case):
-    """Rows ``(object, name, value text)`` of ``tests/data/gears_baseline/<case>.csv``, in file order."""
+    """Rows ``(object, name, value text)`` of ``gears/tests/data/gears_baseline/<case>.csv``, in file order."""
     with open(DATA_DIR / f"{case}.csv", newline="", encoding="utf-8") as f:
         return [(r["object"], r["name"], r["value"]) for r in csv.DictReader(f)]
 
@@ -982,8 +934,34 @@ def baseline_objects(cases):
     return [(case, obj) for case in cases for obj in dict.fromkeys(o for o, _, _ in baseline_rows(case))]
 
 
+# a number printed inside a text row (summary(), __repr__(), validate() messages)
+_NUMBER_IN_TEXT = re.compile(r"([-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?)")
+
+
+def _close(got, ref):
+    """Float rule of Q02: absolute ``ABS_TOL`` near zero, relative ``REL_TOL`` elsewhere."""
+    if math.isinf(ref) or math.isnan(ref):
+        return repr(got) == repr(ref)     # inf (lead of a spur gear) and nan have no tolerance
+    if abs(ref) < ABS_TOL_BELOW:
+        return abs(got - ref) <= ABS_TOL
+    return abs(got - ref) <= REL_TOL * abs(ref)
+
+
+def _same_text(got, text):
+    """Text rule of Q02: the words equal, the numbers inside the string equal under ``_close``."""
+    a, b = _NUMBER_IN_TEXT.split(got), _NUMBER_IN_TEXT.split(text)
+    if len(a) != len(b):
+        return False
+    # split() with one group alternates text (even index) and number (odd index)
+    return all(x == y if i % 2 == 0 else _close(float(x), float(y)) for i, (x, y) in enumerate(zip(a, b)))
+
+
 def equivalent(got, text):
-    """Equivalence rule of the baseline for one value (see ``REL_TOL``).
+    """Equivalence rule of the baseline for one value (Q02, José 2026-10-15; see ``REL_TOL``).
+
+    Floats: relative 1e-12, absolute 1e-9 when the baseline is below 1e-9 in magnitude. Text
+    (booleans, strings, exceptions): the words exactly, the numbers printed inside under the same
+    tolerances.
 
     Parameters
     ----------
@@ -993,25 +971,12 @@ def equivalent(got, text):
         ``value`` cell of the baseline CSV.
     """
     if not isinstance(got, float):
-        # QUESTION(Q02): text is compared exactly, including the numbers printed inside strings
-        # (summary(), __repr__(), validate() messages, "constructor ok: al_12, al_23"); the
-        # alternative is to compare the numbers found inside a string under the tolerances.
-        if text in RENAMED_TEXT:
-            return got == RENAMED_TEXT[text][0]     # QUESTION(Q50): the row names a removed class
-        for pattern, (now, _) in RENAMED_PATTERNS.items():
-            m = re.fullmatch(pattern, text)
-            if m:
-                return got == now.format(*m.groups())     # QUESTION(Q46): the row names a replaced class
-        return got == text
+        return _same_text(got, text)
     try:
         ref = float(text)
     except ValueError:
         return False
-    if math.isinf(ref) or math.isnan(ref):
-        return repr(got) == text     # inf (lead of a spur gear) and nan have no tolerance
-    if abs(ref) < ABS_TOL_BELOW:
-        return abs(got - ref) <= ABS_TOL
-    return abs(got - ref) <= REL_TOL * abs(ref)
+    return _close(got, ref)
 
 
 def mismatches(case, obj):

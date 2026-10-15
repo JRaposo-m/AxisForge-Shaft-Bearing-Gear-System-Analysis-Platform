@@ -21,12 +21,12 @@ def test_records_read_the_resolved_transmission():
     case = bc.resolved_case7("pinion", 1)
     rows = {(r["section"], r["parameter"]): r["value"] for r in system_records(case.resolved, case.P)}
     assert rows[("gear system", "source shaft")] == "shaft_pinion"
-    assert (rows[("gear system", "number of mesh links")], rows[("gear system", "resolved")]) == (1, True)
-    assert rows[("resolved shaft shaft_pinion", "torque T_out")] == case.resolved.torque_Nm[0]
-    assert rows[("resolved shaft shaft_wheel", "torque T_out")] == case.resolved.torque_Nm[1]
+    assert (rows[("gear system", "number of stages")], rows[("gear system", "resolved")]) == (1, True)
+    assert rows[("resolved shaft shaft_pinion", "torque entering the shaft")] == case.resolved.torque_Nm[0]
+    assert rows[("resolved shaft shaft_wheel", "torque entering the shaft")] == case.resolved.torque_Nm[1]
     assert rows[("resolved shaft shaft_wheel", "rotation direction")] == -1
     mesh = "mesh stage (shaft_pinion -> shaft_wheel)"
-    assert (rows[(mesh, "torque split")], rows[(mesh, "line of centres angle phi")]) == ("mode B (100 %)", 30.0)
+    assert (rows[(mesh, "share of the torque")], rows[(mesh, "line of centres angle phi")]) == (1.0, 30.0)
     assert (rows[(mesh, "driver gear")], rows[(mesh, "driven gear")]) == ("g_pinion", "g_wheel")
     assert rows[(mesh, "working centre distance")] == case.link.pair.al
     unresolved = [r["section"] for r in system_records(case.system)]

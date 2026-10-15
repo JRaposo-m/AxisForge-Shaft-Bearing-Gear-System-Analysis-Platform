@@ -88,7 +88,7 @@ def test_resolve_leaves_the_user_shafts_untouched(case7a):
     assert resolved.sP is not user_P and resolved.sW is not user_W
     assert user_P.loads == [] and user_W.loads == []
     assert user_P.shaft_position == user_W.shaft_position == (0.0, 0.0)
-    assert len(resolved.sP.loads) == 5 and len(resolved.sW.loads) == 4
+    assert len(resolved.sP.loads) == 6 and len(resolved.sW.loads) == 5     # with the bending moment of F_a (Q06)
     # wheel axis at the working centre distance along phi = 30 deg from the pinion axis [mm]
     assert resolved.sW.shaft_position == pytest.approx(
         (resolved.mesh.al * 3 ** 0.5 / 2, resolved.mesh.al / 2), rel=1e-12)
@@ -119,7 +119,8 @@ def test_resolve_keeps_the_user_loads_first(case7a):
     case7a.sW.add_load(RadialLoad(100.0, 10.0, 0.0, label="user"))
     resolved = bc.resolve_case7(case7a)
     assert [ld.label for ld in case7a.system.shafts[1].loads] == ["user"]
-    assert [ld.label for ld in resolved.sW.loads] == ["user", "g_wheel:Fr", "g_wheel:Ft", "g_wheel:Fa", "g_wheel:T"]
+    assert [ld.label for ld in resolved.sW.loads] == ["user", "g_wheel:Fr", "g_wheel:Ft", "g_wheel:Fa", "g_wheel:T",
+                                                        "g_wheel:M"]
 
 
 # ----------------------------------------------------------------------------------------------
@@ -145,7 +146,7 @@ def test_sink_closes_the_driven_shaft(case7a):
     assert (type(sink), sink.label, sink.position, sink.source) == (TorqueLoad, "shaft_wheel:T_out", 200.0, "gear_mesh")
     assert sink.magnitude == pytest.approx(bc.T_NM * case7a.w.z / case7a.p.z, rel=1e-12)
     assert _torque_sum(loaded_W) == 0.0
-    assert len(loaded_P.loads) == 5 and user_W.loads == []
+    assert len(loaded_P.loads) == 6 and user_W.loads == []
 
 
 def test_sink_on_a_shaft_outside_the_system_is_refused(case7a):

@@ -3,13 +3,15 @@
 Three groups: the six magnitudes of baseline case 2 against the hand arithmetic of the plan
 (unit conversions of D-0010 item 5, and the "N mm by mistake" guard); the mesh frame and the sign
 table of D-0010 items 14-16 (vault note ``units_and_conventions.md``, C.4); statics that need no
-standard (action = reaction, torque = moment of the mesh force, one normal force). These are NEW
-numbers: the forces that the shaft loads still use are those of ``forces()``, pinned in
-``test_cylindrical_family.py`` and by the baseline rows.
+standard (action = reaction, torque = moment of the mesh force, one normal force). ``mesh_forces`` is
+the only force calculation of the family (Q03); the shaft loads are built from it (Q05, José
+2026-10-15). The hand of the helix is that of the gear data (Q08): the baseline helical gear 1 is
+right-hand.
 
 Case 2: H501, z 20/30, mn 3.5 mm, beta 15 deg, T = 60.75 N m on gear 1; d_w1 = 73.200206 mm,
 d_1 = 72.469333 mm, d_b1 = 67.814717 mm. Units: forces [N], torques [N m], lengths [mm].
 """
+import dataclasses
 import math
 
 import pytest
@@ -24,6 +26,12 @@ T = bc.T_NM                                # [N m] torque on gear 1
 
 def pair(g1, g2):
     return GearPair.assemble(FAMILY, gear1=g1, gear2=g2)
+
+
+def with_hand(p, hand1):
+    """The same pair with gear 1 of hand ``hand1`` and gear 2 of the hand the kind of pair needs (Q08)."""
+    hand2 = hand1 if p.gear2.z < 0 else -hand1
+    return pair(*(bc.Gear.assemble(FAMILY, dataclasses.replace(g.data, hand=h)) for g, h in ((p.gear1, hand1), (p.gear2, hand2))))
 
 
 CASES = {
@@ -60,15 +68,6 @@ def test_torque_is_in_newton_metre_not_newton_millimetre():
     assert wrong.F_tw_N == pytest.approx(1000.0 * m.F_tw_N, rel=REL) and wrong.F_tw_N > 1.6e6
 
 
-def test_magnitudes_agree_with_todays_forces_where_the_definitions_agree():
-    """F_tw, F_r, F_bt are today's Ft, Fr, Fn of ``forces()``; F_a and F_bn are not (Q07a, Q07b)."""
-    p = CASES["case2"]
-    m, F = FAMILY.mesh_forces(p, T, 1), FAMILY.forces(p, T)
-    assert (m.F_tw_N, m.F_r_N, m.F_bt_N) == pytest.approx((F["Ft"], F["Fr"], F["Fn"]), rel=REL)
-    assert m.F_a_N / F["Fa"] == pytest.approx(p.rl1 / p.gear1.r, rel=1e-12)       # +1.0 %: r_w / r
-    assert m.F_bn_N / F["Fn"] == pytest.approx(1.0 / math.cos(p.gear1.betab), rel=1e-12)
-
-
 @pytest.mark.parametrize("case", CASES)
 def test_one_normal_force(case):
     """The three sets describe one force: F_tw^2 + F_r^2 + F_a^2 = F_bn^2 (geometry of the helicoid)."""
@@ -99,7 +98,7 @@ def test_pitch_point_from_each_axis(case):
 @pytest.mark.parametrize("hand", [1, -1])
 def test_sign_table_external_pair_gear_1_driving(rot, hand):
     """On the driver: (-F_r, -rot F_tw, +h rot F_a); on the driven gear the opposite."""
-    m = FAMILY.mesh_forces(CASES["case2"], rot * T, rot, hand1=hand)     # driving: T omega > 0
+    m = FAMILY.mesh_forces(with_hand(CASES["case2"], hand), rot * T, rot)     # driving: T omega > 0
     assert m.on_1 == pytest.approx((-m.F_r_N, -rot * m.F_tw_N, hand * rot * m.F_a_N), rel=REL)
     assert m.on_2 == pytest.approx((+m.F_r_N, +rot * m.F_tw_N, -hand * rot * m.F_a_N), rel=REL)
 
@@ -108,16 +107,18 @@ def test_sign_table_external_pair_gear_1_driving(rot, hand):
 @pytest.mark.parametrize("hand", [1, -1])
 def test_sign_table_internal_pair_pinion_driving(rot, hand):
     """On the pinion: (+F_r, +rot F_tw, +h rot F_a); the ring is pushed outward: (-F_r, ...)."""
-    m = FAMILY.mesh_forces(CASES["case5"], rot * T, rot, hand1=hand)
+    m = FAMILY.mesh_forces(with_hand(CASES["case5"], hand), rot * T, rot)
     assert m.on_1 == pytest.approx((+m.F_r_N, +rot * m.F_tw_N, hand * rot * m.F_a_N), rel=REL)
     assert m.on_2 == pytest.approx((-m.F_r_N, -rot * m.F_tw_N, -hand * rot * m.F_a_N), rel=REL)
 
 
-def test_default_hand_is_right_hand_gear_1():
-    """Q08: with no hand given gear 1 is right-hand: driving in the +1 sense it is pushed along +X."""
+def test_hand_is_read_from_the_gear_data():
+    """Q08: the axial force follows the hand of gear 1 in the gear data: a right-hand gear 1 driving in the +1 sense
+    is pushed along +X, a left-hand one along -X; a spur pair (hand 0) has no axial force."""
     p = CASES["case2"]
-    assert FAMILY.mesh_forces(p, T, 1) == FAMILY.mesh_forces(p, T, 1, hand1=1)
-    assert FAMILY.mesh_forces(p, T, 1).on_1[2] > 0.0 > FAMILY.mesh_forces(p, T, 1, hand1=-1).on_1[2]
+    assert p.gear1.hand == 1 and p.gear2.hand == -1
+    assert FAMILY.mesh_forces(p, T, 1).on_1[2] > 0.0 > FAMILY.mesh_forces(with_hand(p, -1), T, 1).on_1[2]
+    assert CASES["case1"].gear1.hand == 0 and FAMILY.mesh_forces(CASES["case1"], T, 1).on_1[2] == 0.0
 
 
 @pytest.mark.parametrize("case", CASES)
@@ -149,8 +150,8 @@ def test_sense_of_rotation_alone_changes_nothing():
 # ----------------------------------------------------------------------------------------------
 # bad inputs, and the contact chain
 # ----------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("kw", [dict(rot1=0), dict(rot1=2), dict(rot1=1, hand1=0), dict(rot1=1, hand1="right")])
-def test_bad_sense_or_hand_is_refused(kw):
+@pytest.mark.parametrize("kw", [dict(rot1=0), dict(rot1=2)])
+def test_bad_sense_is_refused(kw):
     with pytest.raises(ValueError, match="must be"):
         FAMILY.mesh_forces(CASES["case2"], T, **kw)
 

@@ -13,6 +13,7 @@ case4_internal_spur,gear1(pinion),alpha_n_deg,20.0,deg,axisforge/core/machine_el
 case4_internal_spur,gear1(pinion),alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,
 case4_internal_spur,gear1(pinion),beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,
 case4_internal_spur,gear1(pinion),beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,
+case4_internal_spur,gear1(pinion),hand,0,,,new input row (Q08) (José 2026-10-15)
 case4_internal_spur,gear1(pinion),haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,
 case4_internal_spur,gear1(pinion),cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,
 case4_internal_spur,gear1(pinion),hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,
@@ -51,6 +52,7 @@ case4_internal_spur,gear2(ring),alpha_n_deg,20.0,deg,axisforge/core/machine_elem
 case4_internal_spur,gear2(ring),alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:179,
 case4_internal_spur,gear2(ring),beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:180,
 case4_internal_spur,gear2(ring),beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:181,
+case4_internal_spur,gear2(ring),hand,0,,,new input row (Q08) (José 2026-10-15)
 case4_internal_spur,gear2(ring),haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:182,
 case4_internal_spur,gear2(ring),cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:183,
 case4_internal_spur,gear2(ring),hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:184,
@@ -153,6 +155,7 @@ case4_internal_spur,mesh_driver_gear1.gear1_w,alpha_n_deg,20.0,deg,axisforge/cor
 case4_internal_spur,mesh_driver_gear1.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear1_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear1_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case4_internal_spur,mesh_driver_gear1.gear1_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case4_internal_spur,mesh_driver_gear1.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -196,6 +199,7 @@ case4_internal_spur,mesh_driver_gear1.gear2_w,alpha_n_deg,20.0,deg,axisforge/cor
 case4_internal_spur,mesh_driver_gear1.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear2_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear2_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case4_internal_spur,mesh_driver_gear1.gear2_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case4_internal_spur,mesh_driver_gear1.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear1.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -239,46 +243,6 @@ case4_internal_spur,mesh_driver_gear1,validate()[0],"'Interference: the path of 
 case4_internal_spur,mesh_driver_gear1,validate_or_raise()!exception,"'ValueError: Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the involute interference of SDP-SI Eq. (5-2).'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:781,"Q39+Q24, lead decision (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1,summary(),"'── case4_internal_spur ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 116.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 1.9497\n  εβ    : 0.0000\n  εγ    : 1.9497\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear1,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=1.9497)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,"Q04, Q27 (José 2026-10-15)"
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).Ft",3037.4999999999995,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).Fr",1105.5595865835899,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).Fn",3232.439983895583,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:666,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).T_out",-182.25,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:667,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:706,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).theta_Ft_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:707,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:711,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).theta_Ft_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:671,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, 1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:668,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, -1).Ft",3037.4999999999995,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, -1).Fr",1105.5595865835899,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, -1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, -1).Fn",3232.439983895583,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:666,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, -1).T_out",-182.25,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:667,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, -1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:706,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, -1).theta_Ft_driver",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:707,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, -1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:711,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, -1).theta_Ft_driven",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:671,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 0.0, -1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:668,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, 1).Ft",3037.4999999999995,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, 1).Fr",1105.5595865835899,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, 1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, 1).Fn",3232.439983895583,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:666,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, 1).T_out",-182.25,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:667,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, 1).theta_Fr_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:706,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, 1).theta_Ft_driver",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:707,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, 1).theta_Fr_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:711,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, 1).theta_Ft_driven",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:671,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, 1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:668,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, -1).Ft",3037.4999999999995,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, -1).Fr",1105.5595865835899,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, -1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, -1).Fn",3232.439983895583,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:666,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, -1).T_out",-182.25,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:667,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, -1).theta_Fr_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:706,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, -1).theta_Ft_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:707,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, -1).theta_Fr_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:711,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, -1).theta_Ft_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:671,
-case4_internal_spur,mesh_driver_gear1,"forces(60.75, 90.0, -1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:668,
 case4_internal_spur,mesh_driver_gear2,driver,'gear2',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:144,
 case4_internal_spur,mesh_driver_gear2,driven,'gear1',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:145,
 case4_internal_spur,mesh_driver_gear2,label,'case4_internal_spur',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,
@@ -336,6 +300,7 @@ case4_internal_spur,mesh_driver_gear2.gear1_w,alpha_n_deg,20.0,deg,axisforge/cor
 case4_internal_spur,mesh_driver_gear2.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear1_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear1_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case4_internal_spur,mesh_driver_gear2.gear1_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case4_internal_spur,mesh_driver_gear2.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -379,6 +344,7 @@ case4_internal_spur,mesh_driver_gear2.gear2_w,alpha_n_deg,20.0,deg,axisforge/cor
 case4_internal_spur,mesh_driver_gear2.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear2_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear2_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case4_internal_spur,mesh_driver_gear2.gear2_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case4_internal_spur,mesh_driver_gear2.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case4_internal_spur,mesh_driver_gear2.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -422,46 +388,6 @@ case4_internal_spur,mesh_driver_gear2,validate()[0],"'Interference: the path of 
 case4_internal_spur,mesh_driver_gear2,validate_or_raise()!exception,"'ValueError: Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the involute interference of SDP-SI Eq. (5-2).'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:781,"Q39+Q24, lead decision (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2,summary(),"'── case4_internal_spur ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 116.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 1.9497\n  εβ    : 0.0000\n  εγ    : 1.9497\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_driver_gear2,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=1.9497)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,"Q04, Q27 (José 2026-10-15)"
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).Ft",1012.4999999999999,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).Fr",368.51986219453,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).Fn",1077.479994631861,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:666,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).T_out",-20.25,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:667,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:706,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).theta_Ft_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:707,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:711,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).theta_Ft_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:671,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, 1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:668,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, -1).Ft",1012.4999999999999,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, -1).Fr",368.51986219453,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, -1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, -1).Fn",1077.479994631861,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:666,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, -1).T_out",-20.25,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:667,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, -1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:706,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, -1).theta_Ft_driver",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:707,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, -1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:711,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, -1).theta_Ft_driven",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:671,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 0.0, -1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:668,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, 1).Ft",1012.4999999999999,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, 1).Fr",368.51986219453,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, 1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, 1).Fn",1077.479994631861,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:666,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, 1).T_out",-20.25,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:667,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, 1).theta_Fr_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:706,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, 1).theta_Ft_driver",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:707,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, 1).theta_Fr_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:711,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, 1).theta_Ft_driven",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:671,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, 1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:668,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, -1).Ft",1012.4999999999999,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, -1).Fr",368.51986219453,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, -1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, -1).Fn",1077.479994631861,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:666,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, -1).T_out",-20.25,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:667,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, -1).theta_Fr_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:706,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, -1).theta_Ft_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:707,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, -1).theta_Fr_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:711,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, -1).theta_Ft_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:671,
-case4_internal_spur,mesh_driver_gear2,"forces(60.75, 90.0, -1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:668,
 case4_internal_spur,mesh_driver_gear1,correction_for_gs_equilibrium()!exception,"""AttributeError: 'InternalGear' object has no attribute 'zn'""",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:332,"EXCEPTION; traceback tail: File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\gear_meshing\internal_meshing.py"", line 319, in correction_for_gs_equilibrium | z1, z2   = self.gear1.zn, self.gear2.zn | ^^^^^^^^^^^^^ | AttributeError: 'InternalGear' object has no attribute 'zn'"
 case4_internal_spur,mesh_addendum_reduction,driver,'gear1',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:144,
 case4_internal_spur,mesh_addendum_reduction,driven,'gear2',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:145,
@@ -520,6 +446,7 @@ case4_internal_spur,mesh_addendum_reduction.gear1_w,alpha_n_deg,20.0,deg,axisfor
 case4_internal_spur,mesh_addendum_reduction.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case4_internal_spur,mesh_addendum_reduction.gear1_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -563,6 +490,7 @@ case4_internal_spur,mesh_addendum_reduction.gear2_w,alpha_n_deg,20.0,deg,axisfor
 case4_internal_spur,mesh_addendum_reduction.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case4_internal_spur,mesh_addendum_reduction.gear2_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case4_internal_spur,mesh_addendum_reduction.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -606,16 +534,6 @@ case4_internal_spur,mesh_addendum_reduction,validate()[0],"'Interference: the pa
 case4_internal_spur,mesh_addendum_reduction,validate_or_raise()!exception,"'ValueError: Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the involute interference of SDP-SI Eq. (5-2).'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:781,"Q39+Q24, lead decision (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction,summary(),"'── mesh_addendum_reduction ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 116.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 1.9497\n  εβ    : 0.0000\n  εγ    : 1.9497\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_addendum_reduction,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=1.9497)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,"Q04, Q27 (José 2026-10-15)"
-case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).Ft",3037.4999999999995,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
-case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).Fr",1105.5595865835899,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
-case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
-case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).Fn",3232.439983895583,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:666,
-case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).T_out",-182.25,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:667,
-case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:706,
-case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).theta_Ft_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:707,
-case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:711,
-case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).theta_Ft_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:671,
-case4_internal_spur,mesh_addendum_reduction,"forces(60.75, 0.0, 1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:668,
 case4_internal_spur,mesh_equalise_gs,constructor!exception,"""AttributeError: 'InternalGear' object has no attribute 'zn'""",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:115,"EXCEPTION; kwargs={'equalise_gs': True}; traceback tail: File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\gear_meshing\internal_meshing.py"", line 319, in correction_for_gs_equilibrium | z1, z2   = self.gear1.zn, self.gear2.zn | ^^^^^^^^^^^^^ | AttributeError: 'InternalGear' object has no attribute 'zn'"
 case4_internal_spur,mesh_al_imposed_equal_al,driver,'gear1',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:144,
 case4_internal_spur,mesh_al_imposed_equal_al,driven,'gear2',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:145,
@@ -675,6 +593,7 @@ case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,alpha_n_deg,20.0,deg,axisfo
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -718,6 +637,7 @@ case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,alpha_n_deg,20.0,deg,axisfo
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_al.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -761,16 +681,6 @@ case4_internal_spur,mesh_al_imposed_equal_al,validate()[0],"'Interference: the p
 case4_internal_spur,mesh_al_imposed_equal_al,validate_or_raise()!exception,"'ValueError: Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the involute interference of SDP-SI Eq. (5-2).'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:781,"Q39+Q24, lead decision (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al,summary(),"'── mesh_al_imposed_equal_al ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 116.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 1.9497\n  εβ    : 0.0000\n  εγ    : 1.9497\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_al,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=1.9497)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,"Q04, Q27 (José 2026-10-15)"
-case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).Ft",3037.4999999999995,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
-case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).Fr",1105.55958658359,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
-case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
-case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).Fn",3232.439983895583,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:666,
-case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).T_out",-182.25,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:667,
-case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:706,
-case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).theta_Ft_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:707,
-case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:711,
-case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).theta_Ft_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:671,
-case4_internal_spur,mesh_al_imposed_equal_al,"forces(60.75, 0.0, 1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:668,
 case4_internal_spur,mesh_al_imposed_equal_a,driver,'gear1',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:144,
 case4_internal_spur,mesh_al_imposed_equal_a,driven,'gear2',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:145,
 case4_internal_spur,mesh_al_imposed_equal_a,label,'mesh_al_imposed_equal_a',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,
@@ -829,6 +739,7 @@ case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,alpha_n_deg,20.0,deg,axisfor
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -872,6 +783,7 @@ case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,alpha_n_deg,20.0,deg,axisfor
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case4_internal_spur,mesh_al_imposed_equal_a.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -915,13 +827,3 @@ case4_internal_spur,mesh_al_imposed_equal_a,validate()[0],"'Interference: the pa
 case4_internal_spur,mesh_al_imposed_equal_a,validate_or_raise()!exception,"'ValueError: Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the involute interference of SDP-SI Eq. (5-2).'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:781,"Q39+Q24, lead decision (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a,summary(),"'── mesh_al_imposed_equal_a ─────────────────────────────────\n  gear1 (ext): z=20, mn=2.0, x=0.0, β=0.0°\n  gear2 (int): z=-60, mn=2.0, x=0.0, β=0.0°\n da2 : 116.0000 mm\n T1C : 6.8404 mm   (pinion tip contact point)\n  u     : -3.0000\n  a     : 40.0000 mm   (reference centre distance)\n  al    : 40.0000 mm   (working centre distance)\n  αtw   : 20.0000°\n  dl1   : 40.0000 mm\n  dl2   : 120.0000 mm\n  εα    : 1.9497\n  εβ    : 0.0000\n  εγ    : 1.9497\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,"Q04, Q27 (José 2026-10-15)"
 case4_internal_spur,mesh_al_imposed_equal_a,__repr__(),"'InternalGearMeshing(z1=20, z2=-60, mn=2.0, β=0.0°, al=40.0000 mm, αtw=20.0000°, εγ=1.9497)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,"Q04, Q27 (José 2026-10-15)"
-case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).Ft",3037.5,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,
-case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).Fr",1105.559586583588,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,
-case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,
-case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).Fn",3232.4399838955824,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:666,
-case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).T_out",-182.25,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:667,
-case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:706,
-case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).theta_Ft_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:707,
-case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:711,
-case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).theta_Ft_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:671,
-case4_internal_spur,mesh_al_imposed_equal_a,"forces(60.75, 0.0, 1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:668,

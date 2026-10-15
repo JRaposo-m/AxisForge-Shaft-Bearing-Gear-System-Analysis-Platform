@@ -13,6 +13,7 @@ case6_planetary_spur,sun,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/ge
 case6_planetary_spur,sun,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,
 case6_planetary_spur,sun,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,
 case6_planetary_spur,sun,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,
+case6_planetary_spur,sun,hand,0,,,new input row (Q08) (José 2026-10-15)
 case6_planetary_spur,sun,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,
 case6_planetary_spur,sun,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,
 case6_planetary_spur,sun,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,
@@ -53,6 +54,7 @@ case6_planetary_spur,planet,alpha_n_deg,20.0,deg,axisforge/core/machine_elements
 case6_planetary_spur,planet,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,
 case6_planetary_spur,planet,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,
 case6_planetary_spur,planet,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,
+case6_planetary_spur,planet,hand,0,,,new input row (Q08) (José 2026-10-15)
 case6_planetary_spur,planet,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,
 case6_planetary_spur,planet,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,
 case6_planetary_spur,planet,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,
@@ -91,6 +93,7 @@ case6_planetary_spur,ring,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/g
 case6_planetary_spur,ring,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:179,
 case6_planetary_spur,ring,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:180,
 case6_planetary_spur,ring,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:181,
+case6_planetary_spur,ring,hand,0,,,new input row (Q08) (José 2026-10-15)
 case6_planetary_spur,ring,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:182,
 case6_planetary_spur,ring,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:183,
 case6_planetary_spur,ring,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:184,
@@ -202,6 +205,7 @@ case6_planetary_spur,planetary.meshing_12.gear1_w,alpha_n_deg,20.0,deg,axisforge
 case6_planetary_spur,planetary.meshing_12.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_12.gear1_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_12.gear1_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case6_planetary_spur,planetary.meshing_12.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_12.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_12.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -247,6 +251,7 @@ case6_planetary_spur,planetary.meshing_12.gear2_w,alpha_n_deg,20.0,deg,axisforge
 case6_planetary_spur,planetary.meshing_12.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_12.gear2_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_12.gear2_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case6_planetary_spur,planetary.meshing_12.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_12.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_12.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -342,6 +347,7 @@ case6_planetary_spur,planetary.meshing_23.gear1_w,alpha_n_deg,20.0,deg,axisforge
 case6_planetary_spur,planetary.meshing_23.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_23.gear1_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_23.gear1_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case6_planetary_spur,planetary.meshing_23.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_23.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_23.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -385,6 +391,7 @@ case6_planetary_spur,planetary.meshing_23.gear2_w,alpha_n_deg,20.0,deg,axisforge
 case6_planetary_spur,planetary.meshing_23.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_23.gear2_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_23.gear2_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,hand,0,,,new input row (Q08) (José 2026-10-15)
 case6_planetary_spur,planetary.meshing_23.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_23.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case6_planetary_spur,planetary.meshing_23.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -642,26 +649,6 @@ case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).T_sun",-15.1875,N m
 case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).T_sun_planet_mesh",-3.796875,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:227,(property)
 case6_planetary_spur,planetary,torques(CARRIER).satisfies_torque_ordering(),True,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:243,
 case6_planetary_spur,planetary,"torques(T_in=60.75, PLANET)!exception","""ValueError: torques: input_member must be one of ['SUN', 'RING', 'CARRIER'], got PLANET""",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:866,"EXCEPTION; traceback tail: ^^^^^^^^^^^^^^^^^^^ | File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\planetary_gear\planetary_gear_meshing.py"", line 841, in torques | raise ValueError( | ValueError: torques: input_member must be one of ['SUN', 'RING', 'CARRIER'], got PLANET"
-case6_planetary_spur,planetary.meshing_12,"forces(T_mesh_sun, phi=0, rot=+1).Ft",759.3749999999999,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,docstring of torques(): T_mesh_sun is the quantity to pass to meshing_12.forces
-case6_planetary_spur,planetary.meshing_12,"forces(T_mesh_sun, phi=0, rot=+1).Fr",276.38989664589747,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,docstring of torques(): T_mesh_sun is the quantity to pass to meshing_12.forces
-case6_planetary_spur,planetary.meshing_12,"forces(T_mesh_sun, phi=0, rot=+1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,docstring of torques(): T_mesh_sun is the quantity to pass to meshing_12.forces
-case6_planetary_spur,planetary.meshing_12,"forces(T_mesh_sun, phi=0, rot=+1).Fn",808.1099959738957,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,docstring of torques(): T_mesh_sun is the quantity to pass to meshing_12.forces
-case6_planetary_spur,planetary.meshing_12,"forces(T_mesh_sun, phi=0, rot=+1).T_out",15.1875,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,docstring of torques(): T_mesh_sun is the quantity to pass to meshing_12.forces
-case6_planetary_spur,planetary.meshing_12,"forces(T_mesh_sun, phi=0, rot=+1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,docstring of torques(): T_mesh_sun is the quantity to pass to meshing_12.forces
-case6_planetary_spur,planetary.meshing_12,"forces(T_mesh_sun, phi=0, rot=+1).theta_Ft_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,docstring of torques(): T_mesh_sun is the quantity to pass to meshing_12.forces
-case6_planetary_spur,planetary.meshing_12,"forces(T_mesh_sun, phi=0, rot=+1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,docstring of torques(): T_mesh_sun is the quantity to pass to meshing_12.forces
-case6_planetary_spur,planetary.meshing_12,"forces(T_mesh_sun, phi=0, rot=+1).theta_Ft_driven",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,docstring of torques(): T_mesh_sun is the quantity to pass to meshing_12.forces
-case6_planetary_spur,planetary.meshing_12,"forces(T_mesh_sun, phi=0, rot=+1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,docstring of torques(): T_mesh_sun is the quantity to pass to meshing_12.forces
-case6_planetary_spur,planetary.meshing_23,"forces(T_mesh_planet, phi=0, rot=+1).Ft",759.3749999999999,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:663,docstring of torques(): T_mesh_planet is the quantity to pass to meshing_23.forces
-case6_planetary_spur,planetary.meshing_23,"forces(T_mesh_planet, phi=0, rot=+1).Fr",276.38989664589747,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:664,docstring of torques(): T_mesh_planet is the quantity to pass to meshing_23.forces
-case6_planetary_spur,planetary.meshing_23,"forces(T_mesh_planet, phi=0, rot=+1).Fa",0.0,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:665,docstring of torques(): T_mesh_planet is the quantity to pass to meshing_23.forces
-case6_planetary_spur,planetary.meshing_23,"forces(T_mesh_planet, phi=0, rot=+1).Fn",808.1099959738957,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:666,docstring of torques(): T_mesh_planet is the quantity to pass to meshing_23.forces
-case6_planetary_spur,planetary.meshing_23,"forces(T_mesh_planet, phi=0, rot=+1).T_out",-45.5625,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:667,docstring of torques(): T_mesh_planet is the quantity to pass to meshing_23.forces
-case6_planetary_spur,planetary.meshing_23,"forces(T_mesh_planet, phi=0, rot=+1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:706,docstring of torques(): T_mesh_planet is the quantity to pass to meshing_23.forces
-case6_planetary_spur,planetary.meshing_23,"forces(T_mesh_planet, phi=0, rot=+1).theta_Ft_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:707,docstring of torques(): T_mesh_planet is the quantity to pass to meshing_23.forces
-case6_planetary_spur,planetary.meshing_23,"forces(T_mesh_planet, phi=0, rot=+1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:711,docstring of torques(): T_mesh_planet is the quantity to pass to meshing_23.forces
-case6_planetary_spur,planetary.meshing_23,"forces(T_mesh_planet, phi=0, rot=+1).theta_Ft_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:671,docstring of torques(): T_mesh_planet is the quantity to pass to meshing_23.forces
-case6_planetary_spur,planetary.meshing_23,"forces(T_mesh_planet, phi=0, rot=+1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:668,docstring of torques(): T_mesh_planet is the quantity to pass to meshing_23.forces
 case6_planetary_spur,planetary,coaxiality_error(),0.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:897,
 case6_planetary_spur,planetary,assembly_condition().len,2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:910,
 case6_planetary_spur,planetary,assembly_condition()[0],True,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:910,

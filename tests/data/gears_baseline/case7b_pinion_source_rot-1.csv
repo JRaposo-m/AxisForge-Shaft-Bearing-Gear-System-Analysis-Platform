@@ -2,11 +2,11 @@ case,object,name,value,unit,source_file_line,note
 case7b_pinion_source_rot-1,inputs,resolve args,"'P=9224.501429103031 W, rpm=1450.0, rotation_dir_source=-1, source_position=(0.0, 0.0), source_torque_x=0.0'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:505,"P = T*omega with T=60.75 N m (GEARpie K4_05), n=1450.0 rpm; phi_deg=30.0; gear_a = pinion = meshing.gear1, documented usage"
 case7b_pinion_source_rot-1,system,validate() BEFORE resolve.len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:347,; empty list = no message
 case7b_pinion_source_rot-1,system,validate() AFTER resolve.len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:347,; empty list = no message
-case7b_pinion_source_rot-1,system,summary(),"'── case7b_pinion_source_rot-1 ──────────────────────────────────────────────\n  shafts: 2   links: 1   source: shaft_pinion\n    shaft_pinion T_out=60.750 N·m     rot=-1  pos=(y=0.00, z=0.00) mm\n    shaft_wheel  T_out=91.125 N·m     rot=1.0 pos=(y=79.24, z=45.75) mm\n────────────────────────────────────────────────────────'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:705,
+case7b_pinion_source_rot-1,system,summary(),"'── case7b_pinion_source_rot-1 ──────────────────────────────────────────────\n  shafts: 2   links: 1   source: shaft_pinion\n    shaft_pinion T_out=-60.750 N·m    rot=-1  pos=(y=0.00, z=0.00) mm\n    shaft_wheel  T_out=91.125 N·m     rot=1   pos=(y=79.24, z=45.75) mm\n────────────────────────────────────────────────────────'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:705,"answer 9, Q03 (José 2026-10-15)"
 case7b_pinion_source_rot-1,system,__repr__(),"""GearSystem(label='case7b_pinion_source_rot-1', shafts=2, links=1, resolved=True)""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:717,
 case7b_pinion_source_rot-1,system,label,'case7b_pinion_source_rot-1',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:160,
 case7b_pinion_source_rot-1,system,_resolved[shaft_pinion].name,'shaft_pinion',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
-case7b_pinion_source_rot-1,system,_resolved[shaft_pinion].T_out_Nm,60.75000000000001,N m,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7b_pinion_source_rot-1,system,_resolved[shaft_pinion].T_out_Nm,-60.75000000000001,N m,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,"answer 9, Q03 (José 2026-10-15)"
 case7b_pinion_source_rot-1,system,_resolved[shaft_pinion].rotation_dir,-1,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
 case7b_pinion_source_rot-1,system,_resolved[shaft_pinion].shaft_position.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
 case7b_pinion_source_rot-1,system,_resolved[shaft_pinion].shaft_position[0],0.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
@@ -14,7 +14,7 @@ case7b_pinion_source_rot-1,system,_resolved[shaft_pinion].shaft_position[1],0.0,
 case7b_pinion_source_rot-1,system,_resolved[shaft_pinion].rpm,None,rpm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
 case7b_pinion_source_rot-1,system,_resolved[shaft_wheel].name,'shaft_wheel',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
 case7b_pinion_source_rot-1,system,_resolved[shaft_wheel].T_out_Nm,91.12500000000001,N m,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
-case7b_pinion_source_rot-1,system,_resolved[shaft_wheel].rotation_dir,1.0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
+case7b_pinion_source_rot-1,system,_resolved[shaft_wheel].rotation_dir,1,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,Q03 (int sense of rotation) (José 2026-10-15)
 case7b_pinion_source_rot-1,system,_resolved[shaft_wheel].shaft_position.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
 case7b_pinion_source_rot-1,system,_resolved[shaft_wheel].shaft_position[0],79.24154749891227,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
 case7b_pinion_source_rot-1,system,_resolved[shaft_wheel].shaft_position[1],45.750128779499505,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:666-675,private record kept by resolve
@@ -85,6 +85,7 @@ case7b_pinion_source_rot-1,mesh.gear1_w,alpha_n_deg,20.0,deg,axisforge/core/mach
 case7b_pinion_source_rot-1,mesh.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case7b_pinion_source_rot-1,mesh.gear1_w,beta_n_deg,15.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case7b_pinion_source_rot-1,mesh.gear1_w,beta,0.2617993877991494,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case7b_pinion_source_rot-1,mesh.gear1_w,hand,1,,,new input row (Q08) (José 2026-10-15)
 case7b_pinion_source_rot-1,mesh.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case7b_pinion_source_rot-1,mesh.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case7b_pinion_source_rot-1,mesh.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -130,6 +131,7 @@ case7b_pinion_source_rot-1,mesh.gear2_w,alpha_n_deg,20.0,deg,axisforge/core/mach
 case7b_pinion_source_rot-1,mesh.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
 case7b_pinion_source_rot-1,mesh.gear2_w,beta_n_deg,15.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
 case7b_pinion_source_rot-1,mesh.gear2_w,beta,0.2617993877991494,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case7b_pinion_source_rot-1,mesh.gear2_w,hand,-1,,,new input row (Q08) (José 2026-10-15)
 case7b_pinion_source_rot-1,mesh.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
 case7b_pinion_source_rot-1,mesh.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
 case7b_pinion_source_rot-1,mesh.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
@@ -168,46 +170,6 @@ case7b_pinion_source_rot-1,mesh,validate().len,0,-,axisforge/core/machine_elemen
 case7b_pinion_source_rot-1,mesh,validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:804,
 case7b_pinion_source_rot-1,mesh,summary(),"'── stage ─────────────────────────────────\n  gear1 : z=20, mn=3.5, x=0.1809, β=15.0°\n  gear2 : z=30, mn=3.5, x=0.0891, β=15.0°\n  u     : 1.5000\n  a     : 90.5867 mm   (reference centre distance)\n  al    : 91.5003 mm   (working centre distance)\n  αtw   : 22.1153°\n  dl1   : 73.2002 mm\n  dl2   : 109.8003 mm\n  εα    : 1.4715\n  εβ    : 0.5414\n  εγ    : 2.0129\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:832,Q04 (José 2026-10-15)
 case7b_pinion_source_rot-1,mesh,__repr__(),"'HelicalGearMeshing(z1=20, z2=30, mn=3.5, β=15.0°, al=91.5003 mm, αtw=22.1153°, εγ=2.0129)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py,Q04 (José 2026-10-15)
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, 1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, 1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, 1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, 1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, 1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, 1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, 1).theta_Ft_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, 1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, 1).theta_Ft_driven",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, 1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, -1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, -1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, -1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, -1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, -1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, -1).theta_Fr_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, -1).theta_Ft_driver",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, -1).theta_Fr_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, -1).theta_Ft_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 0.0, -1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, 1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, 1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, 1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, 1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, 1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, 1).theta_Fr_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, 1).theta_Ft_driver",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, 1).theta_Fr_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, 1).theta_Ft_driven",180.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, 1).rotation_dir_out",-1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, -1).Ft",1659.8313933933089,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:649,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, -1).Fr",674.5049145320942,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:650,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, -1).Fa",444.7504814315622,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:651,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, -1).Fn",1791.6464869560405,N,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:652,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, -1).T_out",91.125,N m,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:653,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, -1).theta_Fr_driver",90.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:654,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, -1).theta_Ft_driver",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:655,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, -1).theta_Fr_driven",270.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:657,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, -1).theta_Ft_driven",0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:658,
-case7b_pinion_source_rot-1,mesh,"forces(60.75, 90.0, -1).rotation_dir_out",1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:656,
 case7b_pinion_source_rot-1,shaft_pinion,name,'shaft_pinion',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:188,
 case7b_pinion_source_rot-1,shaft_pinion,speed_rpm,0.0,rpm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:189,
 case7b_pinion_source_rot-1,shaft_pinion,design_life_hours,20000.0,h,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:190,
@@ -222,15 +184,17 @@ case7b_pinion_source_rot-1,shaft_pinion,bearings.len,2,-,axisforge/core/mechanic
 case7b_pinion_source_rot-1,shaft_pinion,bearings[0],"'<Bearing object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:613,
 case7b_pinion_source_rot-1,shaft_pinion,bearings[1],"'<Bearing object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:613,
 case7b_pinion_source_rot-1,shaft_pinion,distributed_radial_loads.len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:315,; empty list = no message
-case7b_pinion_source_rot-1,shaft_pinion,external_moments.len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:310,; empty list = no message
+case7b_pinion_source_rot-1,shaft_pinion,external_moments.len,1,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:310,Q06 (José 2026-10-15)
+case7b_pinion_source_rot-1,shaft_pinion,external_moments[0],"'<ExternalMoment object, recorded separately or not numeric>'",,,Q06 (José 2026-10-15)
 case7b_pinion_source_rot-1,shaft_pinion,gears.len,1,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:614,
 case7b_pinion_source_rot-1,shaft_pinion,gears[0],"'<GearElement object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:614,
-case7b_pinion_source_rot-1,shaft_pinion,loads.len,5,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7b_pinion_source_rot-1,shaft_pinion,loads.len,6,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,Q06 (José 2026-10-15)
 case7b_pinion_source_rot-1,shaft_pinion,loads[0],"'<TorqueLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
 case7b_pinion_source_rot-1,shaft_pinion,loads[1],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
 case7b_pinion_source_rot-1,shaft_pinion,loads[2],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
 case7b_pinion_source_rot-1,shaft_pinion,loads[3],"'<AxialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
 case7b_pinion_source_rot-1,shaft_pinion,loads[4],"'<TorqueLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7b_pinion_source_rot-1,shaft_pinion,loads[5],"'<ExternalMoment object, recorded separately or not numeric>'",,,Q06 (José 2026-10-15)
 case7b_pinion_source_rot-1,shaft_pinion,radial_loads.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:295,
 case7b_pinion_source_rot-1,shaft_pinion,radial_loads[0],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:295,
 case7b_pinion_source_rot-1,shaft_pinion,radial_loads[1],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:295,
@@ -242,10 +206,10 @@ case7b_pinion_source_rot-1,shaft_pinion,torque_loads[0],"'<TorqueLoad object, re
 case7b_pinion_source_rot-1,shaft_pinion,torque_loads[1],"'<TorqueLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:305,
 case7b_pinion_source_rot-1,shaft_pinion,shaft.total_length,200.0,mm,axisforge/core/machine_elements/shaft/shaft.py:453,
 case7b_pinion_source_rot-1,shaft_pinion,validate().len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:583,; empty list = no message
-case7b_pinion_source_rot-1,shaft_pinion,summary(),"""── ShaftSystem 'shaft_pinion' ─────────────────────────────\n  length        : 200.00 mm\n  speed         : 0.00 rpm\n  design life   : 20000 h\n  axis offset   : (y=0.000, z=0.000) mm   origin_x=0.000 mm\n  bearings      : 2  @ ['10.0', '190.0']\n  gears         : 1  @ ['100.0']\n  loads         : 5  (user=0, gear_mesh=5)\n──────────────────────────────────────────────────────────""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:641,
-case7b_pinion_source_rot-1,shaft_pinion,__repr__(),"""ShaftSystem(name='shaft_pinion', L=200.0 mm, bearings=2, gears=1, loads=5)""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:652,
+case7b_pinion_source_rot-1,shaft_pinion,summary(),"""── ShaftSystem 'shaft_pinion' ─────────────────────────────\n  length        : 200.00 mm\n  speed         : 0.00 rpm\n  design life   : 20000 h\n  axis offset   : (y=0.000, z=0.000) mm   origin_x=0.000 mm\n  bearings      : 2  @ ['10.0', '190.0']\n  gears         : 1  @ ['100.0']\n  loads         : 6  (user=0, gear_mesh=6)\n──────────────────────────────────────────────────────────""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:641,"Q05, Q06 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_pinion,__repr__(),"""ShaftSystem(name='shaft_pinion', L=200.0 mm, bearings=2, gears=1, loads=6)""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:652,"Q05, Q06 (José 2026-10-15)"
 case7b_pinion_source_rot-1,shaft_pinion,support_positions,"[10.0, 190.0]",mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:286,
-case7b_pinion_source_rot-1,shaft_pinion,n_radial/axial/torque/external_moment/distributed,"'(2, 1, 2, 0, 0)'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:297-317,
+case7b_pinion_source_rot-1,shaft_pinion,n_radial/axial/torque/external_moment/distributed,"'(2, 1, 2, 1, 0)'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:297-317,Q06 (José 2026-10-15)
 case7b_pinion_source_rot-1,shaft_pinion,loads[0].type,'TorqueLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:624,
 case7b_pinion_source_rot-1,shaft_pinion,loads[0].label,'shaft_pinion:T_in',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:624,
 case7b_pinion_source_rot-1,shaft_pinion,loads[0].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:624,
@@ -256,27 +220,35 @@ case7b_pinion_source_rot-1,shaft_pinion,loads[1].label,'g_pinion:Fr',-,axisforge
 case7b_pinion_source_rot-1,shaft_pinion,loads[1].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,
 case7b_pinion_source_rot-1,shaft_pinion,loads[1].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,axial coordinate from the left end of the shaft
 case7b_pinion_source_rot-1,shaft_pinion,loads[1].magnitude,674.5049145320943,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,signed as stored
-case7b_pinion_source_rot-1,shaft_pinion,loads[1].theta_deg,30.0,deg,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,"from +Y toward +Z, right-hand about +X"
-case7b_pinion_source_rot-1,shaft_pinion,loads[1].Fy,584.1383909622452,N,axisforge/core/loads.py:158,magnitude*cos(theta)
-case7b_pinion_source_rot-1,shaft_pinion,loads[1].Fz,337.2524572660471,N,axisforge/core/loads.py:163,magnitude*sin(theta)
+case7b_pinion_source_rot-1,shaft_pinion,loads[1].theta_deg,210.0,deg,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_pinion,loads[1].Fy,-584.1383909627248,N,axisforge/core/loads.py:158,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_pinion,loads[1].Fz,-337.2524572663241,N,axisforge/core/loads.py:163,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
 case7b_pinion_source_rot-1,shaft_pinion,loads[2].type,'RadialLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,
 case7b_pinion_source_rot-1,shaft_pinion,loads[2].label,'g_pinion:Ft',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,
 case7b_pinion_source_rot-1,shaft_pinion,loads[2].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,
 case7b_pinion_source_rot-1,shaft_pinion,loads[2].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,axial coordinate from the left end of the shaft
 case7b_pinion_source_rot-1,shaft_pinion,loads[2].magnitude,1659.831393393309,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,signed as stored
-case7b_pinion_source_rot-1,shaft_pinion,loads[2].theta_deg,300.0,deg,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,"from +Y toward +Z, right-hand about +X"
-case7b_pinion_source_rot-1,shaft_pinion,loads[2].Fy,829.9156966966548,N,axisforge/core/loads.py:158,magnitude*cos(theta)
-case7b_pinion_source_rot-1,shaft_pinion,loads[2].Fz,-1437.4561526775278,N,axisforge/core/loads.py:163,magnitude*sin(theta)
+case7b_pinion_source_rot-1,shaft_pinion,loads[2].theta_deg,120.0,deg,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_pinion,loads[2].Fy,-829.9156966965418,N,axisforge/core/loads.py:158,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_pinion,loads[2].Fz,1437.4561526773332,N,axisforge/core/loads.py:163,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
 case7b_pinion_source_rot-1,shaft_pinion,loads[3].type,'AxialLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,
 case7b_pinion_source_rot-1,shaft_pinion,loads[3].label,'g_pinion:Fa',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,
 case7b_pinion_source_rot-1,shaft_pinion,loads[3].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,
 case7b_pinion_source_rot-1,shaft_pinion,loads[3].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,axial coordinate from the left end of the shaft
-case7b_pinion_source_rot-1,shaft_pinion,loads[3].magnitude,444.7504814315623,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,signed as stored
+case7b_pinion_source_rot-1,shaft_pinion,loads[3].magnitude,-449.2359139993753,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
 case7b_pinion_source_rot-1,shaft_pinion,loads[4].type,'TorqueLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,
 case7b_pinion_source_rot-1,shaft_pinion,loads[4].label,'g_pinion:T',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,
 case7b_pinion_source_rot-1,shaft_pinion,loads[4].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,
 case7b_pinion_source_rot-1,shaft_pinion,loads[4].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,axial coordinate from the left end of the shaft
 case7b_pinion_source_rot-1,shaft_pinion,loads[4].magnitude,60.75000000000001,N m (code: open item U1),axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,signed as stored
+case7b_pinion_source_rot-1,shaft_pinion,loads[5].type,'ExternalMoment',,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_pinion,loads[5].label,'g_pinion:M',,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_pinion,loads[5].source,'gear_mesh',,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_pinion,loads[5].position,100.0,,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_pinion,loads[5].magnitude,16442.0807342803,,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_pinion,loads[5].theta_deg,30.0,,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_pinion,loads[5].My,14239.259606961436,,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_pinion,loads[5].Mz,8221.040367140147,,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
 case7b_pinion_source_rot-1,shaft_pinion.gear_element,role,'driver',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:74,
 case7b_pinion_source_rot-1,shaft_pinion.gear_element,rotation_dir,None,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:75,
 case7b_pinion_source_rot-1,shaft_pinion.gear_element,label,'g_pinion',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:76,
@@ -307,14 +279,16 @@ case7b_pinion_source_rot-1,shaft_wheel,bearings.len,2,-,axisforge/core/mechanica
 case7b_pinion_source_rot-1,shaft_wheel,bearings[0],"'<Bearing object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:613,
 case7b_pinion_source_rot-1,shaft_wheel,bearings[1],"'<Bearing object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:613,
 case7b_pinion_source_rot-1,shaft_wheel,distributed_radial_loads.len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:315,; empty list = no message
-case7b_pinion_source_rot-1,shaft_wheel,external_moments.len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:310,; empty list = no message
+case7b_pinion_source_rot-1,shaft_wheel,external_moments.len,1,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:310,Q06 (José 2026-10-15)
+case7b_pinion_source_rot-1,shaft_wheel,external_moments[0],"'<ExternalMoment object, recorded separately or not numeric>'",,,Q06 (José 2026-10-15)
 case7b_pinion_source_rot-1,shaft_wheel,gears.len,1,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:614,
 case7b_pinion_source_rot-1,shaft_wheel,gears[0],"'<GearElement object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:614,
-case7b_pinion_source_rot-1,shaft_wheel,loads.len,4,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7b_pinion_source_rot-1,shaft_wheel,loads.len,5,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,Q06 (José 2026-10-15)
 case7b_pinion_source_rot-1,shaft_wheel,loads[0],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
 case7b_pinion_source_rot-1,shaft_wheel,loads[1],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
 case7b_pinion_source_rot-1,shaft_wheel,loads[2],"'<AxialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
 case7b_pinion_source_rot-1,shaft_wheel,loads[3],"'<TorqueLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:615,
+case7b_pinion_source_rot-1,shaft_wheel,loads[4],"'<ExternalMoment object, recorded separately or not numeric>'",,,Q06 (José 2026-10-15)
 case7b_pinion_source_rot-1,shaft_wheel,radial_loads.len,2,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:295,
 case7b_pinion_source_rot-1,shaft_wheel,radial_loads[0],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:295,
 case7b_pinion_source_rot-1,shaft_wheel,radial_loads[1],"'<RadialLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:295,
@@ -325,18 +299,18 @@ case7b_pinion_source_rot-1,shaft_wheel,torque_loads.len,1,-,axisforge/core/mecha
 case7b_pinion_source_rot-1,shaft_wheel,torque_loads[0],"'<TorqueLoad object, recorded separately or not numeric>'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:305,
 case7b_pinion_source_rot-1,shaft_wheel,shaft.total_length,200.0,mm,axisforge/core/machine_elements/shaft/shaft.py:453,
 case7b_pinion_source_rot-1,shaft_wheel,validate().len,0,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:583,; empty list = no message
-case7b_pinion_source_rot-1,shaft_wheel,summary(),"""── ShaftSystem 'shaft_wheel' ─────────────────────────────\n  length        : 200.00 mm\n  speed         : 0.00 rpm\n  design life   : 20000 h\n  axis offset   : (y=79.242, z=45.750) mm   origin_x=0.000 mm\n  bearings      : 2  @ ['10.0', '190.0']\n  gears         : 1  @ ['100.0']\n  loads         : 4  (user=0, gear_mesh=4)\n──────────────────────────────────────────────────────────""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:641,
-case7b_pinion_source_rot-1,shaft_wheel,__repr__(),"""ShaftSystem(name='shaft_wheel', L=200.0 mm, bearings=2, gears=1, loads=4)""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:652,
+case7b_pinion_source_rot-1,shaft_wheel,summary(),"""── ShaftSystem 'shaft_wheel' ─────────────────────────────\n  length        : 200.00 mm\n  speed         : 0.00 rpm\n  design life   : 20000 h\n  axis offset   : (y=79.242, z=45.750) mm   origin_x=0.000 mm\n  bearings      : 2  @ ['10.0', '190.0']\n  gears         : 1  @ ['100.0']\n  loads         : 5  (user=0, gear_mesh=5)\n──────────────────────────────────────────────────────────""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:641,"Q05, Q06 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_wheel,__repr__(),"""ShaftSystem(name='shaft_wheel', L=200.0 mm, bearings=2, gears=1, loads=5)""",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:652,"Q05, Q06 (José 2026-10-15)"
 case7b_pinion_source_rot-1,shaft_wheel,support_positions,"[10.0, 190.0]",mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:286,
-case7b_pinion_source_rot-1,shaft_wheel,n_radial/axial/torque/external_moment/distributed,"'(2, 1, 1, 0, 0)'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:297-317,
+case7b_pinion_source_rot-1,shaft_wheel,n_radial/axial/torque/external_moment/distributed,"'(2, 1, 1, 1, 0)'",-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:297-317,Q06 (José 2026-10-15)
 case7b_pinion_source_rot-1,shaft_wheel,loads[0].type,'RadialLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,
 case7b_pinion_source_rot-1,shaft_wheel,loads[0].label,'g_wheel:Fr',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,
 case7b_pinion_source_rot-1,shaft_wheel,loads[0].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,
 case7b_pinion_source_rot-1,shaft_wheel,loads[0].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,axial coordinate from the left end of the shaft
 case7b_pinion_source_rot-1,shaft_wheel,loads[0].magnitude,674.5049145320943,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,signed as stored
-case7b_pinion_source_rot-1,shaft_wheel,loads[0].theta_deg,210.0,deg,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,"from +Y toward +Z, right-hand about +X"
-case7b_pinion_source_rot-1,shaft_wheel,loads[0].Fy,-584.1383909622452,N,axisforge/core/loads.py:158,magnitude*cos(theta)
-case7b_pinion_source_rot-1,shaft_wheel,loads[0].Fz,-337.2524572660472,N,axisforge/core/loads.py:163,magnitude*sin(theta)
+case7b_pinion_source_rot-1,shaft_wheel,loads[0].theta_deg,30.0,deg,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:462,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_wheel,loads[0].Fy,584.1383909627249,N,axisforge/core/loads.py:158,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_wheel,loads[0].Fz,337.252457266324,N,axisforge/core/loads.py:163,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
 case7b_pinion_source_rot-1,shaft_wheel,loads[1].type,'RadialLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,
 case7b_pinion_source_rot-1,shaft_wheel,loads[1].label,'g_wheel:Ft',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,
 case7b_pinion_source_rot-1,shaft_wheel,loads[1].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:465,
@@ -349,12 +323,20 @@ case7b_pinion_source_rot-1,shaft_wheel,loads[2].type,'AxialLoad',-,axisforge/cor
 case7b_pinion_source_rot-1,shaft_wheel,loads[2].label,'g_wheel:Fa',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,
 case7b_pinion_source_rot-1,shaft_wheel,loads[2].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,
 case7b_pinion_source_rot-1,shaft_wheel,loads[2].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,axial coordinate from the left end of the shaft
-case7b_pinion_source_rot-1,shaft_wheel,loads[2].magnitude,-444.7504814315623,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,signed as stored
+case7b_pinion_source_rot-1,shaft_wheel,loads[2].magnitude,449.2359139993753,N,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:446,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
 case7b_pinion_source_rot-1,shaft_wheel,loads[3].type,'TorqueLoad',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,
 case7b_pinion_source_rot-1,shaft_wheel,loads[3].label,'g_wheel:T',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,
 case7b_pinion_source_rot-1,shaft_wheel,loads[3].source,'gear_mesh',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,
 case7b_pinion_source_rot-1,shaft_wheel,loads[3].position,100.0,mm,axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,axial coordinate from the left end of the shaft
-case7b_pinion_source_rot-1,shaft_wheel,loads[3].magnitude,-91.12500000000001,N m (code: open item U1),axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,signed as stored
+case7b_pinion_source_rot-1,shaft_wheel,loads[3].magnitude,91.12500000000003,N m (code: open item U1),axisforge/core/mechanical_system/parallel_axis/spur_helical/gear_system.py:452,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_wheel,loads[4].type,'ExternalMoment',,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_wheel,loads[4].label,'g_wheel:M',,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_wheel,loads[4].source,'gear_mesh',,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_wheel,loads[4].position,100.0,,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_wheel,loads[4].magnitude,24663.121101420453,,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_wheel,loads[4].theta_deg,30.0,,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_wheel,loads[4].My,21358.88941044216,,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
+case7b_pinion_source_rot-1,shaft_wheel,loads[4].Mz,12331.560550710225,,,"Q05, Q06, Q07a, Q08 (José 2026-10-15)"
 case7b_pinion_source_rot-1,shaft_wheel.gear_element,role,'driven',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:74,
 case7b_pinion_source_rot-1,shaft_wheel.gear_element,rotation_dir,None,-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:75,
 case7b_pinion_source_rot-1,shaft_wheel.gear_element,label,'g_wheel',-,axisforge/core/mechanical_system/parallel_axis/spur_helical/shaft_system.py:76,

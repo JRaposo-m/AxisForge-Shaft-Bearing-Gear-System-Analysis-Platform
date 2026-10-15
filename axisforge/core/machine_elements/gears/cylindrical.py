@@ -42,16 +42,6 @@ def _virtual_teeth_external(mn, z, beta):
     return {"zn": zn, "de": mn * zn}
 
 
-def _force_input_external(pair, driver):
-    return pair.rl1, pair.gear1.beta, pair.u            # the torque is always taken on gear 1
-
-
-def _force_input_internal(pair, driver):
-    if driver == "gear1":
-        return pair.rl1, pair.gear1.beta, pair.u
-    return pair.rl2, pair.gear2.beta, 1.0 / pair.u
-
-
 def _undercutting(gear) -> bool:
     """True if z < z_min = 2 cos(beta) / sin(alphat)**2 * (haP - x), i.e. the root is undercut.
 
@@ -196,8 +186,6 @@ _LEGACY = {
     "beta_range": {"external": _beta_range_external, "internal": lambda data, tag: []},
     # Q55 (José, 2026-10-15): keep. Undercut (external gear) against da < d and da > db (ring).
     "gear_limits": {"external": _gear_limits_external, "internal": _gear_limits_internal},
-    # QUESTION(Q03): row 1 / X1. The external pair ignores the driver and takes the torque on gear 1; the internal pair takes it on the driver.
-    "force_input": {"external": _force_input_external, "internal": _force_input_internal},
     # QUESTION(Q50): presentation text of the two classes this family replaces, recorded by the baseline (class names in __repr__ and summary(), two extra lines for an internal pair).
     "text": {"external": _summary_head_external, "internal": _summary_head_internal},
 }
@@ -322,8 +310,14 @@ class CylindricalGearData:
     alpha_n_deg : float, optional
         Normal pressure angle alpha_n of the basic rack [deg]. Default 20.0.
     beta_n_deg : float, optional
-        Helix angle beta at the reference cylinder [deg], a magnitude: there is no hand of helix.
-        The "_n" of the name has no meaning in the formulas. Default 0.0 (spur gear).
+        Helix angle beta at the reference cylinder [deg], a magnitude; its hand is ``hand``. The
+        "_n" of the name has no meaning in the formulas. Default 0.0 (spur gear).
+    hand : int, optional
+        Hand of the helix: +1 right-hand, -1 left-hand [-]; required (+1 or -1) when
+        beta_n_deg != 0, 0 allowed only for a spur gear (D-0010 item 17; Q08, José 2026-10-15).
+        Right-hand: the tooth trace turns in the right-hand sense about the gear axis when
+        followed along it (geometric definition of D-0010 / ``MeshForces``; the definition of the
+        flank direction in ISO_21771_2007, 4.1.4 was not transcribed). Default 0.
     haP : float, optional
         Addendum coefficient of the basic rack h_aP* [-] (addendum = haP mn). Default 1.0.
     cP : float, optional
@@ -363,6 +357,7 @@ class CylindricalGearData:
     b: float = 0.0
     alpha_n_deg: float = 20.0
     beta_n_deg: float = 0.0
+    hand: int = 0
     haP: float = 1.0
     cP: float = 0.25
     rfP: float = 0.38
@@ -380,8 +375,9 @@ class CylindricalGearData:
         -------
         list of str
             One message per violation; empty if valid. Checks: mn > 0, z != 0, b >= 0,
-            0 < alpha_n_deg < 45, 0 <= beta_n_deg < 45 (external gear only), Ra, Rq, Rz >= 0.
-            The limits 45 deg have no library source.
+            0 < alpha_n_deg < 45, 0 <= beta_n_deg < 45 (external gear only), hand +1 or -1 for a
+            helical gear (-1, 0 or +1 for a spur gear), Ra, Rq, Rz >= 0. The limits 45 deg have no
+            library source.
         """
         errors: list[str] = []
         tag = self.label or "Gear"
@@ -397,6 +393,10 @@ class CylindricalGearData:
                 f"{tag}: alpha_n_deg out of range (0, 45), got {self.alpha_n_deg}"
             )
         errors.extend(_legacy("beta_range", self.z)(self, tag))
+        # Q08 (José, 2026-10-15): the axial force of a helical mesh needs the hand of the helix
+        if self.hand not in ((1, -1) if self.beta_n_deg != 0.0 else (1, 0, -1)):
+            errors.append(f"{tag}: hand must be +1 (right) or -1 (left) for a helical gear "
+                          f"(0 only for beta_n_deg = 0), got {self.hand!r}")
         if self.Ra < 0:
             errors.append(f"{tag}: Ra must be >= 0, got {self.Ra}")
         if self.Rq < 0:
@@ -415,9 +415,8 @@ class CylindricalFamily(GearFamily):
 
     ``assemble_gear`` gives the geometry of one gear (clause 4), ``assemble_pair`` that of two gears
     in mesh (clause 5), ``validate_gear`` / ``validate_pair`` the limits (clause 7 and checks with
-    no library source), ``forces`` the tooth forces for a torque as the shaft loads still use them,
-    ``mesh_forces`` the same mesh under D-0010 (``MeshForces``), ``contact_inputs`` the contact data
-    along the path of contact. An internal pair is a pair whose gear 2 has z < 0.
+    no library source), ``mesh_forces`` the forces of the mesh for a torque (D-0010,
+    ``MeshForces``), ``contact_inputs`` the contact data along the path of contact. An internal pair is a pair whose gear 2 has z < 0.
 
     Notes
     -----
@@ -427,7 +426,7 @@ class CylindricalFamily(GearFamily):
 
     Assumptions: rigid, unmodified involute flanks; aligned gears (the common face width is
     min(b1, b2)); the tip circle is taken as the limit of the active profile (the standard uses
-    the active tip diameter d_Na); no hand of helix.
+    the active tip diameter d_Na).
 
     Warnings
     --------
@@ -667,7 +666,8 @@ class CylindricalFamily(GearFamily):
         ValueError
             If the gears differ in module, normal pressure angle or helix angle (relative
             tolerance 1e-6), if gear 1 is internal (z1 < 0), if gear 2 is internal and
-            abs(z2) <= z1, or if abs(z1) > abs(z2) (gear 1 must be the pinion).
+            abs(z2) <= z1, if abs(z1) > abs(z2) (gear 1 must be the pinion), or if a helical
+            external pair has equal hands or a helical internal pair opposite hands (Q08).
         RuntimeError, AttributeError
             From ``correction_for_gs_equilibrium`` when ``equalise_gs`` is True.
 
@@ -742,6 +742,14 @@ class CylindricalFamily(GearFamily):
             raise ValueError(
                 f"gear 1 must be the pinion: |z1| <= |z2|, got z1={z1}, z2={z2}. "
                 "Give the smaller gear as gear1; which gear drives is set by the power path."
+            )
+
+        # D-0010 item 17 (Q08): the helices of an external pair are of opposite hands, those of an
+        # internal pair of the same hand (ISO_21771_2007, 5.1.3, 5.1.4)
+        if gear1.beta != 0.0 and (gear1.hand == gear2.hand) != (s2 < 0):
+            raise ValueError(
+                f"Hand of helix mismatch: gear1 hand={gear1.hand}, gear2 hand={gear2.hand}; an external pair "
+                "needs opposite hands, an internal pair the same hand."
             )
 
         # --- reference centre distance: sum of the reference radii, difference for an internal pair ---
@@ -1011,115 +1019,9 @@ class CylindricalFamily(GearFamily):
         )
 
     # ----------------------------------------------------------------------------------------------
-    # Forces
+    # Forces (the pair holds no driver and no torque: Q03, José 2026-10-15)
     # ----------------------------------------------------------------------------------------------
-    # QUESTION(Q05) / QUESTION(Q07a) / QUESTION(Q07b): this dictionary is kept until rows 17-19 are ruled: the golden rows of cases 1-5 record it and Transmission builds today's shaft loads from it. mesh_forces() below is the same mesh under D-0010.
-    @staticmethod
-    def forces(pair, T: float, phi_deg: float = 0.0, rotation_dir: int = 1,
-               driver: str = "gear1") -> dict[str, float]:
-        """Tooth force components and output torque of the pair for an input torque T.
-
-        The driver is an operating quantity, given here and not stored on the pair. For an
-        internal pair the torque is taken on the gear named by ``driver``; for an external pair
-        it is always taken on gear 1 and ``driver`` is not used (Q03).
-
-        Parameters
-        ----------
-        pair : GearPair
-            Pair of this family.
-        T : float
-            Torque on the driving gear [N m] (NOT N mm: 60.75 N m on gear 1 of baseline case 2
-            gives Ft = 1659.83 N).
-        phi_deg : float, optional
-            Angle of the line of centres gear1 -> gear2 in the shaft cross-section, from +Y
-            toward +Z [deg] (for an internal pair whose ring drives the meaning is open: Q20).
-        rotation_dir : int, optional
-            +1 or -1, sense of rotation of the driving gear about +X [-].
-        driver : str, optional
-            "gear1" or "gear2": the gear that delivers the input torque.
-
-        Returns
-        -------
-        dict
-            Ft, Fr, Fa, Fn : tangential, radial, axial and "normal" force [N], magnitudes;
-            T_out : torque on the driven gear [N m]; theta_Fr_driver, theta_Ft_driver,
-            theta_Fr_driven, theta_Ft_driven : angles [deg, 0-360) of the radial and tangential
-            forces on the driving and on the driven gear, from +Y toward +Z; rotation_dir_out :
-            sense of rotation of the driven gear [-].
-
-        Raises
-        ------
-        ValueError
-            If ``driver`` is not "gear1" or "gear2".
-
-        Notes
-        -----
-        As coded, with rl_in the WORKING pitch radius [mm] of the gear that takes the torque,
-        beta_in its reference helix angle and u_eff = u (gear 1 drives) or 1/u (gear 2 drives)::
-
-            Ft = T / (rl_in / 1000)          T [N m], rl_in [mm] -> [m]
-            Fr = Ft tan(alphatw)
-            Fa = Ft tan(beta_in)
-            Fn = Ft / cos(alphatw)
-            T_out = T u_eff                  (ideal mesh, no losses)
-            rotation_dir_out = -sign(u_eff) rotation_dir
-            theta_Fr_driver = phi;        theta_Ft_driver = phi + 90 rotation_dir
-            theta_Fr_driven = phi + 180;  theta_Ft_driven = phi + 180 + 90 rotation_dir_out
-
-        For an internal pair u < 0: T_out has the sign opposite to T and the two gears turn the
-        same way. Fa has no direction: there is no hand of helix (Q08).
-
-        Warnings
-        --------
-        - ISO_6336-1_2019, 4.2.2, Formula (1) writes the NOMINAL F_t = 2000 T / d on the
-          reference diameter; here Ft is on the working pitch cylinder.
-        - No library source for Fr, Fa, Fn or for any direction (statics only). Open items: Q05
-          (both radial forces of an external pair point toward the mesh and its two tangential
-          forces point the same way), Q07a (Fa), Q07b (``Fn`` is the transverse base force F_bt,
-          not the force normal to the flank), Q03, Q20.
-
-        References
-        ----------
-        .. [1] ISO_6336-1_2019, 4.2.2, Formula (1)-(2) (checked).
-        """
-        if driver not in ("gear1", "gear2"):
-            raise ValueError(
-                f"driver must be 'gear1' or 'gear2', got '{driver}'. "
-                "This selects which gear delivers input torque — it is independent "
-                "of gear1/gear2 being external/internal."
-            )
-        # QUESTION(Q03): row 1 / X1. For an external pair the torque is always put on gear 1 (the pinion since Q03 answer 7) and T_out = T u, whatever `driver` says (case 3a, wheel declared driver: F_t 1659.8 N instead of 1106.6 N).
-        rl_in, beta_in, u_eff = _legacy("force_input", pair.gear2.z)(pair, driver)
-
-        # F_t on the WORKING pitch radius of the gear that takes the torque; T [N m] / r [m] gives [N]
-        Ft = T / (rl_in / 1000)
-        Fr = Ft * np.tan(pair.alphatw)
-        # QUESTION(Q07a): row 19 / X4. Working tangential force with the REFERENCE helix angle; the alternative is F_bt tan(beta_b) (case 2: 444.750 against 449.236 N).
-        # QUESTION(Q08): row 19 / X4. A magnitude: no hand of helix, so the thrust cannot reverse with the sense of rotation.
-        Fa = Ft * np.tan(beta_in)
-        # QUESTION(Q07b): row 19 / X4. Ft/cos(alphatw) is the transverse base force F_bt; the force normal to the flank is F_bn = F_bt/cos(beta_b) (case 2: 1791.646 against 1847.109 N).
-        Fn = Ft / np.cos(pair.alphatw)
-        T_out = T * u_eff
-
-        # QUESTION(Q05): row 17 / X3. Radial force of the driver at phi (toward the mesh for an external pair, not separating); tangential force by the sense of rotation.
-        # QUESTION(Q20): for an internal pair whose ring drives, phi is ambiguous (driver -> driven or gear1 -> gear2) and neither reading gives both a separating Fr and a moment of Ft equal to -rot T.
-        theta_Fr_driver = phi_deg % 360.0
-        theta_Ft_driver = (phi_deg + 90.0 * rotation_dir) % 360.0
-
-        rotation_dir_out = - u_eff/abs(u_eff) * rotation_dir     # external pair: reversed; internal (u < 0): same sense
-
-        # QUESTION(Q05): row 17 / X3. For an external pair theta_Ft_driven equals theta_Ft_driver: the two tangential forces are not an action-reaction pair.
-        theta_Fr_driven = (phi_deg + 180.0) % 360.0
-        theta_Ft_driven = (phi_deg + 180.0 + 90.0 * rotation_dir_out) % 360.0
-
-        return {
-            "Ft": Ft, "Fr": Fr, "Fa": Fa, "Fn": Fn, "T_out": T_out,
-            "theta_Fr_driver": theta_Fr_driver, "theta_Ft_driver": theta_Ft_driver,
-            "theta_Fr_driven": theta_Fr_driven, "theta_Ft_driven": theta_Ft_driven,
-            "rotation_dir_out": rotation_dir_out,
-        }
-
-    def mesh_forces(self, pair, T1_Nm: float, rot1: int, *, hand1: int = 1) -> MeshForces:
+    def mesh_forces(self, pair, T1_Nm: float, rot1: int) -> MeshForces:
         """Forces of the mesh on the two gears, for a torque on gear 1 (pitch-cylinder set of D-0010).
 
         The single normal force between the flanks is resolved at the pitch point C: tangential
@@ -1139,11 +1041,6 @@ class CylindricalFamily(GearFamily):
             ``T1_Nm * rot1 > 0``. With the symmetric flanks of a cylindrical gear the forces
             follow from the signed torque alone, so ``rot1`` is checked and not used; it belongs
             to the family contract (a bevel pair needs it for the loaded flank).
-        hand1 : int, optional
-            Hand of the helix of gear 1: +1 right-hand (default), -1 left-hand [-]. Gear 2 has the
-            opposite hand in an external pair and the same hand in an internal pair. No effect on
-            a spur pair. The gear data hold no hand (Q08): when it is not given, gear 1 is taken
-            as RIGHT-hand, so a driving gear 1 turning in the +1 sense is pushed along +X.
 
         Returns
         -------
@@ -1155,7 +1052,7 @@ class CylindricalFamily(GearFamily):
         Raises
         ------
         ValueError
-            If ``rot1`` or ``hand1`` is not +1 or -1.
+            If ``rot1`` is not +1 or -1.
 
         Notes
         -----
@@ -1167,20 +1064,18 @@ class CylindricalFamily(GearFamily):
             F_bn = F_bt / cos(beta_b)            F_t (nominal) = 2000 abs(T_1) / d_1
             rho_1 = sign(z_2) d_w1 / 2           rho_2 = rho_1 - a_w
             F_1,t = -1000 T_1 / rho_1            F_1,c = -sign(z_1 z_2) F_r
-            F_1,x = -h_1 sign(rho_1) sign(F_1,t) F_a
+            F_1,x = -h_1 sign(rho_1) sign(F_1,t) F_a     h_1 = ``pair.gear1.hand`` (Q08)
 
         The factor 2000 converts N m and mm to N (D-0010 item 5). Baseline case 2 (z 20/30,
         mn 3.5 mm, beta 15 deg), T_1 = 60.75 N m: F_tw 1659.831, F_r 674.505, F_a 449.236,
         F_bt 1791.646, F_bn 1847.109, F_t nominal 1676.571 N.
 
+        This is the only force calculation of the family; the shaft loads are built from it by
+        ``mesh_forces_to_shaft_loads`` (Q05, Q07a, Q07b, José 2026-10-15). A pure function of the pair and the torque: the driver follows from the sign
+        of T_1 rot1 (D-0010 item 11).
+
         Assumptions: ideal mesh (no friction, no losses), rigid involute flanks, steady rotation,
         one normal force through the pitch point at mid face width.
-
-        Warnings
-        --------
-        These are the D-0010 definitions, NOT the numbers of ``forces()``, which the shaft loads
-        of today still use: ``F_a_N`` is 449.236 N where ``forces()`` gives ``Fa`` 444.750 N
-        (Q07a), ``F_bn_N`` 1847.109 N where ``Fn`` is 1791.646 N = ``F_bt_N`` (Q07b).
 
         References
         ----------
@@ -1191,8 +1086,6 @@ class CylindricalFamily(GearFamily):
         """
         if rot1 not in (1, -1):
             raise ValueError(f"rot1 must be +1 or -1, got {rot1!r}")
-        if hand1 not in (1, -1):
-            raise ValueError(f"hand1 must be +1 (right-hand) or -1 (left-hand), got {hand1!r}")
         g1, z2 = pair.gear1, pair.gear2.z
         d_w1 = pair.dl1                        # working pitch diameter of gear 1, d_b1 / cos(alpha_wt)
         T = abs(T1_Nm)
@@ -1210,8 +1103,8 @@ class CylindricalFamily(GearFamily):
         rho_2 = rho_1 - pair.al
         F_1t = -1000.0 * T1_Nm / rho_1         # moment of the mesh force about the axis balances T_1
         F_1c = -np.sign(g1.z * z2) * F_r       # compressive contact: external gear pushed toward its axis
-        # QUESTION(Q08): the axial sign needs the hand of the helix, which the gear data do not hold; hand1 = +1 (right-hand gear 1) unless given.
-        F_1x = -hand1 * np.sign(rho_1) * np.sign(F_1t) * F_a
+        # axial component normal to the tooth trace at C, with the hand of gear 1 (D-0010 item 16; 0 for a spur gear)
+        F_1x = -pair.gear1.hand * np.sign(rho_1) * np.sign(F_1t) * F_a
         on_1 = (float(F_1c), float(F_1t), float(F_1x))
         return MeshForces(F_tw_N=float(F_tw), F_r_N=float(F_r), F_a_N=float(F_a), F_bt_N=float(F_bt),
                           F_bn_N=float(F_bn), F_t_nominal_N=float(F_t_nominal), on_1=on_1,
@@ -1452,7 +1345,7 @@ class CylindricalFamily(GearFamily):
         sin(beta_b), is its length. A spur pair has l = b for 0 <= s <= g_alpha. The largest value
         is the l_max of ISO_21771_2007, Eq. (98)-(99). The neighbouring tooth pairs are at
         s + k p_bt. With the mid-face section as the reference the result depends neither on the
-        driver nor on the hand of helix (there is none: Q08).
+        driver nor on the hand of helix.
 
         A helical tooth pair is in contact before its mid-face point reaches A and after it leaves
         E (by b tan(beta_b)/2): ``share`` is not zero just outside the path. The sum of ``share``
@@ -1514,8 +1407,8 @@ class CylindricalFamily(GearFamily):
             whichever gear drives.
         F_bn_N : float
             Total force normal to the flanks transmitted by the mesh [N], >= 0 (F_bn = F_bt /
-            cos(beta_b)). An argument: no force is derived from a torque here (Q07b: the ``Fn`` of
-            ``forces`` is F_bt).
+            cos(beta_b)). An argument: no force is derived from a torque here (``MeshForces.F_bn_N`` of
+            ``mesh_forces`` is this force).
         n_points : int, optional
             Number of equally spaced steps from A to E, both included (>= 2).
         t_s : array_like, optional

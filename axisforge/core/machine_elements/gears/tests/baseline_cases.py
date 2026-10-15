@@ -39,7 +39,7 @@ from typing import NamedTuple
 import numpy as np
 import pytest
 
-from axisforge.core.loads import AxialLoad, RadialLoad, TorqueLoad
+from axisforge.core.loads import AxialLoad, ExternalMoment, RadialLoad, TorqueLoad
 from axisforge.core.machine_elements.bearings import (
     Bearing,
     BearingCatalog,
@@ -83,8 +83,6 @@ ABS_TOL_BELOW = 1e-9
 # ----------------------------------------------------------------------------------------------
 T_NM = 60.75          # [N m] GEARpie FZG stage K4, 0.5 m arm; passed as the torque on gear 1
 N_RPM = 1450.0        # [rpm] chosen
-PHIS = (0.0, 90.0)    # [deg] line-of-centres angles of the force cases
-ROTS = (1, -1)        # sense of rotation about +X
 GEARPIE = {
     "C14": dict(alpha=20.0, beta=0.0, m=4.5, z=(16, 24), x=(0.1817, 0.1715), b=(14.0, 14.0), haP=1.0, hfP=1.25, rfP=0.38,
                 Ra=(0.4, 0.31), Rq=(0.51, 0.4), Rz=(4.8, 4.8)),
@@ -211,8 +209,9 @@ class Recorder:
 # ----------------------------------------------------------------------------------------------
 FAMILY = CylindricalFamily()
 
+# Q08 (José, 2026-10-15): ``hand`` is a new input; its row follows ``beta`` in every gear record
 _GEAR_INPUTS = ("label", "material_id", "position", "mn", "z", "Ca", "Cf", "x", "b", "alpha_n_deg", "alpha", "beta_n_deg",
-                "beta", "haP", "cP", "hfP", "rfP", "Ra", "Rq", "Rz")
+                "beta", "hand", "haP", "cP", "hfP", "rfP", "Ra", "Rq", "Rz")
 # recorded attribute -> attribute of Gear, in the recorded order (the order of assignment in the old
 # constructors). The ring class had no Ca, Cf, betab, pb, rhoF, zn, de and named two quantities otherwise.
 GEAR_ROWS = {
@@ -242,9 +241,10 @@ RENAMED_TEXT = {
 }
 
 
-# QUESTION(Q03) / QUESTION(Q50): the pair stores no driver (D-0026 item 4), so the recorded rows `driver`
+# QUESTION(Q50): the pair stores no driver (D-0026 item 4; Q03), so the recorded rows `driver`
 # and `driven` of the 25 recorded pairs (29 before Q03 answer 7) are an echo of the case input (they pass by construction):
-# (row names, number of rows in cases 1-7). What the driver CHANGES is compared in the forces() rows.
+# (row names, number of rows in cases 1-7). The pair holds no driver since Q03; the driver of case 7 is
+# the gear on the source shaft.
 ECHOED_ROWS = (("driver", "driven"), 70)   # 50 + 20: 58 recorded less 8 of cases 3b, 3c, 7c, 7d (Q03, answer 7), plus 20 of cases 4n, 5n (Q15)
 
 # QUESTION(Q46): text rows of case 7 that name one of the two classes ``Transmission`` and ``PairStage``
@@ -318,9 +318,8 @@ def _recorded_working_gear(pair, i):
 def recorded_pair(pair, driver="gear1"):
     """``GearPair`` under the names of ``SpurHelicalGearMeshing`` or ``InternalGearMeshing``.
 
-    ``driver`` is the driver the case declares. The pair no longer stores it (it is an argument of
-    ``CylindricalFamily.forces``), so the recorded rows ``driver`` / ``driven`` are the declared
-    value itself and ``forces`` passes it on. The order of the first rows is that of the old
+    ``driver`` is the driver the case declares. The pair does not store it (Q03), so the recorded
+    rows ``driver`` / ``driven`` are the declared value itself. The order of the first rows is that of the old
     constructors: with an imposed ``al`` the centre distance comes before the working pressure
     angle, then the backlash ``jbn`` (both kinds since Q57). ``new`` is the ``GearPair``.
     """
@@ -334,7 +333,6 @@ def recorded_pair(pair, driver="gear1"):
         dict(rows, gear1=pair.gear1, gear2=pair.gear2, gear1_w=_recorded_working_gear(pair, 1),
              gear2_w=_recorded_working_gear(pair, 2), new=pair),
         text=lambda: repr(pair), validate=pair.validate, validate_or_raise=pair.validate_or_raise, summary=pair.summary,
-        forces=lambda T, phi_deg=0.0, rotation_dir=1: FAMILY.forces(pair, T, phi_deg, rotation_dir, driver=driver),
         correction_for_gs_equilibrium=lambda: FAMILY.correction_for_gs_equilibrium(pair.gear1, pair.gear2))
 
 
@@ -355,8 +353,10 @@ def gear(mn, z, check=True, **kw):
 
 def ext_gear(name, i, label, position=0.0):
     g = GEARPIE[name]
-    # GEARpie gives the dedendum hfP; AxisForge takes the clearance cP = hfP - haP [multiples of mn]
-    return gear(mn=g["m"], z=g["z"][i], x=g["x"][i], b=g["b"][i], alpha_n_deg=g["alpha"], beta_n_deg=g["beta"],
+    # GEARpie gives the dedendum hfP; AxisForge takes the clearance cP = hfP - haP [multiples of mn].
+    # Hand (Q08): gear 1 right-hand, gear 2 left-hand (an external pair has opposite hands); none for spur
+    hand = (1, -1)[i] if g["beta"] else 0
+    return gear(mn=g["m"], z=g["z"][i], x=g["x"][i], b=g["b"][i], alpha_n_deg=g["alpha"], beta_n_deg=g["beta"], hand=hand,
                 haP=g["haP"], cP=g["hfP"] - g["haP"], rfP=g["rfP"], Ra=g["Ra"][i], Rq=g["Rq"][i], Rz=g["Rz"][i],
                 label=label, position=position)
 
@@ -367,9 +367,10 @@ def pinion_wheel(name, position=0.0):
 
 def make_internal(beta, mn=2.0, b=20.0, z1=20):
     """Pinion and ring of the internal cases: z1/-60 (z1 = 20: old cases 4, 5; 24: cases 4n, 5n, Q15)."""
-    pin = gear(mn=mn, z=z1, x=0.0, b=b, alpha_n_deg=20.0, beta_n_deg=beta, label="pinion")
+    hand = 1 if beta else 0     # Q08: right-hand pinion, and the ring of the same hand (internal pair)
+    pin = gear(mn=mn, z=z1, x=0.0, b=b, alpha_n_deg=20.0, beta_n_deg=beta, hand=hand, label="pinion")
     # internal gear: negative number of teeth (sign convention of the family)
-    ring = gear(mn=mn, z=-60, x=0.0, b=b, alpha_n_deg=20.0, beta_n_deg=beta, label="ring")
+    ring = gear(mn=mn, z=-60, x=0.0, b=b, alpha_n_deg=20.0, beta_n_deg=beta, hand=hand, label="ring")
     return pin, ring
 
 
@@ -457,8 +458,8 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear
     alt : bool
         Wheel source only. False: pair built as ``(wheel, pinion)``, which ``assemble_pair`` refuses
         (gear 1 must be the pinion, Q03 answer 7; the deleted cases 7c, 7d). True: built as
-        ``(pinion, wheel)``, declared driver gear 2, with ``gear_a`` = wheel: the external pair still
-        takes the torque on its gear 1, the pinion (cases 7e, 7f; question Q03).
+        ``(pinion, wheel)``, declared driver gear 2, with ``gear_a`` = wheel, the driving gear
+        (cases 7e, 7f).
     label : str or None
         Label of the system.
     distribute_loads : bool
@@ -479,7 +480,6 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear
     geW = GearElement(w, role="driver" if source == "wheel" else "driven", label="g_wheel")
     sP.add_gear(geP)
     sW.add_gear(geW)
-    # the stage keeps the `driver` of forces() at its default "gear1", as the link of the baseline did (Q03)
     kw = dict(phi_deg=PHI7, label="stage", distribute_loads=distribute_loads)
     if source == "pinion":
         mesh = assemble_pair(p, w, label="stage", driver="gear1")
@@ -523,15 +523,7 @@ def record_gear(rec, name, g):
         rec.call(name, g, m)
 
 
-def record_forces(rec, name, mesh, T, key):
-    for phi in PHIS:
-        for rot in ROTS:
-            d = rec.call(name, mesh, "forces", (T, phi, rot))
-            if d is not None:
-                R.setdefault("forces", {})[(key, phi, rot)] = d
-
-
-def record_pair(rec, name, mesh, T, key, forces=True):
+def record_pair(rec, name, mesh):
     rec.object_(name, mesh, skip=("gear1", "gear2", "gear1_w", "gear2_w", "new"))
     for w in ("gear1_w", "gear2_w"):
         rec.object_(f"{name}.{w}", getattr(mesh, w))
@@ -541,8 +533,6 @@ def record_pair(rec, name, mesh, T, key, forces=True):
     rec.call(name, mesh, "validate_or_raise")
     rec.call(name, mesh, "summary")
     rec.add(name, "__repr__()", repr(mesh))
-    if forces:
-        record_forces(rec, name, mesh, T, key)
 
 
 def run_external(case, gname):
@@ -553,7 +543,7 @@ def run_external(case, gname):
     record_gear(rec, "gear1(pinion)", p)
     record_gear(rec, "gear2(wheel)", w)
     mesh = assemble_pair(p, w, label=case, driver="gear1")
-    record_pair(rec, "mesh", mesh, T_NM, (case, "base"))
+    record_pair(rec, "mesh", mesh)
     R[(case, "mesh")] = mesh
     rec.call("mesh", mesh, "correction_for_gs_equilibrium")
     # variants (all assembly options of the pair)
@@ -565,8 +555,7 @@ def run_external(case, gname):
         except Exception as e:
             rec.add(vname, "constructor!exception", f"{type(e).__name__}: {e}")
             continue
-        record_pair(rec, vname, mv, T_NM, (case, vname), forces=False)
-        rec.call(vname, mv, "forces", (T_NM, 0.0, 1))
+        record_pair(rec, vname, mv)
         R[(case, vname)] = mv
     if case.startswith("case1"):
         # extra pair for the z1 + z2 > 60 branch of correction_for_gs_equilibrium (the GEARpie pair has 40)
@@ -576,7 +565,7 @@ def run_external(case, gname):
         rec.add("inputs", "extra pair for equalise_gs branch z1+z2 > 60", "mn=4.5, z=35/45, x=0, b=14, default rack")
         try:
             me = assemble_pair(pe, we, label="extra_z80", equalise_gs=True)
-            record_pair(rec, "mesh_extra_z35_z45_equalise_gs", me, T_NM, (case, "extra80"), forces=False)
+            record_pair(rec, "mesh_extra_z35_z45_equalise_gs", me)
             R[(case, "extra80")] = me
         except Exception as e:
             rec.add("mesh_extra_z35_z45_equalise_gs", "constructor!exception", f"{type(e).__name__}: {e}")
@@ -593,7 +582,7 @@ def run_case3():
     variants = {V3[0]: (p, w, "gear2")}
     for vname, (g1, g2, drv) in variants.items():
         mesh = assemble_pair(g1, g2, label=vname, driver=drv)
-        record_pair(rec, vname, mesh, T_NM, (case, vname))
+        record_pair(rec, vname, mesh)
         R[(case, vname)] = mesh
     return rec
 
@@ -617,7 +606,7 @@ def run_internal(case, beta, z1=20, check=True):
     record_internal_gear(rec, "gear2(ring)", ring, pin.z, pin.x)
     for drv in ("gear1", "gear2"):
         mesh = assemble_pair(pin, ring, label=case, driver=drv, check=check)
-        record_pair(rec, f"mesh_driver_{drv}", mesh, T_NM, (case, drv))
+        record_pair(rec, f"mesh_driver_{drv}", mesh)
         R[(case, drv)] = mesh
     base = R[(case, "gear1")]
     rec.call("mesh_driver_gear1", base, "correction_for_gs_equilibrium")
@@ -630,8 +619,7 @@ def run_internal(case, beta, z1=20, check=True):
         except Exception as e:
             rec.add(vname, "constructor!exception", f"{type(e).__name__}: {e}")
             continue
-        record_pair(rec, vname, mv, T_NM, (case, vname), forces=False)
-        rec.call(vname, mv, "forces", (T_NM, 0.0, 1))
+        record_pair(rec, vname, mv)
         R[(case, vname)] = mv
     return rec
 
@@ -642,9 +630,11 @@ def run_internal(case, beta, z1=20, check=True):
 def run_planetary(case, beta):
     rec = Recorder(case)
     mn, b = 2.0, 20.0
-    sun = gear(mn=mn, z=20, x=0.0, b=b, beta_n_deg=beta, label="sun")
-    planet = gear(mn=mn, z=20, x=0.0, b=b, beta_n_deg=beta, label="planet")
-    ring = gear(mn=mn, z=-60, x=0.0, b=b, beta_n_deg=beta, label="ring")
+    # Q08: right-hand sun; the planet the other hand (external mesh), the ring the planet's (internal mesh)
+    h = 1 if beta else 0
+    sun = gear(mn=mn, z=20, x=0.0, b=b, beta_n_deg=beta, hand=h, label="sun")
+    planet = gear(mn=mn, z=20, x=0.0, b=b, beta_n_deg=beta, hand=-h, label="planet")
+    ring = gear(mn=mn, z=-60, x=0.0, b=b, beta_n_deg=beta, hand=-h, label="ring")
     rec.add("inputs", "chosen values", f"mn=2, sun z=20, planet z=20, ring z=-60, k=4 (k=3 violates the assembly condition, see variant k3), x=0, b=20, alpha_n=20 deg, beta={beta} deg, default rack, phi0=0")
     record_gear(rec, "sun", sun)
     record_gear(rec, "planet", planet)
@@ -653,8 +643,8 @@ def run_planetary(case, beta):
     R[(case, "train")] = pg
     rec.object_("planetary", pg, skip=("sun_gear", "planet_gear", "ring_gear", "meshing_12", "meshing_23"))
     m12, m23 = recorded_pair(pg.meshing_12), recorded_pair(pg.meshing_23)   # the train takes the torque on gear 1 of each
-    record_pair(rec, "planetary.meshing_12", m12, T_NM, (case, "m12"), forces=False)
-    record_pair(rec, "planetary.meshing_23", m23, T_NM, (case, "m23"), forces=False)
+    record_pair(rec, "planetary.meshing_12", m12)
+    record_pair(rec, "planetary.meshing_23", m23)
     M = PlanetaryMember
     for j in range(pg.k):
         rec.call("planetary", pg, "planet_phi_deg", (j,))
@@ -684,9 +674,6 @@ def run_planetary(case, beta):
             R[(case, "torques", mem.name)] = tq
             rec.call("planetary", tq, "satisfies_torque_ordering", label=f"torques({mem.name}).satisfies_torque_ordering()")
     tq = R[(case, "torques", "SUN")]
-    # docstring of torques(): T_mesh_sun / T_mesh_planet are the torques to pass to the forces() of each pair
-    rec.call("planetary.meshing_12", m12, "forces", (tq.T_mesh_sun, 0.0, 1), label="forces(T_mesh_sun, phi=0, rot=+1)")
-    rec.call("planetary.meshing_23", m23, "forces", (tq.T_mesh_planet, 0.0, 1), label="forces(T_mesh_planet, phi=0, rot=+1)")
     for m in ("coaxiality_error", "assembly_condition", "neighbouring_condition", "validate", "validate_or_raise", "summary"):
         rec.call("planetary", pg, m)
     rec.call("planetary", pg, "neighbouring_condition", (2.0,))
@@ -716,8 +703,12 @@ def load_row(rec, obj, i, ld):
     rec.add(obj, f"{p}.magnitude", ld.magnitude)   # [N] or [N m], signed as stored
     if hasattr(ld, "theta_deg"):
         rec.add(obj, f"{p}.theta_deg", ld.theta_deg)   # [deg] from +Y toward +Z, right-hand about +X
-        rec.add(obj, f"{p}.Fy", ld.Fy)
-        rec.add(obj, f"{p}.Fz", ld.Fz)
+        if isinstance(ld, ExternalMoment):             # Q06: components as named by core/loads.py [N mm]
+            rec.add(obj, f"{p}.My", ld.My)
+            rec.add(obj, f"{p}.Mz", ld.Mz)
+        else:
+            rec.add(obj, f"{p}.Fy", ld.Fy)
+            rec.add(obj, f"{p}.Fz", ld.Fz)
 
 
 def run_case7(tag, source, rot, alt=False):
@@ -748,7 +739,7 @@ def run_case7(tag, source, rot, alt=False):
     rec.add("link", "shaft_b.name", link.shaft_b.name)
     rec.call("link", link, "validate")
     rec.add("link", "__repr__()", repr(link))      # RENAMED_PATTERNS
-    record_pair(rec, "mesh", mesh, T_NM, (case, "mesh"))
+    record_pair(rec, "mesh", mesh)
     for nm, s, ge in (("shaft_pinion", sP, geP), ("shaft_wheel", sW, geW)):
         rec.object_(nm, s, skip=("shaft",))
         rec.add(nm, "shaft.total_length", s.shaft.total_length)
@@ -805,77 +796,6 @@ def check(cid, case, desc, got, expected, scale=None, tol=1e-9, note="", extra=F
     (EXTRA_CHECKS if extra else CHECKS).append(Check(cid, case, desc, got, expected, "PASS" if ok else "FAIL", note))
 
 
-def force_vectors(F):
-    """Force vectors (Y, Z) [N] on the driver-side and the driven-side gear, from a ``forces()`` dict."""
-    Ft, Fr = F["Ft"], F["Fr"]
-    Fr_a = Fr * dirv(F["theta_Fr_driver"])
-    Ft_a = Ft * dirv(F["theta_Ft_driver"])
-    Fr_b = Fr * dirv(F["theta_Fr_driven"])
-    Ft_b = Ft * dirv(F["theta_Ft_driven"])
-    return Fr_a, Ft_a, Fr_b, Ft_b
-
-
-def physics_pair(cid_prefix, key, mesh, internal, driver):
-    """Checks a, b, d of one pair, for every (phi, rot) of the force cases.
-
-    a: power balance of an ideal mesh, ``abs(T_out) n_out = T_in n_in`` with ``n_out = n_in z_in /
-    z_out`` [W]. b: action = reaction, the four transverse force vectors of the two gears sum to zero
-    [N]. d: the radial force separates the gears: on an external gear it points from the mesh toward
-    its own centre; on a ring it points outward from the ring centre (flank forces are compressive).
-    For an internal pair the mesh point lies at ``-phi_hat`` from both centres when the pinion is on
-    shaft a (``+phi_hat`` when the ring is): phi is READ HERE as the line of centres driver ->
-    driven, whereas the docstring of ``InternalGearMeshing.forces`` says gear1 -> gear2; the two
-    readings differ when the ring drives (question Q20). No library source (statics, kinematics).
-
-    Check a takes T on the gear named by the argument ``driver``, which the callers set to "gear1"
-    for every external pair, because ``SpurHelicalGearMeshing.forces`` ignores the declared driver
-    (case 3, question Q03).
-
-    Check e (internal pairs only, added by the review of step 0, outside the recorded 291): the
-    tangential force on the driver gear, taken at the mesh point of the same reading, gives the
-    moment ``-rot T_in`` about the axis [N m] (the mesh takes out the torque that the source puts
-    in with the sense of rotation).
-    """
-    case = f"{key[0]}/{key[1]}"
-    z1, z2 = abs(mesh.gear1.z), abs(mesh.gear2.z)
-    zin, zout = (z1, z2) if driver == "gear1" else (z2, z1)
-    for phi in PHIS:
-        for rot in ROTS:
-            F = R["forces"][(key, phi, rot)]
-            tag = f"phi={phi:g},rot={rot:+d}"
-            # a. power balance, ideal mesh, speeds from the tooth numbers
-            n_out = N_RPM * zin / zout
-            P_in = T_NM * N_RPM * 2 * math.pi / 60
-            P_out = abs(F["T_out"]) * n_out * 2 * math.pi / 60
-            if (phi, rot) == (0.0, 1):
-                ignored = "" if mesh.driver == driver else f"; T taken on gear 1, declared driver ({mesh.driver}) ignored"
-                check(f"{cid_prefix}.a", case, f"power balance |T_in n_in| vs |T_out n_out|, n_out=n_in*z_in/z_out [W]{ignored}", P_out, P_in, scale=P_in,
-                      note=f"T_in={T_NM} N m at {N_RPM} rpm; T_out={F['T_out']!r}; z_in={zin}, z_out={zout}")
-            # b. action = reaction
-            Fr_a, Ft_a, Fr_b, Ft_b = force_vectors(F)
-            tot = Fr_a + Ft_a + Fr_b + Ft_b
-            check(f"{cid_prefix}.b", case, f"action=reaction: |F_a + F_b| / Ft, both gears, {tag} [-]", np.linalg.norm(tot) / F["Ft"], 0.0,
-                  scale=1.0, note=f"radial pair sum {float(np.linalg.norm(Fr_a + Fr_b))!r}, tangential pair sum {float(np.linalg.norm(Ft_a + Ft_b))!r}")
-            # d. radial separating, mesh direction from own centre
-            ph = dirv(phi)
-            if not internal:
-                md_a, md_b, sg_a, sg_b = ph, -ph, -1, -1
-            else:
-                pin_is_a = (driver == "gear1")
-                md_a = -ph if pin_is_a else ph
-                md_b = md_a
-                sg_a = -1 if pin_is_a else +1          # sign of the expected separating force along mesh_dir: pinion -1 (toward centre), ring +1 (outward)
-                sg_b = +1 if pin_is_a else -1
-                tag += ", phi read as driver -> driven"
-                r_drv = (mesh.gear1_w if pin_is_a else mesh.gear2_w).rl      # [mm] working pitch radius of the driver
-                Mx = mx_of(Ft_a, r_drv * md_a) / 1000.0                      # N mm -> N m
-                check(f"{cid_prefix}.e", case, f"driver gear: Mx of Ft at the mesh point = -rot*T_in [N m], {tag}", Mx, -rot * T_NM, scale=T_NM, extra=True)
-            for nm, dv, md, sg in (("driver-side gear", dirv(F["theta_Fr_driver"]), md_a, sg_a), ("driven-side gear", dirv(F["theta_Fr_driven"]), md_b, sg_b)):
-                dot = float(np.dot(dv, md)) * sg
-                check(f"{cid_prefix}.d", case, f"radial force separating, {nm}, {tag}: dot(F_r_dir, expected separating dir) = +1 [-]", dot, 1.0, scale=1.0,
-                      note="expected dir: external gear -> away from the mesh (toward own centre); ring -> outward from its centre")
-
-
 def physics_planetary(case):
     """Check a for the train: the external torques of sun, ring and carrier sum to zero [N m], and so
     does ``sum T_i omega_i`` [W] (ideal, no losses), for three input members and five speed pairs."""
@@ -930,11 +850,12 @@ def physics_system(case):
     """Checks 7.b-7.d on the loads that ``resolve`` stored on the two shafts of one case-7 run.
 
     The mesh point of gear a lies at ``shaft_a + r phi_hat`` and of gear b at ``shaft_b - r phi_hat``
-    (phi = line of centres a -> b). Sign convention of 7.c1 / 7.c2: a shaft turning with sense
+    (phi = line of centres a -> b).     Sign convention of 7.c1 / 7.c2: a shaft turning with sense
     ``rot`` receives from the source a torque ``+rot T`` about X, so the tooth force on the driver
     gear must give a moment ``-rot T_in`` about the axis, and on the driven gear ``+rot_b T_out`` with
-    ``T_out = T_in z_b / z_a``. Each moment is taken with the radius the code uses (``gear1_w.rl``,
-    ``gear2_w.rl``) and with the geometric one ``al z / (z1 + z2)`` [mm]. No library source.
+    ``T_out = T_in z_b / z_a``. Each moment is taken with the working pitch radius of the gear
+    (``gear1_w.rl`` or ``gear2_w.rl``, the one of that gear) and with the geometric one
+    ``al z / (z1 + z2)`` [mm]. No library source.
 
     Returns
     -------
@@ -950,25 +871,26 @@ def physics_system(case):
     T_src = P / OMEGA
     ph = dirv(phi)
     A, B = shaft_sums(sa), shaft_sums(sb)
-    # radii: the ones the code used (mesh.gear1_w.rl is the SMALLER working radius) and the geometric ones from the tooth numbers
-    r_code_a, r_code_b = mesh.gear1_w.rl, mesh.gear2_w.rl
+    # radii: the working pitch radius of each gear and the geometric ones from the tooth numbers
+    a_is_gear1 = ga is mesh.new.gear1
+    r_code_a, r_code_b = (mesh.gear1_w.rl, mesh.gear2_w.rl) if a_is_gear1 else (mesh.gear2_w.rl, mesh.gear1_w.rl)
     zsum = ga.z + gb.z
     r_geo_a, r_geo_b = mesh.al * ga.z / zsum, mesh.al * gb.z / zsum
-    # b. action = reaction on the stored loads
-    F = mesh.forces(T_src, phi, rot)
+    # b. action = reaction on the stored loads (scales: the magnitudes of the MeshForces of the stage)
+    m = c.resolved.meshes[0]
     tot = A["F"] + B["F"]
-    check("7.b", case, "action=reaction on stored loads: |sum F_a + sum F_b| / Ft [-]", np.linalg.norm(tot) / F["Ft"], 0.0, scale=1.0)
-    check("7.b2", case, "action=reaction on tangential loads only: |Ft_a + Ft_b| / Ft [-]", np.linalg.norm(A["Ft_vec"] + B["Ft_vec"]) / F["Ft"], 0.0, scale=1.0)
-    check("7.b3", case, "action=reaction on radial loads only: |Fr_a + Fr_b| / Fr [-]", np.linalg.norm(A["Fr_vec"] + B["Fr_vec"]) / F["Fr"], 0.0, scale=1.0)
+    check("7.b", case, "action=reaction on stored loads: |sum F_a + sum F_b| / Ft [-]", np.linalg.norm(tot) / m.F_tw_N, 0.0, scale=1.0)
+    check("7.b2", case, "action=reaction on tangential loads only: |Ft_a + Ft_b| / Ft [-]", np.linalg.norm(A["Ft_vec"] + B["Ft_vec"]) / m.F_tw_N, 0.0, scale=1.0)
+    check("7.b3", case, "action=reaction on radial loads only: |Fr_a + Fr_b| / Fr [-]", np.linalg.norm(A["Fr_vec"] + B["Fr_vec"]) / m.F_r_N, 0.0, scale=1.0)
     check("7.b4", case, "axial loads: sum Fa_a + sum Fa_b = 0 [N]", A["Fa"] + B["Fa"], 0.0, scale=max(abs(A["Fa"]), 1.0), note=f"Fa_a={float(A['Fa'])!r}, Fa_b={float(B['Fa'])!r}")
     # c. torque direction: moment about the shaft axis of the stored Ft at the mesh point
-    for lab, r_a, r_b in (("code radii (gear1_w.rl, gear2_w.rl)", r_code_a, r_code_b), ("geometric radii (al*z/(z1+z2))", r_geo_a, r_geo_b)):
+    for lab, r_a, r_b in (("working pitch radii (gear_w.rl)", r_code_a, r_code_b), ("geometric radii (al*z/(z1+z2))", r_geo_a, r_geo_b)):
         Ma = mx_of(A["Ft_vec"], r_a * ph) / 1000.0          # N mm -> N m
         Mb = mx_of(B["Ft_vec"], -r_b * ph) / 1000.0
         Tin = float(T_src)
         Tout_expected = Tin * gb.z / ga.z
         check("7.c1", case, f"driver shaft: Mx of stored Ft at the mesh point = -rot_a*T_in [N m], {lab}", Ma, -rot_a * Tin, scale=Tin,
-              note=f"rot_a={rot_a}; T_in={Tin!r}; stored TorqueLoad at gear = {A['T_gear']!r} (power-flow sign, independent of rot)")
+              note=f"rot_a={rot_a}; T_in={Tin!r}; stored TorqueLoad at gear = {A['T_gear']!r}")
         check("7.c2", case, f"driven shaft: Mx of stored Ft at the mesh point = +rot_b*T_out_physical [N m], {lab}", Mb, rot_b * Tout_expected, scale=Tout_expected,
               note=f"rot_b={rot_b}; T_out_physical=T_in*z_b/z_a={Tout_expected!r}; stored TorqueLoad at gear = {B['T_gear']!r}")
         check("7.c3", case, "sign of Mx(Ft) equals sign of stored TorqueLoad, driver shaft [-]", math.copysign(1, Ma) if Ma else 0.0, math.copysign(1, A["T_gear"]),
@@ -990,8 +912,9 @@ def physics_system(case):
     check("7.c9", case, "driven shaft speed_rpm stored by resolve = n*z_a/z_b [rpm]", sb.speed_rpm, nb_phys, scale=nb_phys, note=f"ShaftSystem.speed_rpm={sb.speed_rpm!r}; source shaft speed_rpm={sa.speed_rpm!r} (given {N_RPM})")
     check("7.c14", case, "source shaft speed_rpm stored by resolve = n [rpm]", sa.speed_rpm, N_RPM, scale=N_RPM, extra=True)
     check("7.c10", case, "rotation sense of driven shaft = -rot_source (external pair) [-]", rot_b, -rot_a, scale=1.0)
-    CHECKS.append(Check("7.c11", case, "tilting moment |Fa|*r absent from the loads [N mm] (required by Harris sec. 4.3 per the code docstring)",
-                        float(abs(A["Fa"]) * r_geo_a), "stored: none", "INFO", f"Fa={float(A['Fa'])!r} N, r_geo_a={float(r_geo_a)!r} mm"))
+    M_stored = sum(ld.magnitude for ld in sa.external_moments)
+    CHECKS.append(Check("7.c11", case, "bending moment of the axial force stored on the driver shaft (ExternalMoment) [N mm] against |Fa|*r_w",
+                        float(M_stored), float(abs(A["Fa"]) * r_code_a), "INFO", f"Fa={float(A['Fa'])!r} N, r_w,a={float(r_code_a)!r} mm (Q06)"))
     # d. on the stored loads
     for nm, S, md in (("driver shaft", A, ph), ("driven shaft", B, -ph)):
         v = S["Fr_vec"]
@@ -1011,7 +934,7 @@ def physics_rotation_reversal(sysres):
             check("7.x2", f"{ta} vs {tb}", f"{sh}: Fr vector unchanged by the sense of rotation (|Fr(+) - Fr(-)|/|Fr|) [-]",
                   np.linalg.norm(a[sh]["Fr_vec"] - b[sh]["Fr_vec"]) / np.linalg.norm(a[sh]["Fr_vec"]), 0.0, scale=1.0)
             check("7.x3", f"{ta} vs {tb}", f"{sh}: axial thrust reverses with the sense of rotation for a fixed helix hand, Fa(+) + Fa(-) = 0 [N]",
-                  a[sh]["Fa"] + b[sh]["Fa"], 0.0, scale=max(abs(a[sh]["Fa"]), 1.0), note=f"Fa(+)={float(a[sh]['Fa'])!r}, Fa(-)={float(b[sh]['Fa'])!r}; the code has no hand of helix")
+                  a[sh]["Fa"] + b[sh]["Fa"], 0.0, scale=max(abs(a[sh]["Fa"]), 1.0), note=f"Fa(+)={float(a[sh]['Fa'])!r}, Fa(-)={float(b[sh]['Fa'])!r}")
 
 
 # ----------------------------------------------------------------------------------------------
@@ -1037,13 +960,8 @@ def run_baseline():
             run_internal("case4n_internal_spur", 0.0, z1=24), run_internal("case5n_internal_helical", 15.0, z1=24),
             run_planetary("case6_planetary_spur", 0.0), run_planetary("case6b_planetary_helical", 15.0)]
     recs += [run_case7(tag, src, rot, alt) for tag, src, rot, alt in RUNS7]
-    physics_pair("1", ("case1_external_spur", "base"), R[("case1_external_spur", "mesh")], False, "gear1")
-    physics_pair("2", ("case2_external_helical", "base"), R[("case2_external_helical", "mesh")], False, "gear1")
-    for vname in V3:
-        physics_pair("3", ("case3_helical_wheel_driver", vname), R[("case3_helical_wheel_driver", vname)], False, "gear1")
-    for case, cid in (("case4_internal_spur", "4"), ("case5_internal_helical", "5")):
-        for drv in ("gear1", "gear2"):
-            physics_pair(cid, (case, drv), R[(case, drv)], True, drv)
+    # Q03 (José, 2026-10-15): the checks 1-5 of the pair forces (forces(), deleted) are gone; the statics of
+    # a mesh is tested on MeshForces (test_mesh_forces.py) and on the stored loads of case 7 (below)
     physics_planetary("case6_planetary_spur")
     physics_planetary("case6b_planetary_helical")
     physics_rotation_reversal({tag: physics_system(f"case7{tag}") for tag, _, _, _ in RUNS7})

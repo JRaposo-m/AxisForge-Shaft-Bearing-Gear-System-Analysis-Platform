@@ -91,7 +91,7 @@ def test_assembled_objects_refuse_writes(case2):
     with pytest.raises(AttributeError, match="immutable"):
         case2.al = 100.0
     with pytest.raises(AttributeError, match="immutable"):
-        case2.driver = "gear2"            # the driver is an argument of forces(), not stored geometry
+        case2.driver = "gear2"            # the driver is not stored geometry (Q03, D-0010 item 11)
     with pytest.raises(AttributeError, match="immutable"):
         case2.gear1.x = 0.5
     with pytest.raises(dataclasses.FrozenInstanceError):
@@ -117,21 +117,20 @@ def test_bad_inputs():
     bad = CylindricalGearData(-1.0, 20, b=-2.0, alpha_n_deg=60.0, beta_n_deg=50.0, Ra=-1.0, Rq=-1.0, Rz=-1.0, label="bad")
     assert bad.validate() == [
         "bad: mn must be > 0, got -1.0", "bad: b must be >= 0, got -2.0", "bad: alpha_n_deg out of range (0, 45), got 60.0",
-        "bad: beta_n_deg out of range [0, 45), got 50.0", "bad: Ra must be >= 0, got -1.0", "bad: Rq must be >= 0, got -1.0",
-        "bad: Rz must be >= 0, got -1.0"]
+        "bad: beta_n_deg out of range [0, 45), got 50.0",
+        "bad: hand must be +1 (right) or -1 (left) for a helical gear (0 only for beta_n_deg = 0), got 0",
+        "bad: Ra must be >= 0, got -1.0", "bad: Rq must be >= 0, got -1.0", "bad: Rz must be >= 0, got -1.0"]
     g = bc.gear(2.0, 20, b=10.0)
     with pytest.raises(ValueError, match="Module mismatch"):
         pair(g, bc.gear(2.5, 30))
     with pytest.raises(ValueError, match="Pressure angle mismatch"):
         pair(g, bc.gear(2.0, 30, alpha_n_deg=25.0))
     with pytest.raises(ValueError, match="Helix angle mismatch"):
-        pair(g, bc.gear(2.0, 30, beta_n_deg=10.0))
+        pair(g, bc.gear(2.0, 30, beta_n_deg=10.0, hand=-1))
     with pytest.raises(ValueError, match="Internal gear must have more teeth"):
         pair(g, bc.gear(2.0, -20, check=False))       # the ring alone is invalid too (tip below its base circle)
     with pytest.raises(ValueError, match=r"gear 1 must be the pinion: \|z1\| <= \|z2\|"):
         pair(bc.gear(2.0, 30, b=10.0), g)
-    with pytest.raises(ValueError, match="driver must be 'gear1' or 'gear2'"):
-        FAMILY.forces(pair(g, bc.gear(2.0, 30, b=10.0)), 10.0, driver="pinion")
 
 
 # ----------------------------------------------------------------------------------------------
@@ -150,7 +149,7 @@ def test_spur_gear_closed_forms():
 
 def test_pair_without_profile_shift_works_at_the_reference_centre_distance():
     """x1 + x2 = 0: alpha_wt = alpha_t and a_w = a (ISO_21771_2007, Eq. (55) with a zero sum)."""
-    p = pair(bc.gear(2.0, 20, b=10.0, beta_n_deg=15.0), bc.gear(2.0, 47, b=10.0, beta_n_deg=15.0))
+    p = pair(bc.gear(2.0, 20, b=10.0, beta_n_deg=15.0, hand=1), bc.gear(2.0, 47, b=10.0, beta_n_deg=15.0, hand=-1))
     assert p.alphatw == pytest.approx(p.gear1.alphat, rel=1e-10)        # through the root solver
     assert p.al == pytest.approx(p.a, rel=1e-10)
     assert p.dl1 == pytest.approx(p.gear1.d, rel=1e-10) and p.dl2 == pytest.approx(p.gear2.d, rel=1e-10)
@@ -237,6 +236,21 @@ def test_working_pitch_circles_roll_on_each_other(beta):
         assert p.dl2 + s2 * p.dl1 == pytest.approx(2.0 * p.al, rel=1e-12)
 
 
+def test_hand_of_helix_is_required_and_checked_at_assembly():
+    """Q08 (D-0010 item 17): a helical gear needs hand +1 or -1 (assembly refuses it otherwise); an external helical
+    pair has opposite hands, an internal one the same hand (ISO_21771_2007, 5.1.3, 5.1.4); a spur gear may have none."""
+    with pytest.raises(ValueError, match="hand must be"):
+        bc.gear(2.0, 20, beta_n_deg=15.0)
+    assert bc.gear(2.0, 20).hand == 0
+    right, left = bc.gear(2.0, 20, beta_n_deg=15.0, hand=1), bc.gear(2.0, 40, beta_n_deg=15.0, hand=-1)
+    assert pair(right, left).gear2.hand == -1
+    with pytest.raises(ValueError, match="Hand of helix mismatch"):
+        pair(right, bc.gear(2.0, 40, beta_n_deg=15.0, hand=1))
+    with pytest.raises(ValueError, match="Hand of helix mismatch"):
+        pair(bc.gear(2.0, 24, b=20.0, beta_n_deg=15.0, hand=1), bc.gear(2.0, -60, b=20.0, beta_n_deg=15.0, hand=-1))
+    assert pair(bc.gear(2.0, 24, b=20.0, beta_n_deg=15.0, hand=-1), bc.gear(2.0, -60, b=20.0, beta_n_deg=15.0, hand=-1)).validate() == []
+
+
 def test_gear_ratio_is_signed(case2, case4):
     """Q03: u = z2 / z1 (ISO_21771_2007, 5.2.1, Eq. (52)), negative for an internal pair."""
     assert case2.u == 1.5 and case4.u == -3.0
@@ -254,7 +268,7 @@ def test_gear_1_must_be_the_pinion():
             bc.build_case7("wheel", rot)                                     # cases 7c, 7d
     with pytest.raises(ValueError, match=r"gear 1 must be the external gear \(pinion\), got z1=-60"):
         pair(bc.gear(2.0, -60), bc.gear(2.0, 20))                            # a ring as gear 1 (D-0010 item 10)
-    assert pair(pinion, bc.gear(3.5, 20, beta_n_deg=15.0)).u == 1.0        # equal tooth numbers are accepted
+    assert pair(pinion, bc.gear(3.5, 20, beta_n_deg=15.0, hand=-1)).u == 1.0        # equal tooth numbers are accepted
 
 
 @pytest.mark.parametrize("case", PAIRS)
@@ -347,19 +361,6 @@ def test_tip_alteration_of_sdp_table_4_4():
 
 
 # ----------------------------------------------------------------------------------------------
-# unit guard: one test per public function that takes a torque
-# ----------------------------------------------------------------------------------------------
-def test_forces_takes_the_torque_in_newton_metre(case2):
-    """Baseline case 2, 60.75 N m on gear 1: Ft = 1659.83 N = 2000 T / d_w1. The same number given in
-    N mm (60750) gives 1.66e6 N: nothing converts silently."""
-    F = FAMILY.forces(case2, bc.T_NM, 0.0, 1)
-    assert F["Ft"] == pytest.approx(1659.8313933933089, rel=REL)
-    assert F["Ft"] == pytest.approx(2000.0 * bc.T_NM / case2.dl1, rel=REL)          # T [N m], d_w [mm]
-    assert F["T_out"] == pytest.approx(91.125, rel=REL)                             # [N m]
-    assert FAMILY.forces(case2, 1000.0 * bc.T_NM, 0.0, 1)["Ft"] == pytest.approx(1659831.3933933089, rel=REL)
-
-
-# ----------------------------------------------------------------------------------------------
 # _LEGACY: one test per entry (today's value), and the alternative where it is a relation
 # ----------------------------------------------------------------------------------------------
 def test_every_legacy_entry_has_both_kinds_and_a_test():
@@ -380,8 +381,8 @@ def test_legacy_virtual_teeth(case5):
 
 def test_legacy_beta_range():
     """Q55 (José, 2026-10-15): keep. A negative helix angle is reported for an external gear and accepted for a ring."""
-    assert bc.gear(2.0, 60, beta_n_deg=-5.0, label="g", check=False).validate() == ["g: beta_n_deg out of range [0, 45), got -5.0"]
-    assert bc.gear(2.0, -60, beta_n_deg=-5.0, label="g").validate() == []
+    assert bc.gear(2.0, 60, beta_n_deg=-5.0, hand=1, label="g", check=False).validate() == ["g: beta_n_deg out of range [0, 45), got -5.0"]
+    assert bc.gear(2.0, -60, beta_n_deg=-5.0, hand=1, label="g").validate() == []
 
 
 def test_legacy_gear_limits():
@@ -391,16 +392,6 @@ def test_legacy_gear_limits():
     assert FAMILY.undercutting(bc.gear(2.0, 8, check=False)) and not FAMILY.undercutting(bc.gear(2.0, 20))
     assert bc.gear(2.0, -60, x=-2.0, label="g", check=False).validate() == [
         "g: tip diameter da=124.0000 ≥ pitch diameter d=120.0000. Internal gear addendum must reduce da below d."]
-
-
-def test_legacy_force_input(case2, case5):
-    """Q03 (X1): the driver changes the forces of an internal pair and not those of an external pair
-    (the alternative for the external pair is ``test_alternative_wheel_driver_takes_the_torque_on_the_wheel``)."""
-    assert FAMILY.forces(case2, bc.T_NM, driver="gear2") == FAMILY.forces(case2, bc.T_NM, driver="gear1")
-    assert FAMILY.forces(case5, bc.T_NM, driver="gear1")["Ft"] == pytest.approx(2933.999697353043, rel=1e-11)   # Q21: r_w1 of one base-cylinder rule
-    ring_drives = FAMILY.forces(case5, bc.T_NM, driver="gear2")
-    assert ring_drives["Ft"] == pytest.approx(977.9998991176811, rel=REL)
-    assert ring_drives["T_out"] == pytest.approx(-20.25, rel=REL)
 
 
 def test_contact_beyond_a_base_tangent_point_is_an_error(case4):
@@ -455,7 +446,8 @@ def test_sdp_involute_test_is_the_q39_criterion(z2, x, beta):
     T1A / (r_b2 tan(alpha_wt)): the involute-interference test of SDP is the Q39 criterion T1A >= 0 (one message,
     lead decision 2026-10-15). Pinions z1 = 0.3, 0.5, 0.6 z2, mn 2 mm, x1 = x, x2 = 0."""
     for z1 in (int(0.3 * z2), int(0.5 * z2), int(0.6 * z2)):
-        p = pair(bc.gear(2.0, z1, x=x, beta_n_deg=beta, check=False), bc.gear(2.0, -z2, beta_n_deg=beta), check=False)
+        h = 1 if beta else 0
+        p = pair(bc.gear(2.0, z1, x=x, beta_n_deg=beta, hand=h, check=False), bc.gear(2.0, -z2, beta_n_deg=beta, hand=h), check=False)
         alpha_a2 = math.acos(p.gear2.rb / (p.da2_w / 2.0))
         margin = z1 / z2 - 1.0 + math.tan(alpha_a2) / math.tan(p.alphatw)
         assert margin == pytest.approx(p.T1A / (p.gear2.rb * math.tan(p.alphatw)), rel=1e-9, abs=1e-12)
@@ -499,7 +491,7 @@ def test_renamed_text_rows_are_counted():
     # one by one in mechanical_system/tests/test_transmission_baseline.py
     renamed += sum(n for _, n in bc.RENAMED_PATTERNS.values())
     echoed += sum(n for _, n, _ in bc.ECHOED_ROWS_CASE7.values())
-    assert (total, total - echoed - renamed, renamed, echoed) == (7866, 7770, 14, 82)     # rows: total, computed, renamed text, echoed
+    assert (total, total - echoed - renamed, renamed, echoed) == (7234, 7138, 14, 82)     # rows: total, computed, renamed text, echoed
 
 
 # ----------------------------------------------------------------------------------------------

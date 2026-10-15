@@ -152,10 +152,10 @@ class PlanetaryTorques:
         Ideal resultant force on one planet pin [N].
     T_mesh_sun : float
         Torque through one sun-planet mesh, on the sun [N m]; the quantity
-        that can be passed to ``CylindricalFamily.forces`` with ``meshing_12`` (see ``torques``, Warnings).
+        that can be passed to ``CylindricalFamily.mesh_forces`` with ``meshing_12`` (see ``torques``, Warnings).
     T_mesh_planet : float
         Torque through one planet-ring mesh, on the planet [N m]; the
-        quantity that can be passed to ``CylindricalFamily.forces`` with ``meshing_23``.
+        quantity that can be passed to ``CylindricalFamily.mesh_forces`` with ``meshing_23``.
     k : int
         Number of planets [-].
 
@@ -172,7 +172,7 @@ class PlanetaryTorques:
         F_H2 = F_t12 + F_t32 = 2*Ft                                 (6.2)
 
     ``Ft`` uses the REFERENCE diameter d1 of the sun [mm], not the working
-    pitch diameter dl1 used by ``CylindricalFamily.forces`` for ``meshing_12`` and
+    pitch diameter dl1 used by ``CylindricalFamily.mesh_forces`` for ``meshing_12`` and
     ``meshing_23``. The values agree when al = a (no profile-shift
     effect on the working diameter, e.g. x1 + x2 = 0) and z_sun <= z_planet
     (see ``torques``, Warnings). F_H2 = 2*Ft is the ideal resultant on one
@@ -279,7 +279,7 @@ class PlanetaryGearTrainMeshing:
     Attributes
     ----------
     meshing_12, meshing_23 : object
-        The two pair objects; ``forces`` of each gives the tooth loads on the
+        The two pair objects; ``mesh_forces`` of each gives the tooth loads on the
         working pitch radius.
     al_12, al_23 : float
         Resolved working centre distances [mm].
@@ -312,7 +312,7 @@ class PlanetaryGearTrainMeshing:
     mesh-stiffness or manufacturing-error load-sharing factor). Not covered:
     load distribution between planets and the real mesh, bearing and pin forces
     (``torques`` gives ideal torques only). This class computes no F_r, F_a or
-    F_n; ``CylindricalFamily.forces`` does, for ``meshing_12`` and ``meshing_23``.
+    F_n; ``CylindricalFamily.mesh_forces`` does, for ``meshing_12`` and ``meshing_23``.
 
     References
     ----------
@@ -814,14 +814,14 @@ class PlanetaryGearTrainMeshing:
         scaled by z_planet/z_sun (same Ft, different radius). Equal load sharing
         over the k planets is assumed; ``load_sharing_factor`` is not used here.
         Ft is on the reference diameter of the sun (ISO_6336-1_2019, 4.2.2,
-        Formula (1)); ``CylindricalFamily.forces`` uses, for ``meshing_12`` and ``meshing_23``, the
+        Formula (1)); ``CylindricalFamily.mesh_forces`` uses, for ``meshing_12`` and ``meshing_23``, the
         working pitch radius (see ``PlanetaryTorques``). The planetary
         class computes no F_r, F_a or F_n.
 
         Warnings
         --------
         Ft uses the reference diameter (ISO_6336-1_2019, 4.2.2, Formula (1)) while
-        ``CylindricalFamily.forces`` uses the working pitch radius.
+        ``CylindricalFamily.mesh_forces`` uses the working pitch radius.
         A train with z_sun > z_planet cannot be built: ``meshing_12`` has the sun as gear 1
         and ``CylindricalFamily.assemble_pair`` refuses a gear 1 larger than gear 2 (Q03,
         José 2026-10-15).

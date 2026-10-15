@@ -1,6 +1,7 @@
 """What ``build_load_cases`` does with the gear-mesh loads of a resolved ``ShaftSystem`` (finding X7
-of the gears review, question Q11), on the pinion shaft of baseline case 7a: Fr 674.505 N at 30 deg
-and Ft 1659.831 N at 120 deg at x = 100 mm, axial load +444.750 N.
+of the gears review, question Q11), on the pinion shaft of baseline case 7a: F_r 674.505 N at 210 deg
+and F_tw 1659.831 N at 300 deg at x = 100 mm, axial load +449.236 N and the bending moment of the axial
+force, 16442.08 N mm (Q05, Q06, José 2026-10-15).
 
 Real objects (no fake): the shaft is built and resolved by
 ``axisforge.core.machine_elements.gears.tests.baseline_cases``. ``build_load_cases`` is the only
@@ -26,7 +27,7 @@ def _has_lateral_force(cases):
 
 def test_point_loads_assembled_by_default():
     cases = _pinion_shaft_load_cases(False, None)
-    assert [c["label"] for c in cases] == ["g_pinion:Fr", "g_pinion:Ft", "g_pinion:Fa"]
+    assert [c["label"] for c in cases] == ["g_pinion:Fr", "g_pinion:Ft", "g_pinion:Fa", "g_pinion:M"]
 
 
 @pytest.mark.parametrize("labels", [{"g_pinion"}, {"*"}])
@@ -34,9 +35,9 @@ def test_point_loads_dropped_when_label_flagged_and_link_not_distributed(labels)
     """Pins TODAY's behaviour (Q11 / X7): with ``distribute_gear_labels`` set and the link resolved
     with ``distribute_loads=False``, Fr and Ft are skipped (vector_external_forces.py:86-91) and no
     distributed counterpart exists, so the shaft is solved with no lateral force at all; only the
-    axial load remains."""
+    axial load and the bending moment remain."""
     cases = _pinion_shaft_load_cases(False, labels)
-    assert [c["label"] for c in cases] == ["g_pinion:Fa"]
+    assert [c["label"] for c in cases] == ["g_pinion:Fa", "g_pinion:M"]
     assert not _has_lateral_force(cases)
 
 
@@ -51,5 +52,5 @@ def test_distributed_loads_assembled_when_link_distributed():
     """The supported path: ``distribute_loads=True`` on the link stores ``DistributedRadialLoad``
     objects over the face width, which are assembled whatever the labels."""
     cases = _pinion_shaft_load_cases(True, {"g_pinion"})
-    assert [c["label"] for c in cases] == ["g_pinion:Fr", "g_pinion:Ft", "g_pinion:Fa"]
+    assert [c["label"] for c in cases] == ["g_pinion:Fr", "g_pinion:Ft", "g_pinion:Fa", "g_pinion:M"]
     assert all(c["distributed_xz"] and not c["radial_xz"] for c in cases[:2])

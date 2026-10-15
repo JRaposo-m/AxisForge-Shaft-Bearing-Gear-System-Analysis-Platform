@@ -41,7 +41,8 @@ class MeshForces:
     - ``e_t = e_x x e_c``: tangent to both pitch circles at C.
 
     A force here is the force exerted BY THE MESH ON a gear (D-0010 item 15), so ``on_2`` is the
-    reaction of ``on_1``: ``on_2 = -on_1``, both applied at C.
+    reaction of ``on_1``: ``on_2 = -on_1``, both applied at C. The shaft loads of a transmission are
+    built from this record by ``mesh_forces_to_shaft_loads`` (Q05, José 2026-10-15).
 
     Sign table (D-0010 item 16), with T_1 the torque applied to gear 1 by its own shaft about
     e_x [N m], rho_i the signed distance of C from the axis of gear i along e_c [mm] and h_1 the

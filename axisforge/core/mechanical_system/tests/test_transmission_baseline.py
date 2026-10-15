@@ -31,10 +31,11 @@ def test_baseline_rows(case, obj):
 
 
 def test_rows_of_the_replaced_classes_are_counted():
-    """Q46: of the 1488 rows of cases 7a, 7b, 7e, 7f (7c, 7d deleted: Q03, answer 7), 8 are text that
-    names a replaced class (compared against the new text) and 12 are state of those classes written
-    back as recorded; with the 8 `driver` / `driven` rows of the four recorded pairs (Q50) that leaves
-    1460 rows computed by the code."""
+    """Q46: of the 1416 rows of cases 7a, 7b, 7e, 7f (7c, 7d deleted: Q03, answer 7; rows of forces()
+    deleted and rows of the hand and of the bending moments added: Q03, Q06, Q08), 8 are text that names a
+    replaced class (compared against the new text) and 12 are state of those classes written back as
+    recorded; with the 8 `driver` / `driven` rows of the four recorded pairs (Q50) that leaves 1388 rows
+    computed by the code."""
     got = bc.run_baseline()[0]
     rows = [(c, i, obj, name, text) for c in CASES for i, (obj, name, text) in enumerate(bc.baseline_rows(c))]
     renamed = 0
@@ -49,38 +50,14 @@ def test_rows_of_the_replaced_classes_are_counted():
         assert len(hits) == count and set(hits) == {bc.fmt(value)}
         echoed += count
     declared = sum(1 for _, _, obj, name, _ in rows if name in bc.ECHOED_ROWS[0] and obj != "link")
-    assert (len(rows), len(rows) - renamed - echoed - declared, renamed, echoed, declared) == (1488, 1460, 8, 12, 8)
-
-
-Q03 = "Q03: row 1 / X1, gear order and driver"
-Q05 = "Q05: row 17 / X3"
+    assert (len(rows), len(rows) - renamed - echoed - declared, renamed, echoed, declared) == (1416, 1388, 8, 12, 8)
 
 
 def _question(c):
-    """Question id of a case-7 check that FAILS today (None: the check passes today)."""
-    wheel_source = c.case[5] in "ef"      # case7e, 7f: the wheel shaft receives the power
-    # with the wheel as source the geometric radius of the wheel differs from the one the code uses
-    wrong_radius = wheel_source and "geometric radii" in c.desc
-    if c.id in ("7.b", "7.b2"):
-        return f"{Q05}, F_t on the driver (both stored F_t point the same way)"
-    if c.id == "7.d":
-        return f"{Q05}, F_r direction (both stored F_r point toward the mesh)"
-    if c.id == "7.c1":
-        # the moment of the stored F_t on the driver shaft is +rot T_in instead of -rot T_in
-        return f"{Q05}, F_t on the driver" + (f" + {Q03} (magnitude)" if wrong_radius else "")
-    if c.id in ("7.c3", "7.c4") and "rot-1" in c.case:
-        # the TorqueLoad signs follow the power flow; the F_t directions follow the sense of rotation
-        return f"{Q05}, torque sign vs sense of rotation"
-    if c.id in ("7.c12", "7.c13") and ("rot-1" in c.case or wrong_radius):
-        sign = f"{Q05}, torque sign vs sense of rotation" if "rot-1" in c.case else ""
-        return " + ".join(q for q in (sign, f"{Q03} (magnitude)" if wrong_radius else "") if q)
-    if c.id in ("7.c2", "7.c7", "7.c8") and wheel_source:
-        # T on the smaller working diameter and T_out = T u, whichever gear is the driver
-        return f"{Q03} (driven torque 91.125 N m instead of 40.5 N m)"
+    """Question id of a case-7 check that FAILS today (None: the check passes today). Since Q03, Q05, Q06, Q07a,
+    Q08 (José, 2026-10-15) only the speed written on the loaded copies is open."""
     if c.id in ("7.c9", "7.c14"):
         return "Q09: X6, ShaftSystem.speed_rpm never set by resolve"
-    if c.id == "7.x3":
-        return "Q08: hand of helix, the axial thrust does not reverse with the sense of rotation"
     return None
 
 
@@ -103,51 +80,48 @@ def case7(request):
 
 
 def test_driven_shaft_torque_is_left_open(case7):
-    """Check 7.c6: the only TorqueLoad on the driven shaft is the one of its gear, -T_out [N m]; the
-    shaft is closed only by a load that the user adds."""
+    """Check 7.c6: the only TorqueLoad on the driven shaft is the one of its gear, the torque the mesh delivers
+    (``torque_Nm`` of that shaft) [N m]; the shaft is closed only by a sink or a load that the user adds."""
     sums = bc.shaft_sums(case7.driven_shaft)
-    assert sums["Tnet"] == sums["T_gear"] == -case7.T_driven_Nm
+    assert sums["Tnet"] == sums["T_gear"] == pytest.approx(case7.T_driven_Nm, rel=1e-12)   # rho F_t / 1000 = -T_b
 
 
-def test_no_tilting_moment_of_the_axial_force(case7):
-    """Check 7.c11 (row 18 / X4, question Q06): no moment F_a x r_w is stored on either shaft."""
-    assert case7.driver_shaft.external_moments == [] and case7.driven_shaft.external_moments == []
+def test_tilting_moment_of_the_axial_force(case7):
+    """Check 7.c11 (Q06, José 2026-10-15): the axial force of the helical mesh acts at the working pitch radius,
+    so each shaft receives one bending moment abs(F_a) r_w [N mm] (ExternalMoment at the gear)."""
+    m = case7.resolved.meshes[0]
+    pair = case7.link.pair
+    for shaft, gear in ((case7.driver_shaft, case7.link.gear_a.gear), (case7.driven_shaft, case7.link.gear_b.gear)):
+        (M,) = shaft.external_moments
+        r_w = pair.rl1 if gear is pair.gear1 else pair.rl2
+        assert M.magnitude == pytest.approx(m.F_a_N * r_w, rel=1e-12) and M.position == bc.GEAR_POS
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Q06: row 18 / X4, tilting moment F_a x r_w absent")
-def test_alternative_tilting_moment_of_the_axial_force(case7):
-    """The axial force of a helical mesh acts at the working pitch radius, so each shaft receives a
-    bending moment abs(F_a) r_w [N mm] (statics; no library source for its direction; how it maps
-    onto ``ExternalMoment`` is not ruled, so only its presence is asked)."""
-    assert case7.driver_shaft.external_moments and case7.driven_shaft.external_moments
-
-
-@pytest.mark.parametrize("driver", ("gear1", "gear2"))
-def test_internal_link_takes_the_declared_driver(driver):
-    """Q03: the stage passes its ``driver`` to ``forces()`` as the pair did before step 3 (default
-    "gear1"), whatever gear ``gear_a`` wraps. Here ``gear_a`` wraps the RING of the pair of case 5
-    (z 20/-60, mn 2 mm, beta 15 deg): with the default the torque is still taken on the pinion, and
-    the stage says so in its warnings (Q45)."""
+@pytest.mark.parametrize("rot", (1, -1))
+def test_internal_stage_driven_by_the_ring(rot):
+    """Q03, Q20 (José, 2026-10-15): the gear on the source shaft drives, here the RING of a helical internal pair
+    (z 24/-60, mn 2 mm, beta 15 deg). The torque 60.75 N m goes on the ring; the pinion shaft receives
+    -T_b = -60.75 x 24 / (-60) = +24.3 N m with the same sense (internal mesh); the radial forces separate and
+    every closure check of the mesh passes, for both senses."""
     from axisforge.core.machine_elements.gears import GearPair
     from axisforge.core.mechanical_system import GearElement, PairStage, Transmission
 
-    pinion = bc.gear(2.0, 20, b=20.0, beta_n_deg=15.0, label="pinion", position=bc.GEAR_POS)
-    ring = bc.gear(2.0, -60, b=20.0, beta_n_deg=15.0, label="ring", position=bc.GEAR_POS)
+    pinion = bc.gear(2.0, 24, b=20.0, beta_n_deg=15.0, hand=1, label="pinion", position=bc.GEAR_POS)
+    ring = bc.gear(2.0, -60, b=20.0, beta_n_deg=15.0, hand=1, label="ring", position=bc.GEAR_POS)
     pair = GearPair.assemble(bc.FAMILY, gear1=pinion, gear2=ring)
     s_ring, s_pinion = bc._shaft_system("shaft_ring"), bc._shaft_system("shaft_pinion")
     ge_ring, ge_pinion = GearElement(ring, role="driver", label="g_ring"), GearElement(pinion, role="driven", label="g_pinion")
     s_ring.add_gear(ge_ring)
     s_pinion.add_gear(ge_pinion)
-    kw = {} if driver == "gear1" else {"driver": driver}
-    stage = PairStage(pair=pair, shaft_a=s_ring, gear_a=ge_ring, shaft_b=s_pinion, gear_b=ge_pinion, phi_deg=bc.PHI7, **kw)
-    system = Transmission([s_ring, s_pinion], [stage], source=s_ring)
-    loaded_ring, loaded_pinion = system.resolve(bc.T_NM * bc.OMEGA, bc.N_RPM, 1).shafts
-    assert any("not the gear on which forces() takes the torque" in w for w in system.warnings) == (driver == "gear1")
-
-    F = bc.FAMILY.forces(pair, bc.T_NM, bc.PHI7, 1, driver=driver)       # [N], [N m]
-    other = bc.FAMILY.forces(pair, bc.T_NM, bc.PHI7, 1, driver="gear2" if driver == "gear1" else "gear1")
-    assert F["Ft"] != pytest.approx(other["Ft"], rel=0.1)                # the driver matters for an internal pair
-    on_ring, on_pinion = bc.shaft_sums(loaded_ring), bc.shaft_sums(loaded_pinion)
-    assert math.hypot(*on_ring["Ft_vec"]) == pytest.approx(F["Ft"], rel=1e-12)
-    assert on_ring["Fa"] == pytest.approx(F["Fa"], rel=1e-12)
-    assert on_pinion["T_gear"] == pytest.approx(-F["T_out"], rel=1e-12)   # power-flow sign of the driven gear
+    stage = PairStage(pair=pair, shaft_a=s_ring, gear_a=ge_ring, shaft_b=s_pinion, gear_b=ge_pinion, phi_deg=bc.PHI7)
+    system = Transmission([s_ring, s_pinion], [stage], source=s_ring, sinks=((s_pinion, 200.0),))
+    resolved = system.resolve(bc.T_NM * bc.OMEGA, bc.N_RPM, rot)
+    assert system.warnings == ()
+    assert resolved.torque_Nm == pytest.approx((rot * bc.T_NM, rot * bc.T_NM * 24 / 60), rel=1e-12)
+    assert resolved.rotation == (rot, rot)
+    assert all(ok for _, _, ok in resolved.checks), [name for name, _, ok in resolved.checks if not ok]
+    on_ring = bc.shaft_sums(resolved.shafts[0])
+    m = resolved.meshes[0]
+    assert math.hypot(*on_ring["Ft_vec"]) == pytest.approx(m.F_tw_N, rel=1e-12)
+    assert m.F_tw_N == pytest.approx(2000.0 * bc.T_NM * 24 / 60 / pair.dl1, rel=1e-12)    # torque on gear 1 = T z1 / z2
+    assert on_ring["T_gear"] == pytest.approx(-rot * bc.T_NM, rel=1e-12)              # the moment balances the source

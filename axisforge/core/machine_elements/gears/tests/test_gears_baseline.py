@@ -14,7 +14,8 @@ import pytest
 from axisforge.core.machine_elements.gears.tests import baseline_cases as bc
 
 CASES = ("case1_external_spur", "case2_external_helical", "case3_helical_wheel_driver", "case4_internal_spur",
-         "case5_internal_helical", "case6_planetary_spur", "case6b_planetary_helical")
+         "case5_internal_helical", "case4n_internal_spur", "case5n_internal_helical", "case6_planetary_spur",
+         "case6b_planetary_helical")
 
 
 @pytest.mark.parametrize("case", CASES)

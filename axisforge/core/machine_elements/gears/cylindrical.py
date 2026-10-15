@@ -8,7 +8,6 @@ file follows the order of the standard: basic rack (ISO_53_1998), one gear (clau
 """
 from __future__ import annotations
 
-import warnings
 from dataclasses import KW_ONLY, dataclass
 import numpy as np
 from scipy import optimize
@@ -28,7 +27,7 @@ def _inv_residual(xx, inv_a):
 
 def _kind(z) -> str:
     """Kind of teeth from the sign of z (ISO_21771_2007, 4.1.5): key of the ``_LEGACY`` table."""
-    # QUESTION(Q55): the kind is the sign of z, where it was the CLASS the caller chose: a positive z given to the old ring class, or a negative z to the old external class, now gives another gear (no baseline or design-studies case does it).
+    # Q55 (José, 2026-10-15): keep. The kind is the sign of z (it was the class the caller chose).
     return "internal" if z < 0 else "external"
 
 
@@ -91,101 +90,84 @@ def _gear_limits_internal(gear, tag):
     return errors
 
 
-def _interference_external(pair):
-    """Involute interference of an external pair: -T1A > T1C on gear 1 and its mirror on gear 2 [mm]. No library source."""
-    errors = []
+def _internal_interference(pair) -> list[str]:
+    """Trochoid and trimming interference of an internal pair (pinion inside the ring).
+
+    Tests of SDP-SI, "Elements of Metric Gear Technology", section 5 (the KHK technical reference),
+    each written as "no interference when ...". The third test of that section, involute
+    interference, Eq. (5-2): z1 / z2 >= 1 - tan(alpha_a2) / tan(alpha_w) with alpha_a2 =
+    arccos(d_b2 / d_a2) (Eq. (5-3)) and d_a2 >= d_b2 (Eq. (5-5), the ring tip limit of
+    ``validate_gear``), is the Q39 criterion T1A >= 0 of ``validate_pair``: its margin
+    z1/z2 - 1 + tan(alpha_a2)/tan(alpha_w) equals T1A / (r_b2 tan(alpha_w)) (with T1A = r_b2
+    tan(alpha_a2) - a_w sin(alpha_w) + ..., a_w sin(alpha_w) = (r_b2 - r_b1) tan(alpha_w) and
+    r_b1/r_b2 = z1/z2). It is therefore reported once, by ``validate_pair``, and SDP Eq. (5-2) is
+    the library source of that criterion for internal pairs (lead decision, 2026-10-15).
+
+    - trochoid interference, Eq. (5-6)-(5-8): theta1 z1 / z2 + inv(alpha_w) - inv(alpha_a2) >= theta2,
+      theta1 = arccos((r_a2**2 - r_a1**2 - a**2) / (2 a r_a1)) + inv(alpha_a1) - inv(alpha_w),
+      theta2 = arccos((a**2 + r_a2**2 - r_a1**2) / (2 a r_a2)): the pinion tip, leaving the mesh,
+      must not touch the ring tooth tip (its relative path is a trochoid);
+    - trimming interference, Eq. (5-9)-(5-10): theta1 + inv(alpha_a1) - inv(alpha_w) >=
+      z2 / z1 (theta2 + inv(alpha_a2) - inv(alpha_w)), theta1 = arcsin(sqrt((1 - (cos(alpha_a1) /
+      cos(alpha_a2))**2) / (1 - (z1 / z2)**2))), theta2 = arcsin(sqrt(((cos(alpha_a2) /
+      cos(alpha_a1))**2 - 1) / ((z2 / z1)**2 - 1))): the pinion cannot be put in radially.
+
+    Parameters
+    ----------
+    pair : GearPair
+        Internal pair of this family (z2 < 0).
+
+    Returns
+    -------
+    list of str
+        One message per failed test (trochoid, trimming), with the two sides of its inequality;
+        empty if none fails.
+
+    Notes
+    -----
+    Symbols of SDP (z2 > 0, x2_KHK = -x2_ISO) and the attributes used here: z1 = ``gear1.z``,
+    z2 = abs(``gear2.z``); r_a1, r_a2 = ``da1_w / 2``, ``da2_w / 2`` (working tips, ISO_21771_2007
+    Eq. (33), no cP); r_b1, r_b2 = ``gear1.rb``, ``gear2.rb``; a (a_x in Eq. (5-4)) = ``al``, the
+    working centre distance; alpha_w = ``alphatw``, the transverse working pressure angle (Eq. (5-4)
+    is the same relation as ISO_21771_2007, Eq. (54)). SDP writes the tests for spur gears; for a
+    helical pair they are applied in the transverse plane (no published check). Validated at x = 0
+    by the 18 limits of the KHK catalogue table "Allowable Mating Pinions" (z2 = 60..200, m 1,
+    20 deg); for x != 0 they hold by the symbols of the equations, with no published check. The
+    trimming test of a helical pair is an extrapolation of the spur derivation (a helical ring is
+    normally assembled axially, where trimming does not arise). nan means that the expression has
+    no real value; the test is then counted as failed, as in the scan that reproduced the KHK
+    table. For the trochoid test nan means that the two tip circles do not intersect: such a pair
+    has eps_alpha < 1 and is refused by ``validate_pair`` anyway.
+
+    References
+    ----------
+    .. [1] SDP-SI, "Elements of Metric Gear Technology", section 5, Eq. (5-2)-(5-10) (vault
+       ``80_Inbox/2026-10-15/internal_gears_validation_khk.md``; José, Q24, 2026-10-15).
+    .. [2] KHK catalogue, internal gears, p. 208, "Allowable Mating Pinions and Number of Teeth".
+    """
+    z1, z2 = pair.gear1.z, abs(pair.gear2.z)
     ra1, ra2 = pair.da1_w / 2.0, pair.da2_w / 2.0
-    approach = (
-        np.sqrt(max(ra2**2 - pair.gear2.rb**2, 0.0))
-        - pair.al * np.sin(pair.alphatw)
-    )
-    limit1 = pair.gear1.rb * np.tan(pair.alphatw)
-    if approach > limit1:
-        errors.append(
-            f"Involute interference on gear1 (pinion): path of approach "
-            f"{approach:.4f} mm > limit {limit1:.4f} mm. "
-            "Reduce haP, increase x1, or increase z1."
-        )
-    recess = (
-        np.sqrt(max(ra1**2 - pair.gear1.rb**2, 0.0))
-        - pair.al * np.sin(pair.alphatw)
-    )
-    limit2 = pair.gear2.rb * np.tan(pair.alphatw)
-    if recess > limit2:
-        errors.append(
-            f"Involute interference on gear2 (wheel): path of recess "
-            f"{recess:.4f} mm > limit {limit2:.4f} mm. "
-            "Reduce haP, increase x2, or increase z2."
-        )
-    return errors
-
-
-def _solve_inv(inv_target: float, alpha0: float = 0.3491) -> float:
-    """Inverse involute by Newton-Raphson from alpha0 = 0.3491 rad (20 deg): at most 50 steps, stop at abs(f) < 1e-12.
-
-    No convergence test after the loop: for a target of 0.2 it returns 8.5e22 without raising.
-    """
-    # QUESTION(Q19): this second inverse involute is kept only because the three interference tests below use it and their messages are recorded; the alternative is to delete it with them (plan 2.1) or to use the brentq of the pair.
-    alpha = alpha0
-    for _ in range(50):
-        f  = np.tan(alpha) - alpha - inv_target
-        df = np.tan(alpha) ** 2          # d/d(alpha) [tan(alpha) - alpha] = tan(alpha)**2
-        alpha -= f / df
-        if abs(f) < 1e-12:
-            break
-    return alpha
-
-
-def _involute_interference(ring, z1: int, x1: float = 0.0) -> bool:
-    """True when the tip pressure angle of the ring exceeds the working angle (alphaa2 > alphaw).
-
-    Uses the NORMAL pressure angle in inv(alpha) and the signed z of the ring:
-    inv(alphaw) = inv(alpha) + 2 tan(alpha) (x1 - x) / (z - z1). No library source (KHK named).
-    """
-    inv_alpha = np.tan(ring.alpha) - ring.alpha
-    inv_alphaw = inv_alpha + 2 * np.tan(ring.alpha) * (x1 - ring.x) / (ring.z - z1)
-    alphaw = _solve_inv(inv_alphaw)
-    alphaa2 = np.arccos(ring.db / ring.da)          # pressure angle at tip of internal gear
-    return alphaa2 > alphaw
-
-
-def _trochoid_interference(ring, z1: int, x1: float = 0.0) -> bool:
-    """True when the tip pressure angle of the mating gear exceeds the working angle (alphaa1 > alphaw).
-
-    The mating gear is taken as a SPUR gear (d1 = mn z1) with a tip without clearance,
-    da1 = d1 + 2 mn (haP + x1). No library source (KHK named).
-    """
-    d1  = ring.mn * z1
-    db1 = d1 * np.cos(ring.alpha)
-    inv_alpha  = np.tan(ring.alpha) - ring.alpha
-    inv_alphaw = inv_alpha + 2 * np.tan(ring.alpha) * (x1 - ring.x) / (ring.z - z1)
-    alphaw     = _solve_inv(inv_alphaw)
-    da1    = d1 + 2 * ring.mn * (ring.haP + x1)    # tip diameter of external gear
-    alphaa1 = np.arccos(db1 / da1)
-    return alphaa1 > alphaw
-
-
-def _trimming_interference(ring, z1: int) -> bool:
-    """True when (z - z1) < 2 with the SIGNED z of the ring: always true for z < 0. No library source."""
-    return (ring.z - z1) < 2
-
-
-def _validate_mesh(ring, z1: int, x1: float = 0.0) -> list[str]:
-    """Messages of the three interference tests of a ring against a mating external gear (z1, x1)."""
-    errors: list[str] = []
-    tag = ring.label or "Gear"
-    if _involute_interference(ring, z1, x1):
-        errors.append(
-            f"{tag}: involute interference with mating gear (z1={z1}, x1={x1})."
-        )
-    if _trochoid_interference(ring, z1, x1):
-        errors.append(
-            f"{tag}: trochoid (flank) interference with mating gear (z1={z1}, x1={x1})."
-        )
-    if _trimming_interference(ring, z1):
-        errors.append(
-            f"{tag}: trimming interference — tooth difference z2-z1={ring.z - z1} < 2."
-        )
+    rb1, rb2 = pair.gear1.rb, pair.gear2.rb
+    a, alpha_w = pair.al, pair.alphatw
+    errors = []
+    with np.errstate(invalid="ignore"):     # no real value -> nan -> the test fails (see Notes)
+        alpha_a1 = np.arccos(rb1 / ra1)                                    # Eq. (5-8)
+        alpha_a2 = np.arccos(rb2 / ra2)                                    # Eq. (5-3)
+        # trochoid, Eq. (5-6)-(5-7)
+        theta1 = np.arccos((ra2**2 - ra1**2 - a**2) / (2 * a * ra1)) + _involute(alpha_a1) - _involute(alpha_w)
+        theta2 = np.arccos((a**2 + ra2**2 - ra1**2) / (2 * a * ra2))
+        lhs, rhs = theta1 * z1 / z2 + _involute(alpha_w) - _involute(alpha_a2), theta2
+        if not lhs >= rhs:
+            errors.append(f"trochoid interference of the internal pair (SDP-SI Eq. (5-6)): "
+                          f"{lhs:.6f} < {rhs:.6f} rad")
+        # trimming, Eq. (5-9)-(5-10)
+        theta1 = np.arcsin(np.sqrt((1 - (np.cos(alpha_a1) / np.cos(alpha_a2))**2) / (1 - (z1 / z2)**2)))
+        theta2 = np.arcsin(np.sqrt(((np.cos(alpha_a2) / np.cos(alpha_a1))**2 - 1) / ((z2 / z1)**2 - 1)))
+        lhs = theta1 + _involute(alpha_a1) - _involute(alpha_w)
+        rhs = z2 / z1 * (theta2 + _involute(alpha_a2) - _involute(alpha_w))
+        if not lhs >= rhs:
+            errors.append(f"trimming interference of the internal pair (SDP-SI Eq. (5-9)): "
+                          f"{lhs:.6f} < {rhs:.6f} rad")
     return errors
 
 
@@ -210,15 +192,12 @@ def _summary_head_internal(pair):
 _LEGACY = {
     # QUESTION(Q25): I5 / row 5. A ring has no virtual number of teeth, so equalise_gs raises AttributeError for an internal pair (Q13).
     "virtual_teeth": {"external": _virtual_teeth_external, "internal": lambda mn, z, beta: {}},
-    # QUESTION(Q55): the helix-angle range is checked for an external gear only; a ring accepts any beta.
+    # Q55 (José, 2026-10-15): keep. The helix-angle range is checked for an external gear only.
     "beta_range": {"external": _beta_range_external, "internal": lambda data, tag: []},
-    # QUESTION(Q55): limits of one gear differ by kind: undercut (external only) against da < d and da > db (ring only).
+    # Q55 (José, 2026-10-15): keep. Undercut (external gear) against da < d and da > db (ring).
     "gear_limits": {"external": _gear_limits_external, "internal": _gear_limits_internal},
     # QUESTION(Q03): row 1 / X1. The external pair ignores the driver and takes the torque on gear 1; the internal pair takes it on the driver.
     "force_input": {"external": _force_input_external, "internal": _force_input_internal},
-    # QUESTION(Q24): I4 / row 4. Interference tests with no library source; trimming is always true for z2 < 0 and trochoid fires for most pairs, so validate_or_raise() raises for every internal pair.
-    "interference": {"external": _interference_external,
-                     "internal": lambda pair: _validate_mesh(pair.gear2, pair.gear1.z, pair.gear1.x)},
     # QUESTION(Q50): presentation text of the two classes this family replaces, recorded by the baseline (class names in __repr__ and summary(), two extra lines for an internal pair).
     "text": {"external": _summary_head_external, "internal": _summary_head_internal},
 }
@@ -677,10 +656,11 @@ class CylindricalFamily(GearFamily):
             Ram, Rrms, RzS : (Ra1 + Ra2)/2, sqrt(Rq1**2 + Rq2**2), Rz1 + Rz2 [um] (no source).
             profile_shift_check : (x1 + x2 implied by a_w, declared x1 + x2) [-] (5.3, Eq. (62),
             signed z1 + z2).
-            warnings : one message "profile shifts do not match the centre distance ..." with the
-            sum implied by the imposed a_w, the declared sum and jbn, when abs(jbn) >= 1e-9 mm;
-            else empty. It becomes ``GearPair.warnings`` and does not raise: an imposed a_w that
-            does not match the shifts is a warning, not an error (Q26 + Q57, José 2026-10-15).
+            warnings : advisory messages, they become ``GearPair.warnings`` and never raise:
+            "profile shifts do not match the centre distance ..." with the sum implied by the
+            imposed a_w, the declared sum and jbn, when abs(jbn) >= 1e-9 mm (Q26 + Q57, José
+            2026-10-15); "transverse contact ratio ... is low (< 1.2)" when 1 <= epslon_alpha <
+            1.2 (answer 6, D-0026 item 9; no library source for 1.2).
 
         Raises
         ------
@@ -716,7 +696,8 @@ class CylindricalFamily(GearFamily):
         ring. A is the start of the path on the tip circle of gear 2 and E its end on the tip
         circle of gear 1, i.e. the names are those of gear 1 driving; they are stored once,
         whatever gear drives. A negative ``T1A`` means that the path starts beyond the
-        base-tangent point of gear 1 (interference); it is stored, not refused.
+        base-tangent point of gear 1 (interference); it is stored here and refused by
+        ``validate_pair`` (Q39).
 
         ``rA1``, ``rB1``, ``rD1`` are the radii of gear 1 at A, B, D; ``rA2``, ``rB2``, ``rD2``
         are the radii of gear 2 at E, D, B (mirrored names).
@@ -843,6 +824,10 @@ class CylindricalFamily(GearFamily):
         b = min(gear1.b, gear2.b)
         epslon_beta = b * np.tan(betab) / pbt
         epslon_gamma = epslon_alpha + epslon_beta
+        # answer 6 (José, 2026-10-15), D-0026 item 9: a low contact ratio is advisory, not an error
+        if 1.0 <= epslon_alpha < 1.2:
+            warnings_.append(f"transverse contact ratio εα={epslon_alpha:.4f} is low (< 1.2) — "
+                             "consider increasing tooth count or face width.")
 
         galpha1 = rb1 * (np.tan(alpha_a1) - np.tan(alphatw))
         galpha2 = rb2 * (np.tan(alpha_a2) - np.tan(alphatw))
@@ -859,7 +844,7 @@ class CylindricalFamily(GearFamily):
         T1T2 = s2 * al * np.sin(alphatw)
         T1E = (ra1**2 - rb1**2) ** (1 / 2)          # end of contact E: tip circle of gear 1
         T2A = s2 * ((ra2**2 - rb2**2) ** (1 / 2))   # start of contact A: tip circle of gear 2
-        # QUESTION(Q15): a negative T1A (start of contact beyond the base-tangent point T1: interference) is stored, not refused; baseline case 4 has T1A = -0.0749 mm.
+        # a negative T1A (start of contact beyond T1) is stored; validate_pair refuses it (Q39); old case 4: -0.0749 mm
         T1A = T1T2 - T2A
         T1B = T1E - pbt                             # B, D: one transverse base pitch from E and from A
         T1C = rb1 * np.tan(alphatw)                 # pitch point C
@@ -942,7 +927,7 @@ class CylindricalFamily(GearFamily):
         Returns
         -------
         list of str
-            The messages of ``CylindricalGearData.validate``, then by kind (Q55): undercut for an
+            The messages of ``CylindricalGearData.validate``, then by kind (Q55, keep): undercut for an
             external gear; da < d and da > db for a ring.
         """
         tag = gear.label or "Gear"
@@ -954,36 +939,44 @@ class CylindricalFamily(GearFamily):
         Returns
         -------
         list of str
-            One message per violation; empty if the pair is valid. (1) The messages of both gears,
-            each twice. (2) epslon_alpha < 1.0; a value
-            below 1.2 adds a message starting "Warning:" to the same list, so
-            ``validate_or_raise`` raises on it. (3) Interference, by kind (Q24): external pair,
-            -T1A > T1C and its mirror; internal pair, the involute, trochoid and trimming tests.
+            One message per violation; empty if the pair is valid:
 
-        Warnings
-        --------
-        The list is never empty for an internal pair (Q24): ``validate_or_raise`` raises for all
-        of them. None of the limits of (2) and (3) has a library source; ISO_21771_2007, 5.4.6
-        states that interference of internal pairs is outside its scope.
+            (1) the messages of both gears, once each (Q56);
+            (2) epslon_alpha < 1.0: the next tooth pair is not in contact when the present one
+            leaves (no library source for the limit; a value below 1.2 is a warning of the pair,
+            see ``assemble_pair``);
+            (3) start or end of contact beyond a base-tangent point, T1A < 0 or s2 T2E < 0 (Q39,
+            both kinds): there the flank of the other gear has no involute, i.e. involute
+            interference (geometry of the line of action, ISO_21771_2007, 5.4.5.3). For an
+            internal pair T1A >= 0 is the involute-interference test of SDP-SI, Eq. (5-2) (the
+            same inequality, see ``_internal_interference``), its library source; one message;
+            (4) internal pair only: the trochoid and trimming interference tests of SDP-SI
+            section 5 (``_internal_interference``, Q24). ISO_21771_2007, 5.4.6 leaves
+            interference of internal pairs outside its scope.
         """
-        errors: list[str] = []
-
-        # QUESTION(Q56): each gear message appears twice (today the pair validated the gears and then its working copies of them); the alternative is once.
-        gear_errors = pair.gear1.validate() + pair.gear2.validate()
-        errors.extend(gear_errors + gear_errors)
+        # Q56 (José, 2026-10-15): each gear message once
+        errors: list[str] = pair.gear1.validate() + pair.gear2.validate()
 
         if pair.epslon_alpha < 1.0:
             errors.append(
                 f"Transverse contact ratio εα={pair.epslon_alpha:.4f} < 1.0 — "
                 "gears will lose contact during meshing."
             )
-        elif pair.epslon_alpha < 1.2:
-            errors.append(
-                f"Warning: transverse contact ratio εα={pair.epslon_alpha:.4f} is low (< 1.2) — "
-                "consider increasing tooth count or face width."
-            )
 
-        errors.extend(_legacy("interference", pair.gear2.z)(pair))
+        # Q39 (José, 2026-10-15): the path A..E must lie between the base-tangent points T1 and T2;
+        # T1A < 0: A beyond T1 (start of contact on the pinion below its base circle), s2 T2E < 0:
+        # E beyond T2 (s2 makes the ring segment, negative as stored, comparable)
+        s2 = np.sign(pair.gear2.z)
+        if pair.T1A < 0.0 or s2 * pair.T2E < 0.0:
+            # internal pair: T1A < 0 is the same inequality as SDP-SI Eq. (5-2), reported once (lead decision)
+            sdp = (" For an internal pair T1A < 0 is the involute interference of SDP-SI Eq. (5-2)."
+                   if s2 < 0 and pair.T1A < 0.0 else "")
+            errors.append(
+                f"Interference: the path of contact passes a base-tangent point (T1A = {pair.T1A:.4f} mm, "
+                f"s2 T2E = {s2 * pair.T2E:.4f} mm; both must be >= 0).{sdp}"
+            )
+        if s2 < 0:
+            errors.extend(_internal_interference(pair))
         return errors
 
     # ----------------------------------------------------------------------------------------------
@@ -1322,8 +1315,8 @@ class CylindricalFamily(GearFamily):
         rho_y1 = T1C + g_y and rho_y2 = T1T2 - rho_y1. At the stored points they are the stored
         segments T1A..T1E and T2A, T2B, T2D, T2E. A radius is zero at its base-tangent point
         (start of the involute) and changes sign beyond it, where there is no involute: the
-        values returned there are not radii of a flank (baseline case 4 starts 0.075 mm beyond T1,
-        Q15: rho1 < 0 and a negative reduced radius, returned without a warning by this function).
+        values returned there are not radii of a flank. ``validate_pair`` refuses such a pair (Q39);
+        old case 4, kept as an equivalence record with ``check=False``, starts 0.075 mm beyond T1.
 
         At C the reduced radius is the stored ``ReqI`` and rho_y2 the stored ``T2C``, for both kinds.
 
@@ -1553,13 +1546,6 @@ class CylindricalFamily(GearFamily):
             exactly one of ``n_points`` and ``t_s`` is given, if n_points < 2, or if ``t_s`` is
             empty, not finite or outside the travel from A to E.
 
-        Warns
-        -----
-        UserWarning
-            If the radius of curvature of an external flank is zero or negative on a returned
-            step: the path starts beyond a base-tangent point, where there is no involute
-            (baseline case 4, Q15). The numbers are returned unchanged (Q39).
-
         Notes
         -----
         Time and position: the contact point moves along the line of action at the normal speed
@@ -1574,6 +1560,12 @@ class CylindricalFamily(GearFamily):
         +-2.88 mm, rho1 from 10.90 to 16.66 mm (+-21 %) and a sliding speed of +-0.73 m/s at the
         line ends against 0 recorded; at A and E the recorded point is the END of a half-length
         line. The record is fair for a two-dimensional slice at mid face, not for the line (Q36).
+
+        Every step is on the two involutes for a pair that passed ``validate_pair`` (assembled
+        with ``check=True``): T1A >= 0 and s2 T2E >= 0 keep A..E between the base-tangent points
+        (Q39), so the radii are those of the flanks and no warning is needed. A pair assembled with
+        ``check=False`` (an equivalence record such as old case 4) may give rho <= 0 at the ends;
+        the numbers are returned as they are.
 
         Assumptions: those of the four functions above; steady speed and constant F_bn.
 
@@ -1604,11 +1596,6 @@ class CylindricalFamily(GearFamily):
         g_y = points["A"] + np.sign(points["E"] - points["A"]) * s
 
         radii = CylindricalFamily.curvature_radii(pair, g_y)
-        # QUESTION(Q39): steps where an external flank has no involute (rho <= 0: the path starts beyond a base-tangent point, Q15) are returned with a warning; the alternatives are to refuse the pair or to cut the path at the base-tangent point.
-        if np.any(radii["rho1_t_mm"] <= 0.0) or (pair.gear2.z > 0 and np.any(radii["rho2_t_mm"] <= 0.0)):
-            warnings.warn("contact_inputs: the path of contact passes a base-tangent point; the radii of curvature, "
-                          "speeds and reduced radius of the steps beyond it do not describe an involute flank.",
-                          stacklevel=2)
         sharing = CylindricalFamily.load_sharing(pair, g_y)
         # QUESTION(Q32): the Hertz half-width b is not computed here; it belongs to slippy_bridge (D-0019), from w_N_per_mm, rho_red_n_mm and E'.
         # QUESTION(Q33): the flanks are given as local equivalent cylinders (the radii), not as involute surfaces.

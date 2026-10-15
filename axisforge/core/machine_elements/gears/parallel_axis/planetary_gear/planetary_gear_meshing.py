@@ -357,8 +357,10 @@ class PlanetaryGearTrainMeshing:
         # --- the two tooth-contact problems (they run their own compatibility
         #     checks: mn / alpha_n / beta_n) --------------------------------
         # QUESTION(Q52): the train is not refactored yet (step 6); only the construction of its two pairs is moved onto GearPair.assemble (the family is that of the gears), everything else in this class is unchanged.
+        # check=False (José, 2026-10-15, answer 3): the train validates its pairs in its own validate() until
+        # step 6 (Q52); the planet-ring pair of the 20/-60 spur train fails the checks of Q39 / Q24
         self.meshing_12 = GearPair.assemble(
-            sun_gear.family,
+            sun_gear.family, check=False,
             gear1=sun_gear, gear2=planet_gear,
             label=f"{label}:sun-planet",
             al=al_12,
@@ -366,7 +368,7 @@ class PlanetaryGearTrainMeshing:
             addendum_reduction=addendum_reduction_12,
         )
         self.meshing_23 = GearPair.assemble(
-            planet_gear.family,
+            planet_gear.family, check=False,
             gear1=planet_gear, gear2=ring_gear,
             label=f"{label}:planet-ring",
             al=al_23,

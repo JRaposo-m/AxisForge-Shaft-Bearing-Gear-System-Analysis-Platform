@@ -295,7 +295,7 @@ class Gear(_Assembled):
         self._assembled = False   # __setattr__ refuses further writes once True
 
     @classmethod
-    def assemble(cls, family: GearFamily, data: Any) -> "Gear":
+    def assemble(cls, family: GearFamily, data: Any, *, check: bool = True) -> "Gear":
         """Build an assembled, immutable gear.
 
         Parameters
@@ -304,6 +304,10 @@ class Gear(_Assembled):
             Family instance, passed directly.
         data : object
             Input record of the family.
+        check : bool, optional
+            If True (default), run ``validate()`` and refuse an invalid gear. False only for the
+            equivalence records, the planetary module until step 6 (Q52), and tests of the messages
+            of invalid objects (D-0026 item 9; José, 2026-10-15, answer 3).
 
         Returns
         -------
@@ -313,13 +317,15 @@ class Gear(_Assembled):
         Raises
         ------
         ValueError
-            If the family cannot compute the gear from ``data``.
+            If the family cannot compute the gear from ``data``, or (``check``) with every message
+            of ``validate()`` in one error.
         NotImplementedError
             If the family defines its gears through pair data only.
         """
         gear = cls(family, data)
-        # QUESTION(Q51): no validate() here, as in today's constructors (validation stays a separate call); the alternative of D-0026 item 9 raises at assembly.
         gear._freeze(family.assemble_gear(data))
+        if check:   # Q51 (José, 2026-10-15): validation at assembly, one error with every message
+            gear.validate_or_raise()
         return gear
 
     def validate(self) -> list[str]:
@@ -393,13 +399,18 @@ class GearPair(_Assembled):
         self._assembled = False   # __setattr__ refuses further writes once True
 
     @classmethod
-    def assemble(cls, family: GearFamily, **pair_inputs: Any) -> "GearPair":
+    def assemble(cls, family: GearFamily, *, check: bool = True, **pair_inputs: Any) -> "GearPair":
         """Build an assembled, immutable pair.
 
         Parameters
         ----------
         family : GearFamily
             Family instance, passed directly.
+        check : bool, optional
+            If True (default), run ``validate()`` (which includes the messages of the two gears)
+            and refuse an invalid pair. False only for the equivalence records, the planetary module
+            until step 6 (Q52), and tests of the messages of invalid objects (D-0026 item 9; José,
+            2026-10-15, answer 3).
         **pair_inputs
             Keyword arguments forwarded to ``family.assemble_pair`` (for the cylindrical family:
             ``gear1``, ``gear2``, ``label``, ``al``, ``equalise_gs``, ``addendum_reduction``).
@@ -407,17 +418,20 @@ class GearPair(_Assembled):
         Returns
         -------
         GearPair
-            Pair with the family attributes set, flagged as assembled.
+            Pair with the family attributes set, flagged as assembled. Advisory messages are in
+            ``warnings``.
 
         Raises
         ------
         ValueError
-            If the family rejects the two gears (they cannot mesh).
+            If the family rejects the two gears (they cannot mesh), or (``check``) with every
+            message of ``validate()`` in one error.
         """
         gear1, gear2, computed = family.assemble_pair(**pair_inputs)
         pair = cls(family, gear1, gear2)
-        # QUESTION(Q51): no validate() here, as in today's constructors: every internal pair fails validate_or_raise() today (Q24), so raising at assembly would refuse baseline cases 4, 5, 6, 6b.
         pair._freeze(computed)
+        if check:   # Q51 (José, 2026-10-15): validation at assembly, one error with every message
+            pair.validate_or_raise()
         return pair
 
     def validate(self) -> list[str]:

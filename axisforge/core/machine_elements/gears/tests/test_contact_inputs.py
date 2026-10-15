@@ -26,8 +26,8 @@ OMEGA1 = bc.OMEGA                          # [rad/s]
 F_BN_CASE2 = 1847.1085622260473            # [N] F_bt / cos(beta_b) of case 2 for 60.75 N m (the alternative of Q07b)
 
 
-def pair(g1, g2):
-    return GearPair.assemble(FAMILY, gear1=g1, gear2=g2)
+def pair(g1, g2, **kw):
+    return GearPair.assemble(FAMILY, gear1=g1, gear2=g2, **kw)
 
 
 def same(got, expected):
@@ -38,8 +38,9 @@ def same(got, expected):
 CASES = {
     "case1": pair(*bc.pinion_wheel("C14")),      # external spur, z 16/24, mn 4.5 mm, eps_alpha 1.462
     "case2": pair(*bc.pinion_wheel("H501")),     # external helical, z 20/30, mn 3.5 mm, beta 15 deg
-    "case4": pair(*bc.make_internal(0.0)),       # internal spur, z 20/-60, mn 2 mm, eps_alpha 1.950 (T1A < 0: Q15)
+    "case4n": pair(*bc.make_internal(0.0, z1=24)),   # internal spur, z 24/-60, mn 2 mm, eps_alpha 1.972 (Q15: replaces case 4)
     "case5": pair(*bc.make_internal(15.0)),      # internal helical, beta 15 deg
+    "case5n": pair(*bc.make_internal(15.0, z1=24)),  # internal helical, z 24/-60, beta 15 deg (Q15)
 }
 
 
@@ -70,12 +71,12 @@ def test_gear_2_driving_exchanges_A_with_E_and_B_with_D(case):
             assert same(radius, getattr(p, f"da{i}_w") / 2.0)
 
 
-def test_path_points_pinned_on_case_2_and_case_4():
-    """Units guard [mm]. Case 4 (eps_alpha 1.95 < 2): B comes before D."""
+def test_path_points_pinned_on_case_2_and_case_4n():
+    """Units guard [mm]. Case 4n (eps_alpha 1.97 < 2): B comes before D."""
     g = FAMILY.path_points(CASES["case2"], "gear1")
     assert same(g["A"], -7.548430643298625) and same(g["E"], 8.126598199162627)
-    g = FAMILY.path_points(CASES["case4"], "gear1")
-    assert same(g["D"], -1.0110645623249095) and same(g["B"], -1.3082715749939684) and g["B"] < g["D"]
+    g = FAMILY.path_points(CASES["case4n"], "gear1")
+    assert same(g["D"], -1.0110645623249113) and same(g["B"], -1.175234940599971) and g["B"] < g["D"]
 
 
 # ----------------------------------------------------------------------------------------------
@@ -154,11 +155,12 @@ def test_surface_speeds_pinned_on_case_2():
     assert same(v["vg_m_per_s"], -1.9103020372179227)
 
 
-def test_helical_internal_pair_does_not_slide_at_the_pitch_point():
-    """Q21: one base-cylinder rule for both gears. Case 5 at 1450 rpm: no sliding at C (abs 1e-12 m/s), and
-    the two base circles unroll the same length of the line of action, omega2 rb2 = omega1 rb1 with
+@pytest.mark.parametrize("case", ("case5", "case4n", "case5n"))
+def test_internal_pair_does_not_slide_at_the_pitch_point(case):
+    """Q21: one base-cylinder rule for both gears. Cases 5, 4n, 5n at 1450 rpm: no sliding at C (abs 1e-12 m/s),
+    and the two base circles unroll the same length of the line of action, omega2 rb2 = omega1 rb1 with
     omega2 = omega1 / u (ISO_21771_2007, Eq. (105): v_n is common to both flanks)."""
-    p = CASES["case5"]
+    p = CASES[case]
     assert abs(FAMILY.surface_speeds(p, 0.0, N1)["vg_m_per_s"]) < 1e-12
     assert abs(OMEGA1 / p.u) * p.gear2.rb == pytest.approx(OMEGA1 * p.gear1.rb, rel=1e-12)
 
@@ -172,9 +174,9 @@ def test_surface_speeds_refuses_a_speed_that_is_not_positive(n1_rpm):
 
 def test_internal_pair_slides_less_than_the_external_pair_of_the_same_teeth():
     """NOTE at ISO_21771_2007, 5.6.1: u < 0 for an internal pair, so the factor (1 + 1/u) is smaller."""
-    internal = FAMILY.surface_speeds(CASES["case4"], 2.0, N1)
+    internal = FAMILY.surface_speeds(CASES["case4n"], 2.0, N1)
     assert internal["u2_m_per_s"] > 0.0
-    assert same(internal["vg_m_per_s"], OMEGA1 * 2.0 * (1.0 - 20.0 / 60.0) / 1000.0)
+    assert same(internal["vg_m_per_s"], OMEGA1 * 2.0 * (1.0 - 24.0 / 60.0) / 1000.0)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -304,12 +306,14 @@ def test_times_with_gear_2_driving_start_at_the_tip_of_gear_1():
     assert scalar["g_y_mm"].shape == (1,) and same(scalar["w_N_per_mm"][0], out["w_N_per_mm"][1])
 
 
-def test_path_that_starts_beyond_a_base_tangent_point_is_returned_with_a_warning():
-    """Q39 (with Q15): the first step of baseline case 4 has rho1 < 0 (A is 0.075 mm beyond T1 with the ISO
-    tip, Q27), where flank 1 has no involute; the numbers are returned as they are (at A: reduced radius
+def test_unchecked_pair_beyond_a_base_tangent_point_is_returned_as_it_is():
+    """Q39: ``validate_pair`` refuses a path that passes a base-tangent point, so ``contact_inputs`` gives no
+    warning. Old case 4, an equivalence record built with check=False, starts 0.075 mm beyond T1: its first step
+    has rho1 < 0, where flank 1 has no involute, and the numbers are returned as they are (at A: reduced radius
     -0.0745 mm, u1 -0.0114 m/s)."""
-    p = CASES["case4"]
-    with pytest.warns(UserWarning, match="base-tangent point"):
+    p = pair(*bc.make_internal(0.0), check=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
         out = FAMILY.contact_inputs(p, "gear1", N1, 1000.0, n_points=51)
     assert out["rho1_t_mm"][0] == pytest.approx(-0.07492456399709191, rel=1e-9) and same(out["rho1_t_mm"][0], p.T1A)
     assert out["rho_red_t_mm"][0] < 0.0 and out["u1_m_per_s"][0] < 0.0
@@ -317,15 +321,6 @@ def test_path_that_starts_beyond_a_base_tangent_point_is_returned_with_a_warning
     assert out["u1_m_per_s"][0] == pytest.approx(-0.011376818891622977, rel=1e-9)
     assert same(out["w_N_per_mm"][0], 25.0)                            # two tooth pairs at A, b = 20 mm
     assert (out["rho1_t_mm"] <= 0.0).sum() == 1                        # the first step only
-
-
-@pytest.mark.parametrize("case", ["case1", "case2", "case5"])
-def test_path_between_the_base_tangent_points_gives_no_warning(case):
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        out = FAMILY.contact_inputs(CASES[case], "gear1", N1, 1000.0, n_points=51)
-    # flank 2 is an involute where its radius has the sign of z2 (negative: the concave ring flank)
-    assert out["rho1_t_mm"].min() > 0.0 and (np.sign(CASES[case].gear2.z) * out["rho2_t_mm"]).min() > 0.0
 
 
 @pytest.mark.filterwarnings("ignore:contact_inputs. the path of contact passes a base-tangent point")

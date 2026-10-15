@@ -245,7 +245,7 @@ RENAMED_TEXT = {
 # QUESTION(Q03) / QUESTION(Q50): the pair stores no driver (D-0026 item 4), so the recorded rows `driver`
 # and `driven` of the 25 recorded pairs (29 before Q03 answer 7) are an echo of the case input (they pass by construction):
 # (row names, number of rows in cases 1-7). What the driver CHANGES is compared in the forces() rows.
-ECHOED_ROWS = (("driver", "driven"), 50)   # 58 recorded; 8 deleted with cases 3b, 3c, 7c, 7d (Q03, answer 7)
+ECHOED_ROWS = (("driver", "driven"), 70)   # 50 + 20: 58 recorded less 8 of cases 3b, 3c, 7c, 7d (Q03, answer 7), plus 20 of cases 4n, 5n (Q15)
 
 # QUESTION(Q46): text rows of case 7 that name one of the two classes ``Transmission`` and ``PairStage``
 # replace: regular expression of the baseline text -> (text given now, built from the groups; number
@@ -289,9 +289,9 @@ class Recorded:
 def recorded_gear(g):
     """``Gear`` under the names of ``SpurHelicalGear`` (z > 0) or ``InternalGear`` (z < 0).
 
-    The checks that were methods of the old gear classes are now ``CylindricalFamily.undercutting``,
-    ``CylindricalFamily.values_at`` and, for the interference tests of a ring that are under
-    question Q24, private functions of ``cylindrical`` (entries of its ``_LEGACY`` table).
+    The checks that were methods of the old gear classes are now ``CylindricalFamily.undercutting``
+    and ``CylindricalFamily.values_at``. The interference tests of a ring are tests of the PAIR since
+    Q24 (``validate_pair``); their recorded rows on the ring are deleted.
     """
     kind = cylindrical._kind(g.z)
     rows = {name: getattr(g, attr) for name, attr in GEAR_ROWS[kind].items()}
@@ -300,10 +300,6 @@ def recorded_gear(g):
         calls.update(undercutting=lambda: FAMILY.undercutting(g))
     else:
         calls.update(tip_below_base_circle=lambda: g.da <= g.db,     # inlined in the ring limits of validate()
-                     involute_interference=lambda z1, x1: cylindrical._involute_interference(g, z1, x1),
-                     trochoid_interference=lambda z1, x1: cylindrical._trochoid_interference(g, z1, x1),
-                     trimming_interference=lambda z1: cylindrical._trimming_interference(g, z1),
-                     validate_mesh=lambda z1, x1: cylindrical._validate_mesh(g, z1, x1),
                      values_at=lambda dy: FAMILY.values_at(g, dy))
     return Recorded(rows, **calls)
 
@@ -342,17 +338,19 @@ def recorded_pair(pair, driver="gear1"):
         correction_for_gs_equilibrium=lambda: FAMILY.correction_for_gs_equilibrium(pair.gear1, pair.gear2))
 
 
-def assemble_pair(g1, g2, driver="gear1", **kw):
-    """Pair of the cylindrical family for two gears, recorded with the declared ``driver``."""
-    return recorded_pair(GearPair.assemble(FAMILY, gear1=g1, gear2=g2, **kw), driver)
+def assemble_pair(g1, g2, driver="gear1", check=True, **kw):
+    """Pair of the cylindrical family for two gears, recorded with the declared ``driver``.
+    ``check=False`` only for an equivalence record that fails ``validate()`` (old case 4)."""
+    return recorded_pair(GearPair.assemble(FAMILY, gear1=g1, gear2=g2, check=check, **kw), driver)
 
 
 # ----------------------------------------------------------------------------------------------
 # builders of the case objects
 # ----------------------------------------------------------------------------------------------
-def gear(mn, z, **kw):
-    """Assembled gear of the cylindrical family (z < 0: internal gear)."""
-    return Gear.assemble(FAMILY, CylindricalGearData(mn, z, **kw))
+def gear(mn, z, check=True, **kw):
+    """Assembled gear of the cylindrical family (z < 0: internal gear); ``check=False`` builds an invalid
+    gear (tests of the messages)."""
+    return Gear.assemble(FAMILY, CylindricalGearData(mn, z, **kw), check=check)
 
 
 def ext_gear(name, i, label, position=0.0):
@@ -367,8 +365,9 @@ def pinion_wheel(name, position=0.0):
     return ext_gear(name, 0, f"{name}_pinion", position), ext_gear(name, 1, f"{name}_wheel", position)
 
 
-def make_internal(beta, mn=2.0, b=20.0):
-    pin = gear(mn=mn, z=20, x=0.0, b=b, alpha_n_deg=20.0, beta_n_deg=beta, label="pinion")
+def make_internal(beta, mn=2.0, b=20.0, z1=20):
+    """Pinion and ring of the internal cases: z1/-60 (z1 = 20: old cases 4, 5; 24: cases 4n, 5n, Q15)."""
+    pin = gear(mn=mn, z=z1, x=0.0, b=b, alpha_n_deg=20.0, beta_n_deg=beta, label="pinion")
     # internal gear: negative number of teeth (sign convention of the family)
     ring = gear(mn=mn, z=-60, x=0.0, b=b, alpha_n_deg=20.0, beta_n_deg=beta, label="ring")
     return pin, ring
@@ -604,22 +603,20 @@ def record_internal_gear(rec, name, ring, z1, x1):
     rec.object_(name, ring)
     for m in ("tip_below_base_circle", "validate", "validate_or_raise"):
         rec.call(name, ring, m)
-    rec.call(name, ring, "involute_interference", (z1, x1))
-    rec.call(name, ring, "trochoid_interference", (z1, x1))
-    rec.call(name, ring, "trimming_interference", (z1,))
-    rec.call(name, ring, "validate_mesh", (z1, x1))
     for dy in (ring.d, 0.5 * (ring.db + ring.d)):   # [mm] reference diameter and a diameter above the base circle
         rec.call(name, ring, "values_at", (dy,))
 
 
-def run_internal(case, beta):
+def run_internal(case, beta, z1=20, check=True):
+    """Internal pair z1/-60; ``check=False`` for old case 4 (20/-60 spur), an equivalence record that fails
+    ``validate()`` (Q39: T1A < 0; Q24: involute interference; José, 2026-10-15, answers 3 and 4)."""
     rec = Recorder(case)
-    pin, ring = make_internal(beta)
-    rec.add("inputs", "chosen values", f"mn=2, z1=20, z2=-60, x=0, b=20, alpha_n=20 deg, beta={beta} deg, default basic rack")
+    pin, ring = make_internal(beta, z1=z1)
+    rec.add("inputs", "chosen values", f"mn=2, z1={z1}, z2=-60, x=0, b=20, alpha_n=20 deg, beta={beta} deg, default basic rack")
     record_gear(rec, "gear1(pinion)", pin)
     record_internal_gear(rec, "gear2(ring)", ring, pin.z, pin.x)
     for drv in ("gear1", "gear2"):
-        mesh = assemble_pair(pin, ring, label=case, driver=drv)
+        mesh = assemble_pair(pin, ring, label=case, driver=drv, check=check)
         record_pair(rec, f"mesh_driver_{drv}", mesh, T_NM, (case, drv))
         R[(case, drv)] = mesh
     base = R[(case, "gear1")]
@@ -629,7 +626,7 @@ def run_internal(case, beta):
                       ("mesh_al_imposed_equal_al", dict(al=base.al)),
                       ("mesh_al_imposed_equal_a", dict(al=base.a))):
         try:
-            mv = assemble_pair(pin, ring, label=vname, driver="gear1", **kw)
+            mv = assemble_pair(pin, ring, label=vname, driver="gear1", check=check, **kw)
         except Exception as e:
             rec.add(vname, "constructor!exception", f"{type(e).__name__}: {e}")
             continue
@@ -1036,7 +1033,8 @@ def run_baseline():
     CHECKS.clear()
     EXTRA_CHECKS.clear()
     recs = [run_external("case1_external_spur", "C14"), run_external("case2_external_helical", "H501"), run_case3(),
-            run_internal("case4_internal_spur", 0.0), run_internal("case5_internal_helical", 15.0),
+            run_internal("case4_internal_spur", 0.0, check=False), run_internal("case5_internal_helical", 15.0),
+            run_internal("case4n_internal_spur", 0.0, z1=24), run_internal("case5n_internal_helical", 15.0, z1=24),
             run_planetary("case6_planetary_spur", 0.0), run_planetary("case6b_planetary_helical", 15.0)]
     recs += [run_case7(tag, src, rot, alt) for tag, src, rot, alt in RUNS7]
     physics_pair("1", ("case1_external_spur", "base"), R[("case1_external_spur", "mesh")], False, "gear1")

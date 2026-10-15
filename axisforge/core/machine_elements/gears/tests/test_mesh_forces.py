@@ -29,7 +29,7 @@ def pair(g1, g2):
 CASES = {
     "case1": pair(*bc.pinion_wheel("C14")),          # external spur, z 16/24
     "case2": pair(*bc.pinion_wheel("H501")),         # external helical, z 20/30, beta 15 deg
-    "case4": pair(*bc.make_internal(0.0)),           # internal spur, z 20/-60
+    "case4n": pair(*bc.make_internal(0.0, z1=24)),   # internal spur, z 24/-60 (Q15: replaces case 4)
     "case5": pair(*bc.make_internal(15.0)),          # internal helical, beta 15 deg
 }
 # hand arithmetic of the plan (header) and of units_and_conventions.md, C.5, to the printed digit
@@ -84,7 +84,7 @@ def test_spur_pair_has_no_axial_force():
 # ----------------------------------------------------------------------------------------------
 # mesh frame and sign table (D-0010 items 14-16)
 # ----------------------------------------------------------------------------------------------
-@pytest.mark.parametrize("case", ["case2", "case4"])
+@pytest.mark.parametrize("case", ["case2", "case4n"])
 def test_pitch_point_from_each_axis(case):
     """rho along e_c (gear 1 -> gear 2): between the axes for an external pair (+r_w1, -r_w2);
     beyond the pinion, away from the ring centre, for an internal pair (-r_w1, -r_w2)."""

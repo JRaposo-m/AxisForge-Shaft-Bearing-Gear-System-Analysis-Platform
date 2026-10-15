@@ -32,10 +32,12 @@ def xfail(question):
     return pytest.mark.xfail(strict=True, raises=AssertionError, reason=question)
 
 
-# the four baseline pairs: C14 external spur (z 16/24, mn 4.5 mm), H501 external helical (z 20/30,
-# mn 3.5 mm, beta 15 deg), internal spur and internal helical (z 20/-60, mn 2 mm, beta 0 / 15 deg)
+# the baseline pairs: C14 external spur (z 16/24, mn 4.5 mm), H501 external helical (z 20/30, mn 3.5 mm,
+# beta 15 deg), internal spur and internal helical (z 20/-60 and 24/-60, mn 2 mm, beta 0 / 15 deg). Old
+# case 4 is an equivalence record that fails validate() (Q39, Q24), so it is assembled with check=False.
 PAIRS = {"case1": pair(*bc.pinion_wheel("C14")), "case2": pair(*bc.pinion_wheel("H501")),
-         "case4": pair(*bc.make_internal(0.0)), "case5": pair(*bc.make_internal(15.0))}
+         "case4": pair(*bc.make_internal(0.0), check=False), "case5": pair(*bc.make_internal(15.0)),
+         "case4n": pair(*bc.make_internal(0.0, z1=24)), "case5n": pair(*bc.make_internal(15.0, z1=24))}
 # internal pair z 20/-60, mn 2 mm, x 0.2/0.2 (x1 + x2 != 0; no baseline case)
 INTERNAL_SHIFTED = (bc.gear(2.0, 20, x=0.2, b=20.0), bc.gear(2.0, -60, x=0.2, b=20.0))
 
@@ -125,7 +127,7 @@ def test_bad_inputs():
     with pytest.raises(ValueError, match="Helix angle mismatch"):
         pair(g, bc.gear(2.0, 30, beta_n_deg=10.0))
     with pytest.raises(ValueError, match="Internal gear must have more teeth"):
-        pair(g, bc.gear(2.0, -20))
+        pair(g, bc.gear(2.0, -20, check=False))       # the ring alone is invalid too (tip below its base circle)
     with pytest.raises(ValueError, match=r"gear 1 must be the pinion: \|z1\| <= \|z2\|"):
         pair(bc.gear(2.0, 30, b=10.0), g)
     with pytest.raises(ValueError, match="driver must be 'gear1' or 'gear2'"):
@@ -197,8 +199,9 @@ def _bottom_clearances(p):
 def test_bottom_clearance_at_the_reference_centre_distance(z2):
     """Q04, Q27: the tip is d + 2 (z/abs(z)) mn (haP + x) (ISO_21771_2007, 4.5.3, Eq. (33)) and the
     root d + 2 (z/abs(z)) mn (x - haP - cP) (Eq. (34)), so with x = 0 (a_w = a) each tip clears the
-    root of its mate by the bottom clearance cP mn of the basic rack [mm]."""
-    p = pair(bc.gear(2.0, 20, b=10.0), bc.gear(2.0, z2, b=10.0))
+    root of its mate by the bottom clearance cP mn of the basic rack [mm]. Pinion z 24 (the internal
+    pair 24/-60 of case 4n is valid)."""
+    p = pair(bc.gear(2.0, 24, b=10.0), bc.gear(2.0, z2, b=10.0))
     assert p.al == pytest.approx(p.a, rel=1e-12)
     cP_mn = p.gear1.cP * p.gear1.mn                           # 0.25 x 2 mm = 0.5 mm
     assert _bottom_clearances(p) == (pytest.approx(cP_mn, abs=1e-9), pytest.approx(cP_mn, abs=1e-9))
@@ -227,7 +230,7 @@ def test_ring_has_the_base_cylinder_of_its_pinion(case5):
 def test_working_pitch_circles_roll_on_each_other(beta):
     """Q21, Q03: d_w = d_b / cos(alpha_wt) for each gear (ISO_21771_2007, Eq. (56)-(57)); the working
     pitch circles are tangent at C: d_w2 + s2 d_w1 = 2 a_w (s2 = -1 for a ring)."""
-    for p in (pair(*bc.pinion_wheel("H501" if beta else "C14")), pair(*bc.make_internal(beta))):
+    for p in (pair(*bc.pinion_wheel("H501" if beta else "C14")), PAIRS["case5n" if beta else "case4n"]):
         s2 = math.copysign(1.0, p.gear2.z)
         assert p.dl1 == pytest.approx(p.gear1.db / math.cos(p.alphatw), rel=REL)
         assert p.dl2 == pytest.approx(p.gear2.db / math.cos(p.alphatw), rel=REL)
@@ -376,22 +379,17 @@ def test_legacy_virtual_teeth(case5):
 
 
 def test_legacy_beta_range():
-    """Q55: a negative helix angle is reported for an external gear and accepted for a ring."""
-    assert bc.gear(2.0, 60, beta_n_deg=-5.0, label="g").validate() == ["g: beta_n_deg out of range [0, 45), got -5.0"]
+    """Q55 (José, 2026-10-15): keep. A negative helix angle is reported for an external gear and accepted for a ring."""
+    assert bc.gear(2.0, 60, beta_n_deg=-5.0, label="g", check=False).validate() == ["g: beta_n_deg out of range [0, 45), got -5.0"]
     assert bc.gear(2.0, -60, beta_n_deg=-5.0, label="g").validate() == []
 
 
-@xfail("Q55: the same helix-angle range for both kinds")
-def test_alternative_ring_helix_angle_is_checked():
-    assert any("beta_n_deg" in m for m in bc.gear(2.0, -60, beta_n_deg=-5.0).validate())
-
-
 def test_legacy_gear_limits():
-    """Q55: undercut is checked on an external gear only; the tip of a ring must lie between its base
-    and reference circles."""
-    assert bc.gear(2.0, 8, label="g").validate() == ["g: gear is undercut — z=8, mn=2.0, alpha=20.0°, beta=0.0°, x=0.0"]
-    assert FAMILY.undercutting(bc.gear(2.0, 8)) and not FAMILY.undercutting(bc.gear(2.0, 20))
-    assert bc.gear(2.0, -60, x=-2.0, label="g").validate() == [
+    """Q55 (José, 2026-10-15): keep. Undercut is checked on an external gear only; the tip of a ring must lie
+    between its base and reference circles."""
+    assert bc.gear(2.0, 8, label="g", check=False).validate() == ["g: gear is undercut — z=8, mn=2.0, alpha=20.0°, beta=0.0°, x=0.0"]
+    assert FAMILY.undercutting(bc.gear(2.0, 8, check=False)) and not FAMILY.undercutting(bc.gear(2.0, 20))
+    assert bc.gear(2.0, -60, x=-2.0, label="g", check=False).validate() == [
         "g: tip diameter da=124.0000 ≥ pitch diameter d=120.0000. Internal gear addendum must reduce da below d."]
 
 
@@ -405,22 +403,74 @@ def test_legacy_force_input(case2, case5):
     assert ring_drives["T_out"] == pytest.approx(-20.25, rel=REL)
 
 
-def test_legacy_interference(case2, case4):
-    """Q24 (I4): every internal pair carries the trimming message (and here the trochoid one), so
-    ``validate_or_raise`` raises; an external pair is tested by -T1A > T1C (z 7/60 with the ISO tip, Q04)."""
-    assert case4.validate() == ["ring: trochoid (flank) interference with mating gear (z1=20, x1=0.0).",
-                                "ring: trimming interference — tooth difference z2-z1=-80 < 2."]
-    with pytest.raises(ValueError, match="trimming interference"):
-        case4.validate_or_raise()
-    assert case2.validate() == []
-    low = pair(bc.gear(2.0, 7, b=10.0, label="p"), bc.gear(2.0, 60, b=10.0, label="w"))
-    assert low.validate()[-1] == ("Involute interference on gear1 (pinion): path of approach 2.8746 mm > limit "
-                                  "2.3941 mm. Reduce haP, increase x1, or increase z1.")
+def test_contact_beyond_a_base_tangent_point_is_an_error(case4):
+    """Q39: the path A..E must lie between the base-tangent points, T1A >= 0 and s2 T2E >= 0, for both kinds.
+    Old case 4 starts 0.075 mm beyond T1 (for an internal pair this is SDP-SI Eq. (5-2), one message); the
+    external pair z 7/60 (undercut pinion) 2.87 mm beyond T1; the external pair z 12/12, x 0.6/-0.6 ends beyond
+    T2 (T1A > 0, s2 T2E < 0). Every other pair of PAIRS validates to []."""
+    assert case4.validate() == ["Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, "
+                                "s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the "
+                                "involute interference of SDP-SI Eq. (5-2)."]
+    low = pair(bc.gear(2.0, 7, b=10.0, label="p", check=False), bc.gear(2.0, 60, b=10.0, label="w"), check=False)
+    assert low.T1A < 0.0 and any(m.startswith("Interference: the path of contact passes") for m in low.validate())
+    end = pair(bc.gear(2.0, 12, x=0.6, check=False), bc.gear(2.0, 12, x=-0.6, check=False), check=False)
+    assert end.T1A > 0.0 > end.T2E
+    assert any(m.startswith("Interference: the path of contact passes") for m in end.validate())
+    for p in PAIRS.values():
+        if p is not case4:
+            assert p.T1A >= 0.0 and math.copysign(1.0, p.gear2.z) * p.T2E >= 0.0 and p.validate() == []
 
 
-@xfail("Q24: I4 / row 4, the trimming test (z2 - z1 < 2 with the signed z2) is true for every internal pair")
-def test_alternative_internal_pair_without_the_trimming_message(case4):
-    assert not any("trimming" in m for m in case4.validate())
+KHK_LIMITS = {60: (21, 51, 43), 80: (20, 72, 64), 100: (19, 92, 84), 120: (19, 112, 104), 160: (19, 152, 144),
+              200: (18, 192, 184)}
+
+
+@pytest.mark.parametrize("z2", KHK_LIMITS)
+def test_internal_interference_reproduces_the_khk_limits(z2):
+    """Q24: KHK catalogue, internal gears, p. 208, "Allowable Mating Pinions" (m 1, 20 deg, x = 0): smallest pinion
+    without involute interference, largest without trochoid and without trimming interference, for z2 = 60..200,
+    from the tests of SDP-SI section 5, Eq. (5-2)-(5-10) on the pairs z1/-z2 (vault
+    ``80_Inbox/2026-10-15/internal_gears_validation_khk.md``). Involute interference is the one Q39 message
+    (T1A < 0 = SDP Eq. (5-2))."""
+    flags = {}
+    for z1 in range(8, z2 - 1):
+        msgs = pair(bc.gear(1.0, z1, check=False), bc.gear(1.0, -z2), check=False).validate()
+        flags[z1] = [not any("SDP-SI Eq. (5-2)" in m for m in msgs)] + [
+            not any(m.startswith(f"{kind} interference of the internal pair") for m in msgs) for kind in ("trochoid", "trimming")]
+    involute_lower = min(z1 for z1, ok in flags.items() if ok[0])
+    trochoid_upper = max(z1 for z1, ok in flags.items() if ok[1])
+    trimming_upper = max(z1 for z1, ok in flags.items() if ok[2])
+    assert (involute_lower, trochoid_upper, trimming_upper) == KHK_LIMITS[z2]
+    # one limit each, not a band
+    assert all(ok[0] for z1, ok in flags.items() if z1 >= involute_lower)
+    assert all(ok[1] for z1, ok in flags.items() if z1 <= trochoid_upper)
+    assert all(ok[2] for z1, ok in flags.items() if z1 <= trimming_upper)
+
+
+@pytest.mark.parametrize("z2", (60, 100, 200))
+@pytest.mark.parametrize("x", (0.0, 0.3))
+@pytest.mark.parametrize("beta", (0.0, 15.0))
+def test_sdp_involute_test_is_the_q39_criterion(z2, x, beta):
+    """For an internal pair the margin of SDP-SI Eq. (5-2), z1/z2 - 1 + tan(alpha_a2)/tan(alpha_w), equals
+    T1A / (r_b2 tan(alpha_wt)): the involute-interference test of SDP is the Q39 criterion T1A >= 0 (one message,
+    lead decision 2026-10-15). Pinions z1 = 0.3, 0.5, 0.6 z2, mn 2 mm, x1 = x, x2 = 0."""
+    for z1 in (int(0.3 * z2), int(0.5 * z2), int(0.6 * z2)):
+        p = pair(bc.gear(2.0, z1, x=x, beta_n_deg=beta, check=False), bc.gear(2.0, -z2, beta_n_deg=beta), check=False)
+        alpha_a2 = math.acos(p.gear2.rb / (p.da2_w / 2.0))
+        margin = z1 / z2 - 1.0 + math.tan(alpha_a2) / math.tan(p.alphatw)
+        assert margin == pytest.approx(p.T1A / (p.gear2.rb * math.tan(p.alphatw)), rel=1e-9, abs=1e-12)
+
+
+@pytest.mark.parametrize("case", ("case4n", "case5n"))
+def test_new_internal_cases_are_valid(case):
+    """Q15 (José answer 4): the internal cases 24/-60 spur and helical (beta 15 deg) replace old case 4 for contact
+    results: the path lies between the base-tangent points, galpha = A-E, ReqI = curvature at C, no interference
+    of SDP-SI section 5, and the pair assembles with the checks."""
+    p = PAIRS[case]
+    assert p.T1A >= 0.0 and -p.T2E >= 0.0
+    assert p.galpha == pytest.approx(p.AE, rel=1e-12)
+    assert p.ReqI == pytest.approx(FAMILY.curvature_radii(p, 0.0)["rho_red_t_mm"], rel=1e-12)
+    assert p.warnings == ()
 
 
 def test_legacy_text(case2, case4):
@@ -444,12 +494,12 @@ def test_renamed_text_rows_are_counted():
     echoed = sum(1 for c in cases for obj, name, _ in bc.baseline_rows(c) if name in names and obj != "link")
     renamed = sum(n for _, n in bc.RENAMED_TEXT.values())
     total = sum(len(bc.baseline_rows(c)) for c in cases)
-    assert echoed == count == 50                 # 8 rows deleted with cases 3b, 3c, 7c, 7d (Q03, answer 7)
+    assert echoed == count == 70                 # 8 rows deleted with cases 3b, 3c, 7c, 7d (Q03), 20 added in 4n, 5n (Q15)
     # Q46 (step 5): the rows of case 7 that are text or state of the two replaced system classes, counted
     # one by one in mechanical_system/tests/test_transmission_baseline.py
     renamed += sum(n for _, n in bc.RENAMED_PATTERNS.values())
     echoed += sum(n for _, n, _ in bc.ECHOED_ROWS_CASE7.values())
-    assert (total, total - echoed - renamed, renamed, echoed) == (6075, 5999, 14, 62)     # rows: total, computed, renamed text, echoed
+    assert (total, total - echoed - renamed, renamed, echoed) == (7866, 7770, 14, 82)     # rows: total, computed, renamed text, echoed
 
 
 # ----------------------------------------------------------------------------------------------
@@ -462,50 +512,37 @@ def test_ring_tip_diameter_without_the_clearance(case4):
     assert ring.da == pytest.approx(ring.d - 2.0 * ring.mn * (ring.haP + ring.x), rel=REL)
 
 
-def test_assemble_does_not_validate(case4):
-    """Q51 / Q15: baseline case 4 assembles although its path starts beyond the base-tangent point
-    (T1A < 0, 0.075 mm with the ISO tip) and its ``validate()`` is not empty."""
-    assert case4.T1A == pytest.approx(-0.07492456399709191, rel=1e-9)
-    assert case4.validate() != []
-
-
-@xfail("Q51: validation at assembly (D-0026 item 9)")
-def test_alternative_assemble_raises_on_an_invalid_pair():
-    try:
+def test_assemble_raises_one_error_with_every_message(case4):
+    """Q51 (José, answer 3): Gear.assemble and GearPair.assemble run validate() and raise ONE ValueError with every
+    message; check=False builds the object (equivalence records). Old case 4: the one Q39 / SDP Eq. (5-2) message."""
+    with pytest.raises(ValueError) as err:
         pair(*bc.make_internal(0.0))
-    except ValueError:
-        return
-    raise AssertionError("assemble returned a pair whose validate() is not empty")
+    assert str(err.value).splitlines() == case4.validate() and len(case4.validate()) == 1
+    assert case4.T1A == pytest.approx(-0.07492456399709191, rel=1e-9)        # built with check=False
+    with pytest.raises(ValueError, match="gear is undercut"):
+        bc.gear(2.0, 8)
 
 
-def test_gear_messages_appear_twice_in_the_pair():
-    """Q56: the pair repeats the messages of its gears (today it validated its working copies too)."""
-    low = pair(bc.gear(2.0, 8, b=10.0, label="p"), bc.gear(2.0, 60, b=10.0, label="w"))
-    assert low.validate()[:2] == 2 * ["p: gear is undercut — z=8, mn=2.0, alpha=20.0°, beta=0.0°, x=0.0"]
+def test_low_contact_ratio_is_a_warning_not_an_error():
+    """Answer 6 (D-0026 item 9): 1 <= eps_alpha < 1.2 goes to pair.warnings and the pair assembles; eps_alpha < 1
+    stays an error of validate(). Spur pair z 30/60, mn 2 mm, haP 0.6 (eps_alpha 1.082)."""
+    p = pair(bc.gear(2.0, 30, b=10.0, haP=0.6), bc.gear(2.0, 60, b=10.0, haP=0.6))
+    assert 1.0 <= p.epslon_alpha < 1.2 and p.validate() == []
+    assert len(p.warnings) == 1 and p.warnings[0].startswith("transverse contact ratio")
+    short = pair(bc.gear(2.0, 30, b=10.0, haP=0.4), bc.gear(2.0, 60, b=10.0, haP=0.4), check=False)
+    assert short.epslon_alpha < 1.0 and any("< 1.0" in m for m in short.validate()) and short.warnings == ()
 
 
-@xfail("Q56: each gear message once")
-def test_alternative_gear_messages_appear_once_in_the_pair():
-    low = pair(bc.gear(2.0, 8, b=10.0, label="p"), bc.gear(2.0, 60, b=10.0, label="w"))
+def test_gear_messages_appear_once_in_the_pair():
+    """Q56 (José, 2026-10-15): each message of a gear once in the pair."""
+    low = pair(bc.gear(2.0, 8, b=10.0, label="p", check=False), bc.gear(2.0, 60, b=10.0, label="w"), check=False)
     assert sum("undercut" in m for m in low.validate()) == 1
-
-
-def test_second_inverse_involute_of_the_interference_tests():
-    """Q19: the Newton inverse involute returns the angle near its start value (20 deg) ..."""
-    alpha = math.radians(20.0)
-    assert cylindrical._solve_inv(math.tan(alpha) - alpha) == pytest.approx(alpha, rel=1e-10)
-
-
-@xfail("Q19: the Newton inverse involute does not converge for inv = 0.2 (returns 8.5e22) and does not raise")
-def test_alternative_second_inverse_involute_converges():
-    alpha = cylindrical._solve_inv(0.2)
-    assert math.tan(alpha) - alpha == pytest.approx(0.2, abs=1e-9)
 
 
 def test_henriot_split_returns_non_physical_shifts_for_some_pairs():
     """Q13: outside the baseline the split does not raise; for z 12/54 (mn 2 mm, x = 0) it returns
     x1 = -x2 = 4.55, a profile shift of 4.5 modules (not usable)."""
-    x1, x2 = FAMILY.correction_for_gs_equilibrium(bc.gear(2.0, 12, b=20.0), bc.gear(2.0, 54, b=20.0))
+    x1, x2 = FAMILY.correction_for_gs_equilibrium(bc.gear(2.0, 12, b=20.0, check=False), bc.gear(2.0, 54, b=20.0))
     assert (x1, x2) == (pytest.approx(4.548969365135395, rel=1e-9), pytest.approx(-4.548969365135395, rel=1e-9))
     with pytest.raises(RuntimeError, match="no solution for x2"):
         FAMILY.correction_for_gs_equilibrium(*bc.pinion_wheel("H501"))

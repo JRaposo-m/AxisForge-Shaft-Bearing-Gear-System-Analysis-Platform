@@ -410,10 +410,10 @@ def test_alternative_negative_power_is_refused(case7a):
 # a stage that follows an internal stage (Q47)
 # ----------------------------------------------------------------------------------------------
 def _internal_then_external():
-    """Internal spur pair of case 4 (z 20/-60, mn 2 mm; pinion on shaft 1, ring on shaft 2, x = 100 mm,
+    """Internal spur pair of case 4n (z 24/-60, mn 2 mm; pinion on shaft 1, ring on shaft 2, x = 100 mm,
     phi 0) followed by the C14 spur pair (z 16/24; pinion on shaft 2, wheel on shaft 3, x = 50 mm,
     phi 90 deg); 9224.5 W at 1450 rpm, rot +1."""
-    pin, ring = (Gear.assemble(bc.FAMILY, dataclasses.replace(g.data, position=100.0)) for g in bc.make_internal(0.0))
+    pin, ring = (Gear.assemble(bc.FAMILY, dataclasses.replace(g.data, position=100.0)) for g in bc.make_internal(0.0, z1=24))
     p2, w2 = bc.pinion_wheel("C14", position=50.0)
     s1, s2, s3 = (bc._shaft_system(name) for name in ("shaft_1", "shaft_2", "shaft_3"))
     ge = {name: GearElement(g, role=role, label=name) for name, g, role in (
@@ -430,17 +430,19 @@ def _internal_then_external():
 
 
 def test_torque_is_negative_after_an_internal_stage():
-    """Pins TODAY's behaviour (Q47): an internal pair returns T_out = T u with u = -3, so the torque
-    entering shaft 2 is -182.25 N m; passed on as it is, it makes ``forces()`` of the next stage
-    return negative forces, stored as negative load magnitudes (Fr -2056.361 N, Ft -4979.504 N on the
-    pinion of stage 2), and the ``MeshForces`` of that stage takes the pinion as the DRIVEN gear
-    (F_t on it +4979.504 N where the driving pinion would have -4979.504 N)."""
+    """Pins TODAY's behaviour (Q47): an internal pair returns T_out = T u with u = -2.5, so the torque
+    entering shaft 2 is -151.875 N m (hand: 60.75 x 60 / 24; then x 24 / 16 = -227.8125 N m on shaft 3);
+    passed on as it is, it makes ``forces()`` of the next stage return negative forces, stored as
+    negative load magnitudes (Fr -1713.634 N, Ft -4149.587 N on the pinion of stage 2), and the
+    ``MeshForces`` of that stage takes the pinion as the DRIVEN gear (F_t on it +4149.587 N where the
+    driving pinion would have -4149.587 N)."""
     resolved = _internal_then_external()
-    assert resolved.torque_Nm == pytest.approx((60.75, -182.25, -273.375), rel=1e-12)
-    assert resolved.rotation == (1, 1, -1) and resolved.speed_rpm == pytest.approx((1450.0, 1450.0 / 3, 1450.0 / 4.5), rel=1e-12)
+    assert resolved.torque_Nm == pytest.approx((60.75, -60.75 * 60 / 24, -60.75 * 60 / 24 * 24 / 16), rel=1e-12)
+    assert resolved.torque_Nm == pytest.approx((60.75, -151.875, -227.8125), rel=1e-12)
+    assert resolved.rotation == (1, 1, -1) and resolved.speed_rpm == pytest.approx((1450.0, 1450.0 / 2.5, 1450.0 / 3.75), rel=1e-12)
     stage2 = {ld.label: ld.magnitude for ld in resolved.shafts[1].loads if ld.label.startswith("p2")}
-    assert (stage2["p2:Fr"], stage2["p2:Ft"]) == pytest.approx((-2056.361, -4979.504), abs=5e-4)
-    assert resolved.meshes[1].on_1[:2] == pytest.approx((-2056.361, 4979.504), abs=5e-4)
+    assert (stage2["p2:Fr"], stage2["p2:Ft"]) == pytest.approx((-1713.634, -4149.587), abs=5e-4)
+    assert resolved.meshes[1].on_1[:2] == pytest.approx((-1713.634, 4149.587), abs=5e-4)
     assert any("magnitude must be >= 0" in e for e in resolved.shafts[1].validate())
     # the torque signs of the internal stage itself: stored torque of the pinion against the moment of its Ft (Q05)
     assert _check(resolved, "internal: torque of gear_a") == (pytest.approx(121.5, rel=1e-9), False)

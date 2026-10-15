@@ -47,7 +47,7 @@ def _base_cylinder_external(mn, z, alpha, beta, d):
 
 def _base_cylinder_internal(mn, z, alpha, beta, d):
     # QUESTION(Q21): I1 / row 3, entry `base_cylinder`: not the rule of ISO_21771_2007 Eq. (5)-(7), (13), (19) above.
-    betab = np.arcsin(np.sin(beta) / np.cos(alpha))       # quotient, not the product of Eq. (5)-(7): beta_b > beta
+    betab = np.arcsin(np.sin(beta) * np.cos(alpha))       # product of Eq. (5)-(7): beta_b > beta
     db = abs(z) * mn * np.cos(alpha) / np.cos(betab)
     alphat = np.arccos(db / d)
     return alphat, betab, db
@@ -119,7 +119,7 @@ def _working_pitch_diameters_internal(al, u, db1, db2, alphatw):
 
 def _galpha_internal(galpha1, galpha2, da1, db1, da2, db2, z2, al, alphatw):
     # QUESTION(Q22): I2 / row 45, entry `galpha`: the sign factor is on the tip term of the ring only, not on 2 a_w sin(alpha_wt).
-    return 1/2 * ((da1**2 - db1**2)**(1/2) + z2/abs(z2) * (da2**2 - db2**2)**(1/2) - 2 * al * np.sin(alphatw))
+    return 1/2 * ((da1**2 - db1**2)**(1/2) + z2/abs(z2) * ((da2**2 - db2**2)**(1/2) - 2 * al * np.sin(alphatw)))
 
 
 def _profile_shift_check_external(gear1, gear2, inv_alphatw):

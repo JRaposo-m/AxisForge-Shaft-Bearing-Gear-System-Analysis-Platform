@@ -366,6 +366,64 @@ def test_tip_alteration_of_sdp_table_4_4():
     assert p.k == pytest.approx(-0.12671, abs=5e-6)
 
 
+# SDP-SI "Elements of Metric Gear Technology", section 5 (internal gears), Tables 5-1 and 5-4
+# (06_Library/_incoming/SDPSI2026_MetricGearTechnology_InternalHelical.pdf, intake pending; vault
+# ``80_Inbox/2026-10-15/internal_gears_validation_khk.md``). SDP writes z2 > 0 for the ring and the ring
+# shift with the opposite sign: x2_ISO = -x2_KHK (ring addendum (1 - x2_KHK) m). Default rack: haP 1, cP 0.25.
+def test_internal_pair_of_sdp_table_5_1():
+    """SDP Table 5-1 (internal spur, m 3 mm, 20 deg, z 16/-24, x 0 / -0.5 ISO = +0.5 KHK), to the printed digits:
+    inv alpha_wt 0.060401, alpha_wt 31.0937 deg, a_w 13.1683 mm, d_b 45.105/67.658, d_w 52.673/79.010,
+    d_a 54.000/69.000, d_f 40.500/82.500 mm (Q21, Q26, Q04; d_w = d_b / cos alpha_wt).
+
+    alpha_wt follows SDP's rounding chain: SDP inverts the ROUNDED inv alpha_wt 0.060401, which gives
+    31.093674 deg (printed 31.0937); the exact involute from the data, 0.0604006632 (ISO_21771_2007, Eq. (62)),
+    gives 31.093621 deg, which the code returns and the test asserts.
+
+    Built with check=False because the code refuses the pair, rightly: the pinion z 16, x 0 is below the
+    rack-cutter limit z_min = 2 / sin^2(20 deg) = 17.1 (undercut), and the path starts 0.029 mm beyond T1
+    (T1A < 0), which is SDP's own involute-interference test, Eq. (5-2) (margin -0.0014). SDP prints the
+    table as a geometry example, not as a pair free of interference."""
+    p = pair(bc.gear(3.0, 16, check=False), bc.gear(3.0, -24, x=-0.5), check=False)
+    assert p.inv_alphatw == pytest.approx(0.060401, abs=5e-7)
+    assert math.degrees(p.alphatw) == pytest.approx(31.09362, abs=5e-6)       # exact, from the data
+    assert p.al == pytest.approx(13.1683, abs=5e-5)
+    assert (p.gear1.db, p.gear2.db) == (pytest.approx(45.105, abs=5e-4), pytest.approx(67.658, abs=5e-4))
+    assert (p.dl1, p.dl2) == (pytest.approx(52.673, abs=5e-4), pytest.approx(79.010, abs=5e-4))
+    assert (p.da1_w, p.da2_w) == (pytest.approx(54.000, abs=5e-4), pytest.approx(69.000, abs=5e-4))
+    assert (p.gear1.df, p.gear2.df) == (pytest.approx(40.500, abs=5e-4), pytest.approx(82.500, abs=5e-4))
+    msgs = p.validate()
+    assert msgs[0] == "Gear: gear is undercut — z=16, mn=3.0, alpha=20.0°, beta=0.0°, x=0.0"
+    assert len(msgs) == 2 and msgs[1].startswith("Interference: the path of contact passes a base-tangent point")
+
+
+# z1, x2 (KHK), alpha_wt [deg], a_w [mm], eps_alpha: m 1 mm, z2 = -50, x1 = 0
+SDP_TABLE_5_4 = ((49, 1.00, 61.0605, 0.971, 1.105), (48, 0.60, 46.0324, 1.354, 1.512), (47, 0.40, 37.4155, 1.775, 1.726),
+                 (46, 0.30, 32.4521, 2.227, 1.835), (45, 0.20, 28.2019, 2.666, 1.933), (44, 0.11, 24.5356, 3.099, 2.014),
+                 (43, 0.06, 22.3755, 3.557, 2.053), (42, 0.01, 20.3854, 4.010, 2.088))
+
+
+@pytest.mark.parametrize(("z1", "x2_khk", "alpha_wt_deg", "a_w", "eps_alpha"), SDP_TABLE_5_4)
+def test_small_tooth_difference_of_sdp_table_5_4(z1, x2_khk, alpha_wt_deg, a_w, eps_alpha):
+    """SDP Table 5-4 (internal spur, m 1 mm, 20 deg, z2 -50, z1 49..42, x1 0, x2_ISO = -x2_KHK), to the printed
+    digits: alpha_wt (up to 61 deg: brentq bracket [1e-6, 1.5] rad), a_w, eps_alpha (Q22, Q26).
+
+    SDP states that these pairs have no involute and no trochoid interference but do have trimming
+    interference (they cannot be assembled radially): the messages of ``validate`` agree, and the pairs are
+    built with check=False for that reason only. For z1 49..47 the arcsin argument of Eq. (5-10) exceeds 1
+    (d_a1 > d_a2): no real value, counted as failed (``_internal_interference`` Notes).
+    The ring of z1 = 49 (x2_KHK 1.00) has zero addendum, d_a = d, which the gear check refuses (Q55); it is
+    built with check=False too."""
+    ring = bc.gear(1.0, -50, x=-x2_khk, check=(x2_khk != 1.00))
+    p = pair(bc.gear(1.0, z1), ring, check=False)
+    assert math.degrees(p.alphatw) == pytest.approx(alpha_wt_deg, abs=5e-5)
+    assert p.al == pytest.approx(a_w, abs=5e-4)
+    assert p.epslon_alpha == pytest.approx(eps_alpha, abs=5e-4)
+    msgs = p.validate()
+    assert any(m.startswith("trimming interference of the internal pair") for m in msgs)
+    assert not any(m.startswith("Interference:") or m.startswith("trochoid interference") for m in msgs)
+    assert len(msgs) == 1 + (z1 == 49)     # trimming, and for z1 49 the ring tip of the gear check
+
+
 # ----------------------------------------------------------------------------------------------
 # _LEGACY: one test per entry (today's value), and the alternative where it is a relation
 # ----------------------------------------------------------------------------------------------

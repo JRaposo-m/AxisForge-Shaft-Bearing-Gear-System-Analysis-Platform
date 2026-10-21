@@ -5,6 +5,8 @@ the four generating helpers against closed forms, and the ideal undercut check i
 which must give the old z-form answer for every baseline gear.
 Block 2: ``ManufacturedCylindricalGear``: zero allowances reproduce the ideal gear, pair and shaft loads;
 the hand check of H501; internal gears; undercut at the lower allowance.
+Block 3: ``ManufacturedCylindricalGearPair``: backlash, active root diameters, d_Nf >= d_Ff.
+Block 4: the placeholders (MG-02, MG-15 to MG-18) refuse to compute.
 Units: lengths [mm], angles [rad] (inputs in [deg]).
 """
 import dataclasses
@@ -18,6 +20,7 @@ from axisforge.core.machine_elements.gears import (
     CylindricalGearData,
     CylindricalGearManufacturingData,
     GearPair,
+    GeneratingPinionCutter,
     GeneratingRackProfile,
     ManufacturedCylindricalGear,
     ManufacturedCylindricalGearPair,
@@ -408,3 +411,42 @@ def test_pair_of_plain_gears_is_refused_and_repr_names_the_class():
     with pytest.raises(TypeError, match="needs a CylindricalFamily"):
         ManufacturedCylindricalGearPair.assemble(object(), gear1=_zero(p), gear2=_zero(w))
     assert repr(_made_pair((_zero(p), _zero(w)))).startswith("ManufacturedCylindricalGearPair(z1=20, z2=30, ")
+
+
+# ----------------------------------------------------------------------------------------------
+# placeholders (block 4)
+# ----------------------------------------------------------------------------------------------
+ANNEX_A = (("span_measurement", (3,)), ("dimension_over_balls", (7.0,)), ("chordal_tooth_thickness", ()),
+           ("chordal_height", ()), ("double_flank_centre_distance", None))
+
+
+@pytest.mark.parametrize("name, args", ANNEX_A, ids=[n for n, _ in ANNEX_A])
+def test_annex_a_test_dimensions_are_placeholders(name, args):
+    """MG-15: each Annex A test dimension, on the family and as the shortcut of the gear, raises
+    NotImplementedError naming the issue."""
+    gear = _zero(bc.pinion_wheel("H501")[0])
+    args = (gear,) if args is None else args          # the master gear of A.8
+    with pytest.raises(NotImplementedError, match="MG-15"):
+        getattr(FAMILY, name)(gear, *args)
+    with pytest.raises(NotImplementedError, match="MG-15"):
+        getattr(gear, name)(*args)
+
+
+def test_pinion_type_cutter_is_a_placeholder():
+    """MG-16: a pinion-type cutter cannot be built."""
+    with pytest.raises(NotImplementedError, match="MG-16"):
+        GeneratingPinionCutter(z0=25, x0=0.0, haP0=1.25, rhoaP0=0.38, alpha_P0_deg=20.0)
+
+
+@pytest.mark.parametrize("target, field, value, issue", (
+    ("data", "quality_grade", 6, "MG-18"), ("data", "q_min", 0.05, "MG-02"), ("data", "q_max", 0.1, "MG-02"),
+    ("cutter", "prP0", 0.02, "MG-17"), ("cutter", "alpha_prP0_deg", 10.0, "MG-17")))
+def test_placeholder_fields_are_refused(target, field, value, issue):
+    """MG-02, MG-17, MG-18: a placeholder field of the data or of the cutter set to a value gives one validate()
+    message naming the field and the issue, and the gear is not assembled."""
+    kw = {"cutter": dataclasses.replace(RACK_A, **{field: value})} if target == "cutter" else {field: value}
+    data = CylindricalGearManufacturingData(2.0, 20, E_sns=-0.05, E_sni=-0.1, **kw)
+    errors = data.validate()
+    assert len(errors) == 1 and field in errors[0] and issue in errors[0]
+    with pytest.raises(ValueError, match=issue):
+        ManufacturedCylindricalGear.assemble(FAMILY, data)

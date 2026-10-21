@@ -32,6 +32,185 @@ def _kind(z) -> str:
 
 
 # ==================================================================================================
+# Generation of the teeth by a rack-type cutter (ISO_21771_2007, clause 7): pure functions of numbers
+# and of the cutter record, shared by the ideal undercut check and the manufactured gear. External
+# gear, rack cutter (or hob) without protuberance, finish cutting.
+# ==================================================================================================
+def _min_generating_profile_shift(z, mn, alphat, beta, cutter) -> tuple[float, float]:
+    """Smallest generating profile shift coefficient that cuts the teeth without undercut.
+
+    Undercut starts when the end of the straight tip flank of the tool passes the interference
+    point T (the base-tangent point) on the generating line of action (Fig. 39); the limit is the
+    shift that puts the end of that straight flank on the line of action at the base-tangent point.
+
+    Parameters
+    ----------
+    z : int
+        Number of teeth [-], positive (external gear).
+    mn : float
+        Normal module [mm].
+    alphat : float
+        Transverse pressure angle of the gear [rad].
+    beta : float
+        Reference helix angle of the gear [rad].
+    cutter : GeneratingRackProfile
+        Rack-type tool (coefficients h_aP0 / m_n, rho_aP0 / m_n).
+
+    Returns
+    -------
+    tuple of float
+        ``(x_Emin, hFaP0)``: minimum generating profile shift coefficient x_Emin [-] and the
+        straight part of the tip flank of the tool h_FaP0 [mm].
+
+    Notes
+    -----
+    h_FaP0 = m_n (h_aP0 - rho_aP0 (1 - sin(alpha_t))): the bracket of Eq. (128) / (130), the
+    "straight part of tip flank of tool-generating profile" of the Fig. 39 key. It is taken with
+    the alpha_t of the GEAR, as printed. Issue MG-01: Fig. 35 draws h_FaP0 in the normal section of
+    the tool, where the tip-radius geometry would give alpha_P0 instead; kept as printed (0.004 in
+    x_Emin at beta 15 deg, z 17). Valid for an external gear and a non-protuberance rack cutter
+    or hob only.
+
+    References
+    ----------
+    .. [1] ISO_21771_2007, 7.7, Eq. (135), p. 59 (PDF p. 63); 7.6, Fig. 39 key, Eq. (128),
+       p. 57-58 (PDF p. 61-62).
+    """
+    hFaP0 = mn * (cutter.haP0 - cutter.rhoaP0 * (1.0 - np.sin(alphat)))
+    x_Emin = hFaP0 / mn - z * np.sin(alphat) ** 2 / (2.0 * np.cos(beta))      # Eq. (135)
+    return x_Emin, hFaP0
+
+
+def _ideal_x_Emin(data, alphat, beta) -> float:
+    """Limit of the IDEAL undercut check: x_Emin [-] of Eq. (135) with the counterpart of the basic rack.
+
+    The one criterion of ``assemble_gear`` (warning) and ``undercutting``: the gear is undercut if
+    x < x_Emin (x_E = x). External gear only: -inf for an internal gear (Eq. (135) is printed for
+    external gears), so that no ring is reported.
+
+    Parameters
+    ----------
+    data : CylindricalGearData
+        Gear data (z, mn and the basic rack).
+    alphat, beta : float
+        Transverse pressure angle and reference helix angle of the gear [rad].
+
+    Returns
+    -------
+    float
+        x_Emin [-], or -inf for z < 0.
+    """
+    if data.z < 0:
+        return -np.inf
+    return _min_generating_profile_shift(data.z, data.mn, alphat, beta, GeneratingRackProfile.from_basic_rack(data))[0]
+
+
+def _generating_profile_shift(x, mn, alpha_n, E_sn) -> float:
+    """Generating profile shift coefficient x_E of a tooth thinned by the allowance E_sn.
+
+    The cutter is fed deeper than the nominal x by the amount that removes E_sn from the normal
+    tooth thickness on both flanks: E_sn / (2 tan(alpha_n)) radially.
+
+    Parameters
+    ----------
+    x : float
+        Nominal profile shift coefficient [-].
+    mn : float
+        Normal module [mm].
+    alpha_n : float
+        Normal pressure angle [rad].
+    E_sn : float
+        Tooth thickness allowance [mm], E_sns (upper) or E_sni (lower); negative thins the tooth.
+
+    Returns
+    -------
+    float
+        x_E [-]: x_Es from E_sns (Eq. (123)) or x_Ei from E_sni (Eq. (124)).
+
+    Notes
+    -----
+    Finish cutting only (machining allowance q = 0); the pre-finish shifts of Eq. (120)-(122) are
+    not computed.
+
+    References
+    ----------
+    .. [1] ISO_21771_2007, 7.4, Eq. (123), (124), p. 56 (PDF p. 60).
+    """
+    return x + E_sn / (2.0 * mn * np.tan(alpha_n))
+
+
+def _generated_root_diameter(d, x_E, mn, cutter) -> float:
+    """Root diameter cut by a rack-type tool at the generating profile shift x_E.
+
+    Parameters
+    ----------
+    d : float
+        Reference diameter [mm].
+    x_E : float
+        Generating profile shift coefficient [-] (x_Es or x_Ei).
+    mn : float
+        Normal module [mm].
+    cutter : GeneratingRackProfile
+        Rack-type tool (coefficient h_aP0 / m_n).
+
+    Returns
+    -------
+    float
+        Generated root diameter d_fE [mm]: the tool tip line, h_aP0 below the tool datum line,
+        which lies x_E m_n outside the reference circle.
+
+    Notes
+    -----
+    External gear, rack cutter; the standard asks for the values of the process that produces the
+    finished tooth.
+
+    References
+    ----------
+    .. [1] ISO_21771_2007, 7.5, Eq. (125), p. 57 (PDF p. 61).
+    """
+    return d + 2.0 * x_E * mn - 2.0 * cutter.haP0 * mn
+
+
+def _root_form_diameter(d, db, alphat, x_E, mn, cutter) -> float:
+    """Root form diameter: where the involute generated by the straight tool flank ends.
+
+    Below d_Ff the flank is the fillet (trochoid) cut by the tip radius of the tool.
+
+    Parameters
+    ----------
+    d, db : float
+        Reference and base diameters [mm].
+    alphat : float
+        Transverse pressure angle [rad].
+    x_E : float
+        Generating profile shift coefficient [-] (x_Es or x_Ei).
+    mn : float
+        Normal module [mm].
+    cutter : GeneratingRackProfile
+        Rack-type tool (coefficients h_aP0 / m_n, rho_aP0 / m_n).
+
+    Returns
+    -------
+    float
+        Root form diameter d_Ff [mm].
+
+    Notes
+    -----
+    Eq. (128), first form, with h = m_n (h_aP0 - x_E - rho_aP0 (1 - sin(alpha_t))) [mm], the
+    height of the end of the straight tool flank below the reference line of the gear:
+    d_Ff = sqrt((d sin(alpha_t) - 2 h / sin(alpha_t))**2 + d_b**2). External gear, rack cutter
+    with tool tips parallel to the datum line, valid only without undercut (x_E >= x_Emin) and
+    without pre-finish root relief.
+
+    References
+    ----------
+    .. [1] ISO_21771_2007, 7.6, Eq. (128), p. 58 (PDF p. 62).
+    """
+    h = mn * (cutter.haP0 - x_E - cutter.rhoaP0 * (1.0 - np.sin(alphat)))
+    return np.sqrt((d * np.sin(alphat) - 2.0 * h / np.sin(alphat)) ** 2 + db ** 2)
+
+
+# ==================================================================================================
 # _LEGACY: what the external and internal gears do DIFFERENTLY, kept by a ruling (Q25 deferred, Q55
 # keep). One entry per quantity, one expression per kind of teeth, carried unchanged from the four
 # modules this file replaces; each is reached only through ``_legacy(name, z)``. The texts of the
@@ -42,26 +221,9 @@ def _virtual_teeth_external(mn, z, beta):
     return {"zn": zn, "de": mn * zn}
 
 
-def _undercutting(gear) -> bool:
-    """True if z < z_min = 2 cos(beta) / sin(alphat)**2 * (haP - x), i.e. the root is undercut.
-
-    Equals ISO_21771_2007, 7.7, Eq. (135) (minimum generating profile shift, rack-type tool,
-    external gears) solved for z with the default rack, to 3e-5 (one reader); no z_min is printed.
-    """
-    z_min = 2.0 * (np.cos(gear.beta) / (np.sin(gear.alphat) ** 2)) * (gear.haP - gear.x)
-    return bool(gear.z < z_min)
-
-
 def _beta_range_external(data, tag):
     if not (0.0 <= data.beta_n_deg < 45.0):
         return [f"{tag}: beta_n_deg out of range [0, 45), got {data.beta_n_deg}"]
-    return []
-
-
-def _gear_limits_external(gear, tag):
-    if _undercutting(gear):
-        return [f"{tag}: gear is undercut — z={gear.z}, mn={gear.mn}, "
-                f"alpha={gear.alpha_n_deg}°, beta={gear.beta_n_deg}°, x={gear.x}"]
     return []
 
 
@@ -166,8 +328,9 @@ _LEGACY = {
     "virtual_teeth": {"external": _virtual_teeth_external, "internal": lambda mn, z, beta: {}},
     # Q55 (José, 2026-10-15): keep. The helix-angle range is checked for an external gear only.
     "beta_range": {"external": _beta_range_external, "internal": lambda data, tag: []},
-    # Q55 (José, 2026-10-15): keep. Undercut (external gear) against da < d and da > db (ring).
-    "gear_limits": {"external": _gear_limits_external, "internal": _gear_limits_internal},
+    # Q55 (José, 2026-10-15): keep. da < d and da > db (ring). None for an external gear: its undercut is
+    # a warning, assemble_gear["warnings"] (MG-07, José 2026-10-21).
+    "gear_limits": {"external": lambda gear, tag: [], "internal": _gear_limits_internal},
 }
 
 
@@ -298,6 +461,145 @@ class CylindricalGearData:
         return errors
 
 
+@dataclass(frozen=True, kw_only=True)
+class GeneratingRackProfile:
+    """Rack-type cutting tool (rack cutter or hob) that generates the teeth: the counterpart rack.
+
+    The tool is the complement of the basic rack: its teeth fill the tooth spaces of the basic rack,
+    so its addendum cuts the root and its tip radius the root fillet of the gear. Coefficients are
+    multiples of the normal module m_n, like ``haP``, ``cP``, ``rfP`` of ``CylindricalGearData``.
+
+    Parameters
+    ----------
+    haP0 : float
+        Addendum of the tool h_aP0 / m_n [-], measured from the tool datum line.
+    rhoaP0 : float
+        Tip radius of the tool rho_aP0 / m_n [-] (Fig. 35 labels it r_aP0, Eq. (128) prints
+        rho_aP0).
+    alpha_P0_deg : float
+        Pressure angle of the tool flank alpha_P0 [deg].
+
+    Notes
+    -----
+    The straight part of the tip flank h_FaP0 is not a field: it needs the transverse pressure angle
+    of the gear (``_min_generating_profile_shift``).
+
+    References
+    ----------
+    .. [1] ISO_21771_2007, 7.1, Fig. 35, p. 53 (PDF p. 57).
+    .. [2] ISO_53_1998, 3.2, Fig. 1, Table 2, p. 2-3 (PDF p. 4-5).
+    """
+    haP0: float
+    rhoaP0: float
+    alpha_P0_deg: float
+
+    @classmethod
+    def from_basic_rack(cls, data: CylindricalGearData) -> GeneratingRackProfile:
+        """Counterpart rack of the basic rack of ``data``.
+
+        haP0 = haP + cP, rhoaP0 = rfP, alpha_P0_deg = alpha_n_deg: the counterpart rack encloses the
+        bottom land of the basic rack (ISO_21771_2007, 7.1, Fig. 35), i.e. it is the basic rack
+        made symmetrical about the profile reference line P-P and displaced by half a pitch
+        (ISO_53_1998, 3.2, Fig. 1, "mating rack"), so its teeth fill the tooth spaces of the basic
+        rack: its addendum is the basic rack dedendum h_fP = h_aP + c_P and its tip radius the basic rack
+        fillet radius rho_fP. No page prints these three equalities as equations: they follow from
+        the figures.
+
+        Parameters
+        ----------
+        data : CylindricalGearData
+            Gear data whose basic rack (``haP``, ``cP``, ``rfP``, ``alpha_n_deg``) is used.
+
+        Returns
+        -------
+        GeneratingRackProfile
+        """
+        return cls(haP0=data.haP + data.cP, rhoaP0=data.rfP, alpha_P0_deg=data.alpha_n_deg)
+
+    def validate(self) -> list[str]:
+        """Check the domains of the inputs.
+
+        Returns
+        -------
+        list of str
+            One message per violation; empty if valid. Checks: haP0 > 0, rhoaP0 >= 0,
+            0 < alpha_P0_deg < 45 (no library source for the 45 deg limit, as in
+            ``CylindricalGearData``).
+        """
+        errors: list[str] = []
+        if self.haP0 <= 0:
+            errors.append(f"cutter: haP0 must be > 0, got {self.haP0}")
+        if self.rhoaP0 < 0:
+            errors.append(f"cutter: rhoaP0 must be >= 0, got {self.rhoaP0}")
+        if not (0.0 < self.alpha_P0_deg < 45.0):
+            errors.append(f"cutter: alpha_P0_deg out of range (0, 45), got {self.alpha_P0_deg}")
+        return errors
+
+    def validate_or_raise(self) -> None:
+        """Raise ``ValueError`` with all messages of ``validate()`` if any."""
+        errors = self.validate()
+        if errors:
+            raise ValueError("\n".join(errors))
+
+
+@dataclass(frozen=True, kw_only=True)
+class CylindricalGearManufacturingData(CylindricalGearData):
+    """Input data of one cylindrical gear as made: the nominal data plus the manufacturing inputs.
+
+    All the fields of ``CylindricalGearData`` (``mn`` and ``z`` may still be positional), then
+    two kinds of input:
+
+    - design inputs, read from the drawing: the tooth thickness allowances ``E_sns``, ``E_sni``;
+    - process inputs, chosen by the workshop: the generating tool ``cutter``.
+
+    Parameters
+    ----------
+    E_sns, E_sni : float
+        Upper and lower tooth thickness allowances [mm], normal section: s_ns = s_n + E_sns,
+        s_ni = s_n + E_sni. Required. A negative allowance reduces the tooth thickness.
+    cutter : GeneratingRackProfile or None, optional
+        Rack-type tool that generates the teeth. None (default): the counterpart of the basic rack
+        of this record, ``GeneratingRackProfile.from_basic_rack(self)``.
+
+    References
+    ----------
+    .. [1] ISO_21771_2007, 7.3, Eq. (118), (119), p. 55 (PDF p. 59) (allowances); 7.1-7.2 (tool).
+    """
+    E_sns: float
+    E_sni: float
+    cutter: GeneratingRackProfile | None = None
+
+    def validate(self) -> list[str]:
+        """Check the domains of the inputs.
+
+        Returns
+        -------
+        list of str
+            The messages of ``CylindricalGearData.validate``, then: E_sni <= E_sns <= 0; the
+            messages of ``cutter.validate()`` when a cutter is given; the tool pressure angle
+            alpha_P0_deg equal to alpha_n_deg (relative 1e-6).
+
+        Notes
+        -----
+        E_sns <= 0: ISO_21771_2007, 7.3 says that "a negative tooth thickness allowance reduces the
+        tooth thickness" and prints no sign limit; no library source for the limit E_sns <= 0.
+        alpha_P0 = alpha_n: otherwise alpha_wt0 and d_wE replace alpha_t and d in the generating
+        equations (ISO_21771_2007, Fig. 39 NOTE, p. 57 / PDF p. 61); not implemented.
+        """
+        errors = super().validate()
+        tag = self.label or "Gear"
+        if not (self.E_sni <= self.E_sns <= 0.0):
+            errors.append(f"{tag}: tooth thickness allowances must satisfy E_sni <= E_sns <= 0, "
+                          f"got E_sns={self.E_sns}, E_sni={self.E_sni}")
+        if self.cutter is not None:
+            errors.extend(f"{tag}: {m}" for m in self.cutter.validate())
+            # same tolerance as the pressure angles of two gears in mesh (assemble_pair)
+            if not np.isclose(self.cutter.alpha_P0_deg, self.alpha_n_deg, rtol=1e-6):
+                errors.append(f"{tag}: cutter alpha_P0_deg={self.cutter.alpha_P0_deg} differs from "
+                              f"alpha_n_deg={self.alpha_n_deg}; not implemented (ISO_21771_2007, Fig. 39 NOTE)")
+        return errors
+
+
 # ==================================================================================================
 # The family
 # ==================================================================================================
@@ -385,6 +687,10 @@ class CylindricalFamily(GearFamily):
             zn, de : virtual number of teeth z / cos(beta)**3 [-] and mn zn [mm]; external gear
             only (Q25). ISO_6336-1_2019, 9.3.1, Formula (81) (unchecked). ``de`` is not the d_e
             of ISO_6336-1_2019, Table F.1.
+            warnings : tuple of str, becomes ``Gear.warnings`` (never raises): "gear is undercut
+            ..." for an external gear with x < x_Emin (ISO_21771_2007, 7.7, Eq. (135), x_E = x,
+            counterpart rack of the basic rack, ``_ideal_x_Emin``; MG-07, José 2026-10-21); empty
+            otherwise.
 
         Raises
         ------
@@ -429,6 +735,17 @@ class CylindricalFamily(GearFamily):
         df = d + 2 * mn * s * (x - hfP)
         dv = d + 2 * s * x * mn
 
+        # MG-07 (José, 2026-10-21): the ideal undercut is a warning, with x_E = x and the counterpart
+        # rack of the basic rack (Eq. (135): external gear, rack cutter)
+        warnings_ = ()
+        x_Emin = _ideal_x_Emin(data, alphat, beta)
+        if x < x_Emin:
+            warnings_ = (
+                f"{data.label or 'Gear'}: gear is undercut - z={z}, mn={mn}, alpha={data.alpha_n_deg} deg, "
+                f"beta={data.beta_n_deg} deg, x={x} < x_Emin={x_Emin:.6f} (ISO_21771_2007 Eq. (135), "
+                "counterpart of the basic rack, x_E = x); the manufactured gear (ManufacturedCylindricalGear) "
+                "gives the real check.",)
+
         return dict(
             alpha=alpha, beta=beta, hfP=hfP, mt=mt, mx=mx, pn=pn, pt=pt, pz=pz, px=px,
             d=d, r=d / 2.0, alphat=alphat, betab=betab, db=db, rb=db / 2.0,
@@ -436,6 +753,7 @@ class CylindricalFamily(GearFamily):
             pb=pn * np.cos(alpha), pbt=pt * np.cos(alphat),
             dv=dv, rv=dv / 2, da=da, ra=da / 2.0, df=df, rf=df / 2.0,
             **_legacy("virtual_teeth", z)(mn, z, beta),
+            warnings=warnings_,
         )
 
     @staticmethod
@@ -789,8 +1107,32 @@ class CylindricalFamily(GearFamily):
     # ----------------------------------------------------------------------------------------------
     @staticmethod
     def undercutting(gear: Gear) -> bool:
-        """Undercut of the root of an external gear: True if z < z_min (see ``_undercutting``)."""
-        return _undercutting(gear)
+        """Undercut of the root of the IDEAL gear: x < x_Emin (MG-07, José 2026-10-21).
+
+        The ideal check: x_E = x and the counterpart of the gear's basic rack; an explicit
+        ``cutter`` of ``CylindricalGearManufacturingData`` is ignored on purpose. With a negative
+        allowance the real x_E < x, so the manufactured gear gives the real check.
+
+        Parameters
+        ----------
+        gear : Gear
+            Gear of this family.
+
+        Returns
+        -------
+        bool
+            External gear: True if its profile shift x is below the minimum generating profile
+            shift x_Emin of ISO_21771_2007, 7.7, Eq. (135) (``_ideal_x_Emin``, the criterion of the
+            warning of ``assemble_gear`` too). Internal gear: False (Eq. (135) is for external
+            gears).
+
+        Notes
+        -----
+        For ISO 53 rack A, spur, the limit equals the classical z form z < 2 cos(beta) /
+        sin(alpha_t)**2 (haP - x) to 3e-5 in x; at beta 15 deg to about 4e-3, because alpha_t
+        enters h_FaP0.
+        """
+        return bool(gear.x < _ideal_x_Emin(gear.data, gear.alphat, gear.beta))
 
     def validate_gear(self, gear: Gear) -> list[str]:
         """Check one gear.
@@ -798,8 +1140,9 @@ class CylindricalFamily(GearFamily):
         Returns
         -------
         list of str
-            The messages of ``CylindricalGearData.validate``, then by kind (Q55, keep): undercut for an
-            external gear; da < d and da > db for a ring.
+            The messages of ``CylindricalGearData.validate``, then by kind (Q55, keep): da < d and
+            da > db for a ring; none for an external gear (its undercut is a warning of
+            ``assemble_gear``, MG-07, José 2026-10-21).
         """
         tag = gear.label or "Gear"
         return gear.data.validate() + _legacy("gear_limits", gear.z)(gear, tag)

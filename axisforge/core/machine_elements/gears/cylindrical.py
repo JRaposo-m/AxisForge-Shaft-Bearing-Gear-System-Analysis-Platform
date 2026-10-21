@@ -12,7 +12,7 @@ from dataclasses import KW_ONLY, dataclass, fields
 import numpy as np
 from scipy import optimize
 
-from axisforge.core.machine_elements.gears.base import Gear, GearFamily, MeshForces, register_gear_family
+from axisforge.core.machine_elements.gears.base import Gear, GearFamily, GearPair, MeshForces, register_gear_family
 
 
 def _involute(ang):
@@ -29,6 +29,15 @@ def _kind(z) -> str:
     """Kind of teeth from the sign of z (ISO_21771_2007, 4.1.5): key of the ``_LEGACY`` table."""
     # Q55 (José, 2026-10-15): keep. The kind is the sign of z (it was the class the caller chose).
     return "internal" if z < 0 else "external"
+
+
+def _normal_backlash(x_sum_from_al, x_sum, mn, alpha) -> float:
+    """Normal backlash j_bn [mm] of two gears whose profile shifts sum to ``x_sum`` [-] at a working
+    centre distance that needs ``x_sum_from_al`` [-] for zero backlash (Eq. (62)); ``mn`` [mm],
+    normal pressure angle ``alpha`` [rad]. > 0: clearance between the non-working flanks; < 0: the
+    flanks would overlap. ISO_21771_2007, 5.3, Eq. (63), p. 32 (PDF p. 36), solved for j_bn; x_sum
+    is the declared x1 + x2 or the generating x_E1 + x_E2."""
+    return (x_sum_from_al - x_sum) * 2 * mn * np.sin(alpha)
 
 
 # ==================================================================================================
@@ -1065,7 +1074,7 @@ class CylindricalFamily(GearFamily):
             # normal backlash left by the declared shifts at the imposed a_w: Eq. (63) solved for j_bn with
             # x_E = the declared x; jbn > 0: clearance between the non-working flanks, jbn < 0: the flanks
             # would overlap at that a_w (the teeth must be thinned)
-            jbn = (x_sum_from_al - (x1 + x2)) * 2 * m * np.sin(alpha)
+            jbn = _normal_backlash(x_sum_from_al, x1 + x2, m, alpha)
             # Q26 + Q57 (José, 2026-10-15): zero backlash for now, a mismatch is ONE warning (not a validate error);
             # 1e-9 mm is far above the rounding of a derived a_w (1e-14)
             if abs(jbn) >= 1e-9:
@@ -1168,6 +1177,54 @@ class CylindricalFamily(GearFamily):
             RzS=(gear1.Rz + gear2.Rz),
             profile_shift_check=(x_sum_from_al, x1 + x2),
             warnings=warnings_,
+        )
+
+    @staticmethod
+    def assemble_manufactured_pair(pair) -> dict:
+        """Backlash and active root diameters of a pair of gears as cut.
+
+        Parameters
+        ----------
+        pair : GearPair
+            Pair of two ``ManufacturedCylindricalGear`` whose nominal attributes (``assemble_pair``)
+            are already set; not yet frozen (``ManufacturedCylindricalGearPair``).
+
+        Returns
+        -------
+        dict
+            jbn_max, jbn_min : normal backlash [mm] at the pair's working centre distance a_w
+            (derived or imposed), from the lower (x_Ei1 + x_Ei2) and the upper (x_Es1 + x_Es2)
+            allowances (``_normal_backlash``, Eq. (63), with the sum implied by a_w,
+            ``profile_shift_check[0]``, signed z1 + z2). Same sign as ``jbn``: > 0 clearance
+            between the non-working flanks.
+            d_Nf1, d_Nf2 : active root diameters [mm], 2 ``rA1`` and 2 ``rA2`` (the existing radii
+            of the start of the active profile of each gear; equal to 5.4.1, Eq. (64), (65),
+            p. 33 (PDF p. 37) with d_Na = d_a, with a_w taken negative for an internal pair
+            (AxisForge stores a_w > 0)).
+            warnings : tuple of str: one per gear with an allowance whose d_Ff is None (ring, or
+            undercut at that allowance): d_Nf >= d_Ff is not checked there.
+
+        Notes
+        -----
+        j_bn is defined in 5.5.1, p. 40 (PDF p. 44); Eq. (100)-(104) only convert it to other
+        backlashes (not computed). Centre-distance tolerances are out of scope: a_w is the one
+        value of the pair.
+        """
+        g1, g2 = pair.gear1, pair.gear2
+        x_sum_from_al = pair.profile_shift_check[0]   # Sum x implied by a_w (Eq. (62)), reused
+        warnings_ = []
+        for i, g in ((1, g1), (2, g2)):
+            missing = [k for k in ("s", "i") if getattr(g, f"d_Ff{k}") is None]
+            if missing:
+                warnings_.append(f"d_Nf >= d_Ff not checked for gear {i} ({g.label or 'Gear'}): "
+                                 f"{', '.join(f'd_Ff{k}' for k in missing)} not computed (internal gear or undercut "
+                                 "at that allowance).")
+        return dict(
+            # largest backlash from the thinnest teeth (lower allowances), smallest from the upper
+            jbn_max=_normal_backlash(x_sum_from_al, g1.x_Ei + g2.x_Ei, g1.mn, g1.alpha),
+            jbn_min=_normal_backlash(x_sum_from_al, g1.x_Es + g2.x_Es, g1.mn, g1.alpha),
+            d_Nf1=2 * pair.rA1, d_Nf2=2 * pair.rA2,
+            warnings=tuple(warnings_),
         )
 
     # ----------------------------------------------------------------------------------------------
@@ -1290,6 +1347,39 @@ class CylindricalFamily(GearFamily):
             errors.extend(_internal_interference(pair))
         return errors
 
+    @staticmethod
+    def validate_manufactured_pair(pair) -> list[str]:
+        """Checks of a pair of gears as cut, added to ``validate_pair`` by ``ManufacturedCylindricalGearPair``.
+
+        Returns
+        -------
+        list of str
+            One message per gear and allowance whose root form diameter is computed and lies
+            above the active root diameter, d_Nf < d_Ff: the tip of the mate would reach below the
+            start of the involute, i.e. contact on the root fillet. ISO_21771_2007, 5.4.1, p. 33
+            (PDF p. 37): "d_Nf may be governed by the start of involute", Eq. (66), (67).
+            Gears or allowances without d_Ff are a warning of the pair (``assemble_manufactured_pair``).
+
+        Notes
+        -----
+        ISO 21771 5.4.1 does not call d_Nf < d_Ff invalid: it sets d_Nf = d_Ff (Eq. (66), (67)) and
+        limits the active tip of the mate, d_Na <= d_Fa (Eq. (68), (69), i.e. tip relief). AxisForge
+        has no d_Fa (d_Fa = d_a), so this error is stricter than the standard (ruling MG-10:
+        Eq. (128) and this check). The rack-A internal baseline pairs fail it: the ring tip
+        (h_a2 = 1.0 m_n) reaches the pinion fillet (issue MG-24).
+        """
+        errors: list[str] = []
+        for i, gear in ((1, pair.gear1), (2, pair.gear2)):
+            d_Nf = getattr(pair, f"d_Nf{i}")
+            for k, which in (("s", "upper"), ("i", "lower")):
+                d_Ff = getattr(gear, f"d_Ff{k}")
+                # "not >=" also catches nan
+                if d_Ff is not None and not d_Nf >= d_Ff:
+                    errors.append(f"gear {i} ({gear.label or 'Gear'}): active root diameter d_Nf{i}={d_Nf:.4f} mm "
+                                  f"< root form diameter d_Ff{k}={d_Ff:.4f} mm at the {which} allowance: the mate's "
+                                  "tip reaches the root fillet (ISO_21771_2007 5.4.1, Eq. (66), (67))")
+        return errors
+
     # ----------------------------------------------------------------------------------------------
     # Text
     # ----------------------------------------------------------------------------------------------
@@ -1316,9 +1406,9 @@ class CylindricalFamily(GearFamily):
         return "\n".join(lines)
 
     def pair_repr(self, pair) -> str:
-        """One-line representation: tooth numbers, module, helix angle, al, alphatw, eps_gamma."""
+        """One-line representation: class name, tooth numbers, module, helix angle, al, alphatw, eps_gamma."""
         return (
-            f"GearPair(z1={pair.gear1.z}, z2={pair.gear2.z}, "
+            f"{type(pair).__name__}(z1={pair.gear1.z}, z2={pair.gear2.z}, "
             f"mn={pair.gear1.mn}, beta={pair.gear1.beta_n_deg} deg, al={pair.al:.4f} mm, "
             f"alpha_tw={np.degrees(pair.alphatw):.4f} deg, eps_gamma={pair.epslon_gamma:.4f})"
         )
@@ -1747,3 +1837,73 @@ class ManufacturedCylindricalGear(Gear):
             One message per violation; empty if valid.
         """
         return super().validate() + self.family.validate_manufactured_gear(self)
+
+
+class ManufacturedCylindricalGearPair(GearPair):
+    """Two manufactured gears in mesh: the nominal pair plus its backlash and root-fillet check.
+
+    The nominal geometry of ``CylindricalFamily.assemble_pair`` is unchanged; the class ONLY ADDS
+    the attributes below (``CylindricalFamily.assemble_manufactured_pair``) and the check
+    d_Nf >= d_Ff (``CylindricalFamily.validate_manufactured_pair``).
+
+    Attributes
+    ----------
+    jbn_max, jbn_min : float
+        Largest and smallest normal backlash [mm] at the working centre distance.
+    d_Nf1, d_Nf2 : float
+        Active root diameters of gear 1 and gear 2 [mm].
+
+    Equations and references: ``CylindricalFamily.assemble_manufactured_pair``.
+    """
+
+    @classmethod
+    def assemble(cls, family: GearFamily, *, check: bool = True, **pair_inputs) -> ManufacturedCylindricalGearPair:
+        """Build an assembled, immutable pair of two ``ManufacturedCylindricalGear``.
+
+        Parameters
+        ----------
+        family : CylindricalFamily
+            Family instance.
+        check : bool, optional
+            If True (default), run ``validate()`` and refuse an invalid pair (as ``GearPair.assemble``).
+        **pair_inputs
+            Forwarded to ``CylindricalFamily.assemble_pair`` (``gear1``, ``gear2``, ``label``,
+            ``al``, ``addendum_reduction``).
+
+        Returns
+        -------
+        ManufacturedCylindricalGearPair
+            ``warnings`` joins the nominal warnings and the manufactured ones.
+
+        Raises
+        ------
+        TypeError
+            If ``family`` is not a ``CylindricalFamily`` or a gear not a ``ManufacturedCylindricalGear``.
+        ValueError
+            As ``GearPair.assemble``.
+        """
+        if not isinstance(family, CylindricalFamily):
+            raise TypeError(f"{cls.__name__} needs a CylindricalFamily, got {type(family).__name__}")
+        gear1, gear2, nominal = family.assemble_pair(**pair_inputs)
+        if not (isinstance(gear1, ManufacturedCylindricalGear) and isinstance(gear2, ManufacturedCylindricalGear)):
+            raise TypeError(f"{cls.__name__} needs two ManufacturedCylindricalGear, got "
+                            f"{type(gear1).__name__} and {type(gear2).__name__}")
+        pair = cls(family, gear1, gear2)
+        nominal_warnings = nominal.pop("warnings")
+        for attr, value in nominal.items():    # the manufactured quantities are computed from the nominal ones
+            setattr(pair, attr, value)
+        computed = family.assemble_manufactured_pair(pair)
+        pair._freeze({**computed, "warnings": (*nominal_warnings, *computed["warnings"])})
+        if check:
+            pair.validate_or_raise()
+        return pair
+
+    def validate(self) -> list[str]:
+        """Check the pair: ``validate_pair`` (incl. the manufactured gears), then ``validate_manufactured_pair``.
+
+        Returns
+        -------
+        list of str
+            One message per violation; empty if valid.
+        """
+        return super().validate() + self.family.validate_manufactured_pair(self)

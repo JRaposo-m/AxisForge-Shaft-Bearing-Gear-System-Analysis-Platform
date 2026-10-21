@@ -20,9 +20,11 @@ from axisforge.core.machine_elements.gears import (
     GearPair,
     GeneratingRackProfile,
     ManufacturedCylindricalGear,
+    ManufacturedCylindricalGearPair,
     cylindrical,
 )
 from axisforge.core.machine_elements.gears.tests import baseline_cases as bc
+from axisforge.core.machine_elements.gears.tests.test_cylindrical_family import PAIRS
 
 FAMILY = CylindricalFamily()
 RACK_A = GeneratingRackProfile(haP0=1.25, rhoaP0=0.38, alpha_P0_deg=20.0)   # counterpart of ISO 53 rack A
@@ -188,24 +190,19 @@ def test_zero_allowances_reproduce_the_ideal_gear(g):
         assert m.d_fEs == pytest.approx(g.df, rel=1e-12) and m.d_fEi == pytest.approx(g.df, rel=1e-12)
 
 
-def test_manufactured_gears_give_the_same_pair_and_shaft_loads():
-    """Two manufactured gears with zero allowances are accepted by ``GearPair.assemble``, ``GearElement`` and a
-    ``Transmission`` (baseline case 7a: H501 on two shafts, ``bc.build_case7``) and give identical results to the
-    ideal gears: every pair attribute, the mesh forces, the torques, speeds and senses, and every stored load on
-    the two loaded shafts."""
-    def zero(g):
-        return ManufacturedCylindricalGear.from_ideal(g, E_sns=0.0, E_sni=0.0)
+def _zero(g):
+    """The manufactured gear of ``g`` with zero allowances."""
+    return ManufacturedCylindricalGear.from_ideal(g, E_sns=0.0, E_sni=0.0)
 
-    p, w = bc.pinion_wheel("H501")
-    ideal, made = GearPair.assemble(FAMILY, gear1=p, gear2=w), GearPair.assemble(FAMILY, gear1=zero(p), gear2=zero(w))
-    for name, value in vars(ideal).items():
-        if name not in ("gear1", "gear2", "_family"):
-            assert _same(getattr(made, name), value), name
-    assert _same(dataclasses.asdict(FAMILY.mesh_forces(made, 60.75, 1)), dataclasses.asdict(FAMILY.mesh_forces(ideal, 60.75, 1)))
 
+def test_manufactured_gears_give_the_same_shaft_loads():
+    """Two manufactured gears with zero allowances are accepted by ``GearElement`` and a ``Transmission`` (baseline
+    case 7a: H501 on two shafts, ``bc.build_case7``) and give identical results to the ideal gears: the torques,
+    speeds and senses, the mesh forces and every stored load on the two loaded shafts (the pair itself:
+    ``test_zero_allowances_reproduce_the_ideal_pair``)."""
     p, w = bc.pinion_wheel("H501", position=bc.GEAR_POS)
     a = bc.resolve_case7(bc.build_case7("pinion", 1, gears=(p, w)))
-    b = bc.resolve_case7(bc.build_case7("pinion", 1, gears=(zero(p), zero(w))))
+    b = bc.resolve_case7(bc.build_case7("pinion", 1, gears=(_zero(p), _zero(w))))
     assert isinstance(b.geP.gear, ManufacturedCylindricalGear)
     for name in ("torque_Nm", "rotation", "speed_rpm"):
         assert _same(getattr(b.resolved, name), getattr(a.resolved, name)), name
@@ -310,3 +307,104 @@ def test_only_cylindrical_manufacturing_inputs_are_accepted():
         ManufacturedCylindricalGear.assemble(FAMILY, CylindricalGearData(2.0, 20))
     with pytest.raises(TypeError, match="needs a CylindricalFamily"):
         ManufacturedCylindricalGear.assemble(object(), CylindricalGearManufacturingData(2.0, 20, E_sns=0.0, E_sni=0.0))
+
+
+# ----------------------------------------------------------------------------------------------
+# ManufacturedCylindricalGearPair
+# ----------------------------------------------------------------------------------------------
+def _made_pair(gears, check=True, **kw):
+    return ManufacturedCylindricalGearPair.assemble(FAMILY, gear1=gears[0], gear2=gears[1], check=check, **kw)
+
+
+@pytest.mark.parametrize("case", PAIRS)
+def test_zero_allowances_reproduce_the_ideal_pair(case):
+    """Zero allowances, derived a_w, the baseline pairs (``test_cylindrical_family.PAIRS``): a ``GearPair`` and a
+    ``ManufacturedCylindricalGearPair`` of the manufactured gears have every nominal pair attribute and the mesh
+    forces of the ideal pair (Q02 tolerance), and jbn_max = jbn_min = 0 (Eq. (63) with x_E = x at the
+    zero-backlash a_w), for external and internal pairs. Old case 4 fails validate() (Q39, Q24): check=False.
+
+    ``validate()`` of the manufactured pair adds nothing for an external pair; for every internal pair it adds the
+    two d_Nf1 < d_Ff1 messages of the pinion (both allowances): the concave ring tip reaches deeper into the pinion
+    than a rack would, and with ISO 53 rack A a rack mate already ends at the end of the straight cutter flank
+    (h_FaP0 = 0.99997 m_n vs h_aP 1.0 m_n), so the ring tip meets the pinion root fillet (issue MG-24). The
+    manufactured pair is therefore built with check=False."""
+    ideal = PAIRS[case]
+    check = ideal.validate() == []
+    made = (_zero(ideal.gear1), _zero(ideal.gear2))
+    plain = GearPair.assemble(FAMILY, gear1=made[0], gear2=made[1], check=check)
+    manufactured = _made_pair(made, check=False)
+    for pair in (plain, manufactured):
+        for name, value in vars(ideal).items():
+            if name not in ("gear1", "gear2", "_family", "warnings"):
+                assert _same(getattr(pair, name), value), name
+        assert _same(dataclasses.asdict(FAMILY.mesh_forces(pair, 60.75, 1)), dataclasses.asdict(FAMILY.mesh_forces(ideal, 60.75, 1)))
+    assert plain.warnings == ideal.warnings
+    assert manufactured.warnings[:len(ideal.warnings)] == ideal.warnings
+    assert manufactured.jbn_max == pytest.approx(0.0, abs=1e-12) and manufactured.jbn_min == pytest.approx(0.0, abs=1e-12)
+    extra = manufactured.validate()[len(ideal.validate()):]
+    if ideal.gear2.z > 0:
+        assert extra == []
+    else:
+        assert len(extra) == 2 and all(m.startswith("gear 1 (pinion): active root diameter d_Nf1=") for m in extra)
+
+
+def test_zero_allowances_at_an_imposed_centre_distance_give_the_nominal_backlash():
+    """Zero allowances, a_w imposed 0.2 % above the derived one (H501): jbn_max = jbn_min = the nominal ``jbn`` of
+    the pair (both Eq. (63), with x_E = x)."""
+    p, w = bc.pinion_wheel("H501")
+    al = GearPair.assemble(FAMILY, gear1=p, gear2=w).al * 1.002
+    pair = _made_pair((_zero(p), _zero(w)), al=al)
+    assert pair.jbn > 0.0
+    assert pair.jbn_max == pytest.approx(pair.jbn, rel=1e-12) and pair.jbn_min == pytest.approx(pair.jbn, rel=1e-12)
+
+
+def test_hand_check_of_the_h501_pair():
+    """H501 (baseline case 2), E_sns = -0.05 mm, E_sni = -0.10 mm on both gears: illustrative, not from a drawing
+    (José, 2026-10-21, MG-19). Reference values from ``_evidence/hand_check_output.txt`` (vault
+    80_Inbox/2026-10-21/cylindrical_manufactured_gear/; independent script: Eq. (55) with a Newton inverse involute,
+    Eq. (63), Eq. (64), (65) with d_Fa = d_a): jbn_max 0.1879385242, jbn_min 0.0939692621, d_Nf1 68.9500671039,
+    d_Nf2 104.7691058425 mm; jbn = -(E_sn1 + E_sn2) cos(alpha_n) at the derived a_w. d_Nf >= d_Ff holds."""
+    made = [ManufacturedCylindricalGear.from_ideal(g, E_sns=-0.05, E_sni=-0.10) for g in bc.pinion_wheel("H501")]
+    pair = _made_pair(made)
+    for name, value in dict(jbn_max=0.1879385242, jbn_min=0.0939692621, d_Nf1=68.9500671039, d_Nf2=104.7691058425).items():
+        assert getattr(pair, name) == pytest.approx(value, abs=1e-9), name
+    assert pair.d_Nf1 >= made[0].d_Ffi and pair.d_Nf2 >= made[1].d_Ffi
+    assert pair.validate() == [] and pair.warnings == ()
+
+
+def test_active_root_below_the_root_form_diameter_is_an_error():
+    """Constructed failing pair (hard-coded): pinion z 12, x 0.6, with a long-addendum wheel z 60, x 0, haP 1.1,
+    mn 2 mm, zero allowances, derived a_w 73.1358 mm. The pinion is not undercut, the path stays between the
+    base-tangent points (T1A > 0) and the wheel tip clears the pinion root circle (+0.236 mm), but it reaches
+    d_Nf1 = 22.7525 mm < d_Ff1 = 22.8273 mm (-0.075 mm): contact on the pinion root fillet (ISO_21771_2007 5.4.1,
+    Eq. (66), (67)); one error per allowance, and nothing else."""
+    def made(z, x, **kw):
+        return ManufacturedCylindricalGear.assemble(
+            FAMILY, CylindricalGearManufacturingData(2.0, z, x=x, b=10.0, E_sns=0.0, E_sni=0.0, label=f"z{z}", **kw))
+
+    pair = _made_pair((made(12, 0.6), made(60, 0.0, haP=1.1)), check=False)
+    assert pair.T1A > 0.0 and pair.al - pair.da2_w / 2 - pair.gear1.rf == pytest.approx(0.2358117, abs=1e-6)
+    assert pair.d_Nf1 - pair.gear1.d_Ffs == pytest.approx(-0.0748709, abs=1e-6) and pair.gear1.d_Ffs == pair.gear1.d_Ffi
+    msgs = pair.validate()
+    assert [m.split(" mm at the ")[1][:5] for m in msgs] == ["upper", "lower"]
+    assert all(m.startswith(f"gear 1 (z12): active root diameter d_Nf1={pair.d_Nf1:.4f} mm < root form diameter")
+               for m in msgs)
+    with pytest.raises(ValueError, match="the mate's tip reaches the root fillet"):
+        _made_pair((pair.gear1, pair.gear2))
+
+
+def test_internal_pair_warns_that_the_ring_is_not_checked():
+    """Internal pair 24/-60 (case 4n), zero allowances: the ring has no d_Ff (rack cutter), so d_Nf >= d_Ff is not
+    checked for gear 2 (one warning of the pair). check=False: the pinion messages of MG-24."""
+    pair = _made_pair((_zero(PAIRS["case4n"].gear1), _zero(PAIRS["case4n"].gear2)), check=False)
+    assert pair.warnings == ("d_Nf >= d_Ff not checked for gear 2 (ring): d_Ffs, d_Ffi not computed (internal gear or "
+                             "undercut at that allowance).",)
+
+
+def test_pair_of_plain_gears_is_refused_and_repr_names_the_class():
+    p, w = bc.pinion_wheel("H501")
+    with pytest.raises(TypeError, match="needs two ManufacturedCylindricalGear, got Gear and Gear"):
+        _made_pair((p, w))
+    with pytest.raises(TypeError, match="needs a CylindricalFamily"):
+        ManufacturedCylindricalGearPair.assemble(object(), gear1=_zero(p), gear2=_zero(w))
+    assert repr(_made_pair((_zero(p), _zero(w)))).startswith("ManufacturedCylindricalGearPair(z1=20, z2=30, ")

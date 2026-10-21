@@ -414,7 +414,7 @@ class Case7(NamedTuple):
 
 
 def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear_pos=GEAR_POS,
-                ball_arrangement="locating"):
+                ball_arrangement="locating", gears=None):
     """Two shafts of case 7 joined by the H501 pair, NOT yet resolved.
 
     Parameters
@@ -437,12 +437,15 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear
     ball_arrangement : str
         Arrangement of the ball bearing of both shafts ("locating" in every baseline case: it takes
         the axial thrust of the helical mesh).
+    gears : tuple of Gear or None
+        ``(pinion, wheel)`` to use instead of the H501 gears of ``pinion_wheel`` at ``gear_pos``
+        (None in every baseline case; e.g. the same gears as ``ManufacturedCylindricalGear``).
 
     Returns
     -------
     Case7
     """
-    p, w = pinion_wheel("H501", position=gear_pos)
+    p, w = gears if gears is not None else pinion_wheel("H501", position=gear_pos)
     sP, sW = _shaft_system("shaft_pinion", ball_arrangement), _shaft_system("shaft_wheel", ball_arrangement)
     geP = GearElement(p, label="g_pinion")
     geW = GearElement(w, label="g_wheel")

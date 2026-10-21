@@ -38,7 +38,6 @@ case6b_planetary_helical,sun,df,36.41104721640332,mm,axisforge/core/machine_elem
 case6b_planetary_helical,sun,rf,18.20552360820166,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,
 case6b_planetary_helical,sun,zn,22.192113318724722,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,
 case6b_planetary_helical,sun,de,44.384226637449444,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,
-case6b_planetary_helical,sun,undercutting(),False,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:237,
 case6b_planetary_helical,sun,validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:284,; empty list = no message
 case6b_planetary_helical,sun,validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:286,
 case6b_planetary_helical,planet,label,'planet',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:166,
@@ -79,7 +78,6 @@ case6b_planetary_helical,planet,df,36.41104721640332,mm,axisforge/core/machine_e
 case6b_planetary_helical,planet,rf,18.20552360820166,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,
 case6b_planetary_helical,planet,zn,22.192113318724722,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,
 case6b_planetary_helical,planet,de,44.384226637449444,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,
-case6b_planetary_helical,planet,undercutting(),False,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:237,
 case6b_planetary_helical,planet,validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:284,; empty list = no message
 case6b_planetary_helical,planet,validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:286,
 case6b_planetary_helical,ring,label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:169,

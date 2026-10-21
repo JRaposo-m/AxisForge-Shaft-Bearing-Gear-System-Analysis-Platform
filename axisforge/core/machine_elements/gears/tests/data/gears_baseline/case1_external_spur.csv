@@ -39,7 +39,6 @@ case1_external_spur,gear1(pinion),df,62.3853,mm,axisforge/core/machine_elements/
 case1_external_spur,gear1(pinion),rf,31.19265,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,
 case1_external_spur,gear1(pinion),zn,16.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,
 case1_external_spur,gear1(pinion),de,72.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,
-case1_external_spur,gear1(pinion),undercutting(),False,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:237,
 case1_external_spur,gear1(pinion),validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:284,; empty list = no message
 case1_external_spur,gear1(pinion),validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:286,
 case1_external_spur,gear2(wheel),label,'C14_wheel',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:166,
@@ -80,7 +79,6 @@ case1_external_spur,gear2(wheel),df,98.2935,mm,axisforge/core/machine_elements/g
 case1_external_spur,gear2(wheel),rf,49.14675,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,
 case1_external_spur,gear2(wheel),zn,24.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,
 case1_external_spur,gear2(wheel),de,108.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,
-case1_external_spur,gear2(wheel),undercutting(),False,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:237,
 case1_external_spur,gear2(wheel),validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:284,; empty list = no message
 case1_external_spur,gear2(wheel),validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:286,
 case1_external_spur,mesh,driver,'gear1',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:122,

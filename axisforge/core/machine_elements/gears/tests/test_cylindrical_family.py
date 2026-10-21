@@ -21,6 +21,7 @@ from axisforge.core.machine_elements.gears import (
     Gear,
     GearFamily,
     GearPair,
+    ManufacturedCylindricalGear,
     cylindrical,
 )
 from axisforge.core.machine_elements.gears.base import _GEAR_FAMILY_REGISTRY
@@ -36,6 +37,14 @@ def pair(g1, g2, **kw):
 
 def xfail(question):
     return pytest.mark.xfail(strict=True, raises=AssertionError, reason=question)
+
+
+def assert_undercut_only_as_cut(g):
+    """Ruling B (José, 2026-10-21): the ideal gear ``g`` (external, x < x_Emin) carries no undercut warning or
+    message; the same data as cut with zero allowances (x_Ei = x) is refused (MG-10)."""
+    assert g.warnings == () and not any("undercut" in m for m in g.validate())
+    with pytest.raises(ValueError, match="undercut at the lower allowance"):
+        ManufacturedCylindricalGear.from_ideal(g, E_sns=0.0, E_sni=0.0)
 
 
 # the baseline pairs: C14 external spur (z 16/24, mn 4.5 mm), H501 external helical (z 20/30, mn 3.5 mm,
@@ -381,8 +390,8 @@ def test_internal_pair_of_sdp_table_5_1():
 
     Built with check=False because the code refuses the pair, rightly: the path starts 0.029 mm beyond T1
     (T1A < 0), which is SDP's own involute-interference test, Eq. (5-2) (margin -0.0014). The pinion z 16, x 0
-    is undercut (x < x_Emin = 0.0641, ISO_21771_2007 Eq. (135)): one warning of the gear, not an error (MG-07,
-    José 2026-10-21). SDP prints the table as a geometry example, not as a pair free of interference."""
+    is undercut (x < x_Emin = 0.0641, ISO_21771_2007 Eq. (135)): the ideal gear says nothing, the same gear as
+    cut is refused (ruling B, José 2026-10-21). SDP prints the table as a geometry example, not as a pair free of interference."""
     p = pair(bc.gear(3.0, 16), bc.gear(3.0, -24, x=-0.5), check=False)
     assert p.inv_alphatw == pytest.approx(0.060401, abs=5e-7)
     assert math.degrees(p.alphatw) == pytest.approx(31.09362, abs=5e-6)       # exact, from the data
@@ -392,7 +401,7 @@ def test_internal_pair_of_sdp_table_5_1():
     assert (p.da1_w, p.da2_w) == (pytest.approx(54.000, abs=5e-4), pytest.approx(69.000, abs=5e-4))
     assert (p.gear1.df, p.gear2.df) == (pytest.approx(40.500, abs=5e-4), pytest.approx(82.500, abs=5e-4))
     msgs = p.validate()
-    assert len(p.gear1.warnings) == 1 and p.gear1.warnings[0].startswith("Gear: gear is undercut - z=16, mn=3.0")
+    assert_undercut_only_as_cut(p.gear1)
     assert len(msgs) == 1 and msgs[0].startswith("Interference: the path of contact passes a base-tangent point")
 
 
@@ -446,14 +455,12 @@ def test_legacy_beta_range():
 
 
 def test_legacy_gear_limits():
-    """Q55 (José, 2026-10-15): keep. Undercut is checked on an external gear only, as a warning (MG-07,
-    José 2026-10-21: assemble_gear["warnings"], no validate() message); the tip of a ring must lie
-    between its base and reference circles."""
+    """Q55 (José, 2026-10-15): keep. No limit for an external gear: the ideal layer has no undercut check (ruling B,
+    José 2026-10-21), the manufactured gear refuses it; the tip of a ring must lie between its base and reference
+    circles."""
     g = bc.gear(2.0, 8, label="g")
-    assert g.validate() == [] and len(g.warnings) == 1
-    assert g.warnings[0].startswith("g: gear is undercut - z=8, mn=2.0, alpha=20.0 deg, beta=0.0 deg, x=0.0 < x_Emin=")
-    assert "(ManufacturedCylindricalGear) gives the real check" in g.warnings[0]
-    assert FAMILY.undercutting(g) and not FAMILY.undercutting(bc.gear(2.0, 20)) and bc.gear(2.0, 20).warnings == ()
+    assert g.validate() == []
+    assert_undercut_only_as_cut(g)
     assert bc.gear(2.0, -60, x=-2.0, label="g", check=False).validate() == [
         "g: tip diameter da=124.0000 ≥ pitch diameter d=120.0000. Internal gear addendum must reduce da below d."]
 
@@ -546,8 +553,8 @@ def test_echoed_rows_are_counted():
     names, count = bc.ECHOED_ROWS
     echoed = sum(1 for c in cases for obj, name, _ in bc.baseline_rows(c) if name in names and obj != "link")
     total = sum(len(bc.baseline_rows(c)) for c in cases)
-    # 7224 rows: 7246 after block 4, less 18 deleted by Q13 and 4 by Q46
-    assert (total, total - echoed, echoed, count) == (7224, 7154, 70, 70)
+    # 7212 rows: 7246 after block 4, less 18 deleted by Q13, 4 by Q46 and 12 undercutting() by ruling B (2026-10-21)
+    assert (total, total - echoed, echoed, count) == (7212, 7142, 70, 70)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -569,6 +576,23 @@ def test_assemble_raises_one_error_with_every_message(case4):
     assert case4.T1A == pytest.approx(-0.07492456399709191, rel=1e-9)        # built with check=False
     with pytest.raises(ValueError, match="mn must be > 0"):
         bc.gear(-2.0, 8)
+    assert_undercut_only_as_cut(bc.gear(2.0, 8))        # the z 8 gear assembles: no ideal undercut check
+
+
+def test_assemble_gear_calls_no_clause_7_helper(monkeypatch):
+    """Ruling B (José, 2026-10-21): the ideal layer does not use the generating tool. With every clause 7 helper
+    and the tool record patched to raise, an undercut external gear, a ring and their pairs still assemble."""
+    def forbidden(*args, **kwargs):
+        raise AssertionError("clause 7 helper called by the ideal layer")
+
+    for name in ("_min_generating_profile_shift", "_generating_profile_shift", "_generated_root_diameter",
+                 "_root_form_diameter"):
+        monkeypatch.setattr(cylindrical, name, forbidden)
+    monkeypatch.setattr(cylindrical.GeneratingRackProfile, "from_basic_rack", forbidden)
+    pinion = bc.gear(2.0, 8)
+    assert pinion.warnings == () and pinion.validate() == []
+    pair(pinion, bc.gear(2.0, 60), check=False)
+    pair(*bc.make_internal(0.0), check=False)
 
 
 def test_low_contact_ratio_is_a_warning_not_an_error():
@@ -582,11 +606,11 @@ def test_low_contact_ratio_is_a_warning_not_an_error():
 
 
 def test_gear_messages_appear_once_in_the_pair():
-    """Q56 (José, 2026-10-15): each message of a gear once in the pair. The undercut of the pinion z 8 is a
-    warning of the gear (MG-07, José 2026-10-21), so the gear message is a negative roughness."""
+    """Q56 (José, 2026-10-15): each message of a gear once in the pair. The pinion z 8 is undercut, which the
+    ideal layer does not check (ruling B, José 2026-10-21), so the gear message is a negative roughness."""
     low = pair(bc.gear(2.0, 8, b=10.0, Ra=-1.0, label="p", check=False), bc.gear(2.0, 60, b=10.0, label="w"), check=False)
     assert sum("Ra must be >= 0" in m for m in low.validate()) == 1
-    assert not any("undercut" in m for m in low.validate())
+    assert_undercut_only_as_cut(low.gear1)
 
 
 def test_henriot_split_is_deleted(case2):

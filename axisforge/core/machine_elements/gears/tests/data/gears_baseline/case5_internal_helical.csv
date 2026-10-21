@@ -38,7 +38,6 @@ case5_internal_helical,gear1(pinion),df,36.41104721640332,mm,axisforge/core/mach
 case5_internal_helical,gear1(pinion),rf,18.20552360820166,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,
 case5_internal_helical,gear1(pinion),zn,22.192113318724722,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,
 case5_internal_helical,gear1(pinion),de,44.384226637449444,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,
-case5_internal_helical,gear1(pinion),undercutting(),False,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:237,
 case5_internal_helical,gear1(pinion),validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:284,; empty list = no message
 case5_internal_helical,gear1(pinion),validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:286,
 case5_internal_helical,gear2(ring),label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:169,

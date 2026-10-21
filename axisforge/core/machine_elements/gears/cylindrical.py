@@ -8,7 +8,9 @@ file follows the order of the standard: basic rack (ISO_53_1998), one gear (clau
 Two layers: IDEAL (clauses 4-5, nominal profile shift, zero backlash), ``CylindricalGearData`` ->
 ``Gear`` / ``GearPair``; MANUFACTURED (clause 7, tooth thickness allowances and generating tool;
 it only adds attributes to the ideal ones), ``CylindricalGearManufacturingData`` ->
-``ManufacturedCylindricalGear`` / ``ManufacturedCylindricalGearPair``.
+``ManufacturedCylindricalGear`` / ``ManufacturedCylindricalGearPair``. The IDEAL layer has no
+undercut check: undercut (7.7, Eq. (135)) needs a generating tool, so only the manufactured gear
+checks it (José, 2026-10-21, ruling B).
 
 Examples
 --------
@@ -56,8 +58,8 @@ def _normal_backlash(x_sum_from_al, x_sum, mn, alpha) -> float:
 
 # ==================================================================================================
 # Generation of the teeth by a rack-type cutter (ISO_21771_2007, clause 7): pure functions of numbers
-# and of the cutter record, shared by the ideal undercut check and the manufactured gear. External
-# gear, rack cutter (or hob) without protuberance, finish cutting.
+# and of the cutter record, used by the manufactured gear only (the ideal layer calls none of them).
+# External gear, rack cutter (or hob) without protuberance, finish cutting.
 # ==================================================================================================
 def _min_generating_profile_shift(z, mn, alphat, beta, cutter) -> tuple[float, float]:
     """Smallest generating profile shift coefficient that cuts the teeth without undercut.
@@ -102,32 +104,6 @@ def _min_generating_profile_shift(z, mn, alphat, beta, cutter) -> tuple[float, f
     hFaP0 = mn * (cutter.haP0 - cutter.rhoaP0 * (1.0 - np.sin(alphat)))
     x_Emin = hFaP0 / mn - z * np.sin(alphat) ** 2 / (2.0 * np.cos(beta))      # Eq. (135)
     return x_Emin, hFaP0
-
-
-def _ideal_x_Emin(data, alphat, beta) -> float:
-    """Limit of the IDEAL undercut check: x_Emin [-] with the counterpart of the basic rack.
-
-    ISO_21771_2007, 7.7, Eq. (135), p. 59 (PDF p. 63), through ``_min_generating_profile_shift``.
-
-    The one criterion of ``assemble_gear`` (warning) and ``undercutting``: the gear is undercut if
-    x < x_Emin (x_E = x). External gear only: -inf for an internal gear (Eq. (135) is printed for
-    external gears), so that no ring is reported.
-
-    Parameters
-    ----------
-    data : CylindricalGearData
-        Gear data (z, mn and the basic rack).
-    alphat, beta : float
-        Transverse pressure angle and reference helix angle of the gear [rad].
-
-    Returns
-    -------
-    float
-        x_Emin [-], or -inf for z < 0.
-    """
-    if data.z < 0:
-        return -np.inf
-    return _min_generating_profile_shift(data.z, data.mn, alphat, beta, GeneratingRackProfile.from_basic_rack(data))[0]
 
 
 def _generating_profile_shift(x, mn, alpha_n, E_sn) -> float:
@@ -353,8 +329,8 @@ _LEGACY = {
     "virtual_teeth": {"external": _virtual_teeth_external, "internal": lambda mn, z, beta: {}},
     # Q55 (José, 2026-10-15): keep. The helix-angle range is checked for an external gear only.
     "beta_range": {"external": _beta_range_external, "internal": lambda data, tag: []},
-    # Q55 (José, 2026-10-15): keep. da < d and da > db (ring). None for an external gear: its undercut is
-    # a warning, assemble_gear["warnings"] (MG-07, José 2026-10-21).
+    # Q55 (José, 2026-10-15): keep. da < d and da > db (ring). None for an external gear: the ideal layer
+    # has no undercut check (ruling B, José 2026-10-21); ManufacturedCylindricalGear checks it (MG-10).
     "gear_limits": {"external": lambda gear, tag: [], "internal": _gear_limits_internal},
 }
 
@@ -732,8 +708,9 @@ class CylindricalFamily(GearFamily):
     """Cylindrical involute gears and gear pairs on parallel axes (ISO_21771_2007), external and internal.
 
     ``assemble_gear`` gives the geometry of one gear (clause 4), ``assemble_pair`` that of two gears
-    in mesh (clause 5), ``validate_gear`` / ``validate_pair`` the limits (clause 7 and checks with
-    no library source), ``mesh_forces`` the forces of the mesh for a torque (D-0010,
+    in mesh (clause 5), ``validate_gear`` / ``validate_pair`` the limits of the ideal gear and
+    pair (no undercut check: it needs a tool; clause 7 is in ``assemble_manufactured_gear`` and
+    ``validate_manufactured_gear``, used by ``ManufacturedCylindricalGear``), ``mesh_forces`` the forces of the mesh for a torque (D-0010,
     ``MeshForces``), ``path_points``, ``curvature_radii``, ``surface_speeds`` the geometry and
     kinematics along the path of contact (the load sharing and the contact inputs are in
     ``axisforge.solvers.machine_elements.gears.contact``). An internal pair is a pair whose gear 2 has z < 0.
@@ -811,10 +788,6 @@ class CylindricalFamily(GearFamily):
             zn, de : virtual number of teeth z / cos(beta)**3 [-] and mn zn [mm]; external gear
             only (Q25). ISO_6336-1_2019, 9.3.1, Formula (81) (unchecked). ``de`` is not the d_e
             of ISO_6336-1_2019, Table F.1.
-            warnings : tuple of str, becomes ``Gear.warnings`` (never raises): "gear is undercut
-            ..." for an external gear with x < x_Emin (ISO_21771_2007, 7.7, Eq. (135), x_E = x,
-            counterpart rack of the basic rack, ``_ideal_x_Emin``; MG-07, José 2026-10-21); empty
-            otherwise.
 
         Raises
         ------
@@ -827,7 +800,9 @@ class CylindricalFamily(GearFamily):
         the root outside the reference circle of a ring. ``da`` carries no tip alteration k: the
         working tip diameters with k are pair quantities (``assemble_pair``). The base cylinder
         follows one rule for both kinds, so a ring and the pinion it meshes with have the same
-        alphat, betab and pbt (the condition of clause 5 for two gears in mesh).
+        alphat, betab and pbt (the condition of clause 5 for two gears in mesh). No undercut
+        check and no warning: undercut (ISO_21771_2007, 7.7, Eq. (135)) needs a generating tool,
+        so ``ManufacturedCylindricalGear`` checks it (ruling B, José 2026-10-21; MG-10).
 
         References
         ----------
@@ -859,17 +834,6 @@ class CylindricalFamily(GearFamily):
         df = d + 2 * mn * s * (x - hfP)
         dv = d + 2 * s * x * mn
 
-        # MG-07 (José, 2026-10-21): the ideal undercut is a warning, with x_E = x and the counterpart
-        # rack of the basic rack (Eq. (135): external gear, rack cutter)
-        warnings_ = ()
-        x_Emin = _ideal_x_Emin(data, alphat, beta)
-        if x < x_Emin:
-            warnings_ = (
-                f"{data.label or 'Gear'}: gear is undercut - z={z}, mn={mn}, alpha={data.alpha_n_deg} deg, "
-                f"beta={data.beta_n_deg} deg, x={x} < x_Emin={x_Emin:.6f} (ISO_21771_2007 Eq. (135), "
-                "counterpart of the basic rack, x_E = x); the manufactured gear (ManufacturedCylindricalGear) "
-                "gives the real check.",)
-
         return dict(
             alpha=alpha, beta=beta, hfP=hfP, mt=mt, mx=mx, pn=pn, pt=pt, pz=pz, px=px,
             d=d, r=d / 2.0, alphat=alphat, betab=betab, db=db, rb=db / 2.0,
@@ -877,7 +841,6 @@ class CylindricalFamily(GearFamily):
             pb=pn * np.cos(alpha), pbt=pt * np.cos(alphat),
             dv=dv, rv=dv / 2, da=da, ra=da / 2.0, df=df, rf=df / 2.0,
             **_legacy("virtual_teeth", z)(mn, z, beta),
-            warnings=warnings_,
         )
 
     @staticmethod
@@ -1343,37 +1306,9 @@ class CylindricalFamily(GearFamily):
         )
 
     # ----------------------------------------------------------------------------------------------
-    # Limits and checks (ISO 21771 clause 7; most have no library source)
+    # Limits and checks (ideal: no undercut check; manufactured: ISO 21771 clause 7; most have no
+    # library source)
     # ----------------------------------------------------------------------------------------------
-    @staticmethod
-    def undercutting(gear: Gear) -> bool:
-        """Undercut of the root of the IDEAL gear: x < x_Emin (MG-07, José 2026-10-21).
-
-        The ideal check: x_E = x and the counterpart of the gear's basic rack; an explicit
-        ``cutter`` of ``CylindricalGearManufacturingData`` is ignored on purpose. With a negative
-        allowance the real x_E < x, so the manufactured gear gives the real check.
-
-        Parameters
-        ----------
-        gear : Gear
-            Gear of this family.
-
-        Returns
-        -------
-        bool
-            External gear: True if its profile shift x is below the minimum generating profile
-            shift x_Emin of ISO_21771_2007, 7.7, Eq. (135) (``_ideal_x_Emin``, the criterion of the
-            warning of ``assemble_gear`` too). Internal gear: False (Eq. (135) is for external
-            gears).
-
-        Notes
-        -----
-        For ISO 53 rack A, spur, the limit equals the classical z form z < 2 cos(beta) /
-        sin(alpha_t)**2 (haP - x) to 3e-5 in x; at beta 15 deg to about 4e-3, because alpha_t
-        enters h_FaP0.
-        """
-        return bool(gear.x < _ideal_x_Emin(gear.data, gear.alphat, gear.beta))
-
     def validate_gear(self, gear: Gear) -> list[str]:
         """Check one gear.
 
@@ -1381,8 +1316,9 @@ class CylindricalFamily(GearFamily):
         -------
         list of str
             The messages of ``CylindricalGearData.validate``, then by kind (Q55, keep): da < d and
-            da > db for a ring; none for an external gear (its undercut is a warning of
-            ``assemble_gear``, MG-07, José 2026-10-21).
+            da > db for a ring; none for an external gear. No undercut check: it needs a
+            generating tool, so ``validate_manufactured_gear`` has it (ruling B, José
+            2026-10-21; MG-10).
         """
         tag = gear.label or "Gear"
         return gear.data.validate() + _legacy("gear_limits", gear.z)(gear, tag)
@@ -1972,9 +1908,10 @@ class ManufacturedCylindricalGear(Gear):
     generating tool give (clause 7, ``CylindricalFamily.assemble_manufactured_gear``). The class
     ONLY ADDS: no nominal attribute is redefined, so the gear is accepted wherever a ``Gear`` is
     (``GearPair.assemble``, ``GearElement``, ``Transmission``) with identical results. The one
-    exception is an external gear with x < x_Emin: on the ideal gear that is a warning (MG-07),
-    but as cut it is an error even with zero allowances (x_Ei = x < x_Emin, MG-10), so
-    ``from_ideal(g, E_sns=0, E_sni=0)`` raises unless ``check=False``.
+    exception is an external gear with x < x_Emin: the ideal gear says nothing (no undercut
+    check, ruling B, José 2026-10-21), but as cut it is an error even with zero allowances
+    (x_Ei = x < x_Emin, MG-10), so ``from_ideal(g, E_sns=0, E_sni=0)`` raises unless
+    ``check=False``.
 
     Attributes
     ----------
@@ -2027,7 +1964,8 @@ class ManufacturedCylindricalGear(Gear):
         -------
         ManufacturedCylindricalGear
             The nominal attributes, then the manufactured ones; ``warnings`` joins the nominal
-            warnings and the manufactured ones.
+            warnings (none today: ``assemble_gear`` has no undercut warning, ruling B) and the
+            manufactured ones.
 
         Raises
         ------
@@ -2043,7 +1981,7 @@ class ManufacturedCylindricalGear(Gear):
             raise TypeError(f"{cls.__name__} needs CylindricalGearManufacturingData, got {type(data).__name__}")
         gear = cls(family, data)
         nominal = family.assemble_gear(data)
-        nominal_warnings = nominal.pop("warnings")
+        nominal_warnings = nominal.pop("warnings", ())
         for attr, value in nominal.items():    # the manufactured sizes are computed from the nominal ones
             setattr(gear, attr, value)
         computed = family.assemble_manufactured_gear(gear)

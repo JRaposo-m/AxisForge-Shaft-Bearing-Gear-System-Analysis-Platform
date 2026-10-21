@@ -39,7 +39,6 @@ case2_external_helical,gear1(pinion),df,64.98563262870582,mm,axisforge/core/mach
 case2_external_helical,gear1(pinion),rf,32.49281631435291,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,
 case2_external_helical,gear1(pinion),zn,22.192113318724722,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,
 case2_external_helical,gear1(pinion),de,77.67239661553653,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,
-case2_external_helical,gear1(pinion),undercutting(),False,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:237,
 case2_external_helical,gear1(pinion),validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:284,; empty list = no message
 case2_external_helical,gear1(pinion),validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:286,
 case2_external_helical,gear2(wheel),label,'H501_wheel',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:166,
@@ -80,7 +79,6 @@ case2_external_helical,gear2(wheel),df,100.57769894305872,mm,axisforge/core/mach
 case2_external_helical,gear2(wheel),rf,50.28884947152936,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,
 case2_external_helical,gear2(wheel),zn,33.28816997808708,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,
 case2_external_helical,gear2(wheel),de,116.5085949233048,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,
-case2_external_helical,gear2(wheel),undercutting(),False,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:237,
 case2_external_helical,gear2(wheel),validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:284,; empty list = no message
 case2_external_helical,gear2(wheel),validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:286,
 case2_external_helical,mesh,driver,'gear1',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:122,

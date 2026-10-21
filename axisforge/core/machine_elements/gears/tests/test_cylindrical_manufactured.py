@@ -1,8 +1,8 @@
 """Tests of the manufactured layer of the cylindrical family (``cylindrical``, ISO_21771_2007 clause 7).
 
 Block 1: the tool record ``GeneratingRackProfile``, the input record ``CylindricalGearManufacturingData``,
-the four generating helpers against closed forms, and the ideal undercut check in the x form (Eq. (135)),
-which must give the old z-form answer for every baseline gear.
+the four generating helpers against closed forms (the ideal layer has no undercut check: ruling B, José
+2026-10-21).
 Block 2: ``ManufacturedCylindricalGear``: zero allowances reproduce the ideal gear, pair and shaft loads;
 the hand check of H501; internal gears; undercut at the lower allowance.
 Block 3: ``ManufacturedCylindricalGearPair``: backlash, active root diameters, d_Nf >= d_Ff.
@@ -125,23 +125,6 @@ def test_minimum_generating_profile_shift_rack_a_spur():
     assert all(cylindrical._min_generating_profile_shift(z, 2.0, a, 0.0, RACK_A)[0] < 0.0 for z in range(18, 41))
 
 
-def test_undercutting_gives_the_old_answer_for_every_baseline_gear():
-    """MG-07: ``undercutting`` is now x < x_Emin (Eq. (135), counterpart of the basic rack). The old criterion was the
-    z form z < 2 cos(beta) / sin(alpha_t)**2 (haP - x), reimplemented here as the reference: the two differ only
-    by h_FaP0 / m_n against haP (3e-5 for rack A, spur; about 4e-3 at beta 15 deg), so every baseline gear, far from the limit, keeps its answer
-    (False, the golden rows ``undercutting()``). A gear well below the limit is True in both forms. A ring: False."""
-    def old_z_form(g):
-        return g.z < 2.0 * math.cos(g.beta) / math.sin(g.alphat) ** 2 * (g.haP - g.x)
-
-    gears = _baseline_gears() + [bc.gear(2.0, 8), bc.gear(2.0, 12, beta_n_deg=15.0, hand=1)]
-    assert len(gears) == 14
-    for g in gears:
-        assert FAMILY.undercutting(g) == old_z_form(g), g.label
-    assert [FAMILY.undercutting(g) for g in gears[-2:]] == [True, True]
-    assert all(g.warnings == () for g in gears[:-2]) and all(len(g.warnings) == 1 for g in gears[-2:])
-    assert not FAMILY.undercutting(bc.make_internal(0.0)[1])
-
-
 @pytest.mark.parametrize("name", ("C14", "H501"))
 @pytest.mark.parametrize("E_sn", (0.0, -0.1))
 def test_root_form_diameter_three_forms(name, E_sn):
@@ -173,15 +156,15 @@ def test_zero_allowances_reproduce_the_ideal_gear(g):
     and each field of ``CylindricalGearData``, Q02 tolerance), x_Es = x_Ei = x, s_ns = s_ni = s_n of Eq. (49),
     s_ats = s_ati = Eq. (38) at the nominal x (computed here from d_a, d_b, alpha_t, x, z), and for an external
     gear d_fEs = d_fEi = d_f (Eq. (125) at x_E = x with haP0 = hfP is Eq. (34)). The manufactured keys never
-    overwrite a NOMINAL key (only ``warnings`` is shared, and joined); ``cutter`` deliberately replaces the copy of
-    the data field (the resolved tool; the input stays in ``data.cutter``)."""
+    overwrite a NOMINAL key (the ideal gear has no ``warnings`` key since ruling B, José 2026-10-21); ``cutter``
+    deliberately replaces the copy of the data field (the resolved tool; the input stays in ``data.cutter``)."""
     m = ManufacturedCylindricalGear.from_ideal(g, E_sns=0.0, E_sni=0.0)
     nominal, computed = FAMILY.assemble_gear(g.data), FAMILY.assemble_manufactured_gear(m)
-    assert nominal.keys() & computed.keys() == {"warnings"}
+    assert nominal.keys() & computed.keys() == set()
     assert computed.keys() & {f.name for f in dataclasses.fields(m.data)} == {"cutter"}
-    for name in [k for k in nominal if k != "warnings"] + [f.name for f in dataclasses.fields(CylindricalGearData)]:
+    for name in list(nominal) + [f.name for f in dataclasses.fields(CylindricalGearData)]:
         assert _same(getattr(m, name), getattr(g, name)), name
-    assert m.warnings[:len(g.warnings)] == g.warnings
+    assert g.warnings == () and m.warnings == computed["warnings"]
     assert m.x_Es == m.x_Ei == g.x
     s_n = g.mn * (math.pi / 2 + 2 * g.x * math.tan(g.alpha))
     assert m.s_ns == pytest.approx(s_n, rel=1e-12) and m.s_ni == pytest.approx(s_n, rel=1e-12)
@@ -281,7 +264,7 @@ def test_internal_gear(ring):
 
 
 def test_undercut_at_the_lower_allowance():
-    """MG-10 (José, 2026-10-21): spur z 17, mn 2, x 0.01 (just above x_Emin = 0.005657, no nominal warning),
+    """MG-10 (José, 2026-10-21): spur z 17, mn 2, x 0.01 (just above x_Emin = 0.005657),
     E_sns = 0, E_sni = -0.1 mm: x_Ei = 0.01 - 0.1 / (4 tan 20 deg) < x_Emin. validate() has the undercut error
     (assemble with the checks refuses the gear); d_Ffi is None with its warning (Eq. (128) holds only without
     undercut, MG-11), d_Ffs is computed."""

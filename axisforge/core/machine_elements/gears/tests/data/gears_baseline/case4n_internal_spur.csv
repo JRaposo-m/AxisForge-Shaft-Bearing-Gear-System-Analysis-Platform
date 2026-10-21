@@ -38,7 +38,6 @@ case4n_internal_spur,gear1(pinion),df,43.0,,,"new case (Q15, answer 4; José 202
 case4n_internal_spur,gear1(pinion),rf,21.5,,,"new case (Q15, answer 4; José 2026-10-15)"
 case4n_internal_spur,gear1(pinion),zn,24.0,,,"new case (Q15, answer 4; José 2026-10-15)"
 case4n_internal_spur,gear1(pinion),de,48.0,,,"new case (Q15, answer 4; José 2026-10-15)"
-case4n_internal_spur,gear1(pinion),undercutting(),False,,,"new case (Q15, answer 4; José 2026-10-15)"
 case4n_internal_spur,gear1(pinion),validate().len,0,,,"new case (Q15, answer 4; José 2026-10-15)"
 case4n_internal_spur,gear1(pinion),validate_or_raise(),None,,,"new case (Q15, answer 4; José 2026-10-15)"
 case4n_internal_spur,gear2(ring),label,'ring',,,"new case (Q15, answer 4; José 2026-10-15)"

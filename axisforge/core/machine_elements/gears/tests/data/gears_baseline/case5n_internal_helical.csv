@@ -38,7 +38,6 @@ case5n_internal_helical,gear1(pinion),df,44.69325665968398,,,"new case (Q15, ans
 case5n_internal_helical,gear1(pinion),rf,22.34662832984199,,,"new case (Q15, answer 4; José 2026-10-15)"
 case5n_internal_helical,gear1(pinion),zn,26.630535982469667,,,"new case (Q15, answer 4; José 2026-10-15)"
 case5n_internal_helical,gear1(pinion),de,53.26107196493933,,,"new case (Q15, answer 4; José 2026-10-15)"
-case5n_internal_helical,gear1(pinion),undercutting(),False,,,"new case (Q15, answer 4; José 2026-10-15)"
 case5n_internal_helical,gear1(pinion),validate().len,0,,,"new case (Q15, answer 4; José 2026-10-15)"
 case5n_internal_helical,gear1(pinion),validate_or_raise(),None,,,"new case (Q15, answer 4; José 2026-10-15)"
 case5n_internal_helical,gear2(ring),label,'ring',,,"new case (Q15, answer 4; José 2026-10-15)"

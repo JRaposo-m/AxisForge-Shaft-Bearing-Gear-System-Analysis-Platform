@@ -1,11 +1,11 @@
-"""Tests of the manufactured layer of the cylindrical family (``cylindrical``, ISO_21771_2007 clause 7).
+"""Tests of the manufactured cylindrical family ``ManufacturedCylindricalFamily`` (ISO_21771_2007 clause 7).
 
 Block 1: the tool record ``GeneratingRackProfile``, the input record ``CylindricalGearManufacturingData``,
 the four generating helpers against closed forms (the ideal layer has no undercut check: ruling B, José
 2026-10-21).
-Block 2: ``ManufacturedCylindricalGear``: zero allowances reproduce the ideal gear, pair and shaft loads;
+Block 2: one gear of ``ManufacturedCylindricalFamily``: zero allowances reproduce the ideal gear, pair and shaft loads;
 the hand check of H501; internal gears; undercut at the lower allowance.
-Block 3: ``ManufacturedCylindricalGearPair``: backlash, active root diameters, d_Nf >= d_Ff.
+Block 3: a pair of ``ManufacturedCylindricalFamily``: backlash, active root diameters, d_Nf >= d_Ff.
 Block 4: the placeholders (MG-02, MG-15 to MG-18) refuse to compute.
 Units: lengths [mm], angles [rad] (inputs in [deg]).
 """
@@ -19,17 +19,17 @@ from axisforge.core.machine_elements.gears import (
     CylindricalFamily,
     CylindricalGearData,
     CylindricalGearManufacturingData,
+    Gear,
     GearPair,
     GeneratingPinionCutter,
     GeneratingRackProfile,
-    ManufacturedCylindricalGear,
-    ManufacturedCylindricalGearPair,
-    cylindrical,
+    ManufacturedCylindricalFamily,
 )
 from axisforge.core.machine_elements.gears.tests import baseline_cases as bc
 from axisforge.core.machine_elements.gears.tests.test_cylindrical_family import PAIRS
 
 FAMILY = CylindricalFamily()
+MADE = ManufacturedCylindricalFamily()
 RACK_A = GeneratingRackProfile(haP0=1.25, rhoaP0=0.38, alpha_P0_deg=20.0)   # counterpart of ISO 53 rack A
 MANUFACTURED = ("cutter", "hFaP0", "x_Es", "x_Ei", "x_Emin", "s_ns", "s_ni", "s_ats", "s_ati",
                 "d_fEs", "d_fEi", "d_Ffs", "d_Ffi")
@@ -121,8 +121,8 @@ def test_minimum_generating_profile_shift_rack_a_spur():
     """ISO_21771_2007 7.7, Eq. (135), rack A, spur: x_Emin(z 17) = 1.25 - 0.38 (1 - sin 20 deg) - 17 sin^2(20 deg) / 2
     = +0.005657 > 0, so z 17 at x = 0 is slightly undercut (classical z_min = 17.1), and x_Emin < 0 for z 18..40."""
     a = math.radians(20.0)
-    assert cylindrical._min_generating_profile_shift(17, 2.0, a, 0.0, RACK_A)[0] == pytest.approx(0.005657, abs=1e-6)
-    assert all(cylindrical._min_generating_profile_shift(z, 2.0, a, 0.0, RACK_A)[0] < 0.0 for z in range(18, 41))
+    assert MADE._min_generating_profile_shift(17, 2.0, a, 0.0, RACK_A)[0] == pytest.approx(0.005657, abs=1e-6)
+    assert all(MADE._min_generating_profile_shift(z, 2.0, a, 0.0, RACK_A)[0] < 0.0 for z in range(18, 41))
 
 
 @pytest.mark.parametrize("name", ("C14", "H501"))
@@ -136,8 +136,8 @@ def test_root_form_diameter_three_forms(name, E_sn):
     This checks the algebraic identity of the printed forms (and the coded first form), not an independent
     reading of the standard."""
     g = bc.pinion_wheel(name)[0]
-    x_E = cylindrical._generating_profile_shift(g.x, g.mn, g.alpha, E_sn)
-    d_Ff = cylindrical._root_form_diameter(g.d, g.db, g.alphat, x_E, g.mn, RACK_A)
+    x_E = MADE._generating_profile_shift(g.x, g.mn, g.alpha, E_sn)
+    d_Ff = MADE._root_form_diameter(g.d, g.db, g.alphat, x_E, g.mn, RACK_A)
     h = g.mn * (RACK_A.haP0 - x_E - RACK_A.rhoaP0 * (1.0 - math.sin(g.alphat)))
     second = math.sqrt((g.d - 2.0 * h) ** 2 + 4.0 * h ** 2 / math.tan(g.alphat) ** 2)
     tan_Ff = math.tan(g.alphat) - 4.0 * (RACK_A.haP0 - RACK_A.rhoaP0 * (1.0 - math.sin(g.alphat)) - x_E) \
@@ -148,20 +148,21 @@ def test_root_form_diameter_three_forms(name, E_sn):
 
 
 # ----------------------------------------------------------------------------------------------
-# ManufacturedCylindricalGear
+# one gear of ManufacturedCylindricalFamily
 # ----------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("g", _baseline_gears() + _rings(), ids=lambda g: f"{g.label or 'g'}_z{g.z}_beta{g.beta_n_deg:g}")
 def test_zero_allowances_reproduce_the_ideal_gear(g):
     """With E_sns = E_sni = 0 the manufactured gear keeps every nominal attribute (each key of ``assemble_gear``
     and each field of ``CylindricalGearData``, Q02 tolerance), x_Es = x_Ei = x, s_ns = s_ni = s_n of Eq. (49),
     s_ats = s_ati = Eq. (38) at the nominal x (computed here from d_a, d_b, alpha_t, x, z), and for an external
-    gear d_fEs = d_fEi = d_f (Eq. (125) at x_E = x with haP0 = hfP is Eq. (34)). The manufactured keys never
+    gear d_fEs = d_fEi = d_f (Eq. (125) at x_E = x with haP0 = hfP is Eq. (34)). ``assemble_gear`` of the
+    manufactured family returns the nominal keys first, with the nominal values, and the manufactured keys never
     overwrite a NOMINAL key (the ideal gear has no ``warnings`` key since ruling B, José 2026-10-21); ``cutter``
     deliberately replaces the copy of the data field (the resolved tool; the input stays in ``data.cutter``)."""
-    m = ManufacturedCylindricalGear.from_ideal(g, E_sns=0.0, E_sni=0.0)
-    nominal, computed = FAMILY.assemble_gear(g.data), FAMILY.assemble_manufactured_gear(m)
-    assert nominal.keys() & computed.keys() == set()
-    assert computed.keys() & {f.name for f in dataclasses.fields(m.data)} == {"cutter"}
+    m = MADE.from_ideal(g, E_sns=0.0, E_sni=0.0)
+    nominal, computed = FAMILY.assemble_gear(g.data), MADE.assemble_gear(m.data)
+    assert list(computed)[:len(nominal)] == list(nominal) and all(_same(computed[k], nominal[k]) for k in nominal)
+    assert (computed.keys() - nominal.keys()) & {f.name for f in dataclasses.fields(m.data)} == {"cutter"}
     for name in list(nominal) + [f.name for f in dataclasses.fields(CylindricalGearData)]:
         assert _same(getattr(m, name), getattr(g, name)), name
     assert g.warnings == () and m.warnings == computed["warnings"]
@@ -178,7 +179,7 @@ def test_zero_allowances_reproduce_the_ideal_gear(g):
 
 def _zero(g):
     """The manufactured gear of ``g`` with zero allowances."""
-    return ManufacturedCylindricalGear.from_ideal(g, E_sns=0.0, E_sni=0.0)
+    return MADE.from_ideal(g, E_sns=0.0, E_sni=0.0)
 
 
 def test_manufactured_gears_give_the_same_shaft_loads():
@@ -189,7 +190,7 @@ def test_manufactured_gears_give_the_same_shaft_loads():
     p, w = bc.pinion_wheel("H501", position=bc.GEAR_POS)
     a = bc.resolve_case7(bc.build_case7("pinion", 1, gears=(p, w)))
     b = bc.resolve_case7(bc.build_case7("pinion", 1, gears=(_zero(p), _zero(w))))
-    assert isinstance(b.geP.gear, ManufacturedCylindricalGear)
+    assert isinstance(b.geP.gear.family, ManufacturedCylindricalFamily)
     for name in ("torque_Nm", "rotation", "speed_rpm"):
         assert _same(getattr(b.resolved, name), getattr(a.resolved, name)), name
     assert _same([dataclasses.asdict(m) for m in b.resolved.meshes], [dataclasses.asdict(m) for m in a.resolved.meshes])
@@ -205,15 +206,15 @@ def test_from_ideal_equals_assemble():
     """``from_ideal`` builds the same gear as ``assemble`` on the same data and allowances (every attribute). From a
     manufactured gear only the nominal fields are copied: the new allowances replace the old ones."""
     g = bc.pinion_wheel("H501")[0]
-    a = ManufacturedCylindricalGear.from_ideal(g, E_sns=-0.05, E_sni=-0.10)
+    a = MADE.from_ideal(g, E_sns=-0.05, E_sni=-0.10)
     data = CylindricalGearManufacturingData(**{f.name: getattr(g.data, f.name) for f in dataclasses.fields(g.data)},
                                             E_sns=-0.05, E_sni=-0.10)
-    b = ManufacturedCylindricalGear.assemble(FAMILY, data)
+    b = Gear.assemble(MADE, data)
     assert vars(a).keys() == vars(b).keys()
     for name, value in vars(b).items():
         if name != "_family":
             assert _same(getattr(a, name), value), name
-    assert ManufacturedCylindricalGear.from_ideal(a, E_sns=0.0, E_sni=-0.02).data.E_sni == -0.02
+    assert MADE.from_ideal(a, E_sns=0.0, E_sni=-0.02).data.E_sni == -0.02
 
 
 # _evidence/hand_check_output.txt (vault 80_Inbox/2026-10-21/cylindrical_manufactured_gear/), printed to 10 decimals
@@ -235,7 +236,7 @@ def test_hand_check_of_h501(which):
     ISO_21771_2007; output ``hand_check_output.txt``), not from the code under test: Eq. (123)/(124), (118)/(119)
     with (49), (38) at d_a with x_E, (125), (128), (135)."""
     g = bc.pinion_wheel("H501")[which == "wheel"]
-    m = ManufacturedCylindricalGear.from_ideal(g, E_sns=-0.05, E_sni=-0.10)
+    m = MADE.from_ideal(g, E_sns=-0.05, E_sni=-0.10)
     for name, value in H501_HAND[which].items():
         assert getattr(m, name) == pytest.approx(value, abs=1e-9), name
     assert m.cutter == RACK_A and m.data.cutter is None and m.validate() == [] and m.warnings == ()
@@ -246,7 +247,7 @@ def test_ring_tip_thickness_against_an_independent_route():
     from ``_evidence/hand_check_output.txt`` (vault 80_Inbox/2026-10-21/cylindrical_manufactured_gear/, last line):
     the space width of the external gear z +60 at the same diameter, ISO_21771_2007 4.7.3, Eq. (43), a route
     independent of Eq. (38) with z/abs(z)."""
-    m = ManufacturedCylindricalGear.from_ideal(_rings()[0], E_sns=0.0, E_sni=0.0)
+    m = MADE.from_ideal(_rings()[0], E_sns=0.0, E_sni=0.0)
     assert m.da == pytest.approx(116.0, rel=1e-12)
     assert m.s_ats == m.s_ati == pytest.approx(1.8331162424, abs=1e-9)
 
@@ -256,7 +257,7 @@ def test_internal_gear(ring):
     """z < 0: x_E, s_n and the tip thickness (Eq. (38), both kinds) are computed; hFaP0, x_Emin, d_fE, d_Ff are None
     (a rack-type cutter cannot generate an internal gear; Eq. (125), (128), (135) are for external gears; MG-03),
     with one warning; the gear validates."""
-    m = ManufacturedCylindricalGear.from_ideal(ring, E_sns=-0.05, E_sni=-0.10)
+    m = MADE.from_ideal(ring, E_sns=-0.05, E_sni=-0.10)
     assert m.x_Ei < m.x_Es < ring.x and m.s_ni < m.s_ns and 0.0 < m.s_ati < m.s_ats
     assert all(getattr(m, name) is None for name in ("hFaP0", "x_Emin", "d_fEs", "d_fEi", "d_Ffs", "d_Ffi"))
     assert len(m.warnings) == 1 and "a rack-type cutter cannot generate it" in m.warnings[0]
@@ -270,8 +271,8 @@ def test_undercut_at_the_lower_allowance():
     undercut, MG-11), d_Ffs is computed."""
     data = CylindricalGearManufacturingData(2.0, 17, x=0.01, E_sns=0.0, E_sni=-0.1, label="g")
     with pytest.raises(ValueError, match="undercut at the lower allowance"):
-        ManufacturedCylindricalGear.assemble(FAMILY, data)
-    m = ManufacturedCylindricalGear.assemble(FAMILY, data, check=False)
+        Gear.assemble(MADE, data)
+    m = Gear.assemble(MADE, data, check=False)
     assert m.x_Ei < m.x_Emin < m.x_Es
     assert m.validate() == [f"g: undercut at the lower allowance - x_Ei={m.x_Ei:.6f} < x_Emin={m.x_Emin:.6f} "
                             "(ISO_21771_2007 Eq. (135)); d_Ff (Eq. (128)) is not valid"]
@@ -283,30 +284,28 @@ def test_pointed_tooth_is_an_error():
     """s_at <= 0 at the tip circle is an error (ISO_21771_2007 7.9 prints no minimum; none is invented): spur
     z 10, mn 2, x 1.0, whose tooth is pointed at the nominal tip; both allowances are reported."""
     data = CylindricalGearManufacturingData(2.0, 10, x=1.0, E_sns=-0.05, E_sni=-0.1)
-    m = ManufacturedCylindricalGear.assemble(FAMILY, data, check=False)
+    m = Gear.assemble(MADE, data, check=False)
     assert m.s_ati < m.s_ats <= 0.0
     assert [e.split(" - ")[0] for e in m.validate()] == ["Gear: pointed tooth", "Gear: pointed tooth"]
 
 
 def test_only_cylindrical_manufacturing_inputs_are_accepted():
-    with pytest.raises(TypeError, match="needs CylindricalGearManufacturingData"):
-        ManufacturedCylindricalGear.assemble(FAMILY, CylindricalGearData(2.0, 20))
-    with pytest.raises(TypeError, match="needs a CylindricalFamily"):
-        ManufacturedCylindricalGear.assemble(object(), CylindricalGearManufacturingData(2.0, 20, E_sns=0.0, E_sni=0.0))
+    with pytest.raises(TypeError, match="ManufacturedCylindricalFamily needs CylindricalGearManufacturingData"):
+        Gear.assemble(MADE, CylindricalGearData(2.0, 20))
 
 
 # ----------------------------------------------------------------------------------------------
-# ManufacturedCylindricalGearPair
+# a pair of ManufacturedCylindricalFamily
 # ----------------------------------------------------------------------------------------------
 def _made_pair(gears, check=True, **kw):
-    return ManufacturedCylindricalGearPair.assemble(FAMILY, gear1=gears[0], gear2=gears[1], check=check, **kw)
+    return GearPair.assemble(MADE, gear1=gears[0], gear2=gears[1], check=check, **kw)
 
 
 @pytest.mark.parametrize("case", PAIRS)
 def test_zero_allowances_reproduce_the_ideal_pair(case):
-    """Zero allowances, derived a_w, the baseline pairs (``test_cylindrical_family.PAIRS``): a ``GearPair`` and a
-    ``ManufacturedCylindricalGearPair`` of the manufactured gears have every nominal pair attribute and the mesh
-    forces of the ideal pair (Q02 tolerance), and jbn_max = jbn_min = 0 (Eq. (63) with x_E = x at the
+    """Zero allowances, derived a_w, the baseline pairs (``test_cylindrical_family.PAIRS``): a ``GearPair`` of the
+    ideal family and one of ``ManufacturedCylindricalFamily``, both of the manufactured gears, have every nominal
+    pair attribute and the mesh forces of the ideal pair (Q02 tolerance), and jbn_max = jbn_min = 0 (Eq. (63) with x_E = x at the
     zero-backlash a_w), for external and internal pairs. Old case 4 fails validate() (Q39, Q24): check=False.
 
     ``validate()`` of the manufactured pair adds nothing for an external pair; for every internal pair it adds the
@@ -350,7 +349,7 @@ def test_hand_check_of_the_h501_pair():
     80_Inbox/2026-10-21/cylindrical_manufactured_gear/; independent script: Eq. (55) with a Newton inverse involute,
     Eq. (63), Eq. (64), (65) with d_Fa = d_a): jbn_max 0.1879385242, jbn_min 0.0939692621, d_Nf1 68.9500671039,
     d_Nf2 104.7691058425 mm; jbn = -(E_sn1 + E_sn2) cos(alpha_n) at the derived a_w. d_Nf >= d_Ff holds."""
-    made = [ManufacturedCylindricalGear.from_ideal(g, E_sns=-0.05, E_sni=-0.10) for g in bc.pinion_wheel("H501")]
+    made = [MADE.from_ideal(g, E_sns=-0.05, E_sni=-0.10) for g in bc.pinion_wheel("H501")]
     pair = _made_pair(made)
     for name, value in dict(jbn_max=0.1879385242, jbn_min=0.0939692621, d_Nf1=68.9500671039, d_Nf2=104.7691058425).items():
         assert getattr(pair, name) == pytest.approx(value, abs=1e-9), name
@@ -365,8 +364,8 @@ def test_active_root_below_the_root_form_diameter_is_an_error():
     d_Nf1 = 22.7525 mm < d_Ff1 = 22.8273 mm (-0.075 mm): contact on the pinion root fillet (ISO_21771_2007 5.4.1,
     Eq. (66), (67)); one error per allowance, and nothing else."""
     def made(z, x, **kw):
-        return ManufacturedCylindricalGear.assemble(
-            FAMILY, CylindricalGearManufacturingData(2.0, z, x=x, b=10.0, E_sns=0.0, E_sni=0.0, label=f"z{z}", **kw))
+        return Gear.assemble(
+            MADE, CylindricalGearManufacturingData(2.0, z, x=x, b=10.0, E_sns=0.0, E_sni=0.0, label=f"z{z}", **kw))
 
     pair = _made_pair((made(12, 0.6), made(60, 0.0, haP=1.1)), check=False)
     assert pair.T1A > 0.0 and pair.al - pair.da2_w / 2 - pair.gear1.rf == pytest.approx(0.2358117, abs=1e-6)
@@ -387,13 +386,15 @@ def test_internal_pair_warns_that_the_ring_is_not_checked():
                              "undercut at that allowance).",)
 
 
-def test_pair_of_plain_gears_is_refused_and_repr_names_the_class():
+def test_pair_of_ideal_gears_is_refused():
+    """A pair of the manufactured family needs two gears of that family; its repr is that of a ``GearPair``."""
     p, w = bc.pinion_wheel("H501")
-    with pytest.raises(TypeError, match="needs two ManufacturedCylindricalGear, got Gear and Gear"):
+    with pytest.raises(TypeError, match="needs two gears assembled with ManufacturedCylindricalFamily, got "
+                                        "CylindricalFamily and CylindricalFamily"):
         _made_pair((p, w))
-    with pytest.raises(TypeError, match="needs a CylindricalFamily"):
-        ManufacturedCylindricalGearPair.assemble(object(), gear1=_zero(p), gear2=_zero(w))
-    assert repr(_made_pair((_zero(p), _zero(w)))).startswith("ManufacturedCylindricalGearPair(z1=20, z2=30, ")
+    with pytest.raises(TypeError, match="got ManufacturedCylindricalFamily and CylindricalFamily"):
+        _made_pair((_zero(p), w))
+    assert repr(_made_pair((_zero(p), _zero(w)))).startswith("GearPair(z1=20, z2=30, ")
 
 
 # ----------------------------------------------------------------------------------------------
@@ -405,14 +406,12 @@ ANNEX_A = (("span_measurement", (3,)), ("dimension_over_balls", (7.0,)), ("chord
 
 @pytest.mark.parametrize("name, args", ANNEX_A, ids=[n for n, _ in ANNEX_A])
 def test_annex_a_test_dimensions_are_placeholders(name, args):
-    """MG-15: each Annex A test dimension, on the family and as the shortcut of the gear, raises
-    NotImplementedError naming the issue."""
+    """MG-15: each Annex A test dimension of the manufactured family raises NotImplementedError naming the
+    issue."""
     gear = _zero(bc.pinion_wheel("H501")[0])
     args = (gear,) if args is None else args          # the master gear of A.8
     with pytest.raises(NotImplementedError, match="MG-15"):
-        getattr(FAMILY, name)(gear, *args)
-    with pytest.raises(NotImplementedError, match="MG-15"):
-        getattr(gear, name)(*args)
+        getattr(MADE, name)(gear, *args)
 
 
 def test_pinion_type_cutter_is_a_placeholder():
@@ -432,4 +431,4 @@ def test_placeholder_fields_are_refused(target, field, value, issue):
     errors = data.validate()
     assert len(errors) == 1 and field in errors[0] and issue in errors[0]
     with pytest.raises(ValueError, match=issue):
-        ManufacturedCylindricalGear.assemble(FAMILY, data)
+        Gear.assemble(MADE, data)

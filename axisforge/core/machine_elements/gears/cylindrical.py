@@ -1,25 +1,32 @@
 """Cylindrical involute gears on parallel axes, external and internal, spur and helical.
 
-One family for both kinds of teeth under the sign convention of ISO_21771_2007, 4.1.5: the number
-of teeth of an internal gear is negative, every diameter and the centre distance are positive. The
-file follows the order of the standard: basic rack (ISO_53_1998), one gear (clause 4), the pair
-(clause 5), limits and checks (clause 7), the tooth forces, then the contact inputs along the path
-(5.4-5.6). Lengths in [mm], angles in [rad] (inputs in [deg]), torques in [N m], forces in [N].
-Two layers: IDEAL (clauses 4-5, nominal profile shift, zero backlash), ``CylindricalGearData`` ->
-``Gear`` / ``GearPair``; MANUFACTURED (clause 7, tooth thickness allowances and generating tool;
-it only adds attributes to the ideal ones), ``CylindricalGearManufacturingData`` ->
-``ManufacturedCylindricalGear`` / ``ManufacturedCylindricalGearPair``. The IDEAL layer has no
-undercut check: undercut (7.7, Eq. (135)) needs a generating tool, so only the manufactured gear
-checks it (José, 2026-10-21, ruling B).
+Both kinds of teeth follow the sign convention of ISO_21771_2007, 4.1.5: the number of teeth of an
+internal gear is negative, every diameter and the centre distance are positive. Lengths in [mm],
+angles in [rad] (inputs in [deg]), torques in [N m], forces in [N].
+
+Two families, in two sections of this file; the dependency goes one way only (MANUFACTURED ->
+IDEAL, the IDEAL section never refers to the MANUFACTURED one):
+
+- IDEAL, ``CylindricalFamily`` (clauses 4-5 of ISO_21771_2007, nominal profile shift, zero
+  backlash): basic rack (ISO_53_1998), one gear (clause 4), the pair (clause 5), its checks, the
+  tooth forces, the contact inputs along the path (5.4-5.6). No undercut check: undercut (7.7,
+  Eq. (135)) needs a generating tool (José, 2026-10-21, ruling B).
+  ``Gear.assemble(CylindricalFamily(), CylindricalGearData(...))``.
+- MANUFACTURED, ``ManufacturedCylindricalFamily(CylindricalFamily)`` (clause 7: tooth thickness
+  allowances and generating tool; it only adds attributes and checks to the ideal ones, undercut
+  included). ``Gear.assemble(ManufacturedCylindricalFamily(), CylindricalGearManufacturingData(...))``.
+
+Pairs: ``GearPair.assemble(family, gear1=..., gear2=...)`` with the same family as the gears.
 
 Examples
 --------
 >>> fam = CylindricalFamily()
 >>> g1, g2 = (Gear.assemble(fam, CylindricalGearData(3.5, z, x=0.18)) for z in (20, 30))
 >>> pair = GearPair.assemble(fam, gear1=g1, gear2=g2)
->>> m1, m2 = (ManufacturedCylindricalGear.assemble(fam, CylindricalGearManufacturingData(
+>>> made_fam = ManufacturedCylindricalFamily()
+>>> m1, m2 = (Gear.assemble(made_fam, CylindricalGearManufacturingData(
 ...     3.5, z, x=0.18, E_sns=-0.05, E_sni=-0.10)) for z in (20, 30))
->>> made = ManufacturedCylindricalGearPair.assemble(fam, gear1=m1, gear2=m2)
+>>> made = GearPair.assemble(made_fam, gear1=m1, gear2=m2)
 """
 from __future__ import annotations
 
@@ -28,9 +35,12 @@ from typing import NamedTuple
 import numpy as np
 from scipy import optimize
 
-from axisforge.core.machine_elements.gears.base import Gear, GearFamily, GearPair, MeshForces, register_gear_family
+from axisforge.core.machine_elements.gears.base import Gear, GearFamily, MeshForces, register_gear_family
 
 
+# ##################################################################################################
+# IDEAL: the nominal gear and pair (ISO_21771_2007, clauses 4-5). Refers to nothing below.
+# ##################################################################################################
 def _involute(ang):
     """Involute function inv(ang) = tan(ang) - ang [rad], ang in [rad] (ISO_21771_2007, 4.3.9, Eq. (18))."""
     return np.tan(ang) - ang
@@ -54,161 +64,6 @@ def _normal_backlash(x_sum_from_al, x_sum, mn, alpha) -> float:
     flanks would overlap. ISO_21771_2007, 5.3, Eq. (63), p. 32 (PDF p. 36), solved for j_bn; x_sum
     is the declared x1 + x2 or the generating x_E1 + x_E2."""
     return (x_sum_from_al - x_sum) * 2 * mn * np.sin(alpha)
-
-
-# ==================================================================================================
-# Generation of the teeth by a rack-type cutter (ISO_21771_2007, clause 7): pure functions of numbers
-# and of the cutter record, used by the manufactured gear only (the ideal layer calls none of them).
-# External gear, rack cutter (or hob) without protuberance, finish cutting.
-# ==================================================================================================
-def _min_generating_profile_shift(z, mn, alphat, beta, cutter) -> tuple[float, float]:
-    """Smallest generating profile shift coefficient that cuts the teeth without undercut.
-
-    Undercut starts when the end of the straight tip flank of the tool passes the interference
-    point T (the base-tangent point) on the generating line of action (Fig. 39); the limit is the
-    shift that puts the end of that straight flank on the line of action at the base-tangent point.
-
-    Parameters
-    ----------
-    z : int
-        Number of teeth [-], positive (external gear).
-    mn : float
-        Normal module [mm].
-    alphat : float
-        Transverse pressure angle of the gear [rad].
-    beta : float
-        Reference helix angle of the gear [rad].
-    cutter : GeneratingRackProfile
-        Rack-type tool (coefficients h_aP0 / m_n, rho_aP0 / m_n).
-
-    Returns
-    -------
-    tuple of float
-        ``(x_Emin, hFaP0)``: minimum generating profile shift coefficient x_Emin [-] and the
-        straight part of the tip flank of the tool h_FaP0 [mm].
-
-    Notes
-    -----
-    h_FaP0 = m_n (h_aP0 - rho_aP0 (1 - sin(alpha_t))): the bracket of Eq. (128) / (130), the
-    "straight part of tip flank of tool-generating profile" of the Fig. 39 key. It is taken with
-    the alpha_t of the GEAR, as printed. Issue MG-01: Fig. 35 draws h_FaP0 in the normal section of
-    the tool, where the tip-radius geometry would give alpha_P0 instead; kept as printed (0.004 in
-    x_Emin at beta 15 deg, z 17). Valid for an external gear and a non-protuberance rack cutter
-    or hob only.
-
-    References
-    ----------
-    .. [1] ISO_21771_2007, 7.7, Eq. (135), p. 59 (PDF p. 63); 7.6, Fig. 39 key, Eq. (128),
-       p. 57-58 (PDF p. 61-62).
-    """
-    hFaP0 = mn * (cutter.haP0 - cutter.rhoaP0 * (1.0 - np.sin(alphat)))
-    x_Emin = hFaP0 / mn - z * np.sin(alphat) ** 2 / (2.0 * np.cos(beta))      # Eq. (135)
-    return x_Emin, hFaP0
-
-
-def _generating_profile_shift(x, mn, alpha_n, E_sn) -> float:
-    """Generating profile shift coefficient x_E of a tooth thinned by the allowance E_sn.
-
-    The cutter is fed deeper than the nominal x by the amount that removes E_sn from the normal
-    tooth thickness on both flanks: E_sn / (2 tan(alpha_n)) radially.
-
-    Parameters
-    ----------
-    x : float
-        Nominal profile shift coefficient [-].
-    mn : float
-        Normal module [mm].
-    alpha_n : float
-        Normal pressure angle [rad].
-    E_sn : float
-        Tooth thickness allowance [mm], E_sns (upper) or E_sni (lower); negative thins the tooth.
-
-    Returns
-    -------
-    float
-        x_E [-]: x_Es from E_sns (Eq. (123)) or x_Ei from E_sni (Eq. (124)).
-
-    Notes
-    -----
-    Finish cutting only (machining allowance q = 0); the pre-finish shifts of Eq. (120)-(122) are
-    not computed.
-
-    References
-    ----------
-    .. [1] ISO_21771_2007, 7.4, Eq. (123), (124), p. 56 (PDF p. 60).
-    """
-    return x + E_sn / (2.0 * mn * np.tan(alpha_n))
-
-
-def _generated_root_diameter(d, x_E, mn, cutter) -> float:
-    """Root diameter cut by a rack-type tool at the generating profile shift x_E.
-
-    Parameters
-    ----------
-    d : float
-        Reference diameter [mm].
-    x_E : float
-        Generating profile shift coefficient [-] (x_Es or x_Ei).
-    mn : float
-        Normal module [mm].
-    cutter : GeneratingRackProfile
-        Rack-type tool (coefficient h_aP0 / m_n).
-
-    Returns
-    -------
-    float
-        Generated root diameter d_fE [mm]: the tool tip line, h_aP0 below the tool datum line,
-        which lies x_E m_n outside the reference circle.
-
-    Notes
-    -----
-    External gear, rack cutter; the standard asks for the values of the process that produces the
-    finished tooth.
-
-    References
-    ----------
-    .. [1] ISO_21771_2007, 7.5, Eq. (125), p. 57 (PDF p. 61).
-    """
-    return d + 2.0 * x_E * mn - 2.0 * cutter.haP0 * mn
-
-
-def _root_form_diameter(d, db, alphat, x_E, mn, cutter) -> float:
-    """Root form diameter: where the involute generated by the straight tool flank ends.
-
-    Below d_Ff the flank is the fillet (trochoid) cut by the tip radius of the tool.
-
-    Parameters
-    ----------
-    d, db : float
-        Reference and base diameters [mm].
-    alphat : float
-        Transverse pressure angle [rad].
-    x_E : float
-        Generating profile shift coefficient [-] (x_Es or x_Ei).
-    mn : float
-        Normal module [mm].
-    cutter : GeneratingRackProfile
-        Rack-type tool (coefficients h_aP0 / m_n, rho_aP0 / m_n).
-
-    Returns
-    -------
-    float
-        Root form diameter d_Ff [mm].
-
-    Notes
-    -----
-    Eq. (128), first form, with h = m_n (h_aP0 - x_E - rho_aP0 (1 - sin(alpha_t))) [mm], the
-    height of the end of the straight tool flank below the reference line of the gear:
-    d_Ff = sqrt((d sin(alpha_t) - 2 h / sin(alpha_t))**2 + d_b**2). External gear, rack cutter
-    with tool tips parallel to the datum line, valid only without undercut (x_E >= x_Emin) and
-    without pre-finish root relief.
-
-    References
-    ----------
-    .. [1] ISO_21771_2007, 7.6, Eq. (128), p. 58 (PDF p. 62).
-    """
-    h = mn * (cutter.haP0 - x_E - cutter.rhoaP0 * (1.0 - np.sin(alphat)))
-    return np.sqrt((d * np.sin(alphat) - 2.0 * h / np.sin(alphat)) ** 2 + db ** 2)
 
 
 # ==================================================================================================
@@ -330,7 +185,7 @@ _LEGACY = {
     # Q55 (José, 2026-10-15): keep. The helix-angle range is checked for an external gear only.
     "beta_range": {"external": _beta_range_external, "internal": lambda data, tag: []},
     # Q55 (José, 2026-10-15): keep. da < d and da > db (ring). None for an external gear: the ideal layer
-    # has no undercut check (ruling B, José 2026-10-21); ManufacturedCylindricalGear checks it (MG-10).
+    # has no undercut check (ruling B, José 2026-10-21: it needs a generating tool; module docstring).
     "gear_limits": {"external": lambda gear, tag: [], "internal": _gear_limits_internal},
 }
 
@@ -462,244 +317,6 @@ class CylindricalGearData:
         return errors
 
 
-@dataclass(frozen=True, kw_only=True)
-class GeneratingRackProfile:
-    """Rack-type cutting tool (rack cutter or hob) that generates the teeth: the counterpart rack.
-
-    The tool is the complement of the basic rack: its teeth fill the tooth spaces of the basic rack,
-    so its addendum cuts the root and its tip radius the root fillet of the gear. Coefficients are
-    multiples of the normal module m_n, like ``haP``, ``cP``, ``rfP`` of ``CylindricalGearData``.
-
-    Parameters
-    ----------
-    haP0 : float
-        Addendum of the tool h_aP0 / m_n [-], measured from the tool datum line.
-    rhoaP0 : float
-        Tip radius of the tool rho_aP0 / m_n [-] (Fig. 35 labels it r_aP0, Eq. (128) prints
-        rho_aP0).
-    alpha_P0_deg : float
-        Pressure angle of the tool flank alpha_P0 [deg].
-    prP0 : None
-        PLACEHOLDER - not implemented (MG-17): protuberance of the tool pr / m_n [-]. Symbol "pr"
-        of ISO_6336-3_2006, Fig. 2, p. 9 (PDF p. 17), with the tool subscripts P0 of ISO_701_1998,
-        Tables 2 and 4, p. 2 (PDF p. 10). Must be None (refused by ``validate``).
-    alpha_prP0_deg : None
-        PLACEHOLDER - not implemented (MG-17): protuberance angle of the tool [deg]. Subscript
-        "pr" = protuberance, ISO_701_1998, Tables 3 and 5, p. 2 (PDF p. 10); no library page prints
-        this symbol: constructed by the ISO 701 rules. Must be None (refused by ``validate``).
-
-    Notes
-    -----
-    The straight part of the tip flank h_FaP0 is not a field: it needs the transverse pressure angle
-    of the gear (``_min_generating_profile_shift``). A protuberance cutter leaves an undercut of the
-    rack profile, U_FP at the angle alpha_FP (ISO_53_1998, A.2, p. 5 / PDF p. 7); Eq. (135) is
-    printed for non-protuberance cutters only.
-
-    References
-    ----------
-    .. [1] ISO_21771_2007, 7.1, Fig. 35, p. 53 (PDF p. 57).
-    .. [2] ISO_53_1998, 3.2, Fig. 1, Table 2, p. 2-3 (PDF p. 4-5).
-    """
-    haP0: float
-    rhoaP0: float
-    alpha_P0_deg: float
-    prP0: float | None = None
-    alpha_prP0_deg: float | None = None
-
-    @classmethod
-    def from_basic_rack(cls, data: CylindricalGearData) -> GeneratingRackProfile:
-        """Counterpart rack of the basic rack of ``data``.
-
-        haP0 = haP + cP, rhoaP0 = rfP, alpha_P0_deg = alpha_n_deg: the counterpart rack encloses the
-        bottom land of the basic rack (ISO_21771_2007, 7.1, Fig. 35), i.e. it is the basic rack
-        made symmetrical about the profile reference line P-P and displaced by half a pitch
-        (ISO_53_1998, 3.2, Fig. 1, "mating rack"), so its teeth fill the tooth spaces of the basic
-        rack: its addendum is the basic rack dedendum h_fP = h_aP + c_P and its tip radius the basic rack
-        fillet radius rho_fP. No page prints these three equalities as equations: they follow from
-        the figures.
-
-        Parameters
-        ----------
-        data : CylindricalGearData
-            Gear data whose basic rack (``haP``, ``cP``, ``rfP``, ``alpha_n_deg``) is used.
-
-        Returns
-        -------
-        GeneratingRackProfile
-        """
-        return cls(haP0=data.haP + data.cP, rhoaP0=data.rfP, alpha_P0_deg=data.alpha_n_deg)
-
-    def validate(self) -> list[str]:
-        """Check the domains of the inputs.
-
-        Returns
-        -------
-        list of str
-            One message per violation; empty if valid. Checks: haP0 > 0, rhoaP0 >= 0,
-            0 < alpha_P0_deg < 45 (no library source for the 45 deg limit, as in
-            ``CylindricalGearData``); prP0 and alpha_prP0_deg None (placeholders, MG-17).
-        """
-        errors: list[str] = []
-        if self.haP0 <= 0:
-            errors.append(f"cutter: haP0 must be > 0, got {self.haP0}")
-        if self.rhoaP0 < 0:
-            errors.append(f"cutter: rhoaP0 must be >= 0, got {self.rhoaP0}")
-        if not (0.0 < self.alpha_P0_deg < 45.0):
-            errors.append(f"cutter: alpha_P0_deg out of range (0, 45), got {self.alpha_P0_deg}")
-        for name in ("prP0", "alpha_prP0_deg"):
-            if getattr(self, name) is not None:
-                errors.append(f"cutter: {name} is not implemented (MG-17), got {getattr(self, name)!r}")
-        return errors
-
-    def validate_or_raise(self) -> None:
-        """Raise ``ValueError`` with all messages of ``validate()`` if any."""
-        errors = self.validate()
-        if errors:
-            raise ValueError("\n".join(errors))
-
-
-@dataclass(frozen=True, kw_only=True)
-class GeneratingPinionCutter:
-    """Pinion-type cutter (shaper cutter) that generates the teeth.
-
-    PLACEHOLDER - not implemented (MG-16). It would also generate internal gears, which a rack
-    cutter cannot (MG-03). Subscript 0 = tool (ISO_701_1998). The generating equations need, from
-    these fields and the gear: z_0, d_b0, the tool tip diameter d_a0 (Eq. (126)), the form
-    diameter d_Fa0 of the tool tip (Eq. (131), (134); it also needs a tool tip-rounding rule, not
-    stated here), the centre distance a_0 and the working pressure angle alpha_wt0 of cutter and
-    gear. The helix angle of the tool is implied: beta_0 = beta.
-
-    Parameters
-    ----------
-    z0 : int
-        Number of teeth of the cutter [-].
-    x0 : float
-        Profile shift coefficient of the cutter [-].
-    haP0 : float
-        Addendum of the cutter h_aP0 / m_n [-].
-    rhoaP0 : float
-        Tip radius of the cutter rho_aP0 / m_n [-].
-    alpha_P0_deg : float
-        Pressure angle of the cutter alpha_P0 [deg].
-
-    Raises
-    ------
-    NotImplementedError
-        Always, at construction.
-
-    References
-    ----------
-    .. [1] ISO_21771_2007, 7.5, Eq. (126); 7.6, Eq. (131)-(134), p. 57-58 (PDF p. 61-62).
-    .. [2] ISO_701_1998, subscript 0 (tool), Tables 2 and 4, p. 2 (PDF p. 10).
-    """
-    z0: int
-    x0: float
-    haP0: float
-    rhoaP0: float
-    alpha_P0_deg: float
-
-    def __post_init__(self):
-        raise NotImplementedError("MG-16: pinion-type cutter (ISO_21771_2007 Eq. (126), (131)-(134)) not implemented")
-
-
-class InspectionLimits(NamedTuple):
-    """Values of one tooth thickness test dimension at the two allowances [mm].
-
-    Returned by the Annex A test dimensions (placeholders, MG-15): ISO_21771_2007, Annex A,
-    p. 60-82 (PDF p. 64-86). The order follows the allowance, not the magnitude: for an internal
-    gear (span over spaces, A.17, A.22-A.23) the value at x_Es can be the smaller. These are the
-    values of the nominal system (planned test dimensions); the allowable limits of the
-    functional system need the ISO 1328 deviations (F_r, F_pk for the span, A.18-A.19; F_r for
-    balls, A.49-A.50; F_rc and d_a max / min for the chord, A.30-A.35), not in the library
-    (MG-18).
-
-    Parameters
-    ----------
-    upper : float
-        Value at the upper tooth thickness allowance, from x_Es [mm].
-    lower : float
-        Value at the lower tooth thickness allowance, from x_Ei [mm].
-    """
-    upper: float
-    lower: float
-
-
-@dataclass(frozen=True, kw_only=True)
-class CylindricalGearManufacturingData(CylindricalGearData):
-    """Input data of one cylindrical gear as made: the nominal data plus the manufacturing inputs.
-
-    All the fields of ``CylindricalGearData`` (``mn`` and ``z`` may still be positional), then
-    two kinds of input:
-
-    - design inputs, read from the drawing: the tooth thickness allowances ``E_sns``, ``E_sni``
-      and the accuracy grade ``quality_grade``;
-    - process inputs, chosen by the workshop: the generating tool ``cutter`` and the machining
-      allowances ``q_min``, ``q_max``.
-
-    Parameters
-    ----------
-    E_sns, E_sni : float
-        Upper and lower tooth thickness allowances [mm], normal section: s_ns = s_n + E_sns,
-        s_ni = s_n + E_sni. Required. A negative allowance reduces the tooth thickness.
-    quality_grade : None
-        PLACEHOLDER - not implemented (MG-18): accuracy grade of ISO 1328 [-] (ISO 1328 is not in
-        the library: source to find). Must be None (refused by ``validate``).
-    cutter : GeneratingRackProfile or None, optional
-        Rack-type tool that generates the teeth. None (default): the counterpart of the basic rack
-        of this record, ``GeneratingRackProfile.from_basic_rack(self)``. A
-        ``GeneratingPinionCutter`` is a placeholder (MG-16) that cannot be built.
-    q_min, q_max : None
-        PLACEHOLDER - not implemented (MG-02): smallest and largest machining allowance for the
-        finishing process, normal to the flank [mm] (ISO_21771_2007, 7.2, p. 54 / PDF p. 58;
-        pre-finish shifts 7.4, Eq. (120)-(122), p. 56 / PDF p. 60). Must be None (refused by
-        ``validate``): only finish cutting (q = 0) is computed.
-
-    References
-    ----------
-    .. [1] ISO_21771_2007, 7.3, Eq. (118), (119), p. 55 (PDF p. 59) (allowances); 7.1-7.2 (tool).
-    """
-    E_sns: float
-    E_sni: float
-    quality_grade: int | None = None
-    cutter: GeneratingRackProfile | GeneratingPinionCutter | None = None
-    q_min: float | None = None
-    q_max: float | None = None
-
-    def validate(self) -> list[str]:
-        """Check the domains of the inputs.
-
-        Returns
-        -------
-        list of str
-            The messages of ``CylindricalGearData.validate``, then: E_sni <= E_sns <= 0; the
-            messages of ``cutter.validate()`` when a cutter is given; the tool pressure angle
-            alpha_P0_deg equal to alpha_n_deg (relative 1e-6); quality_grade, q_min, q_max None
-            (placeholders, MG-18, MG-02).
-
-        Notes
-        -----
-        E_sns <= 0: ISO_21771_2007, 7.3 says that "a negative tooth thickness allowance reduces the
-        tooth thickness" and prints no sign limit; no library source for the limit E_sns <= 0.
-        alpha_P0 = alpha_n: otherwise alpha_wt0 and d_wE replace alpha_t and d in the generating
-        equations (ISO_21771_2007, Fig. 39 NOTE, p. 57 / PDF p. 61); not implemented.
-        """
-        errors = super().validate()
-        tag = self.label or "Gear"
-        if not (self.E_sni <= self.E_sns <= 0.0):
-            errors.append(f"{tag}: tooth thickness allowances must satisfy E_sni <= E_sns <= 0, "
-                          f"got E_sns={self.E_sns}, E_sni={self.E_sni}")
-        if self.cutter is not None:
-            errors.extend(f"{tag}: {m}" for m in self.cutter.validate())
-            # same tolerance as the pressure angles of two gears in mesh (assemble_pair)
-            if not np.isclose(self.cutter.alpha_P0_deg, self.alpha_n_deg, rtol=1e-6):
-                errors.append(f"{tag}: cutter alpha_P0_deg={self.cutter.alpha_P0_deg} differs from "
-                              f"alpha_n_deg={self.alpha_n_deg}; not implemented (ISO_21771_2007, Fig. 39 NOTE)")
-        for name, issue in (("quality_grade", "MG-18"), ("q_min", "MG-02"), ("q_max", "MG-02")):
-            if getattr(self, name) is not None:
-                errors.append(f"{tag}: {name} is not implemented ({issue}), got {getattr(self, name)!r}")
-        return errors
-
-
 # ==================================================================================================
 # The family
 # ==================================================================================================
@@ -709,9 +326,8 @@ class CylindricalFamily(GearFamily):
 
     ``assemble_gear`` gives the geometry of one gear (clause 4), ``assemble_pair`` that of two gears
     in mesh (clause 5), ``validate_gear`` / ``validate_pair`` the limits of the ideal gear and
-    pair (no undercut check: it needs a tool; clause 7 is in ``assemble_manufactured_gear`` and
-    ``validate_manufactured_gear``, used by ``ManufacturedCylindricalGear``), ``mesh_forces`` the forces of the mesh for a torque (D-0010,
-    ``MeshForces``), ``path_points``, ``curvature_radii``, ``surface_speeds`` the geometry and
+    pair (no undercut check: it needs a generating tool, see the module docstring),
+    ``mesh_forces`` the forces of the mesh for a torque (D-0010, ``MeshForces``), ``path_points``, ``curvature_radii``, ``surface_speeds`` the geometry and
     kinematics along the path of contact (the load sharing and the contact inputs are in
     ``axisforge.solvers.machine_elements.gears.contact``). An internal pair is a pair whose gear 2 has z < 0.
 
@@ -801,8 +417,8 @@ class CylindricalFamily(GearFamily):
         working tip diameters with k are pair quantities (``assemble_pair``). The base cylinder
         follows one rule for both kinds, so a ring and the pinion it meshes with have the same
         alphat, betab and pbt (the condition of clause 5 for two gears in mesh). No undercut
-        check and no warning: undercut (ISO_21771_2007, 7.7, Eq. (135)) needs a generating tool,
-        so ``ManufacturedCylindricalGear`` checks it (ruling B, José 2026-10-21; MG-10).
+        check and no warning: undercut (ISO_21771_2007, 7.7, Eq. (135)) needs a generating tool
+        (ruling B, José 2026-10-21; module docstring).
 
         References
         ----------
@@ -882,74 +498,6 @@ class CylindricalFamily(GearFamily):
             "p_yt": p_yt,
             "p_yn": p_yn,
         }
-
-    def assemble_manufactured_gear(self, gear: Gear) -> dict:
-        """Sizes of one gear as cut: generating profile shifts, tooth thicknesses and root cylinders.
-
-        Parameters
-        ----------
-        gear : Gear
-            Gear whose data is a ``CylindricalGearManufacturingData`` and whose nominal attributes
-            (``assemble_gear``) are already set; not yet frozen (``ManufacturedCylindricalGear``).
-
-        Returns
-        -------
-        dict
-            The 13 computed attributes, ``cutter`` to ``d_Ffi``, documented in
-            ``ManufacturedCylindricalGear`` (Attributes), and
-            ``warnings`` (tuple of str): one per d_Ff not computed because of undercut at that
-            allowance (Eq. (128) holds only without undercut; MG-11); for an internal gear one
-            message (rack cutter, see Notes).
-
-        Notes
-        -----
-        A rack-type cutter cannot generate an internal gear, and Eq. (125), (128), (135) are
-        printed for external gears: for z < 0 hFaP0, x_Emin, d_fE and d_Ff are None (pinion-type
-        cutter, Eq. (126), (131)-(134), not implemented: MG-03). The tip thickness uses the
-        nominal d_a, whereas 7.9 asks for the upper-limit tip diameter (MG-06): when MG-06 is
-        done, the critical limit of d_a for each kind, the largest for an external gear and the
-        smallest for a ring (a ring tooth thins toward smaller diameters). Finish cutting only
-        (q = 0).
-
-        References
-        ----------
-        .. [1] ISO_21771_2007, 4.7.1, Eq. (38); 4.7.2, Eq. (41), p. 25 (PDF p. 29); 4.7.5, Eq. (49);
-           7.3-7.7, Eq. (118)-(135), p. 55-59 (PDF p. 59-63).
-        """
-        data = gear.data
-        cutter = GeneratingRackProfile.from_basic_rack(data) if data.cutter is None else data.cutter
-        tag = gear.label or "Gear"
-        s = gear.z / abs(gear.z)   # ISO_21771_2007, 4.1.5: +1 external, -1 internal
-        s_n = gear.mn * (np.pi / 2 + 2 * gear.x * np.tan(gear.alpha))     # Eq. (49), nominal x
-        # transverse pressure angle at the tip circle, through its involute (Eq. (18))
-        inv_alpha_at = self.values_at(gear, gear.da)["inv_alpha_yt"]
-        external = gear.z > 0
-        if external:
-            x_Emin, hFaP0 = _min_generating_profile_shift(gear.z, gear.mn, gear.alphat, gear.beta, cutter)
-            warnings_ = []
-        else:
-            x_Emin = hFaP0 = None
-            warnings_ = [f"{tag}: internal gear: a rack-type cutter cannot generate it; hFaP0, x_Emin, d_fE and "
-                         "d_Ff are not computed (ISO_21771_2007 Eq. (125), (128), (135) are for external gears; "
-                         "pinion-type cutter not implemented, MG-03)."]
-        out = dict(cutter=cutter, hFaP0=hFaP0, x_Emin=x_Emin)
-        for k, E_sn, which in (("s", data.E_sns, "upper"), ("i", data.E_sni, "lower")):
-            x_E = out[f"x_E{k}"] = _generating_profile_shift(gear.x, gear.mn, gear.alpha, E_sn)
-            out[f"s_n{k}"] = s_n + E_sn                                                # Eq. (118), (119)
-            # Eq. (41): half tooth angle at the reference circle, generated size with x_E
-            psi = (np.pi + 4 * x_E * np.tan(gear.alpha)) / (2 * abs(gear.z))
-            # Eq. (38) at d_y = d_a: AxisForge stores ring diameters positive (D-0010), so d_a enters without
-            # the sign of ISO's signed diameters; z/abs(z) makes the ring tooth thinner toward its tip (d_a < d)
-            out[f"s_at{k}"] = gear.da * (psi + s * (_involute(gear.alphat) - inv_alpha_at))
-            out[f"d_fE{k}"] = _generated_root_diameter(gear.d, x_E, gear.mn, cutter) if external else None
-            out[f"d_Ff{k}"] = None
-            if external and x_E >= x_Emin:
-                out[f"d_Ff{k}"] = _root_form_diameter(gear.d, gear.db, gear.alphat, x_E, gear.mn, cutter)
-            elif external:
-                warnings_.append(f"{tag}: d_Ff{k} not computed: x_E{k}={x_E:.6f} < x_Emin={x_Emin:.6f}, undercut "
-                                 f"at the {which} allowance (ISO_21771_2007 Eq. (128) holds only without undercut).")
-        out["warnings"] = tuple(warnings_)
-        return out
 
     # ----------------------------------------------------------------------------------------------
     # The pair (ISO 21771 clause 5)
@@ -1257,57 +805,8 @@ class CylindricalFamily(GearFamily):
             warnings=warnings_,
         )
 
-    @staticmethod
-    def assemble_manufactured_pair(pair) -> dict:
-        """Backlash and active root diameters of a pair of gears as cut.
-
-        Parameters
-        ----------
-        pair : GearPair
-            Pair of two ``ManufacturedCylindricalGear`` whose nominal attributes (``assemble_pair``)
-            are already set; not yet frozen (``ManufacturedCylindricalGearPair``).
-
-        Returns
-        -------
-        dict
-            jbn_max, jbn_min : normal backlash [mm] at the pair's working centre distance a_w
-            (derived or imposed), from the lower (x_Ei1 + x_Ei2) and the upper (x_Es1 + x_Es2)
-            allowances (``_normal_backlash``, Eq. (63), with the sum implied by a_w,
-            ``profile_shift_check[0]``, signed z1 + z2). Same sign as ``jbn``: > 0 clearance
-            between the non-working flanks.
-            d_Nf1, d_Nf2 : active root diameters [mm], 2 ``rA1`` and 2 ``rA2`` (the existing radii
-            of the start of the active profile of each gear; equal to 5.4.1, Eq. (64), (65),
-            p. 33 (PDF p. 37) with d_Na = d_a, with a_w taken negative for an internal pair
-            (AxisForge stores a_w > 0)).
-            warnings : tuple of str: one per gear with an allowance whose d_Ff is None (ring, or
-            undercut at that allowance): d_Nf >= d_Ff is not checked there.
-
-        Notes
-        -----
-        j_bn is defined in 5.5.1, p. 40 (PDF p. 44); Eq. (100)-(104) only convert it to other
-        backlashes (not computed). Centre-distance tolerances are out of scope: a_w is the one
-        value of the pair.
-        """
-        g1, g2 = pair.gear1, pair.gear2
-        x_sum_from_al = pair.profile_shift_check[0]   # Sum x implied by a_w (Eq. (62)), reused
-        warnings_ = []
-        for i, g in ((1, g1), (2, g2)):
-            missing = [k for k in ("s", "i") if getattr(g, f"d_Ff{k}") is None]
-            if missing:
-                warnings_.append(f"d_Nf >= d_Ff not checked for gear {i} ({g.label or 'Gear'}): "
-                                 f"{', '.join(f'd_Ff{k}' for k in missing)} not computed (internal gear or undercut "
-                                 "at that allowance).")
-        return dict(
-            # largest backlash from the thinnest teeth (lower allowances), smallest from the upper
-            jbn_max=_normal_backlash(x_sum_from_al, g1.x_Ei + g2.x_Ei, g1.mn, g1.alpha),
-            jbn_min=_normal_backlash(x_sum_from_al, g1.x_Es + g2.x_Es, g1.mn, g1.alpha),
-            d_Nf1=2 * pair.rA1, d_Nf2=2 * pair.rA2,
-            warnings=tuple(warnings_),
-        )
-
     # ----------------------------------------------------------------------------------------------
-    # Limits and checks (ideal: no undercut check; manufactured: ISO 21771 clause 7; most have no
-    # library source)
+    # Limits and checks (no undercut check: it needs a generating tool; most have no library source)
     # ----------------------------------------------------------------------------------------------
     def validate_gear(self, gear: Gear) -> list[str]:
         """Check one gear.
@@ -1317,40 +816,10 @@ class CylindricalFamily(GearFamily):
         list of str
             The messages of ``CylindricalGearData.validate``, then by kind (Q55, keep): da < d and
             da > db for a ring; none for an external gear. No undercut check: it needs a
-            generating tool, so ``validate_manufactured_gear`` has it (ruling B, José
-            2026-10-21; MG-10).
+            generating tool (ruling B, José 2026-10-21; module docstring).
         """
         tag = gear.label or "Gear"
         return gear.data.validate() + _legacy("gear_limits", gear.z)(gear, tag)
-
-    @staticmethod
-    def validate_manufactured_gear(gear: Gear) -> list[str]:
-        """Checks of a gear as cut, added to ``validate_gear`` by ``ManufacturedCylindricalGear``.
-
-        Returns
-        -------
-        list of str
-            One message per violation; empty if valid:
-
-            (1) external gear with x_Ei < x_Emin: undercut at the lower allowance (MG-10).
-            Eq. (128) holds only without undercut, so d_Ff and the pair check d_Nf >= d_Ff are
-            invalid when x_Ei < x_Emin; x_Es >= x_Ei, so one message covers both.
-            (2) s_ats or s_ati not > 0: pointed tooth at the tip circle. ISO_21771_2007, 7.9,
-            p. 59 (PDF p. 63) prints no minimum, so none is invented; the nominal d_a is used,
-            whereas 7.9 asks for the upper-limit tip diameter (MG-06).
-        """
-        tag = gear.label or "Gear"
-        errors: list[str] = []
-        if gear.x_Emin is not None and gear.x_Ei < gear.x_Emin:
-            errors.append(f"{tag}: undercut at the lower allowance - x_Ei={gear.x_Ei:.6f} < x_Emin={gear.x_Emin:.6f} "
-                          "(ISO_21771_2007 Eq. (135)); d_Ff (Eq. (128)) is not valid")
-        for k in ("s", "i"):
-            s_at = getattr(gear, f"s_at{k}")
-            # "not > 0" also catches nan: d_a < d_b has no tip pressure angle (reachable only with check=False)
-            if not s_at > 0.0:
-                errors.append(f"{tag}: pointed tooth - s_at{k}={s_at:.6f} mm <= 0 at the tip circle "
-                              f"da={gear.da:.4f} mm (ISO_21771_2007 Eq. (38))")
-        return errors
 
     def validate_pair(self, pair) -> list[str]:
         """Check the pair geometry.
@@ -1397,176 +866,6 @@ class CylindricalFamily(GearFamily):
         if s2 < 0:
             errors.extend(_internal_interference(pair))
         return errors
-
-    @staticmethod
-    def validate_manufactured_pair(pair) -> list[str]:
-        """Checks of a pair of gears as cut, added to ``validate_pair`` by ``ManufacturedCylindricalGearPair``.
-
-        Returns
-        -------
-        list of str
-            One message per gear and allowance whose root form diameter is computed and lies
-            above the active root diameter, d_Nf < d_Ff: the tip of the mate would reach below the
-            start of the involute, i.e. contact on the root fillet. ISO_21771_2007, 5.4.1, p. 33
-            (PDF p. 37): "d_Nf may be governed by the start of involute", Eq. (66), (67).
-            Gears or allowances without d_Ff are a warning of the pair (``assemble_manufactured_pair``).
-
-        Notes
-        -----
-        ISO 21771 5.4.1 does not call d_Nf < d_Ff invalid: it sets d_Nf = d_Ff (Eq. (66), (67)) and
-        limits the active tip of the mate, d_Na <= d_Fa (Eq. (68), (69), i.e. tip relief). AxisForge
-        has no d_Fa (d_Fa = d_a), so this error is stricter than the standard (ruling MG-10:
-        Eq. (128) and this check). The rack-A internal baseline pairs fail it: the ring tip
-        (h_a2 = 1.0 m_n) reaches the pinion fillet (issue MG-24).
-        """
-        errors: list[str] = []
-        for i, gear in ((1, pair.gear1), (2, pair.gear2)):
-            d_Nf = getattr(pair, f"d_Nf{i}")
-            for k, which in (("s", "upper"), ("i", "lower")):
-                d_Ff = getattr(gear, f"d_Ff{k}")
-                # "not >=" also catches nan
-                if d_Ff is not None and not d_Nf >= d_Ff:
-                    errors.append(f"gear {i} ({gear.label or 'Gear'}): active root diameter d_Nf{i}={d_Nf:.4f} mm "
-                                  f"< root form diameter d_Ff{k}={d_Ff:.4f} mm at the {which} allowance: the mate's "
-                                  "tip reaches the root fillet (ISO_21771_2007 5.4.1, Eq. (66), (67))")
-        return errors
-
-    # ----------------------------------------------------------------------------------------------
-    # Tooth thickness test dimensions of a manufactured gear (ISO 21771 Annex A): placeholders (MG-15).
-    # Not placeholders here: A.4 constant chord, A.5-A.6 radial single-ball/cylinder M_rK, M_rZ, A.9.
-    # ----------------------------------------------------------------------------------------------
-    @staticmethod
-    def span_measurement(gear: ManufacturedCylindricalGear, k: int) -> InspectionLimits:
-        """Span measurement W_k over k teeth (external gear) or tooth spaces (internal spur gear).
-
-        PLACEHOLDER - not implemented (MG-15).
-
-        Parameters
-        ----------
-        gear : ManufacturedCylindricalGear
-            Gear as cut.
-        k : int
-            Number of teeth spanned (tooth spaces for an internal gear) [-].
-
-        Returns
-        -------
-        InspectionLimits
-            W_k at x_Es (upper) and at x_Ei (lower) [mm].
-
-        References
-        ----------
-        .. [1] ISO_21771_2007, A.2, Eq. (A.1)-(A.23), p. 61-67 (PDF p. 65-71).
-        """
-        raise NotImplementedError("MG-15: span measurement W_k (ISO_21771_2007 A.2) not implemented")
-
-    @staticmethod
-    def dimension_over_balls(gear: ManufacturedCylindricalGear, D_M: float) -> InspectionLimits:
-        """Diametral dimension over two balls M_dK, or over two cylinders M_dZ.
-
-        PLACEHOLDER - not implemented (MG-15).
-
-        Cylinders (A.7.1) are allowed on external gears and internal spur gears; for helical gears
-        with an odd number of teeth the standard asks for "special calculations".
-
-        Parameters
-        ----------
-        gear : ManufacturedCylindricalGear
-            Gear as cut.
-        D_M : float
-            Diameter of the measuring ball or cylinder [mm].
-
-        Returns
-        -------
-        InspectionLimits
-            M_dK (M_dZ) at x_Es (upper) and at x_Ei (lower) [mm].
-
-        References
-        ----------
-        .. [1] ISO_21771_2007, A.5-A.7, Eq. (A.38)-(A.50), p. 75-81 (PDF p. 79-85): the ball
-           centre circle of A.5, Eq. (A.38)-(A.46), on which A.7 (Eq. (A.47)-(A.50)) and A.7.1
-           build.
-        """
-        raise NotImplementedError("MG-15: dimension over balls M_dK (ISO_21771_2007 A.5-A.7) not implemented")
-
-    @staticmethod
-    def chordal_tooth_thickness(gear: ManufacturedCylindricalGear, d_y: float | None = None) -> InspectionLimits:
-        """Normal chordal tooth thickness s_cy on the Y-cylinder of diameter d_y.
-
-        PLACEHOLDER - not implemented (MG-15).
-
-        Parameters
-        ----------
-        gear : ManufacturedCylindricalGear
-            Gear as cut.
-        d_y : float or None, optional
-            Diameter of the Y-cylinder [mm]; None: d_a - 2 m_n, "often used as the Y-cylinder
-            diameter" (A.3.1).
-
-        Returns
-        -------
-        InspectionLimits
-            s_cy at x_Es (upper) and at x_Ei (lower) [mm].
-
-        References
-        ----------
-        .. [1] ISO_21771_2007, A.3, Eq. (A.24)-(A.35), p. 68-70 (PDF p. 72-74).
-        """
-        raise NotImplementedError("MG-15: chordal tooth thickness s_cy (ISO_21771_2007 A.3) not implemented")
-
-    @staticmethod
-    def chordal_height(gear: ManufacturedCylindricalGear, d_y: float | None = None) -> float:
-        """Height above the chord (chordal addendum) h_ccy at which s_cy is measured.
-
-        PLACEHOLDER - not implemented (MG-15).
-
-        One float, not ``InspectionLimits``: A.3.2 uses ONE chordal height for both thickness
-        limits (the Delta s term of the minimum thickness makes the same height serve both).
-
-        Parameters
-        ----------
-        gear : ManufacturedCylindricalGear
-            Gear as cut.
-        d_y : float or None, optional
-            Diameter of the Y-cylinder [mm]; None: as ``chordal_tooth_thickness``.
-
-        Returns
-        -------
-        float
-            h_ccy [mm].
-
-        References
-        ----------
-        .. [1] ISO_21771_2007, A.3.2, Eq. (A.30)-(A.35), p. 69-70 (PDF p. 73-74).
-        """
-        raise NotImplementedError("MG-15: chordal height h_ccy (ISO_21771_2007 A.3.2) not implemented")
-
-    @staticmethod
-    def double_flank_centre_distance(gear: ManufacturedCylindricalGear,
-                                     master: ManufacturedCylindricalGear) -> InspectionLimits:
-        """Centre distance a_L of zero-backlash (double-flank) mesh with a master gear.
-
-        PLACEHOLDER - not implemented (MG-15).
-
-        Parameters
-        ----------
-        gear : ManufacturedCylindricalGear
-            Gear as cut.
-        master : ManufacturedCylindricalGear
-            Master gear: subscript L in ISO_21771_2007, 3.2 (p. 8 / PDF p. 12), 3 in ISO_701_1998,
-            Table 4 (p. 2 / PDF p. 10). Eq. (A.52) needs its z_L, x_L and ONE actual allowance
-            E_snL, so the master must have E_sns == E_sni (= E_snL) and the same m_n, alpha_n and
-            beta as ``gear`` (the implementation will refuse it otherwise).
-
-        Returns
-        -------
-        InspectionLimits
-            a_L at x_Es (upper) and at x_Ei (lower) [mm]; alpha_L from Eq. (A.52).
-
-        References
-        ----------
-        .. [1] ISO_21771_2007, A.8, Eq. (A.51), (A.52), p. 81 (PDF p. 85).
-        """
-        raise NotImplementedError("MG-15: double-flank centre distance a_L (ISO_21771_2007 A.8) not implemented")
 
     # ----------------------------------------------------------------------------------------------
     # Text
@@ -1897,24 +1196,278 @@ class CylindricalFamily(GearFamily):
         return {"u1_m_per_s": u1, "u2_m_per_s": u2, "vg_m_per_s": u1 - u2, "ue_m_per_s": (u1 + u2) / 2.0}
 
 
-# ==================================================================================================
-# The gear as manufactured (ISO 21771 clause 7)
-# ==================================================================================================
-class ManufacturedCylindricalGear(Gear):
-    """One cylindrical gear as cut: the nominal (IDEAL) gear plus its manufactured sizes.
+# ##################################################################################################
+# MANUFACTURED: the gear as cut (ISO_21771_2007, clause 7). Depends on the IDEAL section above; the
+# IDEAL section never refers to this one.
+# ##################################################################################################
 
-    Two layers: the nominal geometry of ``CylindricalFamily.assemble_gear`` (clause 4, profile
-    shift x, zero backlash), unchanged, and the sizes that the tooth thickness allowances and the
-    generating tool give (clause 7, ``CylindricalFamily.assemble_manufactured_gear``). The class
-    ONLY ADDS: no nominal attribute is redefined, so the gear is accepted wherever a ``Gear`` is
-    (``GearPair.assemble``, ``GearElement``, ``Transmission``) with identical results. The one
-    exception is an external gear with x < x_Emin: the ideal gear says nothing (no undercut
-    check, ruling B, José 2026-10-21), but as cut it is an error even with zero allowances
-    (x_Ei = x < x_Emin, MG-10), so ``from_ideal(g, E_sns=0, E_sni=0)`` raises unless
-    ``check=False``.
+# ==================================================================================================
+# Tool and input records
+# ==================================================================================================
+@dataclass(frozen=True, kw_only=True)
+class GeneratingRackProfile:
+    """Rack-type cutting tool (rack cutter or hob) that generates the teeth: the counterpart rack.
+
+    The tool is the complement of the basic rack: its teeth fill the tooth spaces of the basic rack,
+    so its addendum cuts the root and its tip radius the root fillet of the gear. Coefficients are
+    multiples of the normal module m_n, like ``haP``, ``cP``, ``rfP`` of ``CylindricalGearData``.
+
+    Parameters
+    ----------
+    haP0 : float
+        Addendum of the tool h_aP0 / m_n [-], measured from the tool datum line.
+    rhoaP0 : float
+        Tip radius of the tool rho_aP0 / m_n [-] (Fig. 35 labels it r_aP0, Eq. (128) prints
+        rho_aP0).
+    alpha_P0_deg : float
+        Pressure angle of the tool flank alpha_P0 [deg].
+    prP0 : None
+        PLACEHOLDER - not implemented (MG-17): protuberance of the tool pr / m_n [-]. Symbol "pr"
+        of ISO_6336-3_2006, Fig. 2, p. 9 (PDF p. 17), with the tool subscripts P0 of ISO_701_1998,
+        Tables 2 and 4, p. 2 (PDF p. 10). Must be None (refused by ``validate``).
+    alpha_prP0_deg : None
+        PLACEHOLDER - not implemented (MG-17): protuberance angle of the tool [deg]. Subscript
+        "pr" = protuberance, ISO_701_1998, Tables 3 and 5, p. 2 (PDF p. 10); no library page prints
+        this symbol: constructed by the ISO 701 rules. Must be None (refused by ``validate``).
+
+    Notes
+    -----
+    The straight part of the tip flank h_FaP0 is not a field: it needs the transverse pressure angle
+    of the gear (``ManufacturedCylindricalFamily._min_generating_profile_shift``). A protuberance
+    cutter leaves an undercut of the rack profile, U_FP at the angle alpha_FP (ISO_53_1998, A.2,
+    p. 5 / PDF p. 7); Eq. (135) is printed for non-protuberance cutters only.
+
+    References
+    ----------
+    .. [1] ISO_21771_2007, 7.1, Fig. 35, p. 53 (PDF p. 57).
+    .. [2] ISO_53_1998, 3.2, Fig. 1, Table 2, p. 2-3 (PDF p. 4-5).
+    """
+    haP0: float
+    rhoaP0: float
+    alpha_P0_deg: float
+    prP0: float | None = None
+    alpha_prP0_deg: float | None = None
+
+    @classmethod
+    def from_basic_rack(cls, data: CylindricalGearData) -> GeneratingRackProfile:
+        """Counterpart rack of the basic rack of ``data``.
+
+        haP0 = haP + cP, rhoaP0 = rfP, alpha_P0_deg = alpha_n_deg: the counterpart rack encloses the
+        bottom land of the basic rack (ISO_21771_2007, 7.1, Fig. 35), i.e. it is the basic rack
+        made symmetrical about the profile reference line P-P and displaced by half a pitch
+        (ISO_53_1998, 3.2, Fig. 1, "mating rack"), so its teeth fill the tooth spaces of the basic
+        rack: its addendum is the basic rack dedendum h_fP = h_aP + c_P and its tip radius the basic rack
+        fillet radius rho_fP. No page prints these three equalities as equations: they follow from
+        the figures.
+
+        Parameters
+        ----------
+        data : CylindricalGearData
+            Gear data whose basic rack (``haP``, ``cP``, ``rfP``, ``alpha_n_deg``) is used.
+
+        Returns
+        -------
+        GeneratingRackProfile
+        """
+        return cls(haP0=data.haP + data.cP, rhoaP0=data.rfP, alpha_P0_deg=data.alpha_n_deg)
+
+    def validate(self) -> list[str]:
+        """Check the domains of the inputs.
+
+        Returns
+        -------
+        list of str
+            One message per violation; empty if valid. Checks: haP0 > 0, rhoaP0 >= 0,
+            0 < alpha_P0_deg < 45 (no library source for the 45 deg limit, as in
+            ``CylindricalGearData``); prP0 and alpha_prP0_deg None (placeholders, MG-17).
+        """
+        errors: list[str] = []
+        if self.haP0 <= 0:
+            errors.append(f"cutter: haP0 must be > 0, got {self.haP0}")
+        if self.rhoaP0 < 0:
+            errors.append(f"cutter: rhoaP0 must be >= 0, got {self.rhoaP0}")
+        if not (0.0 < self.alpha_P0_deg < 45.0):
+            errors.append(f"cutter: alpha_P0_deg out of range (0, 45), got {self.alpha_P0_deg}")
+        for name in ("prP0", "alpha_prP0_deg"):
+            if getattr(self, name) is not None:
+                errors.append(f"cutter: {name} is not implemented (MG-17), got {getattr(self, name)!r}")
+        return errors
+
+    def validate_or_raise(self) -> None:
+        """Raise ``ValueError`` with all messages of ``validate()`` if any."""
+        errors = self.validate()
+        if errors:
+            raise ValueError("\n".join(errors))
+
+
+@dataclass(frozen=True, kw_only=True)
+class GeneratingPinionCutter:
+    """Pinion-type cutter (shaper cutter) that generates the teeth.
+
+    PLACEHOLDER - not implemented (MG-16). It would also generate internal gears, which a rack
+    cutter cannot (MG-03). Subscript 0 = tool (ISO_701_1998). The generating equations need, from
+    these fields and the gear: z_0, d_b0, the tool tip diameter d_a0 (Eq. (126)), the form
+    diameter d_Fa0 of the tool tip (Eq. (131), (134); it also needs a tool tip-rounding rule, not
+    stated here), the centre distance a_0 and the working pressure angle alpha_wt0 of cutter and
+    gear. The helix angle of the tool is implied: beta_0 = beta.
+
+    Parameters
+    ----------
+    z0 : int
+        Number of teeth of the cutter [-].
+    x0 : float
+        Profile shift coefficient of the cutter [-].
+    haP0 : float
+        Addendum of the cutter h_aP0 / m_n [-].
+    rhoaP0 : float
+        Tip radius of the cutter rho_aP0 / m_n [-].
+    alpha_P0_deg : float
+        Pressure angle of the cutter alpha_P0 [deg].
+
+    Raises
+    ------
+    NotImplementedError
+        Always, at construction.
+
+    References
+    ----------
+    .. [1] ISO_21771_2007, 7.5, Eq. (126); 7.6, Eq. (131)-(134), p. 57-58 (PDF p. 61-62).
+    .. [2] ISO_701_1998, subscript 0 (tool), Tables 2 and 4, p. 2 (PDF p. 10).
+    """
+    z0: int
+    x0: float
+    haP0: float
+    rhoaP0: float
+    alpha_P0_deg: float
+
+    def __post_init__(self):
+        raise NotImplementedError("MG-16: pinion-type cutter (ISO_21771_2007 Eq. (126), (131)-(134)) not implemented")
+
+
+class InspectionLimits(NamedTuple):
+    """Values of one tooth thickness test dimension at the two allowances [mm].
+
+    Returned by the Annex A test dimensions (placeholders, MG-15): ISO_21771_2007, Annex A,
+    p. 60-82 (PDF p. 64-86). The order follows the allowance, not the magnitude: for an internal
+    gear (span over spaces, A.17, A.22-A.23) the value at x_Es can be the smaller. These are the
+    values of the nominal system (planned test dimensions); the allowable limits of the
+    functional system need the ISO 1328 deviations (F_r, F_pk for the span, A.18-A.19; F_r for
+    balls, A.49-A.50; F_rc and d_a max / min for the chord, A.30-A.35), not in the library
+    (MG-18).
+
+    Parameters
+    ----------
+    upper : float
+        Value at the upper tooth thickness allowance, from x_Es [mm].
+    lower : float
+        Value at the lower tooth thickness allowance, from x_Ei [mm].
+    """
+    upper: float
+    lower: float
+
+
+@dataclass(frozen=True, kw_only=True)
+class CylindricalGearManufacturingData(CylindricalGearData):
+    """Input data of one cylindrical gear as made: the nominal data plus the manufacturing inputs.
+
+    All the fields of ``CylindricalGearData`` (``mn`` and ``z`` may still be positional), then
+    two kinds of input:
+
+    - design inputs, read from the drawing: the tooth thickness allowances ``E_sns``, ``E_sni``
+      and the accuracy grade ``quality_grade``;
+    - process inputs, chosen by the workshop: the generating tool ``cutter`` and the machining
+      allowances ``q_min``, ``q_max``.
+
+    Parameters
+    ----------
+    E_sns, E_sni : float
+        Upper and lower tooth thickness allowances [mm], normal section: s_ns = s_n + E_sns,
+        s_ni = s_n + E_sni. Required. A negative allowance reduces the tooth thickness.
+    quality_grade : None
+        PLACEHOLDER - not implemented (MG-18): accuracy grade of ISO 1328 [-] (ISO 1328 is not in
+        the library: source to find). Must be None (refused by ``validate``).
+    cutter : GeneratingRackProfile or None, optional
+        Rack-type tool that generates the teeth. None (default): the counterpart of the basic rack
+        of this record, ``GeneratingRackProfile.from_basic_rack(self)``. A
+        ``GeneratingPinionCutter`` is a placeholder (MG-16) that cannot be built.
+    q_min, q_max : None
+        PLACEHOLDER - not implemented (MG-02): smallest and largest machining allowance for the
+        finishing process, normal to the flank [mm] (ISO_21771_2007, 7.2, p. 54 / PDF p. 58;
+        pre-finish shifts 7.4, Eq. (120)-(122), p. 56 / PDF p. 60). Must be None (refused by
+        ``validate``): only finish cutting (q = 0) is computed.
+
+    References
+    ----------
+    .. [1] ISO_21771_2007, 7.3, Eq. (118), (119), p. 55 (PDF p. 59) (allowances); 7.1-7.2 (tool).
+    """
+    E_sns: float
+    E_sni: float
+    quality_grade: int | None = None
+    cutter: GeneratingRackProfile | GeneratingPinionCutter | None = None
+    q_min: float | None = None
+    q_max: float | None = None
+
+    def validate(self) -> list[str]:
+        """Check the domains of the inputs.
+
+        Returns
+        -------
+        list of str
+            The messages of ``CylindricalGearData.validate``, then: E_sni <= E_sns <= 0; the
+            messages of ``cutter.validate()`` when a cutter is given; the tool pressure angle
+            alpha_P0_deg equal to alpha_n_deg (relative 1e-6); quality_grade, q_min, q_max None
+            (placeholders, MG-18, MG-02).
+
+        Notes
+        -----
+        E_sns <= 0: ISO_21771_2007, 7.3 says that "a negative tooth thickness allowance reduces the
+        tooth thickness" and prints no sign limit; no library source for the limit E_sns <= 0.
+        alpha_P0 = alpha_n: otherwise alpha_wt0 and d_wE replace alpha_t and d in the generating
+        equations (ISO_21771_2007, Fig. 39 NOTE, p. 57 / PDF p. 61); not implemented.
+        """
+        errors = super().validate()
+        tag = self.label or "Gear"
+        if not (self.E_sni <= self.E_sns <= 0.0):
+            errors.append(f"{tag}: tooth thickness allowances must satisfy E_sni <= E_sns <= 0, "
+                          f"got E_sns={self.E_sns}, E_sni={self.E_sni}")
+        if self.cutter is not None:
+            errors.extend(f"{tag}: {m}" for m in self.cutter.validate())
+            # same tolerance as the pressure angles of two gears in mesh (assemble_pair)
+            if not np.isclose(self.cutter.alpha_P0_deg, self.alpha_n_deg, rtol=1e-6):
+                errors.append(f"{tag}: cutter alpha_P0_deg={self.cutter.alpha_P0_deg} differs from "
+                              f"alpha_n_deg={self.alpha_n_deg}; not implemented (ISO_21771_2007, Fig. 39 NOTE)")
+        for name, issue in (("quality_grade", "MG-18"), ("q_min", "MG-02"), ("q_max", "MG-02")):
+            if getattr(self, name) is not None:
+                errors.append(f"{tag}: {name} is not implemented ({issue}), got {getattr(self, name)!r}")
+        return errors
+
+
+# ==================================================================================================
+# The manufactured family
+# ==================================================================================================
+@register_gear_family
+class ManufacturedCylindricalFamily(CylindricalFamily):
+    """Cylindrical involute gears as cut: the IDEAL family plus the sizes of clause 7 (ISO_21771_2007).
+
+    Two layers: the nominal geometry of ``CylindricalFamily`` (clause 4, profile shift x, zero
+    backlash), unchanged, and the sizes that the tooth thickness allowances and the generating
+    tool give (clause 7). The family ONLY ADDS: ``assemble_gear`` and ``assemble_pair`` return the
+    nominal attributes of ``CylindricalFamily`` plus the manufactured ones, ``validate_gear`` and
+    ``validate_pair`` the nominal messages plus the manufactured ones; every other method is
+    inherited. A gear of this family is a ``Gear`` and is accepted wherever a ``Gear`` is
+    (``GearPair.assemble`` with ``CylindricalFamily``, ``GearElement``, ``Transmission``) with
+    identical nominal results. The one exception is an external gear with x < x_Emin: the ideal
+    gear says nothing (no undercut check, ruling B, José 2026-10-21), but as cut it is an error
+    even with zero allowances (x_Ei = x < x_Emin, MG-10), so ``from_ideal(g, E_sns=0, E_sni=0)``
+    raises unless ``check=False``.
+
+    Build with ``Gear.assemble(ManufacturedCylindricalFamily(), CylindricalGearManufacturingData(...))``
+    and ``GearPair.assemble(ManufacturedCylindricalFamily(), gear1=..., gear2=...)``.
 
     Attributes
     ----------
+    Added to the ``Gear`` (``assemble_gear``):
+
     E_sns, E_sni : float
         Upper and lower tooth thickness allowances [mm] (data fields; 7.3, Eq. (118), (119)).
     cutter : GeneratingRackProfile
@@ -1935,187 +1488,555 @@ class ManufacturedCylindricalGear(Gear):
     d_Ffs, d_Ffi : float or None
         Root form diameters [mm] (7.6, Eq. (128)); None under undercut at that allowance.
 
+    Added to the ``GearPair`` (``assemble_pair``):
+
+    jbn_max, jbn_min : float
+        Largest and smallest normal backlash [mm] at the working centre distance.
+    d_Nf1, d_Nf2 : float
+        Active root diameters of gear 1 and gear 2 [mm].
+
     Notes
     -----
     Rack-type cutter, external gear: for an internal gear (z < 0) hFaP0, x_Emin, d_fE and d_Ff
     are None and the gear carries one warning (pinion-type cutter not implemented, MG-03).
-    ``validate`` adds ``CylindricalFamily.validate_manufactured_gear`` to the nominal checks.
 
     References
     ----------
     .. [1] ISO_21771_2007, clause 7, p. 53-59 (PDF p. 57-63).
     """
 
-    @classmethod
-    def assemble(cls, family: GearFamily, data: CylindricalGearManufacturingData, *,
-                 check: bool = True) -> ManufacturedCylindricalGear:
-        """Build an assembled, immutable manufactured gear.
+    # ----------------------------------------------------------------------------------------------
+    # Generation of the teeth by a rack-type cutter (ISO_21771_2007, clause 7): pure functions of
+    # numbers and of the cutter record. External gear, rack cutter (or hob) without protuberance,
+    # finish cutting.
+    # ----------------------------------------------------------------------------------------------
+    @staticmethod
+    def _min_generating_profile_shift(z, mn, alphat, beta, cutter) -> tuple[float, float]:
+        """Smallest generating profile shift coefficient that cuts the teeth without undercut.
+
+        Undercut starts when the end of the straight tip flank of the tool passes the interference
+        point T (the base-tangent point) on the generating line of action (Fig. 39); the limit is the
+        shift that puts the end of that straight flank on the line of action at the base-tangent point.
 
         Parameters
         ----------
-        family : CylindricalFamily
-            Family instance.
-        data : CylindricalGearManufacturingData
-            Nominal data plus allowances and tool.
-        check : bool, optional
-            If True (default), run ``validate()`` and refuse an invalid gear (as ``Gear.assemble``).
+        z : int
+            Number of teeth [-], positive (external gear).
+        mn : float
+            Normal module [mm].
+        alphat : float
+            Transverse pressure angle of the gear [rad].
+        beta : float
+            Reference helix angle of the gear [rad].
+        cutter : GeneratingRackProfile
+            Rack-type tool (coefficients h_aP0 / m_n, rho_aP0 / m_n).
 
         Returns
         -------
-        ManufacturedCylindricalGear
-            The nominal attributes, then the manufactured ones; ``warnings`` joins the nominal
-            warnings (none today: ``assemble_gear`` has no undercut warning, ruling B) and the
-            manufactured ones.
+        tuple of float
+            ``(x_Emin, hFaP0)``: minimum generating profile shift coefficient x_Emin [-] and the
+            straight part of the tip flank of the tool h_FaP0 [mm].
+
+        Notes
+        -----
+        h_FaP0 = m_n (h_aP0 - rho_aP0 (1 - sin(alpha_t))): the bracket of Eq. (128) / (130), the
+        "straight part of tip flank of tool-generating profile" of the Fig. 39 key. It is taken with
+        the alpha_t of the GEAR, as printed. Issue MG-01: Fig. 35 draws h_FaP0 in the normal section of
+        the tool, where the tip-radius geometry would give alpha_P0 instead; kept as printed (0.004 in
+        x_Emin at beta 15 deg, z 17). Valid for an external gear and a non-protuberance rack cutter
+        or hob only.
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, 7.7, Eq. (135), p. 59 (PDF p. 63); 7.6, Fig. 39 key, Eq. (128),
+           p. 57-58 (PDF p. 61-62).
+        """
+        hFaP0 = mn * (cutter.haP0 - cutter.rhoaP0 * (1.0 - np.sin(alphat)))
+        x_Emin = hFaP0 / mn - z * np.sin(alphat) ** 2 / (2.0 * np.cos(beta))      # Eq. (135)
+        return x_Emin, hFaP0
+
+
+    @staticmethod
+    def _generating_profile_shift(x, mn, alpha_n, E_sn) -> float:
+        """Generating profile shift coefficient x_E of a tooth thinned by the allowance E_sn.
+
+        The cutter is fed deeper than the nominal x by the amount that removes E_sn from the normal
+        tooth thickness on both flanks: E_sn / (2 tan(alpha_n)) radially.
+
+        Parameters
+        ----------
+        x : float
+            Nominal profile shift coefficient [-].
+        mn : float
+            Normal module [mm].
+        alpha_n : float
+            Normal pressure angle [rad].
+        E_sn : float
+            Tooth thickness allowance [mm], E_sns (upper) or E_sni (lower); negative thins the tooth.
+
+        Returns
+        -------
+        float
+            x_E [-]: x_Es from E_sns (Eq. (123)) or x_Ei from E_sni (Eq. (124)).
+
+        Notes
+        -----
+        Finish cutting only (machining allowance q = 0); the pre-finish shifts of Eq. (120)-(122) are
+        not computed.
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, 7.4, Eq. (123), (124), p. 56 (PDF p. 60).
+        """
+        return x + E_sn / (2.0 * mn * np.tan(alpha_n))
+
+
+    @staticmethod
+    def _generated_root_diameter(d, x_E, mn, cutter) -> float:
+        """Root diameter cut by a rack-type tool at the generating profile shift x_E.
+
+        Parameters
+        ----------
+        d : float
+            Reference diameter [mm].
+        x_E : float
+            Generating profile shift coefficient [-] (x_Es or x_Ei).
+        mn : float
+            Normal module [mm].
+        cutter : GeneratingRackProfile
+            Rack-type tool (coefficient h_aP0 / m_n).
+
+        Returns
+        -------
+        float
+            Generated root diameter d_fE [mm]: the tool tip line, h_aP0 below the tool datum line,
+            which lies x_E m_n outside the reference circle.
+
+        Notes
+        -----
+        External gear, rack cutter; the standard asks for the values of the process that produces the
+        finished tooth.
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, 7.5, Eq. (125), p. 57 (PDF p. 61).
+        """
+        return d + 2.0 * x_E * mn - 2.0 * cutter.haP0 * mn
+
+
+    @staticmethod
+    def _root_form_diameter(d, db, alphat, x_E, mn, cutter) -> float:
+        """Root form diameter: where the involute generated by the straight tool flank ends.
+
+        Below d_Ff the flank is the fillet (trochoid) cut by the tip radius of the tool.
+
+        Parameters
+        ----------
+        d, db : float
+            Reference and base diameters [mm].
+        alphat : float
+            Transverse pressure angle [rad].
+        x_E : float
+            Generating profile shift coefficient [-] (x_Es or x_Ei).
+        mn : float
+            Normal module [mm].
+        cutter : GeneratingRackProfile
+            Rack-type tool (coefficients h_aP0 / m_n, rho_aP0 / m_n).
+
+        Returns
+        -------
+        float
+            Root form diameter d_Ff [mm].
+
+        Notes
+        -----
+        Eq. (128), first form, with h = m_n (h_aP0 - x_E - rho_aP0 (1 - sin(alpha_t))) [mm], the
+        height of the end of the straight tool flank below the reference line of the gear:
+        d_Ff = sqrt((d sin(alpha_t) - 2 h / sin(alpha_t))**2 + d_b**2). External gear, rack cutter
+        with tool tips parallel to the datum line, valid only without undercut (x_E >= x_Emin) and
+        without pre-finish root relief.
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, 7.6, Eq. (128), p. 58 (PDF p. 62).
+        """
+        h = mn * (cutter.haP0 - x_E - cutter.rhoaP0 * (1.0 - np.sin(alphat)))
+        return np.sqrt((d * np.sin(alphat) - 2.0 * h / np.sin(alphat)) ** 2 + db ** 2)
+
+    # ----------------------------------------------------------------------------------------------
+    # One gear as cut (ISO 21771 clause 7)
+    # ----------------------------------------------------------------------------------------------
+    def assemble_gear(self, data: CylindricalGearManufacturingData) -> dict:
+        """Nominal geometry of one gear, then its sizes as cut: generating profile shifts, tooth
+        thicknesses and root cylinders.
+
+        Parameters
+        ----------
+        data : CylindricalGearManufacturingData
+            Nominal data plus allowances and tool.
+
+        Returns
+        -------
+        dict
+            The attributes of ``CylindricalFamily.assemble_gear``, unchanged, then the 13 computed
+            attributes, ``cutter`` to ``d_Ffi``, documented in ``ManufacturedCylindricalFamily``
+            (Attributes), and
+            ``warnings`` (tuple of str): one per d_Ff not computed because of undercut at that
+            allowance (Eq. (128) holds only without undercut; MG-11); for an internal gear one
+            message (rack cutter, see Notes).
 
         Raises
         ------
         TypeError
-            If ``family`` is not a ``CylindricalFamily`` or ``data`` not a
-            ``CylindricalGearManufacturingData``.
+            If ``data`` is not a ``CylindricalGearManufacturingData``.
         ValueError
-            As ``Gear.assemble``.
-        """
-        if not isinstance(family, CylindricalFamily):
-            raise TypeError(f"{cls.__name__} needs a CylindricalFamily, got {type(family).__name__}")
-        if not isinstance(data, CylindricalGearManufacturingData):
-            raise TypeError(f"{cls.__name__} needs CylindricalGearManufacturingData, got {type(data).__name__}")
-        gear = cls(family, data)
-        nominal = family.assemble_gear(data)
-        nominal_warnings = nominal.pop("warnings", ())
-        for attr, value in nominal.items():    # the manufactured sizes are computed from the nominal ones
-            setattr(gear, attr, value)
-        computed = family.assemble_manufactured_gear(gear)
-        gear._freeze({**computed, "warnings": (*nominal_warnings, *computed["warnings"])})
-        if check:
-            gear.validate_or_raise()
-        return gear
+            As ``CylindricalFamily.assemble_gear``.
 
-    @classmethod
-    def from_ideal(cls, gear: Gear, *, E_sns: float, E_sni: float,
-                   cutter: GeneratingRackProfile | None = None, check: bool = True) -> ManufacturedCylindricalGear:
-        """Manufactured gear with the nominal data of ``gear`` and the given allowances and tool.
+        Notes
+        -----
+        A rack-type cutter cannot generate an internal gear, and Eq. (125), (128), (135) are
+        printed for external gears: for z < 0 hFaP0, x_Emin, d_fE and d_Ff are None (pinion-type
+        cutter, Eq. (126), (131)-(134), not implemented: MG-03). The tip thickness uses the
+        nominal d_a, whereas 7.9 asks for the upper-limit tip diameter (MG-06): when MG-06 is
+        done, the critical limit of d_a for each kind, the largest for an external gear and the
+        smallest for a ring (a ring tooth thins toward smaller diameters). Finish cutting only
+        (q = 0).
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, 4.7.1, Eq. (38); 4.7.2, Eq. (41), p. 25 (PDF p. 29); 4.7.5, Eq. (49);
+           7.3-7.7, Eq. (118)-(135), p. 55-59 (PDF p. 59-63).
+        """
+        if not isinstance(data, CylindricalGearManufacturingData):
+            raise TypeError(f"{type(self).__name__} needs CylindricalGearManufacturingData, got {type(data).__name__}")
+        nominal = super().assemble_gear(data)   # the manufactured sizes are computed from the nominal ones
+        z, mn, x = data.z, data.mn, data.x
+        alpha, alphat, beta, d, db, da = (nominal[k] for k in ("alpha", "alphat", "beta", "d", "db", "da"))
+        cutter = GeneratingRackProfile.from_basic_rack(data) if data.cutter is None else data.cutter
+        tag = data.label or "Gear"
+        s = z / abs(z)   # ISO_21771_2007, 4.1.5: +1 external, -1 internal
+        s_n = mn * (np.pi / 2 + 2 * x * np.tan(alpha))     # Eq. (49), nominal x
+        # transverse pressure angle at the tip circle, through its involute (Eq. (18); as values_at)
+        inv_alpha_at = _involute(np.arccos(db / da))
+        external = z > 0
+        if external:
+            x_Emin, hFaP0 = self._min_generating_profile_shift(z, mn, alphat, beta, cutter)
+            warnings_ = []
+        else:
+            x_Emin = hFaP0 = None
+            warnings_ = [f"{tag}: internal gear: a rack-type cutter cannot generate it; hFaP0, x_Emin, d_fE and "
+                         "d_Ff are not computed (ISO_21771_2007 Eq. (125), (128), (135) are for external gears; "
+                         "pinion-type cutter not implemented, MG-03)."]
+        out = dict(nominal, cutter=cutter, hFaP0=hFaP0, x_Emin=x_Emin)
+        for k, E_sn, which in (("s", data.E_sns, "upper"), ("i", data.E_sni, "lower")):
+            x_E = out[f"x_E{k}"] = self._generating_profile_shift(x, mn, alpha, E_sn)
+            out[f"s_n{k}"] = s_n + E_sn                                                # Eq. (118), (119)
+            # Eq. (41): half tooth angle at the reference circle, generated size with x_E
+            psi = (np.pi + 4 * x_E * np.tan(alpha)) / (2 * abs(z))
+            # Eq. (38) at d_y = d_a: AxisForge stores ring diameters positive (D-0010), so d_a enters without
+            # the sign of ISO's signed diameters; z/abs(z) makes the ring tooth thinner toward its tip (d_a < d)
+            out[f"s_at{k}"] = da * (psi + s * (_involute(alphat) - inv_alpha_at))
+            out[f"d_fE{k}"] = self._generated_root_diameter(d, x_E, mn, cutter) if external else None
+            out[f"d_Ff{k}"] = None
+            if external and x_E >= x_Emin:
+                out[f"d_Ff{k}"] = self._root_form_diameter(d, db, alphat, x_E, mn, cutter)
+            elif external:
+                warnings_.append(f"{tag}: d_Ff{k} not computed: x_E{k}={x_E:.6f} < x_Emin={x_Emin:.6f}, undercut "
+                                 f"at the {which} allowance (ISO_21771_2007 Eq. (128) holds only without undercut).")
+        out["warnings"] = (*nominal.get("warnings", ()), *warnings_)
+        return out
+
+    def validate_gear(self, gear: Gear) -> list[str]:
+        """Check one gear as cut: ``CylindricalFamily.validate_gear`` (incl. the allowances of the
+        data), then the checks of the gear as cut.
+
+        Returns
+        -------
+        list of str
+            The messages of ``CylindricalFamily.validate_gear``, then one message per violation:
+
+            (1) external gear with x_Ei < x_Emin: undercut at the lower allowance (MG-10).
+            Eq. (128) holds only without undercut, so d_Ff and the pair check d_Nf >= d_Ff are
+            invalid when x_Ei < x_Emin; x_Es >= x_Ei, so one message covers both.
+            (2) s_ats or s_ati not > 0: pointed tooth at the tip circle. ISO_21771_2007, 7.9,
+            p. 59 (PDF p. 63) prints no minimum, so none is invented; the nominal d_a is used,
+            whereas 7.9 asks for the upper-limit tip diameter (MG-06).
+        """
+        tag = gear.label or "Gear"
+        errors = super().validate_gear(gear)
+        if gear.x_Emin is not None and gear.x_Ei < gear.x_Emin:
+            errors.append(f"{tag}: undercut at the lower allowance - x_Ei={gear.x_Ei:.6f} < x_Emin={gear.x_Emin:.6f} "
+                          "(ISO_21771_2007 Eq. (135)); d_Ff (Eq. (128)) is not valid")
+        for k in ("s", "i"):
+            s_at = getattr(gear, f"s_at{k}")
+            # "not > 0" also catches nan: d_a < d_b has no tip pressure angle (reachable only with check=False)
+            if not s_at > 0.0:
+                errors.append(f"{tag}: pointed tooth - s_at{k}={s_at:.6f} mm <= 0 at the tip circle "
+                              f"da={gear.da:.4f} mm (ISO_21771_2007 Eq. (38))")
+        return errors
+
+    def from_ideal(self, gear: Gear, *, E_sns: float, E_sni: float,
+                   cutter: GeneratingRackProfile | None = None, check: bool = True) -> Gear:
+        """Gear of this family with the nominal data of ``gear`` and the given allowances and tool.
 
         Parameters
         ----------
         gear : Gear
-            Assembled gear of the cylindrical family. Only the ``CylindricalGearData`` fields of
-            its data are copied: the allowances and tool of a manufactured gear given here are
-            replaced by the arguments.
+            Assembled gear of ``CylindricalFamily`` or of this family. Only the
+            ``CylindricalGearData`` fields of its data are copied: the allowances and tool of a
+            manufactured gear given here are replaced by the arguments.
         E_sns, E_sni : float
             Upper and lower tooth thickness allowances [mm].
         cutter : GeneratingRackProfile or None, optional
             Tool; None: counterpart of the basic rack.
         check : bool, optional
-            Passed to ``assemble``. Default True.
+            Passed to ``Gear.assemble``. Default True.
 
         Returns
         -------
-        ManufacturedCylindricalGear
-            ``assemble(gear.family, data, check=check)``.
+        Gear
+            ``Gear.assemble(self, data, check=check)``.
         """
         nominal = {f.name: getattr(gear.data, f.name) for f in fields(CylindricalGearData)}
         data = CylindricalGearManufacturingData(**nominal, E_sns=E_sns, E_sni=E_sni, cutter=cutter)
-        return cls.assemble(gear.family, data, check=check)
+        return Gear.assemble(self, data, check=check)
 
-    def validate(self) -> list[str]:
-        """Check the gear: ``validate_gear`` (incl. the allowances of the data), then
-        ``validate_manufactured_gear``.
-
-        Returns
-        -------
-        list of str
-            One message per violation; empty if valid.
-        """
-        return super().validate() + self.family.validate_manufactured_gear(self)
-
-    # Annex A test dimensions: shortcuts to the family (placeholders, MG-15)
-    def span_measurement(self, k: int) -> InspectionLimits:
-        """PLACEHOLDER (MG-15): span measurement W_k [mm], ``CylindricalFamily.span_measurement``."""
-        return self.family.span_measurement(self, k)
-
-    def dimension_over_balls(self, D_M: float) -> InspectionLimits:
-        """PLACEHOLDER (MG-15): dimension over balls M_dK [mm], ``CylindricalFamily.dimension_over_balls``."""
-        return self.family.dimension_over_balls(self, D_M)
-
-    def chordal_tooth_thickness(self, d_y: float | None = None) -> InspectionLimits:
-        """PLACEHOLDER (MG-15): chordal tooth thickness [mm], ``CylindricalFamily.chordal_tooth_thickness``."""
-        return self.family.chordal_tooth_thickness(self, d_y)
-
-    def chordal_height(self, d_y: float | None = None) -> float:
-        """PLACEHOLDER (MG-15): height above the chord [mm], ``CylindricalFamily.chordal_height``."""
-        return self.family.chordal_height(self, d_y)
-
-    def double_flank_centre_distance(self, master: ManufacturedCylindricalGear) -> InspectionLimits:
-        """PLACEHOLDER (MG-15): double-flank centre distance [mm],
-        ``CylindricalFamily.double_flank_centre_distance``."""
-        return self.family.double_flank_centre_distance(self, master)
-
-
-class ManufacturedCylindricalGearPair(GearPair):
-    """Two manufactured gears in mesh: the nominal pair plus its backlash and root-fillet check.
-
-    The nominal geometry of ``CylindricalFamily.assemble_pair`` is unchanged; the class ONLY ADDS
-    the attributes below (``CylindricalFamily.assemble_manufactured_pair``) and the check
-    d_Nf >= d_Ff (``CylindricalFamily.validate_manufactured_pair``).
-
-    Attributes
-    ----------
-    jbn_max, jbn_min : float
-        Largest and smallest normal backlash [mm] at the working centre distance.
-    d_Nf1, d_Nf2 : float
-        Active root diameters of gear 1 and gear 2 [mm].
-
-    Equations and references: ``CylindricalFamily.assemble_manufactured_pair``.
-    """
-
-    @classmethod
-    def assemble(cls, family: GearFamily, *, check: bool = True, **pair_inputs) -> ManufacturedCylindricalGearPair:
-        """Build an assembled, immutable pair of two ``ManufacturedCylindricalGear``.
+    # ----------------------------------------------------------------------------------------------
+    # The pair as cut (ISO 21771 clause 5 with the generating profile shifts of clause 7)
+    # ----------------------------------------------------------------------------------------------
+    def assemble_pair(self, gear1: Gear, gear2: Gear, *, label: str = "", al: float | None = None,
+                      addendum_reduction: bool = False) -> tuple[Gear, Gear, dict]:
+        """Nominal geometry of two gears in mesh, then the backlash and active root diameters of
+        the pair as cut.
 
         Parameters
         ----------
-        family : CylindricalFamily
-            Family instance.
-        check : bool, optional
-            If True (default), run ``validate()`` and refuse an invalid pair (as ``GearPair.assemble``).
-        **pair_inputs
-            Forwarded to ``CylindricalFamily.assemble_pair`` (``gear1``, ``gear2``, ``label``,
-            ``al``, ``addendum_reduction``).
+        gear1, gear2 : Gear
+            Gears assembled with ``ManufacturedCylindricalFamily``.
+        label, al, addendum_reduction
+            As ``CylindricalFamily.assemble_pair``.
 
         Returns
         -------
-        ManufacturedCylindricalGearPair
-            ``warnings`` joins the nominal warnings and the manufactured ones.
+        tuple
+            ``(gear1, gear2, attributes)``: the attributes of ``CylindricalFamily.assemble_pair``,
+            unchanged, then:
+
+            jbn_max, jbn_min : normal backlash [mm] at the pair's working centre distance a_w
+            (derived or imposed), from the lower (x_Ei1 + x_Ei2) and the upper (x_Es1 + x_Es2)
+            allowances (``_normal_backlash``, Eq. (63), with the sum implied by a_w,
+            ``profile_shift_check[0]``, signed z1 + z2). Same sign as ``jbn``: > 0 clearance
+            between the non-working flanks.
+            d_Nf1, d_Nf2 : active root diameters [mm], 2 ``rA1`` and 2 ``rA2`` (the existing radii
+            of the start of the active profile of each gear; equal to 5.4.1, Eq. (64), (65),
+            p. 33 (PDF p. 37) with d_Na = d_a, with a_w taken negative for an internal pair
+            (AxisForge stores a_w > 0)).
+            warnings : tuple of str: one per gear with an allowance whose d_Ff is None (ring, or
+            undercut at that allowance): d_Nf >= d_Ff is not checked there.
+
+        Notes
+        -----
+        j_bn is defined in 5.5.1, p. 40 (PDF p. 44); Eq. (100)-(104) only convert it to other
+        backlashes (not computed). Centre-distance tolerances are out of scope: a_w is the one
+        value of the pair.
 
         Raises
         ------
         TypeError
-            If ``family`` is not a ``CylindricalFamily`` or a gear not a ``ManufacturedCylindricalGear``.
+            If a gear was not assembled with ``ManufacturedCylindricalFamily``.
         ValueError
-            As ``GearPair.assemble``.
+            As ``CylindricalFamily.assemble_pair``.
         """
-        if not isinstance(family, CylindricalFamily):
-            raise TypeError(f"{cls.__name__} needs a CylindricalFamily, got {type(family).__name__}")
-        gear1, gear2, nominal = family.assemble_pair(**pair_inputs)
-        if not (isinstance(gear1, ManufacturedCylindricalGear) and isinstance(gear2, ManufacturedCylindricalGear)):
-            raise TypeError(f"{cls.__name__} needs two ManufacturedCylindricalGear, got "
-                            f"{type(gear1).__name__} and {type(gear2).__name__}")
-        pair = cls(family, gear1, gear2)
-        nominal_warnings = nominal.pop("warnings")
-        for attr, value in nominal.items():    # the manufactured quantities are computed from the nominal ones
-            setattr(pair, attr, value)
-        computed = family.assemble_manufactured_pair(pair)
-        pair._freeze({**computed, "warnings": (*nominal_warnings, *computed["warnings"])})
-        if check:
-            pair.validate_or_raise()
-        return pair
+        if not (isinstance(gear1.family, ManufacturedCylindricalFamily)
+                and isinstance(gear2.family, ManufacturedCylindricalFamily)):
+            raise TypeError(f"{type(self).__name__} needs two gears assembled with ManufacturedCylindricalFamily, "
+                            f"got {type(gear1.family).__name__} and {type(gear2.family).__name__}")
+        g1, g2, nominal = super().assemble_pair(gear1, gear2, label=label, al=al,
+                                                addendum_reduction=addendum_reduction)
+        x_sum_from_al = nominal["profile_shift_check"][0]   # Sum x implied by a_w (Eq. (62)), reused
+        warnings_ = []
+        for i, g in ((1, g1), (2, g2)):
+            missing = [k for k in ("s", "i") if getattr(g, f"d_Ff{k}") is None]
+            if missing:
+                warnings_.append(f"d_Nf >= d_Ff not checked for gear {i} ({g.label or 'Gear'}): "
+                                 f"{', '.join(f'd_Ff{k}' for k in missing)} not computed (internal gear or undercut "
+                                 "at that allowance).")
+        return g1, g2, dict(
+            nominal,
+            # largest backlash from the thinnest teeth (lower allowances), smallest from the upper
+            jbn_max=_normal_backlash(x_sum_from_al, g1.x_Ei + g2.x_Ei, g1.mn, g1.alpha),
+            jbn_min=_normal_backlash(x_sum_from_al, g1.x_Es + g2.x_Es, g1.mn, g1.alpha),
+            d_Nf1=2 * nominal["rA1"], d_Nf2=2 * nominal["rA2"],
+            warnings=(*nominal["warnings"], *warnings_),
+        )
 
-    def validate(self) -> list[str]:
-        """Check the pair: ``validate_pair`` (incl. the manufactured gears), then ``validate_manufactured_pair``.
+    def validate_pair(self, pair) -> list[str]:
+        """Check the pair as cut: ``CylindricalFamily.validate_pair`` (incl. the checks of the two
+        gears as cut), then d_Nf >= d_Ff.
 
         Returns
         -------
         list of str
-            One message per violation; empty if valid.
+            The messages of ``CylindricalFamily.validate_pair``, then one message per gear and
+            allowance whose root form diameter is computed and lies
+            above the active root diameter, d_Nf < d_Ff: the tip of the mate would reach below the
+            start of the involute, i.e. contact on the root fillet. ISO_21771_2007, 5.4.1, p. 33
+            (PDF p. 37): "d_Nf may be governed by the start of involute", Eq. (66), (67).
+            Gears or allowances without d_Ff are a warning of the pair (``assemble_pair``).
+
+        Notes
+        -----
+        ISO 21771 5.4.1 does not call d_Nf < d_Ff invalid: it sets d_Nf = d_Ff (Eq. (66), (67)) and
+        limits the active tip of the mate, d_Na <= d_Fa (Eq. (68), (69), i.e. tip relief). AxisForge
+        has no d_Fa (d_Fa = d_a), so this error is stricter than the standard (ruling MG-10:
+        Eq. (128) and this check). The rack-A internal baseline pairs fail it: the ring tip
+        (h_a2 = 1.0 m_n) reaches the pinion fillet (issue MG-24).
         """
-        return super().validate() + self.family.validate_manufactured_pair(self)
+        errors = super().validate_pair(pair)
+        for i, gear in ((1, pair.gear1), (2, pair.gear2)):
+            d_Nf = getattr(pair, f"d_Nf{i}")
+            for k, which in (("s", "upper"), ("i", "lower")):
+                d_Ff = getattr(gear, f"d_Ff{k}")
+                # "not >=" also catches nan
+                if d_Ff is not None and not d_Nf >= d_Ff:
+                    errors.append(f"gear {i} ({gear.label or 'Gear'}): active root diameter d_Nf{i}={d_Nf:.4f} mm "
+                                  f"< root form diameter d_Ff{k}={d_Ff:.4f} mm at the {which} allowance: the mate's "
+                                  "tip reaches the root fillet (ISO_21771_2007 5.4.1, Eq. (66), (67))")
+        return errors
+
+    # ----------------------------------------------------------------------------------------------
+    # Tooth thickness test dimensions of a manufactured gear (ISO 21771 Annex A): placeholders (MG-15).
+    # Not placeholders here: A.4 constant chord, A.5-A.6 radial single-ball/cylinder M_rK, M_rZ, A.9.
+    # ----------------------------------------------------------------------------------------------
+    @staticmethod
+    def span_measurement(gear: Gear, k: int) -> InspectionLimits:
+        """Span measurement W_k over k teeth (external gear) or tooth spaces (internal spur gear).
+
+        PLACEHOLDER - not implemented (MG-15).
+
+        Parameters
+        ----------
+        gear : Gear
+            Gear as cut.
+        k : int
+            Number of teeth spanned (tooth spaces for an internal gear) [-].
+
+        Returns
+        -------
+        InspectionLimits
+            W_k at x_Es (upper) and at x_Ei (lower) [mm].
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, A.2, Eq. (A.1)-(A.23), p. 61-67 (PDF p. 65-71).
+        """
+        raise NotImplementedError("MG-15: span measurement W_k (ISO_21771_2007 A.2) not implemented")
+
+    @staticmethod
+    def dimension_over_balls(gear: Gear, D_M: float) -> InspectionLimits:
+        """Diametral dimension over two balls M_dK, or over two cylinders M_dZ.
+
+        PLACEHOLDER - not implemented (MG-15).
+
+        Cylinders (A.7.1) are allowed on external gears and internal spur gears; for helical gears
+        with an odd number of teeth the standard asks for "special calculations".
+
+        Parameters
+        ----------
+        gear : Gear
+            Gear as cut.
+        D_M : float
+            Diameter of the measuring ball or cylinder [mm].
+
+        Returns
+        -------
+        InspectionLimits
+            M_dK (M_dZ) at x_Es (upper) and at x_Ei (lower) [mm].
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, A.5-A.7, Eq. (A.38)-(A.50), p. 75-81 (PDF p. 79-85): the ball
+           centre circle of A.5, Eq. (A.38)-(A.46), on which A.7 (Eq. (A.47)-(A.50)) and A.7.1
+           build.
+        """
+        raise NotImplementedError("MG-15: dimension over balls M_dK (ISO_21771_2007 A.5-A.7) not implemented")
+
+    @staticmethod
+    def chordal_tooth_thickness(gear: Gear, d_y: float | None = None) -> InspectionLimits:
+        """Normal chordal tooth thickness s_cy on the Y-cylinder of diameter d_y.
+
+        PLACEHOLDER - not implemented (MG-15).
+
+        Parameters
+        ----------
+        gear : Gear
+            Gear as cut.
+        d_y : float or None, optional
+            Diameter of the Y-cylinder [mm]; None: d_a - 2 m_n, "often used as the Y-cylinder
+            diameter" (A.3.1).
+
+        Returns
+        -------
+        InspectionLimits
+            s_cy at x_Es (upper) and at x_Ei (lower) [mm].
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, A.3, Eq. (A.24)-(A.35), p. 68-70 (PDF p. 72-74).
+        """
+        raise NotImplementedError("MG-15: chordal tooth thickness s_cy (ISO_21771_2007 A.3) not implemented")
+
+    @staticmethod
+    def chordal_height(gear: Gear, d_y: float | None = None) -> float:
+        """Height above the chord (chordal addendum) h_ccy at which s_cy is measured.
+
+        PLACEHOLDER - not implemented (MG-15).
+
+        One float, not ``InspectionLimits``: A.3.2 uses ONE chordal height for both thickness
+        limits (the Delta s term of the minimum thickness makes the same height serve both).
+
+        Parameters
+        ----------
+        gear : Gear
+            Gear as cut.
+        d_y : float or None, optional
+            Diameter of the Y-cylinder [mm]; None: as ``chordal_tooth_thickness``.
+
+        Returns
+        -------
+        float
+            h_ccy [mm].
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, A.3.2, Eq. (A.30)-(A.35), p. 69-70 (PDF p. 73-74).
+        """
+        raise NotImplementedError("MG-15: chordal height h_ccy (ISO_21771_2007 A.3.2) not implemented")
+
+    @staticmethod
+    def double_flank_centre_distance(gear: Gear,
+                                     master: Gear) -> InspectionLimits:
+        """Centre distance a_L of zero-backlash (double-flank) mesh with a master gear.
+
+        PLACEHOLDER - not implemented (MG-15).
+
+        Parameters
+        ----------
+        gear : Gear
+            Gear as cut.
+        master : Gear
+            Master gear: subscript L in ISO_21771_2007, 3.2 (p. 8 / PDF p. 12), 3 in ISO_701_1998,
+            Table 4 (p. 2 / PDF p. 10). Eq. (A.52) needs its z_L, x_L and ONE actual allowance
+            E_snL, so the master must have E_sns == E_sni (= E_snL) and the same m_n, alpha_n and
+            beta as ``gear`` (the implementation will refuse it otherwise).
+
+        Returns
+        -------
+        InspectionLimits
+            a_L at x_Es (upper) and at x_Ei (lower) [mm]; alpha_L from Eq. (A.52).
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, A.8, Eq. (A.51), (A.52), p. 81 (PDF p. 85).
+        """
+        raise NotImplementedError("MG-15: double-flank centre distance a_L (ISO_21771_2007 A.8) not implemented")

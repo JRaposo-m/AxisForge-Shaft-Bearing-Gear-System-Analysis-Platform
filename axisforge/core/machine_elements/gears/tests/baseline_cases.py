@@ -438,7 +438,7 @@ def build_case7(source, rot, alt=False, label=None, distribute_loads=False, gear
         the axial thrust of the helical mesh).
     gears : tuple of Gear or None
         ``(pinion, wheel)`` to use instead of the H501 gears of ``pinion_wheel`` at ``gear_pos``
-        (None in every baseline case; e.g. the same gears as ``ManufacturedCylindricalGear``).
+        (None in every baseline case; e.g. the same gears assembled with ``ManufacturedCylindricalFamily``).
 
     Returns
     -------

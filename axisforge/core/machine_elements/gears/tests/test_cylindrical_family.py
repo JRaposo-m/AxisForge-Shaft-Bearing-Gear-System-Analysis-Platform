@@ -11,6 +11,7 @@ baseline CSVs (``gears/tests/data/gears_baseline``) or of ``scripts/questions_va
 Units: lengths [mm], angles [rad], torques [N m], forces [N].
 """
 import dataclasses
+import inspect
 import math
 
 import pytest
@@ -21,7 +22,7 @@ from axisforge.core.machine_elements.gears import (
     Gear,
     GearFamily,
     GearPair,
-    ManufacturedCylindricalGear,
+    ManufacturedCylindricalFamily,
     cylindrical,
 )
 from axisforge.core.machine_elements.gears.base import _GEAR_FAMILY_REGISTRY
@@ -44,7 +45,7 @@ def assert_undercut_only_as_cut(g):
     message; the same data as cut with zero allowances (x_Ei = x) is refused (MG-10)."""
     assert g.warnings == () and not any("undercut" in m for m in g.validate())
     with pytest.raises(ValueError, match="undercut at the lower allowance"):
-        ManufacturedCylindricalGear.from_ideal(g, E_sns=0.0, E_sni=0.0)
+        ManufacturedCylindricalFamily().from_ideal(g, E_sns=0.0, E_sni=0.0)
 
 
 # the baseline pairs: C14 external spur (z 16/24, mn 4.5 mm), H501 external helical (z 20/30, mn 3.5 mm,
@@ -587,12 +588,32 @@ def test_assemble_gear_calls_no_clause_7_helper(monkeypatch):
 
     for name in ("_min_generating_profile_shift", "_generating_profile_shift", "_generated_root_diameter",
                  "_root_form_diameter"):
-        monkeypatch.setattr(cylindrical, name, forbidden)
+        monkeypatch.setattr(ManufacturedCylindricalFamily, name, staticmethod(forbidden))
     monkeypatch.setattr(cylindrical.GeneratingRackProfile, "from_basic_rack", forbidden)
     pinion = bc.gear(2.0, 8)
     assert pinion.warnings == () and pinion.validate() == []
     pair(pinion, bc.gear(2.0, 60), check=False)
     pair(*bc.make_internal(0.0), check=False)
+
+
+def test_ideal_family_has_none_of_the_manufactured_names():
+    """Ruling (José, 2026-10-21): the manufactured family subclasses the ideal one and the dependency goes one way.
+    ``CylindricalFamily`` has no name that ``ManufacturedCylindricalFamily`` adds (only ``assemble_gear``,
+    ``validate_gear``, ``assemble_pair``, ``validate_pair`` are overridden), and the IDEAL section of the module
+    (between its two section banners) names no manufactured class, record or field."""
+    overridden = {"assemble_gear", "validate_gear", "assemble_pair", "validate_pair"}
+    added = {n for n in vars(ManufacturedCylindricalFamily) if not n.startswith("__")} - overridden - {"_abc_impl"}
+    assert {"from_ideal", "_min_generating_profile_shift", "span_measurement"} <= added
+    assert not [n for n in added if hasattr(CylindricalFamily, n)]
+    assert all(n in vars(CylindricalFamily) for n in overridden)
+    for old in ("undercutting", "assemble_manufactured_gear", "assemble_manufactured_pair",
+                "validate_manufactured_gear", "validate_manufactured_pair"):
+        assert not hasattr(ManufacturedCylindricalFamily, old), old
+    source = inspect.getsource(cylindrical)
+    ideal = source[source.index("# IDEAL:"):source.index("# MANUFACTURED:")]
+    for token in ("Manufactur", "GeneratingRackProfile", "GeneratingPinionCutter", "InspectionLimits", "cutter",
+                  "x_Emin", "E_sn"):
+        assert token not in ideal, token
 
 
 def test_low_contact_ratio_is_a_warning_not_an_error():

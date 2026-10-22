@@ -53,7 +53,6 @@ def _inv_residual(xx, inv_a):
 
 def _kind(z) -> str:
     """Kind of teeth from the sign of z (ISO_21771_2007, 4.1.5): key of the ``_LEGACY`` table."""
-    # Q55 (José, 2026-10-15): keep. The kind is the sign of z (it was the class the caller chose).
     return "internal" if z < 0 else "external"
 
 
@@ -67,36 +66,33 @@ def _normal_backlash(x_sum_from_al, x_sum, mn, alpha) -> float:
 
 
 # ==================================================================================================
-# _LEGACY: what the external and internal gears do DIFFERENTLY, kept by a ruling (Q25 deferred, Q55
-# keep). One entry per quantity, one expression per kind of teeth, carried unchanged from the four
-# modules this file replaces; each is reached only through ``_legacy(name, z)``. The texts of the
-# pair are one for both kinds (Q50, José 2026-10-15).
+# One gear: helpers for both kinds of teeth (the kind is the sign of z, ISO_21771_2007, 4.1.5)
 # ==================================================================================================
-def _virtual_teeth_external(mn, z, beta):
-    zn = z / (np.cos(beta) ** 3)    # teeth of the spur gear equivalent in the normal section
-    return {"zn": zn, "de": mn * zn}
+def _virtual_teeth(mn, z, beta):
+    """Virtual number of teeth zn [-], signed like z (negative for a ring), and the diameter of the
+    virtual gear de = mn abs(zn) [mm], positive as every diameter of this file. Spur gear equivalent
+    in the normal section (Tredgold, z / cos(beta)**3); ISO_6336 uses z / (cos(beta_b)**2 cos(beta))."""
+    zn = z / np.cos(beta) ** 3
+    return {"zn": zn, "de": mn * abs(zn)}
 
 
-def _beta_range_external(data, tag):
-    if not (0.0 <= data.beta_n_deg < 45.0):
-        return [f"{tag}: beta_n_deg out of range [0, 45), got {data.beta_n_deg}"]
-    return []
-
-
-def _gear_limits_internal(gear, tag):
+def _gear_limits(gear, tag):
+    """Tip circle on the tooth side of the reference circle (da > d external, da < d ring, i.e. a
+    positive addendum haP + x > 0) and above the base circle (an involute at the tip). No library source."""
     errors = []
-    if gear.da >= gear.d:
-        errors.append(
-            f"{tag}: tip diameter da={gear.da:.4f} ≥ pitch diameter d={gear.d:.4f}. "
-            "Internal gear addendum must reduce da below d."
-        )
+    s = gear.z / abs(gear.z)
+    if s * (gear.da - gear.d) <= 0:
+        errors.append(f"{tag}: tip circle da={gear.da:.4f} on the wrong side of the reference circle "
+                      f"d={gear.d:.4f} (addendum (haP + x) mn = {(gear.haP + gear.x) * gear.mn:.4f} mm must be > 0).")
     if gear.da <= gear.db:   # no involute at the tip: arccos(db/da) of the tip pressure angle has no value
-        errors.append(
-            f"{tag}: tip circle (da={gear.da:.4f}) ≤ base circle (db={gear.db:.4f}). "
-            "No valid involute at tooth tip — increase z or x, or reduce haP."
-        )
+        errors.append(f"{tag}: tip circle da={gear.da:.4f} <= base circle db={gear.db:.4f}: "
+                      "no involute at the tooth tip.")
     return errors
 
+
+# ==================================================================================================
+# Internal pair: interference tests of SDP-SI section 5 (called by validate_pair when z2 < 0)
+# ==================================================================================================
 
 def _internal_interference(pair) -> list[str]:
     """Trochoid and trimming interference of an internal pair (pinion inside the ring).
@@ -161,6 +157,12 @@ def _internal_interference(pair) -> list[str]:
     with np.errstate(invalid="ignore"):     # no real value -> nan -> the test fails (see Notes)
         alpha_a1 = np.arccos(rb1 / ra1)                                    # Eq. (5-8)
         alpha_a2 = np.arccos(rb2 / ra2)                                    # Eq. (5-3)
+        # involute, Eq. (5.2)
+        lhs = z1 / z2
+        rhs = 1 - np.tan(alpha_a2)/np.tan(alpha_w)
+        if not lhs >= rhs:
+            errors.append(f"involute interference of the internal pair (SDP-SI Eq. (5.2)): " 
+                          f"{lhs:.6f} < {rhs:.6f}")
         # trochoid, Eq. (5-6)-(5-7)
         theta1 = np.arccos((ra2**2 - ra1**2 - a**2) / (2 * a * ra1)) + _involute(alpha_a1) - _involute(alpha_w)
         theta2 = np.arccos((a**2 + ra2**2 - ra1**2) / (2 * a * ra2))
@@ -177,22 +179,6 @@ def _internal_interference(pair) -> list[str]:
             errors.append(f"trimming interference of the internal pair (SDP-SI Eq. (5-9)): "
                           f"{lhs:.6f} < {rhs:.6f} rad")
     return errors
-
-
-_LEGACY = {
-    # QUESTION(Q25): deferred (José, 2026-10-15): no z_n for a ring until the rating step (check the sign ISO 6336 expects, Q29).
-    "virtual_teeth": {"external": _virtual_teeth_external, "internal": lambda mn, z, beta: {}},
-    # Q55 (José, 2026-10-15): keep. The helix-angle range is checked for an external gear only.
-    "beta_range": {"external": _beta_range_external, "internal": lambda data, tag: []},
-    # Q55 (José, 2026-10-15): keep. da < d and da > db (ring). None for an external gear: the ideal layer
-    # has no undercut check (ruling B, José 2026-10-21: it needs a generating tool; module docstring).
-    "gear_limits": {"external": lambda gear, tag: [], "internal": _gear_limits_internal},
-}
-
-
-def _legacy(name: str, z):
-    """Entry of ``_LEGACY`` for the kind of teeth given by the sign of ``z``."""
-    return _LEGACY[name][_kind(z)]
 
 
 # ==================================================================================================
@@ -258,7 +244,6 @@ class CylindricalGearData:
     .. [1] ISO_53_1998, Table 2, p. 3 (PDF p. 5).
     .. [2] ISO_21771_2007, 4.1.5 (sign of z), 4.2.9 (profile shift).
     """
-    # Q18 (José, 2026-10-15): keep - the rack defaults are those of ISO_53_1998, Table 2 (the edition held).
     mn: float
     z: int
     _: KW_ONLY
@@ -272,6 +257,7 @@ class CylindricalGearData:
     haP: float = 1.0
     cP: float = 0.25
     rfP: float = 0.38
+    k: float = 0.0
     Ra: float = 0.8
     Rq: float = 1.0
     Rz: float = 4.0
@@ -286,7 +272,7 @@ class CylindricalGearData:
         -------
         list of str
             One message per violation; empty if valid. Checks: mn > 0, z != 0, b >= 0,
-            0 < alpha_n_deg < 45, 0 <= beta_n_deg < 45 (external gear only), hand +1 or -1 for a
+            0 < alpha_n_deg < 45, 0 <= beta_n_deg < 45, hand +1 or -1 for a
             helical gear (-1, 0 or +1 for a spur gear), Ra, Rq, Rz >= 0. The limits 45 deg have no
             library source.
         """
@@ -303,7 +289,8 @@ class CylindricalGearData:
             errors.append(
                 f"{tag}: alpha_n_deg out of range (0, 45), got {self.alpha_n_deg}"
             )
-        errors.extend(_legacy("beta_range", self.z)(self, tag))
+        if not (0.0 <= self.beta_n_deg < 45.0):
+            errors.append(f"{tag}: beta_n_deg out of range [0, 45), got {self.beta_n_deg}")
         # Q08 (José, 2026-10-15): the axial force of a helical mesh needs the hand of the helix
         if self.hand not in ((1, -1) if self.beta_n_deg != 0.0 else (1, 0, -1)):
             errors.append(f"{tag}: hand must be +1 (right) or -1 (left) for a helical gear "
@@ -335,7 +322,7 @@ class CylindricalFamily(GearFamily):
     -----
     Where the external and the internal classes this family replaces computed a quantity
     differently and no ruling has chosen, both expressions are kept in the module table
-    ``_LEGACY``, each with its question id; the docstrings below say "by kind" for those.
+    one expression per quantity for both kinds, with z/abs(z) where the kind matters
 
     Assumptions: rigid, unmodified involute flanks; aligned gears (the common face width is
     min(b1, b2)); the tip circle is taken as the limit of the active profile (the standard uses
@@ -446,8 +433,8 @@ class CylindricalFamily(GearFamily):
         db = d * np.cos(alphat)                              # ISO_21771_2007, 4.3.10, Eq. (19)-(20)
 
         # tip: addendum haP mn (no clearance: cP belongs to the dedendum hfP of the root, Eq. (34))
-        da = d + 2 * mn * s * (data.haP + x)                 # ISO_21771_2007, 4.5.3, Eq. (33), k = 0
-        df = d + 2 * mn * s * (x - hfP)
+        da = d + 2 * mn * s * (data.haP + x + data.k)                 # ISO_21771_2007, 4.5.3, Eq. (33), k = 0
+        df = d - 2 * mn * s * (hfP - x)
         dv = d + 2 * s * x * mn
 
         return dict(
@@ -456,7 +443,7 @@ class CylindricalFamily(GearFamily):
             tau=2 * np.pi / abs(z), rhoF=data.rfP * mn,
             pb=pn * np.cos(alpha), pbt=pt * np.cos(alphat),
             dv=dv, rv=dv / 2, da=da, ra=da / 2.0, df=df, rf=df / 2.0,
-            **_legacy("virtual_teeth", z)(mn, z, beta),
+            **_virtual_teeth(mn, z, beta),
         )
 
     @staticmethod
@@ -814,12 +801,12 @@ class CylindricalFamily(GearFamily):
         Returns
         -------
         list of str
-            The messages of ``CylindricalGearData.validate``, then by kind (Q55, keep): da < d and
-            da > db for a ring; none for an external gear. No undercut check: it needs a
+            The messages of ``CylindricalGearData.validate``, then: da < d and
+            da > db for a ring. No undercut check: it needs a
             generating tool (ruling B, José 2026-10-21; module docstring).
         """
         tag = gear.label or "Gear"
-        return gear.data.validate() + _legacy("gear_limits", gear.z)(gear, tag)
+        return gear.data.validate() + _gear_limits(gear, tag)
 
     def validate_pair(self, pair) -> list[str]:
         """Check the pair geometry.

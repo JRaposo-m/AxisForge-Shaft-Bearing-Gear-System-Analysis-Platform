@@ -385,12 +385,14 @@ class CylindricalFamily(GearFamily):
             rhoF : root fillet radius of the basic rack, rfP mn [mm] (ISO_53_1998, Table 2, times mn).
             pb, pbt : normal and transverse base pitch [mm] (4.4.5, Eq. (29), (28)).
             dv, rv : diameter and radius of the V-circle, d + 2 (z/abs(z)) x mn [mm] (4.5.1, Eq. (32)).
-            da, ra : tip diameter and radius, d + 2 (z/abs(z)) mn (haP + x) [mm] (4.5.3, Eq. (33)
-            with k = 0; no clearance term: cP is in the root only).
+            da, ra : tip diameter and radius, d + 2 (z/abs(z)) mn (haP + x) [mm] (4.5.3, Eq. (33) with k = 0; no clearance term: cP is in the root only).
             df, rf : root diameter and radius [mm] (4.5.4, Eq. (34)).
-            zn, de : virtual number of teeth z / cos(beta)**3 [-] and mn zn [mm]; external gear
-            only (Q25). ISO_6336-1_2019, 9.3.1, Formula (81) (unchecked). ``de`` is not the d_e
-            of ISO_6336-1_2019, Table F.1.
+            h, ha, hf : total, addendum and dedendum heights [mm] (4.6.1-2, Eq. (35)-(37)).
+            st, sn : transverse and normal tooth thicknesses [mm] (4.7.1, Eq. (39); 4.7.5, Eq. (49)).
+            psi, psib : transverse and base pitch half angles [rad] (4.7.2, Eq. (41)-(42)).
+            et, en : transverse and normal space widths at reference circle [mm] (4.7.3, Eq. (44); 4.7.6, Eq. (51)).
+            eta, etab : transverse and base pitch half angles of the space [rad] (4.7.4, Eq. (46)-(47)).
+            zn, de : virtual number of teeth z / cos(beta)**3 [-] and mn zn [mm]; 
 
         Raises
         ------
@@ -400,12 +402,7 @@ class CylindricalFamily(GearFamily):
         Notes
         -----
         The factor z/abs(z) of the standard (-1 for an internal gear) puts the tip inside and
-        the root outside the reference circle of a ring. ``da`` carries no tip alteration k: the
-        working tip diameters with k are pair quantities (``assemble_pair``). The base cylinder
-        follows one rule for both kinds, so a ring and the pinion it meshes with have the same
-        alphat, betab and pbt (the condition of clause 5 for two gears in mesh). No undercut
-        check and no warning: undercut (ISO_21771_2007, 7.7, Eq. (135)) needs a generating tool
-        (ruling B, José 2026-10-21; module docstring).
+        the root outside the reference circle of a ring.
 
         References
         ----------
@@ -433,9 +430,25 @@ class CylindricalFamily(GearFamily):
         db = d * np.cos(alphat)                              # ISO_21771_2007, 4.3.10, Eq. (19)
 
         # tip: addendum haP mn (no clearance: cP belongs to the dedendum hfP of the root, Eq. (34))
-        da = d + 2 * mn * s * (data.haP + x + data.k)                 # ISO_21771_2007, 4.5.3, Eq. (33), k = 0
-        df = d - 2 * mn * s * (hfP - x)
-        dv = d + 2 * s * x * mn
+        da = d + 2 * mn * s * (data.haP + x + data.k)                   # ISO_21771_2007, 4.5.3, Eq. (33), k = 0
+        df = d - 2 * mn * s * (hfP - x)                                 # ISO_21771_2007, 4.5.4, Eq. (34)
+        dv = d + 2 * s * x * mn                                         # ISO_21771_2007, 4.5.1, Eq. (32)
+
+        h = abs(da - df) / 2.0                                          # ISO_21771_2007, 4.6.1, Eq. (35)
+        ha = abs(da - d) / 2.0                                          # ISO_21771_2007, 4.6.2, Eq. (36)
+        hf = abs(d - df) / 2.0                                          # ISO_21771_2007, 4.6.2, Eq. (37)
+
+        st = mn * (np.pi/2 + 2 * x * np.tan(alpha)) / np.cos(beta)      # ISO_21771_2007, 4.7.1, Eq. (39)
+        sn = mn * (np.pi/2 + 2 * x * np.tan(alpha))                     # ISO_21771_2007, 4.7.5, Eq. (49)
+
+        psi = (np.pi + 4 * x * np.tan(alpha)) / (2 * abs(z))            # ISO_21771_2007, 4.7.2, Eq. (41)
+        psib = psi + s * _involute(alphat)                              # ISO_21771_2007, 4.7.2, Eq. (42)
+
+        eta = (np.pi - 4 * x * np.tan(alpha)) / (2 * abs(z))            # ISO_21771_2007, 4.7.4, Eq. (46)
+        etab = eta - s * _involute(alphat)                              # ISO_21771_2007, 4.7.4, Eq. (47)
+
+        et = d * eta                                                    # ISO_21771_2007, 4.7.3, Eq. (44)
+        en = et * np.cos(beta)                                          # ISO_21771_2007, 4.7.6, Eq. (51)       
 
         return dict(
             alpha=alpha, beta=beta, hfP=hfP, mt=mt, mx=mx, pn=pn, pt=pt, pz=pz, px=px,
@@ -443,6 +456,8 @@ class CylindricalFamily(GearFamily):
             tau=2 * np.pi / abs(z), rhoF=data.rfP * mn,
             pb=pn * np.cos(alpha), pbt=pt * np.cos(alphat),
             dv=dv, rv=dv / 2, da=da, ra=da / 2.0, df=df, rf=df / 2.0,
+            h=h, ha=ha, hf=hf, st=st, sn=sn, psi=psi, psib=psib, 
+            et=et, en=en, eta=eta, etab=etab,
             **_virtual_teeth(mn, z, beta),
         )
 
@@ -462,11 +477,10 @@ class CylindricalFamily(GearFamily):
         -------
         dict
             beta_y : helix angle at dy [rad]; alpha_yt : transverse pressure angle at dy [rad]
-            (ISO_21771_2007, 4.3.5, Eq. (12)); alpha_yn : normal pressure angle at dy [rad];
-            L_y : transverse radius of curvature of the profile at dy [mm], signed with z/abs(z)
-            (negative for a ring: concave flank; 4.3.8, Eq. (17)); inv_alpha_yt :
-            tan(alpha_yt) - alpha_yt [rad] (4.3.9, Eq. (18)); p_yt, p_yn : transverse and normal
-            pitch at dy [mm].
+            alpha_yn : normal pressure angle at dy [rad];
+            L_y : transverse radius of curvature of the profile at dy [mm], signed with z/abs(z); 
+            inv_alpha_yt : tan(alpha_yt) - alpha_yt [rad] (4.3.9, Eq. (18)); 
+            p_yt, p_yn : transverse and normalpitch at dy [mm].
 
         References
         ----------
@@ -479,6 +493,11 @@ class CylindricalFamily(GearFamily):
         inv_alpha_yt = np.tan(alpha_yt) - alpha_yt                              # ISO_21771_2007, 4.3.9, Eq. (18)
         p_yt         = dy * gear.pt / gear.d                                    # ISO_21771_2007, 4.4.3, Eq. (25)
         p_yn         = p_yt * np.cos(beta_y)                                    # ISO_21771_2007, 4.4.3, Eq. (26)
+        s_yt         = dy * ((np.pi + 4 * gear.x * np.tan(gear.alpha)) / (2 * abs(gear.z)) 
+                             + gear.z/abs(gear.z) * (_involute(gear.alphat) - inv_alpha_yt))    # ISO_21771_2007, 4.7.1, Eq. (38)
+        psi_y        = s_yt / dy                                                                # ISO_21771_2007, 4.7.2, Eq. (40)
+        eta_y        = gear.eta - gear.z/abs(gear.z) * (_involute(gear.alphat) - inv_alpha_yt)  # ISO_21771_2007, 4.7.4, Eq. (45)
+        e_yt         = dy * eta_y                                                               # ISO_21771_2007, 4.7.3, Eq. (43)
 
         return {
             "beta_y": beta_y,
@@ -488,6 +507,10 @@ class CylindricalFamily(GearFamily):
             "inv_alpha_yt": inv_alpha_yt,
             "p_yt": p_yt,
             "p_yn": p_yn,
+            "s_yt": s_yt,
+            "psi_y": psi_y,
+            "eta_y": eta_y,
+            "e_yt": e_yt
         }
 
     # ----------------------------------------------------------------------------------------------

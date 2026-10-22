@@ -409,7 +409,7 @@ class CylindricalFamily(GearFamily):
 
         References
         ----------
-        .. [1] ISO_21771_2007, 4.2-4.5, Eq. (1)-(34) (checked by a second reader).
+        .. [1] ISO_21771_2007, 4.2-4.5, Eq. (1)-(34).
         """
         mn, z, x = data.mn, data.z, data.x
         if z == 0:
@@ -420,17 +420,17 @@ class CylindricalFamily(GearFamily):
         beta  = np.radians(data.beta_n_deg)
         hfP   = data.haP + data.cP
 
-        mt = mn / np.cos(beta)
-        mx = mt / np.tan(beta) if beta != 0 else np.inf      # a spur gear has no axial pitch and no lead
-        pn = np.pi * mn
-        pt = np.pi * mt
-        pz = abs(z) * mt * np.pi / np.tan(beta) if beta != 0 else np.inf
-        px = np.pi * mx
+        mt = mn / np.cos(beta)                                              # ISO_21771_2007, 4.2.7, Eq. (2)
+        mx = mt / np.tan(beta) if beta != 0 else np.inf                     # ISO_21771_2007, 4.2.7, Eq. (3)
+        pn = np.pi * mn                                                     # ISO_21771_2007, 4.4.2.2, Eq. (24)
+        pt = np.pi * mt                                                     # ISO_21771_2007, 4.4.2.1, Eq. (23)
+        pz = abs(z) * mt * np.pi / np.tan(beta) if beta != 0 else np.inf    # ISO_21771_2007, 4.3.2, Eq. (4)
+        px = np.pi * mx                                                     # ISO_21771_2007, 4.4.4, Eq. (27)
 
-        d = mt * abs(z)
-        alphat = np.arctan(np.tan(alpha) / np.cos(beta))     # ISO_21771_2007, 4.3.5, Eq. (13)
-        betab = np.arcsin(np.sin(beta) * np.cos(alpha))      # ISO_21771_2007, 4.3.3, Eq. (5)-(7)
-        db = d * np.cos(alphat)                              # ISO_21771_2007, 4.3.10, Eq. (19)-(20)
+        d = mt * abs(z)                                      # ISO_21771_2007, 4.2.4, Eq. (1)
+        alphat = np.arctan(np.tan(alpha) / np.cos(beta))     # ISO_21771_2007, 4.3.5, Eq. (14)
+        betab = np.arcsin(np.sin(beta) * np.cos(alpha))      # ISO_21771_2007, 4.3.3, Eq. (6)
+        db = d * np.cos(alphat)                              # ISO_21771_2007, 4.3.10, Eq. (19)
 
         # tip: addendum haP mn (no clearance: cP belongs to the dedendum hfP of the root, Eq. (34))
         da = d + 2 * mn * s * (data.haP + x + data.k)                 # ISO_21771_2007, 4.5.3, Eq. (33), k = 0
@@ -467,14 +467,18 @@ class CylindricalFamily(GearFamily):
             (negative for a ring: concave flank; 4.3.8, Eq. (17)); inv_alpha_yt :
             tan(alpha_yt) - alpha_yt [rad] (4.3.9, Eq. (18)); p_yt, p_yn : transverse and normal
             pitch at dy [mm].
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, 4.2-4.5.
         """
-        beta_y       = np.arctan(np.tan(gear.beta) * dy / gear.d)               # helix angle at dy
-        alpha_yt     = np.arccos(gear.db / dy)                                  # transverse pressure angle
-        alpha_yn     = np.arctan(np.tan(alpha_yt) * np.cos(beta_y))             # normal pressure angle
-        L_y          = (gear.z / abs(gear.z)) * gear.db * np.tan(alpha_yt) / 2  # radius of curvature
-        inv_alpha_yt = np.tan(alpha_yt) - alpha_yt
-        p_yt         = dy * gear.pt / gear.d
-        p_yn         = p_yt * np.cos(beta_y)
+        beta_y       = np.arctan(np.tan(gear.beta) * dy / gear.d)               # ISO_21771_2007, 4.3.3, Eq.(8)
+        alpha_yt     = np.arccos(gear.db / dy)                                  # ISO_21771_2007, 4.3.5, Eq. (12)
+        alpha_yn     = np.arctan(np.tan(alpha_yt) * np.cos(beta_y))             # ISO_21771_2007, 4.3.6, Eq. (15)
+        L_y          = (gear.z / abs(gear.z)) * gear.db * np.tan(alpha_yt) / 2  # ISO_21771_2007, 4.3.8, Eq. (17)
+        inv_alpha_yt = np.tan(alpha_yt) - alpha_yt                              # ISO_21771_2007, 4.3.9, Eq. (18)
+        p_yt         = dy * gear.pt / gear.d                                    # ISO_21771_2007, 4.4.3, Eq. (25)
+        p_yn         = p_yt * np.cos(beta_y)                                    # ISO_21771_2007, 4.4.3, Eq. (26)
 
         return {
             "beta_y": beta_y,

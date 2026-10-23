@@ -813,7 +813,12 @@ class CylindricalFamily(GearFamily):
         if (x2, k2) != (gear2.x, gear2.data.k):
             gear2 = Gear.assemble(gear2.family, replace(gear2.data, x=x2, k=k2), check=False)
 
-        jbn = None
+        jbn     = None
+        psi_j1  = None
+        psi_j2  = None
+        j_wt    = None
+        j_t     = None
+        j_r     = None
         if al_imposed:
             # normal backlash left by the shifts of the pair at the imposed a_w: Eq. (63) solved for j_bn;
             # jbn > 0: clearance between the non-working flanks, jbn < 0: the flanks would overlap at that a_w
@@ -824,6 +829,12 @@ class CylindricalFamily(GearFamily):
                     f"profile shifts do not match the centre distance: declared x1 + x2 = {x1 + x2:.4f}, "
                     f"al = {al:.4f} mm implies x1 + x2 = {x_sum_from_al:.4f} for zero backlash "
                     f"(ISO_21771_2007 Eq. (62)); normal backlash jbn = {jbn:.6f} mm (Eq. (63)).")
+                
+            psi_j1 = 2 / (m * z1 * np.cos(alpha)) * jbn                     # ISO_21771_2007, 5.5.2, Eq. (100)
+            psi_j2 = 2 / (m * abs(z2) * np.cos(alpha)) * jbn                # ISO_21771_2007, 5.5.2, Eq. (101)
+            j_wt   = 1 / (np.cos(alphatw) * np.cos(betab)) * jbn            # ISO_21771_2007, 5.5.2, Eq. (102)
+            j_t    = 1 / (np.cos(beta) * np.cos(alpha)) * jbn               # ISO_21771_2007, 5.5.2, Eq. (103)
+            j_r    = 1 / (2 * np.tan(alphatw)) * j_wt                       # ISO_21771_2007, 5.5.3, Eq. (104)
 
         u = z2 / z1   # Eq. (52), signed
 
@@ -900,7 +911,10 @@ class CylindricalFamily(GearFamily):
 
         return gear1, gear2, dict(
             label=label, al_imposed=al_imposed, a=a, al=al, alphatw=alphatw, inv_alphatw=inv_alphatw,
-            jbn=jbn, x1=x1, x2=x2, x_split=x_split, x_given=x_given, u=u, k=k, dl1=dl1, dl2=dl2, rl1=rl1, rl2=rl2, da1_w=da1, da2_w=da2,            alpha_a1=alpha_a1, alpha_a2=alpha_a2, epslon_a1=epslon_a1, epslon_a2=epslon_a2,
+            jbn=jbn, psi_j1=psi_j1, psi_j2=psi_j2, j_wt=j_wt, j_t=j_t, j_r=j_r,
+            x1=x1, x2=x2, x_split=x_split, x_given=x_given, u=u, k=k, 
+            dl1=dl1, dl2=dl2, rl1=rl1, rl2=rl2, da1_w=da1, da2_w=da2,            
+            alpha_a1=alpha_a1, alpha_a2=alpha_a2, epslon_a1=epslon_a1, epslon_a2=epslon_a2,
             epslon_alpha=epslon_alpha, b=b, epslon_beta=epslon_beta, epslon_gamma=epslon_gamma,
             galpha1=galpha1, galpha2=galpha2, galpha=galpha, ReqI=ReqI,
             T1T2=T1T2, T1E=T1E, T2A=T2A, T1A=T1A, T1B=T1B, T1C=T1C, T1D=T1D, T2E=T2E, T2B=T2B,

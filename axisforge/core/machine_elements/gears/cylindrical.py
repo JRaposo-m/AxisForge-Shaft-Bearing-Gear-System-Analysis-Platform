@@ -584,6 +584,7 @@ class CylindricalFamily(GearFamily):
                       label: str = "", 
                       al: float | None = None,
                       x_split: str | None = None,
+                      bw: float | None = None,
                       addendum_reduction: bool = False) -> tuple[Gear, Gear, dict]:
         """Working centre distance and pressure angle, contact ratios and path of contact of two gears in mesh.
 
@@ -607,6 +608,9 @@ class CylindricalFamily(GearFamily):
             gear 1 (at A) equals that at the root of gear 2 (at E), ISO_21771_2007, 5.6.3,
             Eq. (116) = (117). The sum is x1 + x2 of the gears or, with ``al`` given, the sum of
             Eq. (62) (zero backlash at a_w; the x of the gears is then not used, with a warning).
+        bw : float or None, optional
+            Active face width b_w [mm] (5.4.7.2): the overlap of the usable face widths, given by the
+            system. None (default): min(b1, b2), aligned gears without edge chamfers. 0 < bw <= min(b1, b2).
         addendum_reduction : bool, optional
             True: tip alteration k = s2 (a_w - a) / mn - (x1 + x2), the same on both gears, which
             keeps the bottom clearance at cP mn; it replaces the k of the gear data. False (default):
@@ -623,7 +627,13 @@ class CylindricalFamily(GearFamily):
             a : reference centre distance, (d2 + (z2/abs(z2)) d1) / 2 [mm]
             al : working centre distance a_w [mm], positive for both kinds (5.2.5, Eq. (58)).
             alphatw, inv_alphatw : transverse working pressure angle alpha_wt and its involute [rad].
-            jbn : normal backlash [mm]
+            jbn : normal backlash [mm] when ``al`` is given, else None (5.3, Eq. (63)); > 0 clearance
+            between the non-working flanks, < 0 the flanks would overlap.
+            psi_j1, psi_j2 : backlash angles of gear 1 and gear 2 [rad] (5.5.2, Eq. (100), (101)).
+            j_wt, j_t : circumferential backlash at the working pitch circle and at the reference
+            circle [mm] (5.5.2, Eq. (102), (103)).
+            j_r : radial backlash [mm] (5.5.3, Eq. (104)). The five are None when ``al`` is not given
+            and have the sign of jbn.
             x1, x2 : profile shift coefficients of the pair [-] (those of the gears, or the split).
             x_split : the split criterion, or None; x_given : (x1, x2) of the gears given [-].
             u : gear ratio z2 / z1, signed (negative for an internal pair) [-].
@@ -634,10 +644,14 @@ class CylindricalFamily(GearFamily):
             (Eq. (33)); equal to ``gear1.da``, ``gear2.da``.
             alpha_a1, alpha_a2 : transverse pressure angles at the tips [rad].
             epslon_a1, epslon_a2 : addendum contact ratios of gear 1 and gear 2 [-];
-            epslon_alpha, epslon_beta, epslon_gamma : transverse contact ratio, overlap ratio and total contact ratio [-].
-            b : common face width, min(b1, b2) [mm].
+            epslon_alpha, epslon_beta, epslon_gamma : transverse contact ratio, overlap ratio and total contact ratio [-]
+            (5.4.7, Eq. (90), (93), (97)); epslon_beta with b_w.
+            b : active face width b_w [mm] (5.4.7.2): ``bw``, or min(b1, b2) for aligned gears.
+            gbeta : overlap length b_w tan(beta) [mm] (5.4.7.4, Eq. (94)).
             galpha1, galpha2 : addendum parts of the path of contact [mm];
             galpha : length of the path of contact [mm], positive, equal to ``AE``.
+            l_max : maximum length of a contact line [mm], the lesser of g_alpha / sin(beta_b) and
+            b_w / cos(beta_b) (5.4.8, Eq. (98), (99)); b_w for a spur pair.
             ReqI : reduced radius of curvature at the pitch point, transverse plane.
             T1T2, T1E, T2A, T1A, T1B, T1C, T1D, T2E, T2B, T2C, T2D : distances along the line of action from the base-tangent points T1, T2 to the points A..E of the path [mm].
             AE, AB, AC, AD : distances from A [mm]; rA1, rB1, rD1, rA2, rB2, rD2 : radii from the gear axis to the path points [mm].
@@ -645,7 +659,6 @@ class CylindricalFamily(GearFamily):
             Ram, Rrms, RzS : (Ra1 + Ra2)/2, sqrt(Rq1**2 + Rq2**2), Rz1 + Rz2 [um] (no source).
             profile_shift_check : (x1 + x2 implied by a_w, x1 + x2 of the pair) [-] (5.3, Eq. (62), signed z1 + z2).
             warnings : advisory messages, they become ``GearPair.warnings``.
-
         Raises
         ------
         ValueError
@@ -861,7 +874,12 @@ class CylindricalFamily(GearFamily):
 
         # overlap ratio: b = common face width of ALIGNED gears (b_w of 5.4.7.2 without chamfers or axial offset)
         b = min(gear1.b, gear2.b)
+        if bw is not None:
+            if not (0.0 < bw <= b):
+                raise ValueError(f"bw must be in (0, min(b1, b2)] = (0, {b}] mm, got {bw}")
+            b = bw
         epslon_beta = b * np.tan(betab) / pbt            # ISO_21771_2007, 5.4.7.3, Eq. (93), last form (p_et = p_bt)
+        gbeta = b * np.tan(beta)                         # ISO_21771_2007, 5.4.7.3, Eq. (94)
         epslon_gamma = epslon_alpha + epslon_beta        # ISO_21771_2007, 5.4.7.5, Eq. (97)
         if 1.0 <= epslon_alpha < 1.2:
             warnings_.append(f"transverse contact ratio εα={epslon_alpha:.4f} is low (< 1.2) — "
@@ -871,6 +889,12 @@ class CylindricalFamily(GearFamily):
         galpha2 = rb2 * (np.tan(alpha_a2) - np.tan(alphatw))
         galpha = 1/2 * ((da1**2 - db1**2)**(1/2) + s2 * ((da2**2 - db2**2)**(1/2) - 2 * al * np.sin(alphatw)))  # ISO_21771_2007, 5.4.5.2, Eq. (77)
 
+        if betab == 0.0:
+            l_max = b                                     # spur: l_max = b_w (5.4.8)
+        else:
+            l_max = min(galpha / np.sin(betab),           # ISO_21771_2007, 5.4.8, Eq. (98)
+                        b / np.cos(betab))                # ISO_21771_2007, 5.4.8, Eq. (99)
+            
         # reduced radius of curvature at the pitch point C, transverse plane: rho_C = r_w sin(alpha_wt),
         ReqI = 1 / (1 / (rl1 * np.sin(alphatw))
                     + 1 / (s2 * rl2 * np.sin(alphatw)))
@@ -915,8 +939,8 @@ class CylindricalFamily(GearFamily):
             x1=x1, x2=x2, x_split=x_split, x_given=x_given, u=u, k=k, 
             dl1=dl1, dl2=dl2, rl1=rl1, rl2=rl2, da1_w=da1, da2_w=da2,            
             alpha_a1=alpha_a1, alpha_a2=alpha_a2, epslon_a1=epslon_a1, epslon_a2=epslon_a2,
-            epslon_alpha=epslon_alpha, b=b, epslon_beta=epslon_beta, epslon_gamma=epslon_gamma,
-            galpha1=galpha1, galpha2=galpha2, galpha=galpha, ReqI=ReqI,
+            epslon_alpha=epslon_alpha, b=b, epslon_beta=epslon_beta, gbeta=gbeta, epslon_gamma=epslon_gamma,
+            galpha1=galpha1, galpha2=galpha2, galpha=galpha, l_max=l_max, ReqI=ReqI,
             T1T2=T1T2, T1E=T1E, T2A=T2A, T1A=T1A, T1B=T1B, T1C=T1C, T1D=T1D, T2E=T2E, T2B=T2B,
             T2C=T2C, T2D=T2D, AE=AE, AB=AB, AC=AC, AD=AD,
             rA1=rA1, rB1=rB1, rD1=rD1, rA2=rA2, rB2=rB2, rD2=rD2, HV=HV,
@@ -1926,7 +1950,7 @@ class ManufacturedCylindricalFamily(CylindricalFamily):
     # The pair as cut (ISO 21771 clause 5 with the generating profile shifts of clause 7)
     # ----------------------------------------------------------------------------------------------
     def assemble_pair(self, gear1: Gear, gear2: Gear, *, label: str = "", al: float | None = None,
-                      x_split: str | None = None,
+                      x_split: str | None = None, bw: float | None = None,
                       addendum_reduction: bool = False) -> tuple[Gear, Gear, dict]:
         """Nominal geometry of two gears in mesh, then the backlash and active root diameters of
         the pair as cut.
@@ -1974,7 +1998,7 @@ class ManufacturedCylindricalFamily(CylindricalFamily):
                 and isinstance(gear2.family, ManufacturedCylindricalFamily)):
             raise TypeError(f"{type(self).__name__} needs two gears assembled with ManufacturedCylindricalFamily, "
                             f"got {type(gear1.family).__name__} and {type(gear2.family).__name__}")
-        g1, g2, nominal = super().assemble_pair(gear1, gear2, label=label, al=al, x_split=x_split,
+        g1, g2, nominal = super().assemble_pair(gear1, gear2, label=label, al=al, x_split=x_split, bw=bw,
                                                 addendum_reduction=addendum_reduction)
         x_sum_from_al = nominal["profile_shift_check"][0]   # Sum x implied by a_w (Eq. (62)), reused
         warnings_ = []

@@ -527,7 +527,7 @@ class CylindricalFamily(GearFamily):
         )
 
     @staticmethod
-    def values_at(gear: Gear, dy: float) -> dict:
+    def gear_values_at(gear: Gear, dy: float) -> dict:
         """Involute quantities at an arbitrary diameter dy of the flank.
 
         Parameters
@@ -628,24 +628,24 @@ class CylindricalFamily(GearFamily):
             al : working centre distance a_w [mm], positive for both kinds (5.2.5, Eq. (58)).
             alphatw, inv_alphatw : transverse working pressure angle alpha_wt and its involute [rad].
             jbn : normal backlash [mm] when ``al`` is given, else None (5.3, Eq. (63)); > 0 clearance
-            between the non-working flanks, < 0 the flanks would overlap.
+                between the non-working flanks, < 0 the flanks would overlap.
             psi_j1, psi_j2 : backlash angles of gear 1 and gear 2 [rad] (5.5.2, Eq. (100), (101)).
             j_wt, j_t : circumferential backlash at the working pitch circle and at the reference
-            circle [mm] (5.5.2, Eq. (102), (103)).
+                circle [mm] (5.5.2, Eq. (102), (103)).
             j_r : radial backlash [mm] (5.5.3, Eq. (104)). The five are None when ``al`` is not given
-            and have the sign of jbn.
+                and have the sign of jbn.
             x1, x2 : profile shift coefficients of the pair [-] (those of the gears, or the split).
             x_split : the split criterion, or None; x_given : (x1, x2) of the gears given [-].
             u : gear ratio z2 / z1, signed (negative for an internal pair) [-].
             k : tip alteration coefficient applied by the pair [-]: the value of
-            ``addendum_reduction``, else 0 (each gear then keeps the k of its data).
+                ``addendum_reduction``, else 0 (each gear then keeps the k of its data).
             dl1, dl2, rl1, rl2 : working pitch diameters d_w = d_b / cos(alpha_wt) and radii [mm]
             da1_w, da2_w : tip diameters of the gears returned, d + 2 (z/abs(z)) mn (haP + x + k) [mm]
-            (Eq. (33)); equal to ``gear1.da``, ``gear2.da``.
+                (Eq. (33)); equal to ``gear1.da``, ``gear2.da``.
             alpha_a1, alpha_a2 : transverse pressure angles at the tips [rad].
             epslon_a1, epslon_a2 : addendum contact ratios of gear 1 and gear 2 [-];
             epslon_alpha, epslon_beta, epslon_gamma : transverse contact ratio, overlap ratio and total contact ratio [-]
-            (5.4.7, Eq. (90), (93), (97)); epslon_beta with b_w.
+                (5.4.7, Eq. (90), (93), (97)); epslon_beta with b_w.
             b : active face width b_w [mm] (5.4.7.2): ``bw``, or min(b1, b2) for aligned gears.
             gbeta : overlap length b_w tan(beta) [mm] (5.4.7.4, Eq. (94)).
             galpha1, galpha2 : addendum parts of the path of contact [mm];
@@ -655,6 +655,11 @@ class CylindricalFamily(GearFamily):
             ReqI : reduced radius of curvature at the pitch point, transverse plane.
             T1T2, T1E, T2A, T1A, T1B, T1C, T1D, T2E, T2B, T2C, T2D : distances along the line of action from the base-tangent points T1, T2 to the points A..E of the path [mm].
             AE, AB, AC, AD : distances from A [mm]; rA1, rB1, rD1, rA2, rB2, rD2 : radii from the gear axis to the path points [mm].
+            gf1, ga1, gf2, ga2 : dedendum and addendum parts of the path of each gear [mm], positive
+                (5.4.5.2, Eq. (79), (80)); gf1 = ga2 = AC, ga1 = gf2 = CE; independent of the driver.
+            Kgf1, Kga1 : sliding factors at the root and at the tip of gear 1 [-] (5.6.2, Eq. (112), (113)).
+            zeta_f1, zeta_f2 : specific sliding at the roots of gear 1 (at A) and gear 2 (at E) [-]
+                (5.6.3, Eq. (116), (117)).
             HV : gear loss factor [-] (ISO_TR_14179-2_2001, 5.2.4, Eq. (14); unchecked, Q53).
             Ram, Rrms, RzS : (Ra1 + Ra2)/2, sqrt(Rq1**2 + Rq2**2), Rz1 + Rz2 [um] (no source).
             profile_shift_check : (x1 + x2 implied by a_w, x1 + x2 of the pair) [-] (5.3, Eq. (62), signed z1 + z2).
@@ -919,7 +924,8 @@ class CylindricalFamily(GearFamily):
         AE = T1E - T1A                              
         AB = T1B - T1A                              
         AC = T1C - T1A                              
-        AD = T1D - T1A                              
+        AD = T1D - T1A
+        CE = T1E - T1C                              
         # radii to the points of the path (gear 2: mirrored names, at E, D, B)
         rA1 = (T1A**2 + rb1**2) ** (1 / 2)
         rB1 = (T1B**2 + rb1**2) ** (1 / 2)
@@ -927,6 +933,15 @@ class CylindricalFamily(GearFamily):
         rA2 = ((T2A - AE)**2 + rb2**2) ** (1 / 2)
         rB2 = ((T2A - AD)**2 + rb2**2) ** (1 / 2)
         rD2 = ((T2A - AB)**2 + rb2**2) ** (1 / 2)
+
+        # dedendum / addendum parts of the path of each gear, positive for both kinds (5.4.5.2, Eq. (79), (80)):
+        # gear 1 root meets gear 2 tip (A..C), gear 1 tip meets gear 2 root (C..E); independent of the driver
+        gf1 = ga2 = T1C - T1A                           # ISO_21771_2007, 5.4.5.2, Eq. (79)
+        ga1 = gf2 = T1E - T1C                           # ISO_21771_2007, 5.4.5.2, Eq. (80)
+        Kgf1 = 2 * gf1 / dl1 * (1 + 1 / u)              # ISO_21771_2007, 5.6.2, Eq. (112)
+        Kga1 = 2 * ga1 / dl1 * (1 + 1 / u)              # ISO_21771_2007, 5.6.2, Eq. (113)
+        zeta_f1 = 1 - T2A / (u * T1A)                   # ISO_21771_2007, 5.6.3, Eq. (116)
+        zeta_f2 = 1 - u * T1E / T2E                     # ISO_21771_2007, 5.6.3, Eq. (117)
 
         # QUESTION(Q53): deferred (José, 2026-10-15): gear loss factor "according to Ohlendorf", unchecked until the thermal/efficiency step; then transcribe ISO_TR_14179-2_2001, 5.2.4, Eq. (14) and check it (also for u < 0 and z1 > z2).
         HV = (np.pi * (u + 1) / (z1 * u * np.cos(betab)) *
@@ -942,7 +957,8 @@ class CylindricalFamily(GearFamily):
             epslon_alpha=epslon_alpha, b=b, epslon_beta=epslon_beta, gbeta=gbeta, epslon_gamma=epslon_gamma,
             galpha1=galpha1, galpha2=galpha2, galpha=galpha, l_max=l_max, ReqI=ReqI,
             T1T2=T1T2, T1E=T1E, T2A=T2A, T1A=T1A, T1B=T1B, T1C=T1C, T1D=T1D, T2E=T2E, T2B=T2B,
-            T2C=T2C, T2D=T2D, AE=AE, AB=AB, AC=AC, AD=AD,
+            T2C=T2C, T2D=T2D, AE=AE, AB=AB, AC=AC, AD=AD, CE=CE,
+            gf1=gf1, ga1=ga1, gf2=gf2, ga2=ga2, Kgf1=Kgf1, Kga1=Kga1, zeta_f1=zeta_f1, zeta_f2=zeta_f2,
             rA1=rA1, rB1=rB1, rD1=rD1, rA2=rA2, rB2=rB2, rD2=rD2, HV=HV,
             Ram=(gear1.Ra + gear2.Ra) / 2, Rrms=(gear1.Rq**2 + gear2.Rq**2) ** (1 / 2),
             RzS=(gear1.Rz + gear2.Rz),
@@ -950,6 +966,54 @@ class CylindricalFamily(GearFamily):
             warnings=warnings_,
         )
 
+    @staticmethod
+    def pair_values_at(pair, dy1, n1_rpm: float | None = None) -> dict:
+        """Mesh quantities at the point of the path where the flank of gear 1 has diameter dy1.
+
+        The point is the same for both flanks: gear 2 is evaluated at the diameter dy2 that
+        the line of action gives for it (rho_y1 + rho_y2 = T1T2, ISO_21771_2007, Eq. (87)).
+
+        Parameters
+        ----------
+        pair : GearPair
+            Pair of this family.
+        dy1 : float or array_like
+            Diameter on gear 1 [mm], dy1 >= d_b1; on the path for d_Nf1 (= 2 rA1) <= dy1 <= d_a1.
+        n1_rpm : float or None, optional
+            Speed of gear 1 [rpm], > 0. None: geometry only.
+
+        Returns
+        -------
+        dict
+            gear1, gear2 : ``gear_values_at`` of each gear at its diameter (L_y = signed radius
+            of curvature rho_y, Eq. (17)).
+            dy2_mm : diameter of the same point on gear 2 [mm].
+            g_y_mm : rho_y1 - rho_C1 [mm], + toward the tip of gear 1 (|g_y| = g_alpha_y, Eq. (107)).
+            zeta1, zeta2 : specific sliding of flank 1 and flank 2 [-] (5.6.3, Eq. (114), (115)).
+            Kg : sliding factor [-] (5.6.2, Eq. (111)).
+            with n1_rpm: vg_m_per_s, sliding speed [m/s], signed as ``surface_speeds`` (Eq. (108)).
+        """
+        g1, g2, u = pair.gear1, pair.gear2, pair.u
+        dy1 = np.asarray(dy1, dtype=float)
+        v1 = CylindricalFamily.gear_values_at(g1, dy1)
+        rho1 = v1["L_y"]
+        rho2 = pair.T1T2 - rho1                                   # ISO_21771_2007, 5.4.5.3, Eq. (87)
+        dy2 = 2 * np.sqrt(rho2**2 + g2.rb**2)
+        v2 = CylindricalFamily.gear_values_at(g2, dy2)
+
+        g_alphay = abs(pair.T1C - rho1)                           # ISO_21771_2007, 5.6.1, Eq. (107)
+
+        out = {
+            "gear1": v1, "gear2": v2, "dy2_mm": dy2, "g_alphay_mm": g_alphay,
+            "zeta1": 1 - v2["L_y"] / (u * rho1),                        # ISO_21771_2007, 5.6.3, Eq. (114)
+            "zeta2": 1 - u * rho1 / v2["L_y"],                          # ISO_21771_2007, 5.6.3, Eq. (115)
+            "Kg": 2 * np.abs(g_alphay) / pair.dl1 * (1 + 1 / u),        # ISO_21771_2007, 5.6.2, Eq. (111)
+        }
+        if n1_rpm is not None:
+            omega1 = n1_rpm * 2 * np.pi / 60
+            out["vg_mm_per_s"] = abs(omega1 * g_alphay * (1 + 1/u))      # ISO_21771_2007, 5.6.1, Eq. (106) 
+        return out
+    
     # ----------------------------------------------------------------------------------------------
     # Limits and checks (no undercut check: it needs a generating tool; most have no library source)
     # ----------------------------------------------------------------------------------------------

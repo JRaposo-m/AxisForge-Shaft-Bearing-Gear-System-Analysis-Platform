@@ -30,7 +30,7 @@ Examples
 """
 from __future__ import annotations
 
-from dataclasses import KW_ONLY, dataclass, fields
+from dataclasses import KW_ONLY, dataclass, fields, replace
 from typing import NamedTuple
 import numpy as np
 from scipy import optimize
@@ -180,6 +180,71 @@ def _internal_interference(pair) -> list[str]:
                           f"{lhs:.6f} < {rhs:.6f} rad")
     return errors
 
+# ==================================================================================================
+# Pair design: split of the profile shift sum x1 + x2 (ISO_21771_2007, 5.3, Eq. (62); criterion from
+# the specific sliding of 5.6.3, Eq. (114)-(117)). Used by CylindricalFamily.assemble_pair(x_split=...).
+# ==================================================================================================
+_X_SPLIT_CRITERIA = frozenset({"equal_specific_sliding"})
+
+
+def _tip_diameter(gear, x, k) -> float:
+    """Working tip diameter d + 2 (z/abs(z)) mn (haP + x + k) [mm] (ISO_21771_2007, 4.5.3, Eq. (33))."""
+    return gear.d + 2 * np.sign(gear.z) * gear.mn * (gear.haP + x + k)
+
+
+def _shift_for_tip_radius(gear, r, k) -> float:
+    """Profile shift x [-] that puts the working tip radius at r [mm]: Eq. (33) solved for x."""
+    return np.sign(gear.z) * (r - gear.d / 2.0) / gear.mn - gear.haP - k
+
+
+def _split_equal_specific_sliding(gear1, gear2, *, x_sum, al, alphatw, k1, k2) -> float:
+    """x1 [-] with x1 + x2 = x_sum and equal specific sliding at the two roots,
+    zeta_f1 = zeta_f2 (ISO_21771_2007, 5.6.3, Eq. (116), (117)); x2 = x_sum - x1.
+
+    Signed transverse form (u = z2/z1 and the radii of a ring negative, 4.3.8 Eq. (17), NOTE of
+    5.4.5.3): external and internal pairs, spur and helical, no virtual gear. With x_sum fixed,
+    a_w, alpha_wt, T1T2 and k are fixed; only the tips move. f = zeta_f1 - zeta_f2 is increasing
+    in x1. The ends of the valid domain come from Eq. (33) solved for x:
+    lower end, A on T1 (rho_A1 = 0) or tip 1 on its base circle: f < 0 there;
+    upper end (external), E on T2 (rho_E2 = 0) or tip 2 on its base circle: f > 0 there;
+    internal pair, no upper end: f -> (1 - 1/|u|) - (1 - |u|) > 0, so the interval is
+    stepped out until f > 0. Then brentq on that interval.
+    """
+    z1, z2 = gear1.z, gear2.z
+    s2 = np.sign(z2)
+    u = z2 / z1                                   # Eq. (52), signed
+    rb1, rb2 = gear1.rb, gear2.rb                 
+    T1T2 = s2 * al * np.sin(alphatw)              # as in assemble_pair, ISO_21771_2007, 5.4.5.3, Eq. (87)
+
+    def residual(x1):
+        """zeta_f1 - zeta_f2 [-] for x1 [-] (inside the bracket only)."""
+        ra1 = _tip_diameter(gear1, x1, k1) / 2.0
+        ra2 = _tip_diameter(gear2, x_sum - x1, k2) / 2.0  
+        T1E = np.sqrt(ra1**2 - rb1**2)            # ISO_21771_2007, 5.4.5.3, Eq. (84)
+        T2A = s2 * np.sqrt(ra2**2 - rb2**2)       # ISO_21771_2007, 5.4.5.3, Eq. (83)
+        rho_A1, rho_A2 = T1T2 - T2A, T2A          # at A: root of gear 1, ISO_21771_2007, 5.4.5.3, Eq. (87, 83)
+        rho_E1, rho_E2 = T1E, T1T2 - T1E          # at E: root of gear 2, ISO_21771_2007, 5.4.5.3, Eq. (84, 87)
+        zeta_f1 = 1.0 - rho_A2 / (u * rho_A1)     # ISO_21771_2007, 5.6.3, Eq. (116)
+        zeta_f2 = 1.0 - u * rho_E1 / rho_E2       # ISO_21771_2007, 5.6.3, Eq. (117)
+        return zeta_f1 - zeta_f2
+
+    R1 = np.hypot(rb1, T1T2)   # tip radius of gear 1 that puts E on T2
+    R2 = np.hypot(rb2, T1T2)   # tip radius of gear 2 that puts A on T1 (both kinds)
+    lo = max(x_sum - _shift_for_tip_radius(gear2, R2, k2),     # rho_A1 = 0
+             _shift_for_tip_radius(gear1, rb1, k1))             # ra1 = rb1
+    if s2 > 0:
+        hi = min(_shift_for_tip_radius(gear1, R1, k1),          # rho_E2 = 0
+                 x_sum - _shift_for_tip_radius(gear2, rb2, k2)) # ra2 = rb2
+    else:
+        hi = lo + 1.0
+        while residual(hi) <= 0.0 and hi < lo + 20.0:
+            hi = lo + 2.0 * (hi - lo)
+    eps = 1e-9   # the ends themselves divide by zero
+    if not (hi - lo > 2 * eps and residual(lo + eps) < 0.0 < residual(hi - eps)):
+        raise ValueError(
+            f"x_split='equal_specific_sliding': no x1 with x1 + x2 = {x_sum:.4f} gives equal specific "
+            f"sliding at the roots with the path of contact between T1 and T2 (z1={z1}, z2={z2}).")
+    return optimize.brentq(residual, lo + eps, hi - eps, xtol=1e-12)
 
 # ==================================================================================================
 # Input record of one gear (basic rack: ISO_53_1998)
@@ -385,7 +450,7 @@ class CylindricalFamily(GearFamily):
             rhoF : root fillet radius of the basic rack, rfP mn [mm] (ISO_53_1998, Table 2, times mn).
             pb, pbt : normal and transverse base pitch [mm] (4.4.5, Eq. (29), (28)).
             dv, rv : diameter and radius of the V-circle, d + 2 (z/abs(z)) x mn [mm] (4.5.1, Eq. (32)).
-            da, ra : tip diameter and radius, d + 2 (z/abs(z)) mn (haP + x) [mm] (4.5.3, Eq. (33) with k = 0; no clearance term: cP is in the root only).
+            da, ra : tip diameter and radius, d + 2 (z/abs(z)) mn (haP + x + k) [mm] (4.5.3, Eq. (33), k of the data, default 0; no clearance term: cP is in the root only).
             df, rf : root diameter and radius [mm] (4.5.4, Eq. (34)).
             h, ha, hf : total, addendum and dedendum heights [mm] (4.6.1-2, Eq. (35)-(37)).
             st, sn : transverse and normal tooth thicknesses [mm] (4.7.1, Eq. (39); 4.7.5, Eq. (49)).
@@ -430,7 +495,7 @@ class CylindricalFamily(GearFamily):
         db = d * np.cos(alphat)                              # ISO_21771_2007, 4.3.10, Eq. (19)
 
         # tip: addendum haP mn (no clearance: cP belongs to the dedendum hfP of the root, Eq. (34))
-        da = d + 2 * mn * s * (data.haP + x + data.k)                   # ISO_21771_2007, 4.5.3, Eq. (33), k = 0
+        da = d + 2 * mn * s * (data.haP + x + data.k)                   # ISO_21771_2007, 4.5.3, Eq. (33), k of the data
         df = d - 2 * mn * s * (hfP - x)                                 # ISO_21771_2007, 4.5.4, Eq. (34)
         dv = d + 2 * s * x * mn                                         # ISO_21771_2007, 4.5.1, Eq. (32)
 
@@ -480,7 +545,7 @@ class CylindricalFamily(GearFamily):
             alpha_yn : normal pressure angle at dy [rad];
             L_y : transverse radius of curvature of the profile at dy [mm], signed with z/abs(z); 
             inv_alpha_yt : tan(alpha_yt) - alpha_yt [rad] (4.3.9, Eq. (18)); 
-            p_yt, p_yn : transverse and normalpitch at dy [mm].
+            p_yt, p_yn : transverse and normal pitch at dy [mm].
 
         References
         ----------
@@ -493,11 +558,10 @@ class CylindricalFamily(GearFamily):
         inv_alpha_yt = np.tan(alpha_yt) - alpha_yt                              # ISO_21771_2007, 4.3.9, Eq. (18)
         p_yt         = dy * gear.pt / gear.d                                    # ISO_21771_2007, 4.4.3, Eq. (25)
         p_yn         = p_yt * np.cos(beta_y)                                    # ISO_21771_2007, 4.4.3, Eq. (26)
-        s_yt         = dy * ((np.pi + 4 * gear.x * np.tan(gear.alpha)) / (2 * abs(gear.z)) 
-                             + gear.z/abs(gear.z) * (_involute(gear.alphat) - inv_alpha_yt))    # ISO_21771_2007, 4.7.1, Eq. (38)
-        psi_y        = s_yt / dy                                                                # ISO_21771_2007, 4.7.2, Eq. (40)
-        eta_y        = gear.eta - gear.z/abs(gear.z) * (_involute(gear.alphat) - inv_alpha_yt)  # ISO_21771_2007, 4.7.4, Eq. (45)
-        e_yt         = dy * eta_y                                                               # ISO_21771_2007, 4.7.3, Eq. (43)
+        s_yt         = dy * (gear.psi + gear.z/abs(gear.z) * (_involute(gear.alphat) - inv_alpha_yt))   # ISO_21771_2007, 4.7.1, Eq. (38)
+        psi_y        = s_yt / dy                                                                        # ISO_21771_2007, 4.7.2, Eq. (40)
+        eta_y        = gear.eta - gear.z/abs(gear.z) * (_involute(gear.alphat) - inv_alpha_yt)          # ISO_21771_2007, 4.7.4, Eq. (45)
+        e_yt         = dy * eta_y                                                                       # ISO_21771_2007, 4.7.3, Eq. (43)
 
         return {
             "beta_y": beta_y,
@@ -516,7 +580,10 @@ class CylindricalFamily(GearFamily):
     # ----------------------------------------------------------------------------------------------
     # The pair (ISO 21771 clause 5)
     # ----------------------------------------------------------------------------------------------
-    def assemble_pair(self, gear1: Gear, gear2: Gear, *, label: str = "", al: float | None = None,
+    def assemble_pair(self, gear1: Gear, gear2: Gear, *, 
+                      label: str = "", 
+                      al: float | None = None,
+                      x_split: str | None = None,
                       addendum_reduction: bool = False) -> tuple[Gear, Gear, dict]:
         """Working centre distance and pressure angle, contact ratios and path of contact of two gears in mesh.
 
@@ -534,67 +601,60 @@ class CylindricalFamily(GearFamily):
             Working centre distance a_w [mm], positive. None: derived from x1 + x2 (zero
             backlash). A value: imposed; the working pressure angle is back-calculated and the
             backlash ``jbn`` that it leaves is stored.
+        x_split : str or None, optional
+            None (default): the profile shifts are those of the gears. ``"equal_specific_sliding"``:
+            the pair keeps the sum x1 + x2 and splits it so that the specific sliding at the root of
+            gear 1 (at A) equals that at the root of gear 2 (at E), ISO_21771_2007, 5.6.3,
+            Eq. (116) = (117). The sum is x1 + x2 of the gears or, with ``al`` given, the sum of
+            Eq. (62) (zero backlash at a_w; the x of the gears is then not used, with a warning).
         addendum_reduction : bool, optional
-            Apply the tip alteration k to the working tip diameters of both gears. Default False
-            (k = 0).
+            True: tip alteration k = s2 (a_w - a) / mn - (x1 + x2), the same on both gears, which
+            keeps the bottom clearance at cP mn; it replaces the k of the gear data. False (default):
+            each gear keeps the k of its data.
 
         Returns
         -------
         tuple
-            ``(gear1, gear2, attributes)``; the attributes set on the ``GearPair`` are:
+            ``(gear1, gear2, attributes)``: the gears carry the x and k the pair uses (new ``Gear``
+            objects when the pair changes them, the input gears otherwise); the attributes set on the
+            ``GearPair`` are:
 
             label; al_imposed : whether ``al`` was given.
-            a : reference centre distance, (d2 + (z2/abs(z2)) d1) / 2 [mm], positive (not printed
-            in ISO 21771 clause 5).
+            a : reference centre distance, (d2 + (z2/abs(z2)) d1) / 2 [mm]
             al : working centre distance a_w [mm], positive for both kinds (5.2.5, Eq. (58)).
-            alphatw, inv_alphatw : transverse working pressure angle alpha_wt and its involute
-            [rad] (5.2.3-5.2.4, Eq. (54), (55)).
-            jbn : normal backlash [mm] when ``al`` is imposed, else None (5.3, Eq. (63) with
-            x_E = the declared x). jbn > 0: clearance between the non-working flanks; jbn < 0: the
-            flanks would overlap at that a_w (the teeth must be thinned). An a_w larger than the
-            zero-backlash one gives jbn > 0 for an external pair and jbn < 0 for an internal pair.
-            x1, x2 : profile shift coefficients used [-].
-            u : gear ratio z2 / z1, signed (negative for an internal pair) [-] (5.2.1, Eq. (52)).
-            k : tip alteration coefficient [-] (4.5.2; the value from a_w, see Notes).
+            alphatw, inv_alphatw : transverse working pressure angle alpha_wt and its involute [rad].
+            jbn : normal backlash [mm]
+            x1, x2 : profile shift coefficients of the pair [-] (those of the gears, or the split).
+            x_split : the split criterion, or None; x_given : (x1, x2) of the gears given [-].
+            u : gear ratio z2 / z1, signed (negative for an internal pair) [-].
+            k : tip alteration coefficient applied by the pair [-]: the value of
+            ``addendum_reduction``, else 0 (each gear then keeps the k of its data).
             dl1, dl2, rl1, rl2 : working pitch diameters d_w = d_b / cos(alpha_wt) and radii [mm]
-            (Eq. (56)-(57), third form).
-            da1_w, da2_w : working tip diameters, d + 2 (z/abs(z)) mn (haP + x + k) [mm] (Eq. (33)).
+            da1_w, da2_w : tip diameters of the gears returned, d + 2 (z/abs(z)) mn (haP + x + k) [mm]
+            (Eq. (33)); equal to ``gear1.da``, ``gear2.da``.
             alpha_a1, alpha_a2 : transverse pressure angles at the tips [rad].
-            epslon_a1, epslon_a2 : addendum contact ratios of gear 1 and gear 2 [-]; that of
-            a ring is negative as stored and is subtracted in epslon_alpha.
-            epslon_alpha, epslon_beta, epslon_gamma : transverse contact ratio, overlap ratio
-            and total contact ratio [-] (5.4.7, Eq. (88)-(97)).
+            epslon_a1, epslon_a2 : addendum contact ratios of gear 1 and gear 2 [-];
+            epslon_alpha, epslon_beta, epslon_gamma : transverse contact ratio, overlap ratio and total contact ratio [-].
             b : common face width, min(b1, b2) [mm].
-            galpha1, galpha2 : addendum parts of the path of contact, rb (tan(alpha_a) -
-            tan(alpha_wt)) [mm]; galpha2 of a ring is negative as stored.
-            galpha : length of the path of contact [mm], positive, equal to ``AE`` (5.4.5.2,
-            Eq. (77)).
-            ReqI : reduced radius of curvature at the pitch point, transverse plane,
-            1 / (1/rho_C1 + 1/rho_C2) with rho_C2 < 0 for a ring [mm] (Eq. (81)-(82) and NOTE).
-            T1T2, T1E, T2A, T1A, T1B, T1C, T1D, T2E, T2B, T2C, T2D : distances along the line of
-            action from the base-tangent points T1, T2 to the points A..E of the path [mm]. They
-            are the transverse radii of curvature of the flanks at those points: 5.4.5.3,
-            Eq. (81)-(87) print T1C, T2C, T2A, T1E, T1B, T2D and T1T2.
-            AE, AB, AC, AD : distances from A [mm]; rA1, rB1, rD1, rA2, rB2, rD2 : radii from
-            the gear axis to the path points [mm] (derived: sqrt(segment**2 + rb**2); no numbered
-            equation, no library source).
+            galpha1, galpha2 : addendum parts of the path of contact [mm];
+            galpha : length of the path of contact [mm], positive, equal to ``AE``.
+            ReqI : reduced radius of curvature at the pitch point, transverse plane.
+            T1T2, T1E, T2A, T1A, T1B, T1C, T1D, T2E, T2B, T2C, T2D : distances along the line of action from the base-tangent points T1, T2 to the points A..E of the path [mm].
+            AE, AB, AC, AD : distances from A [mm]; rA1, rB1, rD1, rA2, rB2, rD2 : radii from the gear axis to the path points [mm].
             HV : gear loss factor [-] (ISO_TR_14179-2_2001, 5.2.4, Eq. (14); unchecked, Q53).
             Ram, Rrms, RzS : (Ra1 + Ra2)/2, sqrt(Rq1**2 + Rq2**2), Rz1 + Rz2 [um] (no source).
-            profile_shift_check : (x1 + x2 implied by a_w, declared x1 + x2) [-] (5.3, Eq. (62),
-            signed z1 + z2).
-            warnings : advisory messages, they become ``GearPair.warnings`` and never raise:
-            "profile shifts do not match the centre distance ..." with the sum implied by the
-            imposed a_w, the declared sum and jbn, when abs(jbn) >= 1e-9 mm (Q26 + Q57, José
-            2026-10-15); "transverse contact ratio ... is low (< 1.2)" when 1 <= epslon_alpha <
-            1.2 (answer 6, D-0026 item 9; no library source for 1.2).
+            profile_shift_check : (x1 + x2 implied by a_w, x1 + x2 of the pair) [-] (5.3, Eq. (62), signed z1 + z2).
+            warnings : advisory messages, they become ``GearPair.warnings``.
 
         Raises
         ------
         ValueError
             If the gears differ in module, normal pressure angle or helix angle (relative
-            tolerance 1e-6), if gear 1 is internal (z1 < 0), if gear 2 is internal and
-            abs(z2) <= z1, if abs(z1) > abs(z2) (gear 1 must be the pinion), or if a helical
-            external pair has equal hands or a helical internal pair opposite hands (Q08).
+            tolerance 1e-6);
+            If gear 1 is internal (z1 < 0), if gear 2 is internal and abs(z2) <= z1;
+            If abs(z1) > abs(z2) (gear 1 must be the pinion);
+            If a helical external pair has equal hands or a helical internal pair opposite hands (Q08);
+            If ``x_split`` is not None and not a known criterion, or no split exists for the sum.
 
         Notes
         -----
@@ -603,22 +663,25 @@ class CylindricalFamily(GearFamily):
         are positive; ISO 21771 makes them negative for an internal pair, hence the factor s2
         wherever their signed value enters (k).
 
-        The profile shifts are those of the gear data: the pair does not split a sum x1 + x2
-        between its gears (Q13, José 2026-10-15: the Henriot split is deleted; ISO_21771_2007, 5.3
-        prints no rule). FUTURE: a profile-shift split from a source (DIN 3992 / Niemann) if needed.
+        Profile shifts: those of the gears unless ``x_split`` is given. ISO_21771_2007, 5.3 prints
+        no rule to split x1 + x2; the criterion coded takes its quantity from 5.6.3 (specific
+        sliding, Eq. (114)-(117)) in the signed transverse form of this method, for external and
+        internal pairs, spur and helical, without virtual teeth (``_split_equal_specific_sliding``).
+        With the sum fixed, a_w, alpha_wt and k do not depend on the split; only the tips move.
 
         Working pressure angle: with a_w derived, inv(alpha_wt) = inv(alpha_t) + 2 tan(alpha_n)
         (x1 + x2) / (z1 + z2) (Eq. (55)) and a_w = (d_b2 + s2 d_b1) / (2 cos(alpha_wt))
-        (Eq. (58)); with a_w imposed, cos(alpha_wt) = a cos(alpha_t) / a_w (Eq. (54)). The
-        inverse involute has no printed method (Eq. (18) is the definition): brentq on
-        [1e-6, 1.5] rad (José, 2026-10-15).
+        (Eq. (58)); with a_w imposed, cos(alpha_wt) = abs(z1 + z2) mn cos(alpha_t) /
+        (2 a_w cos(beta)) (Eq. (54)). The inverse involute has no printed method (Eq. (18) is the
+        definition): brentq on [1e-6, 1.5] rad (José, 2026-10-15).
 
-        Tip alteration (Q23, José 2026-10-15): k = s2 (a_w - a) / mn - (x1 + x2), the same on
-        both gears, when ``addendum_reduction``; it makes the bottom clearance at a_w equal to
-        cP mn on both sides (4.5.2: k < 0 shortens the addendum; no equation for k is printed
-        there). For an internal pair k can be positive and then lengthens both tips (z 20/-60,
-        x 0.2/0.2: k = +0.040, T1A 0.94 -> 0.55 mm). DIN 3960 / Niemann practice not checked (no
-        library source yet).
+        Tip alteration (Q23, José 2026-10-15; 2026-10-23): k = s2 (a_w - a) / mn - (x1 + x2), the
+        same on both gears, when ``addendum_reduction``; it replaces the k of the gear data, and the
+        gears returned carry it (gear.da = da1_w). Without ``addendum_reduction`` each gear keeps
+        the k of its data. The rule makes the bottom clearance at a_w equal to cP mn on both sides
+        (4.5.2: k < 0 shortens the addendum; no equation for k is printed there). For an internal
+        pair k can be positive and then lengthens both tips (z 20/-60, x 0.2/0.2: k = +0.040,
+        T1A 0.94 -> 0.55 mm). DIN 3960 / Niemann practice not checked (no library source yet).
 
         For an internal pair (s2 = -1) the segments measured from T2 and T1T2 are negative, as
         the NOTE of ISO_21771_2007, 5.4.5.3 states for T1T2 and the radii of curvature of the
@@ -636,6 +699,7 @@ class CylindricalFamily(GearFamily):
         .. [1] ISO_21771_2007, 4.5.2-4.5.3, Eq. (33); 5.2-5.4, Eq. (52)-(97) (checked by a second
            reader).
         .. [2] ISO_TR_14179-2_2001, 5.2.4, Eq. (14) (clause map only).
+        .. [3] ISO_21771_2007, 5.6.3, Eq. (114)-(117), p. 44 (PDF p. 48) (specific sliding; x_split).
         """
         # --- the two gears must have the same basic rack size and helix (ISO 21771, clause 5) ---
         if not np.isclose(gear1.mn, gear2.mn, rtol=1e-6):
@@ -657,7 +721,6 @@ class CylindricalFamily(GearFamily):
             )
 
         z1, z2 = gear1.z, gear2.z
-        # Q03 (José, 2026-10-15), D-0010 item 10: gear 1 is the pinion, an external gear
         if z1 < 0:
             raise ValueError(f"gear 1 must be the external gear (pinion), got z1={z1}; give the ring as gear2.")
         s2 = z2 / abs(z2)   # +1 external pair, -1 internal pair
@@ -673,8 +736,8 @@ class CylindricalFamily(GearFamily):
                 "Give the smaller gear as gear1; which gear drives is set by the power path."
             )
 
-        # D-0010 item 17 (Q08): the helices of an external pair are of opposite hands, those of an
-        # internal pair of the same hand (ISO_21771_2007, 5.1.3, 5.1.4)
+        # the helices of an external pair are of opposite hands, those of an internal pair of the
+        # same hand (ISO_21771_2007, 5.1.3, 5.1.4)
         if gear1.beta != 0.0 and (gear1.hand == gear2.hand) != (s2 < 0):
             raise ValueError(
                 f"Hand of helix mismatch: gear1 hand={gear1.hand}, gear2 hand={gear2.hand}; an external pair "
@@ -688,35 +751,74 @@ class CylindricalFamily(GearFamily):
         alpha  = gear1.alpha     # normal pressure angle
         alphat = gear1.alphat    # transverse pressure angle
         betab  = gear1.betab     # base helix angle
+        beta   = gear1.beta      # reference helix angle
         m      = gear1.mn
 
-        # --- working centre distance and transverse working pressure angle ---
+        # --- x_split criterion must be defined ---
+        if x_split is not None and x_split not in _X_SPLIT_CRITERIA:
+            raise ValueError(f"x_split must be one of {sorted(_X_SPLIT_CRITERIA)} or None, got {x_split!r}")
+
         al_imposed = al is not None
+        x_given = (gear1.x, gear2.x)
+
+        # --- working centre distance and transverse working pressure angle ---
         if al_imposed:
-            # the working pitch circles roll on the same base circles: a_w cos(alpha_wt) = a cos(alpha_t) (Eq. (54))
-            alphatw = np.arccos(a * np.cos(alphat) / al)
-            x1, x2 = gear1.x, gear2.x
+            alphatw = np.arccos(abs(z1 + z2) * m * np.cos(alphat) / (2 * al * np.cos(beta)))  # ISO_21771_2007, 5.2.5, Eq. (54)
         else:
-            x1, x2 = gear1.x, gear2.x
-            # zero backlash, Eq. (55) with the signed tooth sum (z1 + z2 < 0 for a ring)
-            inv_alphatw = _involute(alphat) + 2 * np.tan(alpha) * (x1 + x2) / (z1 + z2)
+            inv_alphatw = _involute(alphat) + 2 * np.tan(alpha) * sum(x_given) / (z1 + z2)    # ISO_21771_2007, 5.2.4, Eq. (55)
             # inverse involute: no method is printed (Eq. (18) is the definition only); 1.5 rad bounds any working angle
             alphatw = optimize.brentq(_inv_residual, 1e-6, 1.5, args=(inv_alphatw,))
-            # Eq. (58): base radii added for an external pair, subtracted for a ring; a_w > 0
-            al = (gear2.db + s2 * gear1.db) / (2 * np.cos(alphatw))
+            al = (gear2.db + s2 * gear1.db) / (2 * np.cos(alphatw))                            # ISO_21771_2007, 5.2.5, Eq. (58)
         inv_alphatw = _involute(alphatw)
 
         # sum of profile shifts that a_w needs for zero backlash (Eq. (62), signed z1 + z2)
         x_sum_from_al = (inv_alphatw - _involute(alphat)) * (z1 + z2) / (2 * np.tan(alpha))
-        jbn = None
+
+        # --- the four cases: where the sum x1 + x2 comes from ---
+        #   al      x_split   sum used               shifts of the pair
+        #   None    None      x1 + x2 of the gears   those of the gears
+        #   given   None      x1 + x2 of the gears   those of the gears (backlash jbn below)
+        #   None    given     x1 + x2 of the gears   split
+        #   given   given     Sum_x(a_w), Eq. (62)   split (zero backlash at a_w; the x of the gears is not used)
         warnings_ = []
+        if al_imposed and x_split is not None:
+            x_sum = x_sum_from_al
+            if abs(sum(x_given) - x_sum) >= 1e-9:
+                warnings_.append(
+                    f"x_split with al given: al = {al:.4f} mm fixes x1 + x2 = {x_sum:.4f} (ISO_21771_2007 Eq. (62)); "
+                    f"the shifts of the gears (x1 + x2 = {sum(x_given):.4f}) are not used.")
+        else:
+            x_sum = sum(x_given)
+
+        # --- tip alteration coefficient k (Eq. (33): + k mn on the tip, k < 0 shortens) ---
+        if addendum_reduction:
+            # clearance rule (Q23; DIN 3960 / Niemann, not in the library), signed centre distances of ISO:
+            # the same on both gears; it REPLACES the k of the gear data. Depends on x_sum only.
+            k = s2 * (al - a) / m - x_sum
+            k1 = k2 = k
+        else:
+            k = 0.0                                   # k applied by the pair (stored as before)
+            k1, k2 = gear1.data.k, gear2.data.k       # keep the tip alteration given with each gear
+
+        if x_split is None:
+            x1, x2 = x_given
+        else:
+            x1 = _split_equal_specific_sliding(gear1, gear2, x_sum=x_sum, al=al, alphatw=alphatw, k1=k1, k2=k2)
+            x2 = x_sum - x1
+
+        # the working gears carry the x and k of the pair; rebuilt only when one changes
+        # (their checks run in validate_pair, GearPair.assemble)
+        if (x1, k1) != (gear1.x, gear1.data.k):
+            gear1 = Gear.assemble(gear1.family, replace(gear1.data, x=x1, k=k1), check=False)
+        if (x2, k2) != (gear2.x, gear2.data.k):
+            gear2 = Gear.assemble(gear2.family, replace(gear2.data, x=x2, k=k2), check=False)
+
+        jbn = None
         if al_imposed:
-            # normal backlash left by the declared shifts at the imposed a_w: Eq. (63) solved for j_bn with
-            # x_E = the declared x; jbn > 0: clearance between the non-working flanks, jbn < 0: the flanks
-            # would overlap at that a_w (the teeth must be thinned)
+            # normal backlash left by the shifts of the pair at the imposed a_w: Eq. (63) solved for j_bn;
+            # jbn > 0: clearance between the non-working flanks, jbn < 0: the flanks would overlap at that a_w
+            # (the teeth must be thinned). With x_split it is 0 by construction (sum from Eq. (62)).
             jbn = _normal_backlash(x_sum_from_al, x1 + x2, m, alpha)
-            # Q26 + Q57 (José, 2026-10-15): zero backlash for now, a mismatch is ONE warning (not a validate error);
-            # 1e-9 mm is far above the rounding of a derived a_w (1e-14)
             if abs(jbn) >= 1e-9:
                 warnings_.append(
                     f"profile shifts do not match the centre distance: declared x1 + x2 = {x1 + x2:.4f}, "
@@ -725,20 +827,12 @@ class CylindricalFamily(GearFamily):
 
         u = z2 / z1   # Eq. (52), signed
 
-        # --- tip alteration coefficient k (Eq. (33): + k mn on both tips, k < 0 shortens) ---
-        if addendum_reduction:
-            # (a_w - a) / mn - (x1 + x2) with the signed centre distances of ISO (negative for a ring): factor s2
-            k = s2 * (al - a) / m - (x1 + x2)
-        else:
-            k = 0.0
-
         # working pitch circles: the circles on which the two gears roll, d_w = d_b / cos(alpha_wt) (Eq. (56)-(57))
         dl1, dl2 = gear1.db / np.cos(alphatw), gear2.db / np.cos(alphatw)
         rl1, rl2 = dl1 / 2, dl2 / 2
 
-        # --- working tip diameters, Eq. (33) with k (the clearance cP is in the root only) ---
-        da1 = gear1.d + 2 * m * (gear1.haP + x1 + k)
-        da2 = gear2.d + s2 * 2 * m * (gear2.haP + x2 + k)
+        # --- tip diameters of the working gears, Eq. (33) with their x and k (the clearance cP is in the root only) ---
+        da1, da2 = gear1.da, gear2.da
         ra1, ra2 = da1 / 2.0, da2 / 2.0
         db1, db2 = gear1.db, gear2.db
         rb1, rb2 = gear1.rb, gear2.rb
@@ -806,8 +900,7 @@ class CylindricalFamily(GearFamily):
 
         return gear1, gear2, dict(
             label=label, al_imposed=al_imposed, a=a, al=al, alphatw=alphatw, inv_alphatw=inv_alphatw,
-            jbn=jbn, x1=x1, x2=x2, u=u, k=k, dl1=dl1, dl2=dl2, rl1=rl1, rl2=rl2, da1_w=da1, da2_w=da2,
-            alpha_a1=alpha_a1, alpha_a2=alpha_a2, epslon_a1=epslon_a1, epslon_a2=epslon_a2,
+            jbn=jbn, x1=x1, x2=x2, x_split=x_split, x_given=x_given, u=u, k=k, dl1=dl1, dl2=dl2, rl1=rl1, rl2=rl2, da1_w=da1, da2_w=da2,            alpha_a1=alpha_a1, alpha_a2=alpha_a2, epslon_a1=epslon_a1, epslon_a2=epslon_a2,
             epslon_alpha=epslon_alpha, b=b, epslon_beta=epslon_beta, epslon_gamma=epslon_gamma,
             galpha1=galpha1, galpha2=galpha2, galpha=galpha, ReqI=ReqI,
             T1T2=T1T2, T1E=T1E, T2A=T2A, T1A=T1A, T1B=T1B, T1C=T1C, T1D=T1D, T2E=T2E, T2B=T2B,
@@ -1819,6 +1912,7 @@ class ManufacturedCylindricalFamily(CylindricalFamily):
     # The pair as cut (ISO 21771 clause 5 with the generating profile shifts of clause 7)
     # ----------------------------------------------------------------------------------------------
     def assemble_pair(self, gear1: Gear, gear2: Gear, *, label: str = "", al: float | None = None,
+                      x_split: str | None = None,
                       addendum_reduction: bool = False) -> tuple[Gear, Gear, dict]:
         """Nominal geometry of two gears in mesh, then the backlash and active root diameters of
         the pair as cut.
@@ -1826,9 +1920,10 @@ class ManufacturedCylindricalFamily(CylindricalFamily):
         Parameters
         ----------
         gear1, gear2 : Gear
-            Gears assembled with ``ManufacturedCylindricalFamily``.
-        label, al, addendum_reduction
-            As ``CylindricalFamily.assemble_pair``.
+        label, al, x_split, addendum_reduction
+            As ``CylindricalFamily.assemble_pair``. When the pair changes x (``x_split``) or k
+            (``addendum_reduction``), the gears returned are the gears as cut rebuilt with the
+            same allowances and tool, so x_Es, x_Ei, d_Ff, jbn_max and jbn_min follow.
 
         Returns
         -------
@@ -1865,7 +1960,7 @@ class ManufacturedCylindricalFamily(CylindricalFamily):
                 and isinstance(gear2.family, ManufacturedCylindricalFamily)):
             raise TypeError(f"{type(self).__name__} needs two gears assembled with ManufacturedCylindricalFamily, "
                             f"got {type(gear1.family).__name__} and {type(gear2.family).__name__}")
-        g1, g2, nominal = super().assemble_pair(gear1, gear2, label=label, al=al,
+        g1, g2, nominal = super().assemble_pair(gear1, gear2, label=label, al=al, x_split=x_split,
                                                 addendum_reduction=addendum_reduction)
         x_sum_from_al = nominal["profile_shift_check"][0]   # Sum x implied by a_w (Eq. (62)), reused
         warnings_ = []

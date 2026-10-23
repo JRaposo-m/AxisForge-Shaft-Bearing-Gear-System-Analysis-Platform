@@ -842,16 +842,16 @@ class CylindricalFamily(GearFamily):
         alpha_a1 = np.arccos(db1 / da1)
         alpha_a2 = np.arccos(db2 / da2)
 
-        # addendum contact ratios: roll angle from the pitch point to the tip over the angular pitch.
-        # For a ring tan(alpha_a2) < tan(alpha_wt), so its part is subtracted through s2.
+        # addendum contact ratios g_a / p_et of each gear (not in ISO 21771: DIN 3960 practice, not in the library);
+        # the ring part is subtracted through s2 (tan(alpha_a2) < tan(alpha_wt))
         epslon_a1 = z1 * (np.tan(alpha_a1) - np.tan(alphatw)) / (2 * np.pi)
         epslon_a2 = abs(z2) * (np.tan(alpha_a2) - np.tan(alphatw)) / (2 * np.pi)
-        epslon_alpha = epslon_a1 + s2 * epslon_a2
+        epslon_alpha = epslon_a1 + s2 * epslon_a2       # = g_alpha / p_et, ISO_21771_2007, 5.4.7.1, Eq. (90)
 
-        # overlap ratio: only non-zero for helical gears; b = common face width of ALIGNED gears
+        # overlap ratio: b = common face width of ALIGNED gears (b_w of 5.4.7.2 without chamfers or axial offset)
         b = min(gear1.b, gear2.b)
-        epslon_beta = b * np.tan(betab) / pbt
-        epslon_gamma = epslon_alpha + epslon_beta
+        epslon_beta = b * np.tan(betab) / pbt            # ISO_21771_2007, 5.4.7.3, Eq. (93), last form (p_et = p_bt)
+        epslon_gamma = epslon_alpha + epslon_beta        # ISO_21771_2007, 5.4.7.5, Eq. (97)
         if 1.0 <= epslon_alpha < 1.2:
             warnings_.append(f"transverse contact ratio εα={epslon_alpha:.4f} is low (< 1.2) — "
                              "consider increasing tooth count or face width.")

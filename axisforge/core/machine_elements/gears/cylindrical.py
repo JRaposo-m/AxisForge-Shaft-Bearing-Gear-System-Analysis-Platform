@@ -842,7 +842,7 @@ class CylindricalFamily(GearFamily):
         alpha_a1 = np.arccos(db1 / da1)
         alpha_a2 = np.arccos(db2 / da2)
 
-        # addendum contact ratios g_a / p_et of each gear (not in ISO 21771: DIN 3960 practice, not in the library);
+        # addendum contact ratios g_a / p_et of each gear;
         # the ring part is subtracted through s2 (tan(alpha_a2) < tan(alpha_wt))
         epslon_a1 = z1 * (np.tan(alpha_a1) - np.tan(alphatw)) / (2 * np.pi)
         epslon_a2 = abs(z2) * (np.tan(alpha_a2) - np.tan(alphatw)) / (2 * np.pi)

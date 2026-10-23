@@ -828,7 +828,7 @@ class CylindricalFamily(GearFamily):
         u = z2 / z1   # Eq. (52), signed
 
         # working pitch circles: the circles on which the two gears roll, d_w = d_b / cos(alpha_wt) (Eq. (56)-(57))
-        dl1, dl2 = gear1.db / np.cos(alphatw), gear2.db / np.cos(alphatw)
+        dl1, dl2 = gear1.db / np.cos(alphatw), gear2.db / np.cos(alphatw)       # ISO_21771_2007, 5.2.5, Eq. ((56)-(57))
         rl1, rl2 = dl1 / 2, dl2 / 2
 
         # --- tip diameters of the working gears, Eq. (33) with their x and k (the clearance cP is in the root only) ---

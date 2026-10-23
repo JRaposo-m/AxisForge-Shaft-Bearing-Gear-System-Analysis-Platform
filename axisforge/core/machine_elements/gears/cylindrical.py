@@ -852,39 +852,39 @@ class CylindricalFamily(GearFamily):
         b = min(gear1.b, gear2.b)
         epslon_beta = b * np.tan(betab) / pbt
         epslon_gamma = epslon_alpha + epslon_beta
-        # answer 6 (José, 2026-10-15), D-0026 item 9: a low contact ratio is advisory, not an error
         if 1.0 <= epslon_alpha < 1.2:
             warnings_.append(f"transverse contact ratio εα={epslon_alpha:.4f} is low (< 1.2) — "
                              "consider increasing tooth count or face width.")
 
         galpha1 = rb1 * (np.tan(alpha_a1) - np.tan(alphatw))
         galpha2 = rb2 * (np.tan(alpha_a2) - np.tan(alphatw))
-        # Eq. (77) with the stored (positive) a_w: s2 on the ring tip term AND on 2 a_w sin(alpha_wt);
-        # for an external pair it is galpha1 + galpha2
-        galpha = 1/2 * ((da1**2 - db1**2)**(1/2) + s2 * ((da2**2 - db2**2)**(1/2) - 2 * al * np.sin(alphatw)))
+        galpha = 1/2 * ((da1**2 - db1**2)**(1/2) + s2 * ((da2**2 - db2**2)**(1/2) - 2 * al * np.sin(alphatw)))  # ISO_21771_2007, 5.4.5.2, Eq. (77)
 
         # reduced radius of curvature at the pitch point C, transverse plane: rho_C = r_w sin(alpha_wt),
-        # negative for the concave flank of a ring (Eq. (82) NOTE, D-0010 item 8)
         ReqI = 1 / (1 / (rl1 * np.sin(alphatw))
                     + 1 / (s2 * rl2 * np.sin(alphatw)))
 
         # --- path of contact: distances along the line of action (signed with s2 on the side of gear 2) ---
-        T1T2 = s2 * al * np.sin(alphatw)
-        T1E = (ra1**2 - rb1**2) ** (1 / 2)          # end of contact E: tip circle of gear 1
-        T2A = s2 * ((ra2**2 - rb2**2) ** (1 / 2))   # start of contact A: tip circle of gear 2
-        # a negative T1A (start of contact beyond T1) is stored; validate_pair refuses it (Q39); old case 4: -0.0749 mm
-        T1A = T1T2 - T2A
-        T1B = T1E - pbt                             # B, D: one transverse base pitch from E and from A
-        T1C = rb1 * np.tan(alphatw)                 # pitch point C
-        T1D = T1A + pbt
-        T2E = T1T2 - T1E
-        T2B = T2E + pbt
-        T2C = s2 * rb2 * np.tan(alphatw)
-        T2D = T2A - pbt
-        AE = T1E - T1A
-        AB = T1B - T1A
-        AC = T1C - T1A
-        AD = T1D - T1A
+        # NOTE: equations (83)-(86) apply if pinion is the driving gear and wheel the driven gear. In opposite case,
+        # A and E, as well as B and D, are to be interchanged. Here they are always stored with gear 1 driving;
+        # path_points(pair, driver) does the interchange.
+        # NOTE: the values obtained for the curvature radii of an internal gear and for the segment T1T2 of an
+        # internal gear pair are negative values
+        T1T2 = s2 * al * np.sin(alphatw)            # ISO_21771_2007, 5.4.5.3, Eq. (87)
+        T1E = (ra1**2 - rb1**2) ** (1 / 2)          # ISO_21771_2007, 5.4.5.3, Eq. (84)
+        T2A = s2 * ((ra2**2 - rb2**2) ** (1 / 2))   # ISO_21771_2007, 5.4.5.3, Eq. (83)
+        T1A = T1T2 - T2A                             # Eq. (87) with Eq. (83); < 0 (A beyond T1) is stored, validate_pair refuses it
+        T1B = T1E - pbt                             # ISO_21771_2007, 5.4.5.3, Eq. (85)
+        T1C = rb1 * np.tan(alphatw)                 # ISO_21771_2007, 5.4.5.3, Eq. (81)
+        T1D = T1A + pbt                             # not printed: Eq. (87) with Eq. (86); D one p_et after A (5.4.5.1)
+        T2E = T1T2 - T1E                            # Eq. (87) with Eq. (84)
+        T2B = T2E + pbt                             # not printed: Eq. (87) with Eq. (85)
+        T2C = s2 * rb2 * np.tan(alphatw)            # ISO_21771_2007, 5.4.5.3, Eq. (82)
+        T2D = T2A - pbt                             # ISO_21771_2007, 5.4.5.3, Eq. (86)
+        AE = T1E - T1A                              
+        AB = T1B - T1A                              
+        AC = T1C - T1A                              
+        AD = T1D - T1A                              
         # radii to the points of the path (gear 2: mirrored names, at E, D, B)
         rA1 = (T1A**2 + rb1**2) ** (1 / 2)
         rB1 = (T1B**2 + rb1**2) ** (1 / 2)

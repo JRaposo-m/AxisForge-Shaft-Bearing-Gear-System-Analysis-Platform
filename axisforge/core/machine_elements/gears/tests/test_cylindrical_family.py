@@ -13,6 +13,7 @@ Units: lengths [mm], angles [rad], torques [N m], forces [N].
 import dataclasses
 import inspect
 import math
+import warnings
 
 import pytest
 
@@ -489,6 +490,130 @@ def test_working_gears_carry_k():
     q = pair(gk, g2)
     assert q.da1_w == pytest.approx(gk.da, rel=1e-12) and gk.da == pytest.approx(45.0, rel=1e-12)
     assert q.k == 0.0
+
+
+# ----------------------------------------------------------------------------------------------
+# pair quantities of b7bb83c, 0d8f57b, 01b02ad: backlash conversions, active face width, overlap length,
+# l_max, path parts, sliding factors, specific sliding and pair_values_at. Pair: FZG H501 with the face
+# widths of the FZG test gears, b 14/20 (``baseline_cases`` H501 has 23/23). Values: regression values
+# computed by cowork on 2026-10-23, no published reference unless stated.
+# ----------------------------------------------------------------------------------------------
+def _h501_fzg(**kw):
+    """FZG H501: mn 3.5 mm, z 20/30, x 0.1809/0.0891, beta 15 deg, hands +1/-1, b 14/20 mm, ISO 53 rack."""
+    g1 = bc.gear(3.5, 20, x=0.1809, b=14.0, beta_n_deg=15.0, hand=1, cP=0.25)
+    g2 = bc.gear(3.5, 30, x=0.0891, b=20.0, beta_n_deg=15.0, hand=-1, cP=0.25)
+    return pair(g1, g2, **kw)
+
+
+def test_backlash_conversions():
+    """ISO_21771_2007, 5.5.2-5.5.3, Eq. (100)-(104): from the normal backlash jbn at a_w = 91.6 mm (H501), the
+    backlash angles psi_j1 = 2 jbn / (mn z1 cos(alpha_n)) (Eq. (100)) and psi_j2 with abs(z2) (Eq. (101)), the
+    circumferential backlash j_wt at the working pitch circle (Eq. (102)) and j_t = jbn / (cos(beta) cos(alpha_n))
+    at the reference circle (Eq. (103)), the radial backlash j_r = j_wt / (2 tan(alpha_wt)) (Eq. (104)); all None
+    when a_w is not given. Values: regression values (cowork 2026-10-23), no published reference."""
+    rel = 1e-9
+    q = _h501_fzg(al=91.6)
+    cos_an, mn = math.cos(math.radians(20.0)), q.gear1.mn
+    assert q.jbn == pytest.approx(0.0730851354, rel=rel)
+    assert q.j_wt == pytest.approx(0.0814199179, rel=rel) and q.j_wt > q.jbn
+    assert q.j_r == pytest.approx(q.j_wt / (2.0 * math.tan(q.alphatw)), rel=rel)
+    assert q.j_r == pytest.approx(0.0994175204, rel=rel)
+    assert q.psi_j1 == pytest.approx(2.0 * q.jbn / (mn * 20 * cos_an), rel=rel)
+    assert q.psi_j1 == pytest.approx(0.0022221593, abs=5e-11)      # given to 10 decimals (8 digits): half a unit of the last
+    assert q.psi_j2 == pytest.approx(2.0 * q.jbn / (mn * abs(q.gear2.z) * cos_an), rel=rel)
+    assert q.j_t == pytest.approx(q.jbn / (math.cos(q.gear1.beta) * cos_an), rel=rel)
+    p = _h501_fzg()
+    assert (p.psi_j1, p.psi_j2, p.j_wt, p.j_t, p.j_r) == (None,) * 5
+
+
+def test_active_face_width():
+    """ISO_21771_2007, 5.4.7.2 and Eq. (93): b_w = min(b1, b2) = 14 mm by default (H501, eps_beta 0.3295386432);
+    bw = 10 mm gives eps_beta in proportion, 0.2353847451; bw above min(b1, b2) is refused; the manufactured
+    family accepts bw. Values: regression values (cowork 2026-10-23), no published reference."""
+    p = _h501_fzg()
+    assert p.b == 14.0 and p.epslon_beta == pytest.approx(0.3295386432, rel=1e-9)
+    q = _h501_fzg(bw=10.0)
+    assert q.b == 10.0 and q.epslon_beta == pytest.approx(0.2353847451, rel=1e-9)
+    assert q.epslon_beta == pytest.approx(p.epslon_beta * 10.0 / 14.0, rel=1e-12)
+    with pytest.raises(ValueError, match="bw must be in"):
+        _h501_fzg(bw=15.0)
+    made = ManufacturedCylindricalFamily()
+    m1, m2 = (made.from_ideal(g, E_sns=0.0, E_sni=0.0) for g in (p.gear1, p.gear2))
+    assert GearPair.assemble(made, gear1=m1, gear2=m2, bw=10.0).b == 10.0
+
+
+def test_overlap_length_and_l_max():
+    """ISO_21771_2007, 5.4.7.4, Eq. (94): g_beta = b_w tan(beta) = 14 tan(15 deg) = 3.7512886940 mm (H501);
+    5.4.8, Eq. (98), (99): l_max is the lesser of g_alpha / sin(beta_b) and b_w / cos(beta_b), here Eq. (99),
+    14.4333829578 mm; a spur pair (z 20/40, b 20) has l_max = b_w = 20 mm, without a division by sin(0)."""
+    p = _h501_fzg()
+    assert p.gbeta == pytest.approx(14.0 * math.tan(math.radians(15.0)), rel=1e-12)
+    assert p.gbeta == pytest.approx(3.7512886940, rel=1e-9)
+    assert p.l_max == pytest.approx(14.0 / math.cos(p.gear1.betab), rel=1e-12)
+    assert p.l_max == pytest.approx(14.4333829578, rel=1e-9) and p.l_max < p.galpha / math.sin(p.gear1.betab)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        spur = pair(_g(20, 0.0), _g(40, 0.0))
+    assert spur.l_max == 20.0
+
+
+@pytest.mark.parametrize("gears", [(_g(20, 0.2), _g(40, 0.2)), INTERNAL_SHIFTED], ids=["external", "internal"])
+def test_path_parts_and_sliding_factors(gears):
+    """ISO_21771_2007, 5.4.5.2, Eq. (79), (80): gf1 = AC = s2 g_alpha2 (dedendum part of gear 1) and ga1 = CE =
+    g_alpha1, and for gear 2 gf2 = ga1, ga2 = gf1; 5.6.2, Eq. (112), (113): Kgf1 = 2 gf1 / d_w1 (1 + 1/u) and
+    Kga1 = 2 ga1 / d_w1 (1 + 1/u), u = z2 / z1 signed. External z 20/40 and internal 20/-60, x 0.2/0.2."""
+    p = pair(*gears)
+    s2 = math.copysign(1.0, p.gear2.z)
+    assert p.gf1 == pytest.approx(p.AC, rel=1e-12) and p.gf1 == pytest.approx(s2 * p.galpha2, rel=1e-12)
+    assert p.ga1 == pytest.approx(p.CE, rel=1e-12) and p.ga1 == pytest.approx(p.galpha1, rel=1e-12)
+    assert p.gf2 == p.ga1 and p.ga2 == p.gf1
+    assert p.Kgf1 == pytest.approx(2.0 * p.gf1 / p.dl1 * (1.0 + 1.0 / p.u), rel=1e-12)
+    assert p.Kga1 == pytest.approx(2.0 * p.ga1 / p.dl1 * (1.0 + 1.0 / p.u), rel=1e-12)
+
+
+def test_root_specific_sliding_two_ways():
+    """ISO_21771_2007, 5.6.3: zeta_f1 (Eq. (116), at A) and zeta_f2 (Eq. (117), at E) of the pair equal zeta1 and
+    zeta2 of ``pair_values_at`` (Eq. (114), (115)) at d_y1 = 2 r_A1 and at d_y1 = d_a1, for H501 (-2.0192190065,
+    -1.6199054955: regression values, cowork 2026-10-23, no published reference) and the internal pair 20/-60,
+    x 0.2/0.2; with x_split (BLOCK 01) the two are equal."""
+    h = _h501_fzg()
+    assert (h.zeta_f1, h.zeta_f2) == (pytest.approx(-2.0192190065, abs=1e-9), pytest.approx(-1.6199054955, abs=1e-9))
+    for p in (h, pair(*INTERNAL_SHIFTED)):
+        assert p.zeta_f1 == pytest.approx(float(FAMILY.pair_values_at(p, 2.0 * p.rA1)["zeta1"]), abs=1e-9)
+        assert p.zeta_f2 == pytest.approx(float(FAMILY.pair_values_at(p, p.gear1.da)["zeta2"]), abs=1e-9)
+    s = pair(*INTERNAL_SHIFTED, x_split="equal_specific_sliding")
+    assert s.zeta_f1 == pytest.approx(s.zeta_f2, abs=1e-9)
+
+
+def test_pair_values_at_points():
+    """``pair_values_at`` at A, C and E of H501 (d_y1 = 2 r_A1, d_w1, d_a1), n1 1500 rpm: at A gear 2 is at its tip
+    (dy2 = d_a2 = 116.3276989431 mm); the sliding factor Kg (ISO_21771_2007, 5.6.2, Eq. (111)) is Kgf1, 0, Kga1
+    (0.3437344898, 0, 0.3700626286); the sliding speed magnitude (5.6.1, Eq. (108)) is 1976.17452, 0,
+    2127.53843 mm/s and equals abs(vg_m_per_s) of ``surface_speeds`` times 1000 (mm/s against signed m/s).
+    Values: regression values (cowork 2026-10-23), no published reference."""
+    p = _h501_fzg()
+    v = FAMILY.pair_values_at(p, [2.0 * p.rA1, p.dl1, p.gear1.da], n1_rpm=1500.0)
+    assert v["dy2_mm"][0] == pytest.approx(p.gear2.da, rel=1e-12) and p.gear2.da == pytest.approx(116.3276989431, rel=1e-9)
+    assert list(v["Kg"]) == [pytest.approx(p.Kgf1, rel=1e-9), pytest.approx(0.0, abs=1e-12), pytest.approx(p.Kga1, rel=1e-9)]
+    assert (p.Kgf1, p.Kga1) == (pytest.approx(0.3437344898, rel=1e-9), pytest.approx(0.3700626286, rel=1e-9))
+    assert list(v["vg_mm_per_s"]) == [pytest.approx(1976.17452, rel=1e-8), pytest.approx(0.0, abs=1e-9),
+                                      pytest.approx(2127.53843, rel=1e-8)]
+    g = FAMILY.path_points(p, "gear1")
+    vg = FAMILY.surface_speeds(p, [g["A"], g["C"], g["E"]], 1500.0)["vg_m_per_s"]
+    assert list(v["vg_mm_per_s"] / 1000.0) == [pytest.approx(abs(x), rel=1e-9, abs=1e-12) for x in vg]
+
+
+def test_gear_values_at_radius_sign():
+    """ISO_21771_2007, 4.3.8, Eq. (17): the radius of curvature ``L_y`` of ``gear_values_at`` (the key is L_y) is
+    negative on a ring (concave flank) and equals the ring radius rho2 of ``curvature_radii`` at the same point of
+    the path (5.4.5.3, Eq. (87)), at A, C and E of the internal pair 20/-60, x 0.2/0.2; the ring diameter of the
+    point is 2 sqrt(rho2**2 + r_b2**2)."""
+    p = pair(*INTERNAL_SHIFTED)
+    ring = p.gear2
+    for g_y in FAMILY.path_points(p, "gear1").values():
+        rho2 = float(FAMILY.curvature_radii(p, g_y)["rho2_t_mm"])
+        L_y = FAMILY.gear_values_at(ring, 2.0 * math.hypot(rho2, ring.rb))["L_y"]
+        assert L_y < 0.0 and L_y == pytest.approx(rho2, rel=1e-9)
 
 
 # SDP-SI "Elements of Metric Gear Technology", section 5 (internal gears), Tables 5-1 and 5-4

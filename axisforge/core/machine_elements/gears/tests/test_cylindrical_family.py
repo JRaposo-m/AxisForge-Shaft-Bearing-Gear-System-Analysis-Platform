@@ -2,8 +2,8 @@
 
 Four groups: the contract (registry, immutable objects, one family for external and internal
 gears, bad inputs); closed-form identities of the involute geometry; the geometry rulings of
-2026-10-15 (closed forms, relations between stored quantities, SDP Table 4-4); and one test per entry of
-``cylindrical._LEGACY`` and per other unruled item, which pins TODAY's value on a baseline case. Where
+2026-10-15 (closed forms, relations between stored quantities, SDP Table 4-4); and one test per former
+``cylindrical._LEGACY`` entry (now one rule for both kinds) and per other unruled item, which pins TODAY's value on a baseline case. Where
 the review gives the alternative as a relation between quantities of the code, that relation is a
 second test marked ``xfail(strict=True)`` with its question id. The numbers are those of the
 baseline CSVs (``gears/tests/data/gears_baseline``) or of ``scripts/questions_values_step3.py``
@@ -56,6 +56,8 @@ PAIRS = {"case1": pair(*bc.pinion_wheel("C14")), "case2": pair(*bc.pinion_wheel(
          "case4n": pair(*bc.make_internal(0.0, z1=24)), "case5n": pair(*bc.make_internal(15.0, z1=24))}
 # internal pair z 20/-60, mn 2 mm, x 0.2/0.2 (x1 + x2 != 0; no baseline case)
 INTERNAL_SHIFTED = (bc.gear(2.0, 20, x=0.2, b=20.0), bc.gear(2.0, -60, x=0.2, b=20.0))
+# prefix of the explicit SDP-SI Eq. (5-2) message of ``_internal_interference`` (the equation label may change)
+INVOLUTE_INTERFERENCE = "involute interference of the internal pair (SDP-SI Eq. ("
 
 
 @pytest.fixture(scope="module")
@@ -184,11 +186,11 @@ def test_line_of_action_identities(beta, case4):
     assert ext.epslon_alpha == pytest.approx(ext.AE / ext.gear1.pbt, rel=1e-12)
 
 
-def test_values_at_the_reference_diameter(case5):
+def test_gear_values_at_the_reference_diameter(case5):
     """At dy = d the pressure angle, helix angle and pitch are the reference ones; the radius of
     curvature of a ring flank is negative (concave)."""
     for g in (case5.gear1, case5.gear2):
-        v = FAMILY.values_at(g, g.d)
+        v = FAMILY.gear_values_at(g, g.d)
         assert v["alpha_yt"] == pytest.approx(g.alphat, rel=1e-12)
         assert v["beta_y"] == pytest.approx(g.beta, rel=1e-12) and v["p_yt"] == pytest.approx(g.pt, rel=1e-12)
         assert math.copysign(1.0, v["L_y"]) == math.copysign(1.0, g.z)
@@ -356,8 +358,11 @@ def test_tip_alteration_gives_the_bottom_clearance_at_the_working_centre_distanc
         cP_mn = p.gear1.cP * p.gear1.mn
         assert p.k != 0.0
         assert _bottom_clearances(p) == (pytest.approx(cP_mn, abs=1e-9), pytest.approx(cP_mn, abs=1e-9))
-        assert p.da1_w == pytest.approx(p.gear1.da + 2.0 * p.gear1.mn * p.k, rel=REL)
-        assert p.da2_w == pytest.approx(p.gear2.da + 2.0 * math.copysign(1.0, p.gear2.z) * p.gear2.mn * p.k, rel=REL)
+        # the input gears have k = 0; the gears returned by the pair carry its k (04a7edc), so their da is da_w
+        g1, g2 = gears
+        assert p.da1_w == pytest.approx(g1.da + 2.0 * g1.mn * p.k, rel=REL)
+        assert p.da2_w == pytest.approx(g2.da + 2.0 * math.copysign(1.0, g2.z) * g2.mn * p.k, rel=REL)
+        assert (p.gear1.da, p.gear2.da) == (pytest.approx(p.da1_w, rel=REL), pytest.approx(p.da2_w, rel=REL))
         plain = pair(*gears)
         assert plain.k == 0.0
         assert _bottom_clearances(plain) == (pytest.approx(cP_mn + p.k * p.gear1.mn, abs=1e-9),) * 2
@@ -376,6 +381,116 @@ def test_tip_alteration_of_sdp_table_4_4():
     assert p.k == pytest.approx(-0.12671, abs=5e-6)
 
 
+# ----------------------------------------------------------------------------------------------
+# profile shift split x_split (04a7edc): ISO_21771_2007, 5.6.3, Eq. (114)-(117), p. 44 (PDF p. 48). The split
+# values are regression values computed by cowork on 2026-10-23: no published reference.
+# ----------------------------------------------------------------------------------------------
+def _g(z, x, **kw):
+    """Gear of mn 2 mm, alpha_n 20 deg, b 20 mm."""
+    return bc.gear(2.0, z, x=x, b=20.0, **kw)
+
+
+def _root_specific_sliding(p):
+    """zeta_f1 at A and zeta_f2 at E (gear 1 driving), recomputed from the path points and the signed radii of
+    curvature: Eq. (116) 1 - rho2 / (u rho1) and Eq. (117) 1 - u rho1 / rho2 (u = z2 / z1 signed)."""
+    g = FAMILY.path_points(p, "gear1")
+    r = FAMILY.curvature_radii(p, [g["A"], g["E"]])
+    rho1, rho2 = r["rho1_t_mm"], r["rho2_t_mm"]
+    return 1.0 - rho2[0] / (p.u * rho1[0]), 1.0 - p.u * rho1[1] / rho2[1]
+
+
+X_SPLIT_CASES = {
+    "external_spur": ((20, 0.0, {}), (40, 0.0, {}), 0.2456),
+    "external_helical": ((20, 0.3, dict(beta_n_deg=15.0, hand=1)), (40, 0.0, dict(beta_n_deg=15.0, hand=-1)), 0.3065),
+    "internal_spur": ((20, 0.2, {}), (-60, 0.2, {}), 0.4027),
+    "internal_helical": ((20, 0.2, dict(beta_n_deg=12.0, hand=1)), (-60, 0.2, dict(beta_n_deg=12.0, hand=1)), 0.3825),
+}
+
+
+@pytest.mark.parametrize("name", X_SPLIT_CASES)
+def test_x_split_equal_root_specific_sliding(name):
+    """ISO_21771_2007, 5.6.3, Eq. (116) = (117), p. 44 (PDF p. 48): with x_split="equal_specific_sliding" the
+    specific sliding at the root of gear 1 (at A) equals that at the root of gear 2 (at E), recomputed
+    independently (``_root_specific_sliding``); the sum x1 + x2 and so a_w are kept. x1: regression value
+    (cowork 2026-10-23), no published reference."""
+    (z1, x1, kw1), (z2, x2, kw2), x1_split = X_SPLIT_CASES[name]
+    g1, g2 = _g(z1, x1, **kw1), _g(z2, x2, **kw2)
+    p = pair(g1, g2, x_split="equal_specific_sliding")
+    zeta_f1, zeta_f2 = _root_specific_sliding(p)
+    assert zeta_f1 == pytest.approx(zeta_f2, abs=1e-9)
+    assert p.x1 + p.x2 == pytest.approx(x1 + x2, abs=1e-12)
+    assert p.al == pytest.approx(pair(g1, g2).al, abs=1e-9)
+    assert p.x1 == pytest.approx(x1_split, abs=1e-4)
+
+
+def test_x_split_symmetric_pair():
+    """Equal teeth z 20/20: equal root specific sliding (ISO_21771_2007, 5.6.3, Eq. (116) = (117)) by symmetry
+    needs equal shifts, x1 = x2 = (0 + 0.4) / 2 = 0.2. No library source for the value: symmetry."""
+    p = pair(_g(20, 0.0), _g(20, 0.4), x_split="equal_specific_sliding")
+    assert (p.x1, p.x2) == (pytest.approx(0.2, abs=1e-9), pytest.approx(0.2, abs=1e-9))
+
+
+def test_x_split_with_al():
+    """With al given the split uses the sum of ISO_21771_2007, 5.2.5, Eq. (62) (zero backlash at a_w), not the
+    shifts of the gears, with one warning; no warning when the gears' sum already equals it. z 20/40, x 0/0,
+    a_w 61.0 mm: x1 0.3884, x1 + x2 0.5298 (regression values, cowork 2026-10-23, no published reference)."""
+    p = pair(_g(20, 0.0), _g(40, 0.0), al=61.0, x_split="equal_specific_sliding")
+    assert p.x1 == pytest.approx(0.3884, abs=1e-4)
+    assert p.x1 + p.x2 == pytest.approx(p.profile_shift_check[0], abs=1e-12)
+    assert p.profile_shift_check[0] == pytest.approx(0.5298, abs=1e-4)
+    assert p.jbn == pytest.approx(0.0, abs=1e-12)
+    assert sum(w.startswith("x_split with al given") for w in p.warnings) == 1
+    s = p.profile_shift_check[0]
+    q = pair(_g(20, s / 2), _g(40, s / 2), al=61.0, x_split="equal_specific_sliding")
+    assert not any(w.startswith("x_split with al given") for w in q.warnings)
+
+
+def test_x_split_input_gears_unchanged():
+    """The split builds new gears for the pair; the input gears keep their x and ``x_given`` records them. The
+    default path (x_split None) returns the input gears. No library source: contract of ``assemble_pair``."""
+    g1, g2 = _g(20, 0.3), _g(40, 0.0)
+    p = pair(g1, g2, x_split="equal_specific_sliding")
+    assert (g1.x, g2.x) == (0.3, 0.0)
+    assert (p.gear1.x, p.gear2.x) == (p.x1, p.x2) and p.x1 != g1.x
+    assert p.x_given == (0.3, 0.0) and p.x_split == "equal_specific_sliding"
+    plain = pair(g1, g2)
+    assert plain.x_split is None and plain.gear1 is g1 and plain.gear2 is g2
+
+
+def test_x_split_unknown_criterion():
+    """An unknown split criterion is refused. No library source: contract of ``assemble_pair``."""
+    with pytest.raises(ValueError, match="x_split must be one of"):
+        pair(_g(20, 0.0), _g(40, 0.0), x_split="equal_sliding_speed")
+
+
+def test_x_split_with_addendum_reduction():
+    """Split and tip alteration together, z 20/40, x 0.3/0: x1 0.3176, k -0.0102246 (ISO_21771_2007, 4.5.2;
+    regression values, cowork 2026-10-23, no published reference), and the root specific sliding still equal
+    (5.6.3, Eq. (116) = (117)) on the working tips."""
+    p = pair(_g(20, 0.3), _g(40, 0.0), addendum_reduction=True, x_split="equal_specific_sliding")
+    assert p.x1 == pytest.approx(0.3176, abs=1e-4)
+    assert p.k == pytest.approx(-0.0102246, abs=1e-6)
+    zeta_f1, zeta_f2 = _root_specific_sliding(p)
+    assert zeta_f1 == pytest.approx(zeta_f2, abs=1e-9)
+
+
+def test_working_gears_carry_k():
+    """Tip alteration (04a7edc): with addendum_reduction the gears returned by the pair are new gears with the k of
+    the pair, so their da is the working tip diameter, d + 2 (z/abs(z)) mn (haP + x + k) (ISO_21771_2007, 4.5.3,
+    Eq. (33)); without it the pair returns the input gears and each keeps the k of its data (da1_w = da). Gear z 20,
+    x 0.3, mn 2, data k -0.05: da = 40 + 4 (1 + 0.3 - 0.05) = 45.0 mm."""
+    g1, g2 = _g(20, 0.3), _g(40, 0.0)
+    p = pair(g1, g2, addendum_reduction=True)
+    assert p.gear1.k == p.k and p.gear1 is not g1
+    assert (p.gear1.da, p.gear2.da) == (pytest.approx(p.da1_w, rel=1e-12), pytest.approx(p.da2_w, rel=1e-12))
+    plain = pair(g1, g2)
+    assert plain.gear1 is g1 and plain.da1_w == pytest.approx(g1.da, rel=1e-12)
+    gk = _g(20, 0.3, k=-0.05)
+    q = pair(gk, g2)
+    assert q.da1_w == pytest.approx(gk.da, rel=1e-12) and gk.da == pytest.approx(45.0, rel=1e-12)
+    assert q.k == 0.0
+
+
 # SDP-SI "Elements of Metric Gear Technology", section 5 (internal gears), Tables 5-1 and 5-4
 # (06_Library/_incoming/SDPSI2026_MetricGearTechnology_InternalHelical.pdf, intake pending; vault
 # ``80_Inbox/2026-10-15/internal_gears_validation_khk.md``). SDP writes z2 > 0 for the ring and the ring
@@ -390,7 +505,9 @@ def test_internal_pair_of_sdp_table_5_1():
     gives 31.093621 deg, which the code returns and the test asserts.
 
     Built with check=False because the code refuses the pair, rightly: the path starts 0.029 mm beyond T1
-    (T1A < 0), which is SDP's own involute-interference test, Eq. (5-2) (margin -0.0014). The pinion z 16, x 0
+    (T1A < 0), which is SDP's own involute-interference test, Eq. (5-2) (margin -0.0014); since 255e7e7 the
+    explicit Eq. (5-2) test of ``_internal_interference`` reports it a second time (two messages, José
+    2026-10-24). The pinion z 16, x 0
     is undercut (x < x_Emin = 0.0641, ISO_21771_2007 Eq. (135)): the ideal gear says nothing, the same gear as
     cut is refused (ruling B, José 2026-10-21). SDP prints the table as a geometry example, not as a pair free of interference."""
     p = pair(bc.gear(3.0, 16), bc.gear(3.0, -24, x=-0.5), check=False)
@@ -403,7 +520,8 @@ def test_internal_pair_of_sdp_table_5_1():
     assert (p.gear1.df, p.gear2.df) == (pytest.approx(40.500, abs=5e-4), pytest.approx(82.500, abs=5e-4))
     msgs = p.validate()
     assert_undercut_only_as_cut(p.gear1)
-    assert len(msgs) == 1 and msgs[0].startswith("Interference: the path of contact passes a base-tangent point")
+    assert len(msgs) == 2 and msgs[0].startswith("Interference: the path of contact passes a base-tangent point")
+    assert msgs[1].startswith(INVOLUTE_INTERFERENCE)
 
 
 # z1, x2 (KHK), alpha_wt [deg], a_w [mm], eps_alpha: m 1 mm, z2 = -50, x1 = 0
@@ -435,45 +553,52 @@ def test_small_tooth_difference_of_sdp_table_5_4(z1, x2_khk, alpha_wt_deg, a_w, 
 
 
 # ----------------------------------------------------------------------------------------------
-# _LEGACY: one test per entry (today's value), and the alternative where it is a relation
+# former _LEGACY entries (removed in 255e7e7, José 2026-10-24): one rule for both kinds of teeth
 # ----------------------------------------------------------------------------------------------
-def test_every_legacy_entry_has_both_kinds_and_a_test():
-    assert all(set(entry) == {"external", "internal"} for entry in cylindrical._LEGACY.values())
-    tested = {name[len("test_legacy_"):] for name in globals() if name.startswith("test_legacy_")}
-    assert set(cylindrical._LEGACY) <= tested
+def test_virtual_teeth_of_both_kinds(case5):
+    """Virtual number of teeth zn = z / cos(beta)**3, signed like z (negative for a ring), and
+    de = mn abs(zn) [mm], for both kinds (was external only, Q25). External gear: ISO_6336-1_2019, 9.3.1,
+    Formula (81) (unchecked); no library source for the sign convention of the ring."""
+    for g in (case5.gear1, case5.gear2):
+        assert g.zn == pytest.approx(g.z / math.cos(math.radians(15.0)) ** 3, rel=REL)
+        assert g.de == pytest.approx(g.mn * abs(g.zn), rel=REL)
+    assert case5.gear1.zn > 0.0 > case5.gear2.zn
 
 
-def test_legacy_virtual_teeth(case5):
-    """Q25 (deferred): a ring has no virtual number of teeth."""
-    assert case5.gear1.zn == pytest.approx(20 / math.cos(math.radians(15.0)) ** 3, rel=REL)
-    assert not hasattr(case5.gear2, "zn") and not hasattr(case5.gear2, "de")
+def test_beta_range_of_both_kinds():
+    """Q55 (José, 2026-10-15), extended to both kinds (José 2026-10-24): a negative helix angle is reported for an
+    external gear and for a ring (the hand carries the direction). No library source."""
+    for z in (60, -60):
+        assert bc.gear(2.0, z, beta_n_deg=-5.0, hand=1, label="g", check=False).validate() == [
+            "g: beta_n_deg out of range [0, 45), got -5.0"]
 
 
-def test_legacy_beta_range():
-    """Q55 (José, 2026-10-15): keep. A negative helix angle is reported for an external gear and accepted for a ring."""
-    assert bc.gear(2.0, 60, beta_n_deg=-5.0, hand=1, label="g", check=False).validate() == ["g: beta_n_deg out of range [0, 45), got -5.0"]
-    assert bc.gear(2.0, -60, beta_n_deg=-5.0, hand=1, label="g").validate() == []
-
-
-def test_legacy_gear_limits():
-    """Q55 (José, 2026-10-15): keep. No limit for an external gear: the ideal layer has no undercut check (ruling B,
-    José 2026-10-21), the manufactured gear refuses it; the tip of a ring must lie between its base and reference
-    circles."""
+def test_gear_limits_of_both_kinds():
+    """Q55 (José, 2026-10-15), one rule for both kinds (José 2026-10-24): the tip circle must lie on the tooth side
+    of the reference circle (positive addendum (haP + x) mn) and above the base circle. The ideal layer has no
+    undercut check (ruling B, José 2026-10-21), the manufactured gear refuses it. No library source."""
     g = bc.gear(2.0, 8, label="g")
     assert g.validate() == []
     assert_undercut_only_as_cut(g)
     assert bc.gear(2.0, -60, x=-2.0, label="g", check=False).validate() == [
-        "g: tip diameter da=124.0000 ≥ pitch diameter d=120.0000. Internal gear addendum must reduce da below d."]
+        "g: tip circle da=124.0000 on the wrong side of the reference circle d=120.0000 "
+        "(addendum (haP + x) mn = -2.0000 mm must be > 0)."]
+    assert bc.gear(2.0, 60, x=-2.0, label="g", check=False).validate() == [
+        "g: tip circle da=116.0000 on the wrong side of the reference circle d=120.0000 "
+        "(addendum (haP + x) mn = -2.0000 mm must be > 0)."]
 
 
 def test_contact_beyond_a_base_tangent_point_is_an_error(case4):
     """Q39: the path A..E must lie between the base-tangent points, T1A >= 0 and s2 T2E >= 0, for both kinds.
-    Old case 4 starts 0.075 mm beyond T1 (for an internal pair this is SDP-SI Eq. (5-2), one message); the
-    external pair z 7/60 (undercut pinion) 2.87 mm beyond T1; the external pair z 12/12, x 0.6/-0.6 ends beyond
-    T2 (T1A > 0, s2 T2E < 0). Every other pair of PAIRS validates to []."""
-    assert case4.validate() == ["Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, "
-                                "s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the "
-                                "involute interference of SDP-SI Eq. (5-2)."]
+    Old case 4 starts 0.075 mm beyond T1 (for an internal pair this is SDP-SI Eq. (5-2): two messages since
+    255e7e7, the T1A < 0 one of ``validate_pair`` and the explicit Eq. (5-2) test of ``_internal_interference``,
+    José 2026-10-24); the external pair z 7/60 (undercut pinion) 2.87 mm beyond T1; the external pair z 12/12,
+    x 0.6/-0.6 ends beyond T2 (T1A > 0, s2 T2E < 0). Every other pair of PAIRS validates to []."""
+    msgs = case4.validate()
+    assert msgs[0] == ("Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, "
+                       "s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the "
+                       "involute interference of SDP-SI Eq. (5-2).")
+    assert len(msgs) == 2 and msgs[1].startswith(INVOLUTE_INTERFERENCE)
     low = pair(bc.gear(2.0, 7, b=10.0, label="p", check=False), bc.gear(2.0, 60, b=10.0, label="w"), check=False)
     assert low.T1A < 0.0 and any(m.startswith("Interference: the path of contact passes") for m in low.validate())
     end = pair(bc.gear(2.0, 12, x=0.6, check=False), bc.gear(2.0, 12, x=-0.6, check=False), check=False)
@@ -554,8 +679,10 @@ def test_echoed_rows_are_counted():
     names, count = bc.ECHOED_ROWS
     echoed = sum(1 for c in cases for obj, name, _ in bc.baseline_rows(c) if name in names and obj != "link")
     total = sum(len(bc.baseline_rows(c)) for c in cases)
-    # 7212 rows: 7246 after block 4, less 18 deleted by Q13, 4 by Q46 and 12 undercutting() by ruling B (2026-10-21)
-    assert (total, total - echoed, echoed, count) == (7212, 7142, 70, 70)
+    # 7212 rows: 7246 after block 4, less 18 deleted by Q13, 4 by Q46 and 12 undercutting() by ruling B (2026-10-21);
+    # 7260: plus 48 values_at rows of the rings (s_yt, psi_y, eta_y, e_yt at 2 diameters, 6 cases; 6a61c79);
+    # 7269: plus 9 validate() rows of the second SDP Eq. (5-2) message (case4 5, case6 4; 255e7e7)
+    assert (total, total - echoed, echoed, count) == (7269, 7199, 70, 70)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -570,10 +697,11 @@ def test_ring_tip_diameter_without_the_clearance(case4):
 
 def test_assemble_raises_one_error_with_every_message(case4):
     """Q51 (José, answer 3): Gear.assemble and GearPair.assemble run validate() and raise ONE ValueError with every
-    message; check=False builds the object (equivalence records). Old case 4: the one Q39 / SDP Eq. (5-2) message."""
+    message; check=False builds the object (equivalence records). Old case 4: the Q39 / SDP Eq. (5-2) message and the
+    explicit Eq. (5-2) message (two since 255e7e7, José 2026-10-24)."""
     with pytest.raises(ValueError) as err:
         pair(*bc.make_internal(0.0))
-    assert str(err.value).splitlines() == case4.validate() and len(case4.validate()) == 1
+    assert str(err.value).splitlines() == case4.validate() and len(case4.validate()) == 2
     assert case4.T1A == pytest.approx(-0.07492456399709191, rel=1e-9)        # built with check=False
     with pytest.raises(ValueError, match="mn must be > 0"):
         bc.gear(-2.0, 8)

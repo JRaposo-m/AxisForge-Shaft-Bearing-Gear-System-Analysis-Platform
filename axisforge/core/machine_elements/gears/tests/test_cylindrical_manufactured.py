@@ -343,6 +343,22 @@ def test_zero_allowances_at_an_imposed_centre_distance_give_the_nominal_backlash
     assert pair.jbn_max == pytest.approx(pair.jbn, rel=1e-12) and pair.jbn_min == pytest.approx(pair.jbn, rel=1e-12)
 
 
+def test_x_split_manufactured():
+    """``ManufacturedCylindricalFamily.assemble_pair`` forwards x_split (ISO_21771_2007, 5.6.3, Eq. (116) = (117)):
+    z 20/40, mn 2, x 0.2/0, E_sns -0.05, E_sni -0.10 mm -> x1 0.2946 (regression value, cowork 2026-10-23, no
+    published reference). The split gear is a manufactured gear with the same allowances, and x_Es, x_Ei recomputed
+    from the split x (7.4, Eq. (123), (124), as cited in ``ManufacturedCylindricalFamily``: x_E - x depends on
+    the allowance only)."""
+    m1 = MADE.from_ideal(bc.gear(2.0, 20, x=0.2, b=20.0), E_sns=-0.05, E_sni=-0.10)
+    m2 = MADE.from_ideal(bc.gear(2.0, 40, x=0.0, b=20.0), E_sns=-0.05, E_sni=-0.10)
+    pair = _made_pair((m1, m2), x_split="equal_specific_sliding")
+    assert pair.x1 == pytest.approx(0.2946, abs=1e-4)
+    g = pair.gear1
+    assert isinstance(g.family, ManufacturedCylindricalFamily) and (g.E_sns, g.E_sni) == (m1.E_sns, m1.E_sni)
+    assert g.x_Es - pair.x1 == pytest.approx(m1.x_Es - m1.x, abs=1e-12)
+    assert g.x_Ei - pair.x1 == pytest.approx(m1.x_Ei - m1.x, abs=1e-12)
+
+
 def test_hand_check_of_the_h501_pair():
     """H501 (baseline case 2), E_sns = -0.05 mm, E_sni = -0.10 mm on both gears: illustrative, not from a drawing
     (José, 2026-10-21, MG-19). Reference values from ``_evidence/hand_check_output.txt`` (vault

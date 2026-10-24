@@ -258,7 +258,8 @@ class Recorded:
 def recorded_gear(g):
     """``Gear`` under the names of ``SpurHelicalGear`` (z > 0) or ``InternalGear`` (z < 0).
 
-    The checks that were methods of the old gear classes are now ``CylindricalFamily.values_at``.
+    The checks that were methods of the old gear classes are now ``CylindricalFamily.gear_values_at``
+    (recorded under the old name ``values_at``, a key of the golden data).
     The interference tests of a ring are tests of the PAIR since Q24 (``validate_pair``); their
     recorded rows on the ring are deleted. ``undercutting()`` is not recorded: the ideal gear has no
     undercut check (ruling B, José 2026-10-21); its rows, all False, are deleted.
@@ -268,7 +269,7 @@ def recorded_gear(g):
     calls = dict(validate=g.validate, validate_or_raise=g.validate_or_raise)
     if kind == "internal":
         calls.update(tip_below_base_circle=lambda: g.da <= g.db,     # inlined in the ring limits of validate()
-                     values_at=lambda dy: FAMILY.values_at(g, dy))
+                     values_at=lambda dy: FAMILY.gear_values_at(g, dy))
     return Recorded(rows, **calls)
 
 

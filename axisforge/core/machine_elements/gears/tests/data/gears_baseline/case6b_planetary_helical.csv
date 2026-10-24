@@ -130,6 +130,10 @@ case6b_planetary_helical,ring,values_at(124.23314164920995).L_y,-21.902780761658
 case6b_planetary_helical,ring,values_at(124.23314164920995).inv_alpha_yt,0.01645338989666545,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:256,Q21 (José 2026-10-15)
 case6b_planetary_helical,ring,values_at(124.23314164920995).p_yt,6.504832085625636,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:245,dy = d [mm]
 case6b_planetary_helical,ring,values_at(124.23314164920995).p_yn,6.283185307179586,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:258,dy = d [mm]
+case6b_planetary_helical,ring,values_at(124.23314164920995).s_yt,3.252416042812818,mm,axisforge/core/machine_elements/gears/cylindrical.py:561,dy = d [mm]
+case6b_planetary_helical,ring,values_at(124.23314164920995).psi_y,0.02617993877991494,rad,axisforge/core/machine_elements/gears/cylindrical.py:562,dy = d [mm]
+case6b_planetary_helical,ring,values_at(124.23314164920995).eta_y,0.02617993877991494,rad,axisforge/core/machine_elements/gears/cylindrical.py:563,dy = d [mm]
+case6b_planetary_helical,ring,values_at(124.23314164920995).e_yt,3.252416042812818,mm,axisforge/core/machine_elements/gears/cylindrical.py:564,dy = d [mm]
 case6b_planetary_helical,ring,values_at(120.24347136054332).beta_y,0.25375365768098285,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:241,Q21 (José 2026-10-15)
 case6b_planetary_helical,ring,values_at(120.24347136054332).alpha_yt,0.25832173101285605,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:242,Q21 (José 2026-10-15)
 case6b_planetary_helical,ring,values_at(120.24347136054332).alpha_yn,0.250396203955932,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:243,Q21 (José 2026-10-15)
@@ -137,6 +141,10 @@ case6b_planetary_helical,ring,values_at(120.24347136054332).L_y,-15.358598090111
 case6b_planetary_helical,ring,values_at(120.24347136054332).inv_alpha_yt,0.005903575144932782,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:256,Q21 (José 2026-10-15)
 case6b_planetary_helical,ring,values_at(120.24347136054332).p_yt,6.29593343780696,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:245,Q21 (José 2026-10-15)
 case6b_planetary_helical,ring,values_at(120.24347136054332).p_yn,6.094318309063914,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:258,Q21 (José 2026-10-15)
+case6b_planetary_helical,ring,values_at(120.24347136054332).s_yt,1.8794203709444754,mm,axisforge/core/machine_elements/gears/cylindrical.py:561,Q21 (José 2026-10-15)
+case6b_planetary_helical,ring,values_at(120.24347136054332).psi_y,0.015630124028182275,rad,axisforge/core/machine_elements/gears/cylindrical.py:562,Q21 (José 2026-10-15)
+case6b_planetary_helical,ring,values_at(120.24347136054332).eta_y,0.036729753531647605,rad,axisforge/core/machine_elements/gears/cylindrical.py:563,Q21 (José 2026-10-15)
+case6b_planetary_helical,ring,values_at(120.24347136054332).e_yt,4.416513066862484,mm,axisforge/core/machine_elements/gears/cylindrical.py:564,Q21 (José 2026-10-15)
 case6b_planetary_helical,planetary,label,'case6b_planetary_helical',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:352,
 case6b_planetary_helical,planetary,k,4,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:353,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
 case6b_planetary_helical,planetary,phi0_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:354,

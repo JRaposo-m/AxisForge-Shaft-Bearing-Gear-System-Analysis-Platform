@@ -971,47 +971,77 @@ class CylindricalFamily(GearFamily):
         """Mesh quantities at the point of the path where the flank of gear 1 has diameter dy1.
 
         The point is the same for both flanks: gear 2 is evaluated at the diameter dy2 that
-        the line of action gives for it (rho_y1 + rho_y2 = T1T2, ISO_21771_2007, Eq. (87)).
+        the line of action gives for it (rho_y1 + rho_y2 = T1T2, ISO_21771_2007, 5.4.5.3,
+        Eq. (87)). One call gathers the quantities of the point: the involute values of each
+        gear (``gear_values_at``), the radii of curvature (``curvature_radii``) and, with a
+        speed, the surface speeds (``surface_speeds``), all at the same signed position g_y.
 
         Parameters
         ----------
         pair : GearPair
             Pair of this family.
         dy1 : float or array_like
-            Diameter on gear 1 [mm], dy1 >= d_b1; on the path for d_Nf1 (= 2 rA1) <= dy1 <= d_a1.
+            Diameter on gear 1 [mm], dy1 > d_b1; on the path for d_Nf1 (= 2 rA1) <= dy1 <= d_a1.
+            The base-tangent points T1 and T2 are excluded (rho_y = 0 there, and zeta1 or
+            zeta2 is infinite).
         n1_rpm : float or None, optional
-            Speed of gear 1 [rpm], > 0. None: geometry only.
+            Speed of gear 1 [rpm], > 0 (a magnitude, whichever gear drives). None: geometry
+            only.
 
         Returns
         -------
         dict
-            gear1, gear2 : ``gear_values_at`` of each gear at its diameter (L_y = signed radius
-            of curvature rho_y, Eq. (17)).
-            dy2_mm : diameter of the same point on gear 2 [mm].
-            g_y_mm : rho_y1 - rho_C1 [mm], + toward the tip of gear 1 (|g_y| = g_alpha_y, Eq. (107)).
-            zeta1, zeta2 : specific sliding of flank 1 and flank 2 [-] (5.6.3, Eq. (114), (115)).
-            Kg : sliding factor [-] (5.6.2, Eq. (111)).
-            with n1_rpm: vg_m_per_s, sliding speed [m/s], signed as ``surface_speeds`` (Eq. (108)).
+            gear1, gear2 : ``gear_values_at`` of each gear at its diameter (L_y = transverse
+                radius of curvature rho_y, signed with z, Eq. (17)).
+            dy2_mm : diameter of the same point on gear 2 [mm], positive (diameters are never
+                signed; the sign of a ring is carried by its radii of curvature).
+            g_y_mm : position on the path, rho_y1 - rho_C1 [mm], SIGNED: + toward the tip of
+                gear 1, zero at C (as ``path_points``, ``curvature_radii``, ``surface_speeds``).
+            g_alphay_mm : |g_y|, the distance from C (5.6.1, Eq. (107)) [mm].
+            rho1_t_mm, rho2_t_mm, rho_red_t_mm, rho1_n_mm, rho2_n_mm, rho_red_n_mm :
+            ``curvature_radii`` at g_y: radii of the two flanks and reduced radius in the
+            transverse plane and in the plane normal to the contact line [mm]; signed,
+            negative for the concave flank of a ring (D-0010 item 8). rho2_t_mm comes from
+            the line of action (Eq. (87)), so it changes sign beyond T2.
+            zeta1, zeta2 : specific sliding of flank 1 and flank 2 [-], from rho1_t_mm and
+            rho2_t_mm (5.6.3, Eq. (114), (115)).
+            Kg : sliding factor [-], with the working pitch diameter d_w1 (``dl1``)
+            (5.6.2, Eq. (111)).
+            n1_rpm: u1_m_per_s, u2_m_per_s, vg_m_per_s, ue_m_per_s from
+            ``surface_speeds`` at g_y: tangential speeds of the flanks, sliding speed
+            u1 - u2 (SIGNED, + where flank 1 is the faster) and entrainment speed
+            (u1 + u2) / 2 [m/s] (5.6.1, Eq. (106)-(108); 5.6.3).
+
+        Notes
+        -----
+        g_y is found from the radius of curvature of gear 1 at dy1, g_y = rho_y1 - T1C; the
+        rest is evaluated at that g_y, so all the values belong to the same point.
+        u = z2 / z1 is signed (negative for an internal pair), which gives Eq. (111),
+        (114), (115) for both kinds of pair.
+
+        References
+        ----------
+        .. [1] ISO_21771_2007, 4.3.8 Eq. (17); 5.4.5.3 Eq. (87); 5.6.1-5.6.3, Eq. (106)-(115).
         """
         g1, g2, u = pair.gear1, pair.gear2, pair.u
         dy1 = np.asarray(dy1, dtype=float)
         v1 = CylindricalFamily.gear_values_at(g1, dy1)
-        rho1 = v1["L_y"]
-        rho2 = pair.T1T2 - rho1                                   # ISO_21771_2007, 5.4.5.3, Eq. (87)
-        dy2 = 2 * np.sqrt(rho2**2 + g2.rb**2)
+        g_y = v1["L_y"] - pair.T1C                          # ISO_21771_2007, 5.6.1, Eq. (107), signed
+        r = CylindricalFamily.curvature_radii(pair, g_y)     # rho_y2 = T1T2 - rho_y1, Eq. (87); normal plane / cos(beta_b)
+        rho1, rho2 = r["rho1_t_mm"], r["rho2_t_mm"]
+        dy2 = 2 * np.hypot(rho2, g2.rb)                      # ISO_21771_2007, 4.3.8, Eq. (17) inverted
         v2 = CylindricalFamily.gear_values_at(g2, dy2)
 
-        g_alphay = abs(pair.T1C - rho1)                           # ISO_21771_2007, 5.6.1, Eq. (107)
-
         out = {
-            "gear1": v1, "gear2": v2, "dy2_mm": dy2, "g_alphay_mm": g_alphay,
-            "zeta1": 1 - v2["L_y"] / (u * rho1),                        # ISO_21771_2007, 5.6.3, Eq. (114)
-            "zeta2": 1 - u * rho1 / v2["L_y"],                          # ISO_21771_2007, 5.6.3, Eq. (115)
-            "Kg": 2 * np.abs(g_alphay) / pair.dl1 * (1 + 1 / u),        # ISO_21771_2007, 5.6.2, Eq. (111)
+            "gear1": v1, "gear2": v2, "dy2_mm": dy2,
+            "g_y_mm": g_y, "g_alphay_mm": np.abs(g_y),
+            **r,
+            "zeta1": 1 - rho2 / (u * rho1),                  # ISO_21771_2007, 5.6.3, Eq. (114)
+            "zeta2": 1 - u * rho1 / rho2,                    # ISO_21771_2007, 5.6.3, Eq. (115)
+            "Kg": 2 * np.abs(g_y) / pair.dl1 * (1 + 1 / u),  # ISO_21771_2007, 5.6.2, Eq. (111), dl1 = d_w1
         }
         if n1_rpm is not None:
-            omega1 = n1_rpm * 2 * np.pi / 60
-            out["vg_mm_per_s"] = abs(omega1 * g_alphay * (1 + 1/u))      # ISO_21771_2007, 5.6.1, Eq. (106) 
+            out.update(CylindricalFamily.surface_speeds(pair, g_y, n1_rpm))
         return out
     
     # ----------------------------------------------------------------------------------------------

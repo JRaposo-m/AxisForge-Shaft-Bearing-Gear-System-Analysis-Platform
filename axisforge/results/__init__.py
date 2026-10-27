@@ -1,4 +1,5 @@
-"""Result containers of AxisForge: shaft FEM, sub-model, mesh convergence and bearing analysis.
+"""Result containers of AxisForge: shaft FEM, sub-model, mesh convergence, bearing analysis and
+Newton-Raphson solves.
 
 Data shapes only: no module here imports from ``solvers`` at runtime (the ``solvers`` imports that
 exist are ``TYPE_CHECKING``-only, for annotations), so the dependency is always solvers -> results.
@@ -30,6 +31,9 @@ from .bearings.life.basic_life_results import BasicReferenceRatingLifeResult
 # ---- Bearings: aggregate per bearing -----------------------------------
 from .bearings.bearing_analysis_result import BearingAnalysisResult
 
+# ---- Numerics: Newton-Raphson ------------------------------------------
+from .numerics.newton_raphson.newton_results import IterationRecord, NewtonResult
+
 __all__ = [
     # fem_results/
     "BearingNodeData", "ShaftResults", "SubmodelResult",
@@ -43,4 +47,6 @@ __all__ = [
     "BasicReferenceRatingLifeResult",
     # bearings/
     "BearingAnalysisResult",
+    # numerics/newton_raphson/
+    "IterationRecord", "NewtonResult",
 ]

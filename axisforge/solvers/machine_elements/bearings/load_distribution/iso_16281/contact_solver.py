@@ -20,7 +20,7 @@ from scipy.optimize import brentq
 
 from axisforge.core.machine_elements.bearings.bearing import Bearing
 from axisforge.core.machine_elements.bearings.families.family import is_thrust_family
-from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
+from axisforge.core.mechanical_system.shaft_system import ShaftSystem
 from axisforge.results.fem_results.shaft_results import ShaftResults
 from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281.numerics import run_root
 from axisforge.solvers.machine_elements.bearings.load_distribution.iso_16281.validation import (

@@ -18,7 +18,7 @@ from axisforge.mesh.shaft.beam_model_settings import (
 import axisforge.mesh.shaft.element_type.shear_factor as sf
 
 if TYPE_CHECKING:  # pragma: no cover
-    from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import (
+    from axisforge.core.mechanical_system.shaft_system import (
         ShaftSystem,
     )
     from mesh.shaft.mesh_generation.mesh_1D import Mesh1D

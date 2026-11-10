@@ -1,5 +1,5 @@
-"""Records and text of a ``ShaftSystem`` (``axisforge.core.mechanical_system.parallel_axis.
-spur_helical.shaft_system``): the shaft, its gears, its bearings and its loads.
+"""Records and text of a ``ShaftSystem`` (``axisforge.core.mechanical_system.
+shaft_system``): the shaft, its gears, its bearings and its loads.
 
 A ``ShaftSystem`` already reaches everything that is built on one shaft (``.shaft``, ``.gears``,
 ``.bearings``, ``.loads``), so this module only needs the ``ShaftSystem``. The text is made of
@@ -13,7 +13,7 @@ from axisforge.outputs._format import (
 from axisforge.outputs.construction.bearings import bearing_records, bearing_text
 from axisforge.outputs.construction.loads import load_records, loads_text
 
-# SpurHelicalGear attributes. The gear stores its pressure and helix angles as inputs in degrees
+# Attributes of a cylindrical ``Gear``. The gear stores its pressure and helix angles as inputs in degrees
 # (alpha_n_deg, beta_n_deg).
 GEAR_ATTRIBUTES = [
     ("mn", "mm", "normal module mn"),
@@ -156,17 +156,13 @@ def gear_element_records(shaft_system) -> list[dict]:
     -------
     records : list of dict
         Rows ``{section, parameter, value, unit}``, section ``gear <label or i> (<shaft>)``.
-        Per ``GearElement``: role, rotation direction (``propagated`` when it is None),
-        axial position [mm] and every attribute of ``GEAR_ATTRIBUTES`` that the gear has
+        Per ``GearElement``: axial position [mm] and every attribute of ``GEAR_ATTRIBUTES`` that the gear has
         (lengths and diameters [mm], pressure and helix angle [deg] as the gear stores them).
         Empty if the shaft has no gear.
     """
     rows: list[dict] = []
     for i, ge in enumerate(shaft_system.gears, start=1):
         section = f"gear {ge.label or i} ({shaft_system.name})"
-        rows.append(kv_record(section, "role", ge.role))
-        rows.append(kv_record(section, "rotation direction",
-                              "propagated" if ge.rotation_dir is None else ge.rotation_dir))
         rows.append(kv_record(section, "axial position", ge.position, "mm"))
         rows += attribute_rows(ge.gear, section, GEAR_ATTRIBUTES)
     return rows

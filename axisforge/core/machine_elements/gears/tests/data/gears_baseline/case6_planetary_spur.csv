@@ -1,0 +1,686 @@
+case,object,name,value,unit,source_file_line,note
+case6_planetary_spur,inputs,chosen values,"'mn=2, sun z=20, planet z=20, ring z=-60, k=4 (k=3 violates the assembly condition, see variant k3), x=0, b=20, alpha_n=20 deg, beta=0.0 deg, default rack, phi0=0'",-,chosen (no AxisForge test or study builds a planetary train),"T_in=60.75 N m at the SUN, speeds in rpm"
+case6_planetary_spur,sun,label,'sun',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:166,
+case6_planetary_spur,sun,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,
+case6_planetary_spur,sun,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement
+case6_planetary_spur,sun,mn,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,
+case6_planetary_spur,sun,z,20,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,
+case6_planetary_spur,sun,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only)
+case6_planetary_spur,sun,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only)
+case6_planetary_spur,sun,x,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,
+case6_planetary_spur,sun,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:176,
+case6_planetary_spur,sun,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,
+case6_planetary_spur,sun,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,
+case6_planetary_spur,sun,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,
+case6_planetary_spur,sun,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,
+case6_planetary_spur,sun,hand,0,,,new input row (Q08) (José 2026-10-15)
+case6_planetary_spur,sun,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,
+case6_planetary_spur,sun,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,
+case6_planetary_spur,sun,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,
+case6_planetary_spur,sun,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,
+case6_planetary_spur,sun,Ra,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,
+case6_planetary_spur,sun,Rq,1.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,
+case6_planetary_spur,sun,Rz,4.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,
+case6_planetary_spur,sun,mt,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,
+case6_planetary_spur,sun,alphat,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,
+case6_planetary_spur,sun,betab,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,
+case6_planetary_spur,sun,rhoF,0.76,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,
+case6_planetary_spur,sun,pb,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,
+case6_planetary_spur,sun,pt,6.283185307179586,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,
+case6_planetary_spur,sun,pbt,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,
+case6_planetary_spur,sun,d,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,
+case6_planetary_spur,sun,r,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,
+case6_planetary_spur,sun,db,37.58770483143634,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,
+case6_planetary_spur,sun,rb,18.79385241571817,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,
+case6_planetary_spur,sun,da,44.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,Q04 (José 2026-10-15)
+case6_planetary_spur,sun,ra,22.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,Q04 (José 2026-10-15)
+case6_planetary_spur,sun,df,35.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,
+case6_planetary_spur,sun,rf,17.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,
+case6_planetary_spur,sun,zn,20.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,
+case6_planetary_spur,sun,de,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,
+case6_planetary_spur,sun,validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:284,; empty list = no message
+case6_planetary_spur,sun,validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:286,
+case6_planetary_spur,planet,label,'planet',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:166,
+case6_planetary_spur,planet,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,
+case6_planetary_spur,planet,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement
+case6_planetary_spur,planet,mn,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,
+case6_planetary_spur,planet,z,20,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,
+case6_planetary_spur,planet,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only)
+case6_planetary_spur,planet,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only)
+case6_planetary_spur,planet,x,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,
+case6_planetary_spur,planet,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:176,
+case6_planetary_spur,planet,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,
+case6_planetary_spur,planet,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,
+case6_planetary_spur,planet,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,
+case6_planetary_spur,planet,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,
+case6_planetary_spur,planet,hand,0,,,new input row (Q08) (José 2026-10-15)
+case6_planetary_spur,planet,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,
+case6_planetary_spur,planet,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,
+case6_planetary_spur,planet,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,
+case6_planetary_spur,planet,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,
+case6_planetary_spur,planet,Ra,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,
+case6_planetary_spur,planet,Rq,1.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,
+case6_planetary_spur,planet,Rz,4.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,
+case6_planetary_spur,planet,mt,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,
+case6_planetary_spur,planet,alphat,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,
+case6_planetary_spur,planet,betab,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,
+case6_planetary_spur,planet,rhoF,0.76,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,
+case6_planetary_spur,planet,pb,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,
+case6_planetary_spur,planet,pt,6.283185307179586,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,
+case6_planetary_spur,planet,pbt,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,
+case6_planetary_spur,planet,d,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,
+case6_planetary_spur,planet,r,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,
+case6_planetary_spur,planet,db,37.58770483143634,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,
+case6_planetary_spur,planet,rb,18.79385241571817,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,
+case6_planetary_spur,planet,da,44.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,Q04 (José 2026-10-15)
+case6_planetary_spur,planet,ra,22.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,Q04 (José 2026-10-15)
+case6_planetary_spur,planet,df,35.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,
+case6_planetary_spur,planet,rf,17.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,
+case6_planetary_spur,planet,zn,20.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,
+case6_planetary_spur,planet,de,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,
+case6_planetary_spur,planet,validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:284,; empty list = no message
+case6_planetary_spur,planet,validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:286,
+case6_planetary_spur,ring,label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:169,
+case6_planetary_spur,ring,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:170,
+case6_planetary_spur,ring,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:171,stored only; axial centre of face width when used by GearElement
+case6_planetary_spur,ring,mn,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:174,
+case6_planetary_spur,ring,z,-60,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:175,
+case6_planetary_spur,ring,x,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:176,
+case6_planetary_spur,ring,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:177,
+case6_planetary_spur,ring,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:178,
+case6_planetary_spur,ring,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:179,
+case6_planetary_spur,ring,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:180,
+case6_planetary_spur,ring,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:181,
+case6_planetary_spur,ring,hand,0,,,new input row (Q08) (José 2026-10-15)
+case6_planetary_spur,ring,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:182,
+case6_planetary_spur,ring,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:183,
+case6_planetary_spur,ring,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:184,
+case6_planetary_spur,ring,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:185,
+case6_planetary_spur,ring,Ra,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:186,
+case6_planetary_spur,ring,Rq,1.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:187,
+case6_planetary_spur,ring,Rz,4.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:188,
+case6_planetary_spur,ring,mt,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:191,
+case6_planetary_spur,ring,mx,inf,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:192,
+case6_planetary_spur,ring,pn,6.283185307179586,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:193,
+case6_planetary_spur,ring,pt,6.283185307179586,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:194,
+case6_planetary_spur,ring,pz,inf,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:195,
+case6_planetary_spur,ring,px,inf,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:196,
+case6_planetary_spur,ring,d,120.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:198,
+case6_planetary_spur,ring,r,60.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:199,
+case6_planetary_spur,ring,beta_b,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:201,
+case6_planetary_spur,ring,db,112.76311449430901,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:203,
+case6_planetary_spur,ring,rb,56.381557247154504,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:204,
+case6_planetary_spur,ring,alphat,0.3490658503988658,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:205,
+case6_planetary_spur,ring,tau,0.10471975511965977,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:206,
+case6_planetary_spur,ring,pbt,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:208,
+case6_planetary_spur,ring,pbn,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:209,
+case6_planetary_spur,ring,dv,120.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:211,
+case6_planetary_spur,ring,rv,60.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:212,
+case6_planetary_spur,ring,da,116.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:213,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,ring,ra,58.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:214,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,ring,df,125.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:215,
+case6_planetary_spur,ring,rf,62.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:216,
+case6_planetary_spur,ring,tip_below_base_circle(),False,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:284,
+case6_planetary_spur,ring,validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:481,; empty list = no message
+case6_planetary_spur,ring,validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:483,
+case6_planetary_spur,ring,values_at(120.0).beta_y,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:241,dy = d [mm]
+case6_planetary_spur,ring,values_at(120.0).alpha_yt,0.3490658503988658,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:242,dy = d [mm]
+case6_planetary_spur,ring,values_at(120.0).alpha_yn,0.3490658503988658,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:243,dy = d [mm]
+case6_planetary_spur,ring,values_at(120.0).L_y,-20.521208599540117,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:244,dy = d [mm]
+case6_planetary_spur,ring,values_at(120.0).inv_alpha_yt,0.014904383867336446,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:256,dy = d [mm]
+case6_planetary_spur,ring,values_at(120.0).p_yt,6.283185307179585,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:245,dy = d [mm]
+case6_planetary_spur,ring,values_at(120.0).p_yn,6.283185307179585,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:258,dy = d [mm]
+case6_planetary_spur,ring,values_at(120.0).s_yt,3.141592653589793,mm,axisforge/core/machine_elements/gears/cylindrical.py:561,dy = d [mm]
+case6_planetary_spur,ring,values_at(120.0).psi_y,0.02617993877991494,rad,axisforge/core/machine_elements/gears/cylindrical.py:562,dy = d [mm]
+case6_planetary_spur,ring,values_at(120.0).eta_y,0.02617993877991494,rad,axisforge/core/machine_elements/gears/cylindrical.py:563,dy = d [mm]
+case6_planetary_spur,ring,values_at(120.0).e_yt,3.141592653589793,mm,axisforge/core/machine_elements/gears/cylindrical.py:564,dy = d [mm]
+case6_planetary_spur,ring,values_at(116.3815572471545).beta_y,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:241,dy = (db+d)/2 [mm]
+case6_planetary_spur,ring,values_at(116.3815572471545).alpha_yt,0.2500146551104981,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:242,dy = (db+d)/2 [mm]
+case6_planetary_spur,ring,values_at(116.3815572471545).alpha_yn,0.2500146551104981,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:243,dy = (db+d)/2 [mm]
+case6_planetary_spur,ring,values_at(116.3815572471545).L_y,-14.397455303074038,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:244,dy = (db+d)/2 [mm]
+case6_planetary_spur,ring,values_at(116.3815572471545).inv_alpha_yt,0.005342876785282558,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:256,dy = (db+d)/2 [mm]
+case6_planetary_spur,ring,values_at(116.3815572471545).p_yt,6.093724087683342,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:245,dy = (db+d)/2 [mm]
+case6_planetary_spur,ring,values_at(116.3815572471545).p_yn,6.093724087683342,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:258,dy = (db+d)/2 [mm]
+case6_planetary_spur,ring,values_at(116.3815572471545).s_yt,1.9340789600025432,mm,axisforge/core/machine_elements/gears/cylindrical.py:561,dy = (db+d)/2 [mm]
+case6_planetary_spur,ring,values_at(116.3815572471545).psi_y,0.016618431697861053,rad,axisforge/core/machine_elements/gears/cylindrical.py:562,dy = (db+d)/2 [mm]
+case6_planetary_spur,ring,values_at(116.3815572471545).eta_y,0.035741445861968826,rad,axisforge/core/machine_elements/gears/cylindrical.py:563,dy = (db+d)/2 [mm]
+case6_planetary_spur,ring,values_at(116.3815572471545).e_yt,4.159645127680799,mm,axisforge/core/machine_elements/gears/cylindrical.py:564,dy = (db+d)/2 [mm]
+case6_planetary_spur,planetary,label,'case6_planetary_spur',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:352,
+case6_planetary_spur,planetary,k,4,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:353,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
+case6_planetary_spur,planetary,phi0_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:354,
+case6_planetary_spur,planetary,load_sharing_factor,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:355,
+case6_planetary_spur,planetary,al_12,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:381,
+case6_planetary_spur,planetary,al_23,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:382,
+case6_planetary_spur,planetary,r_carrier,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:385,
+case6_planetary_spur,planetary,i_0,-3.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:390,
+case6_planetary_spur,planetary,t,3.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:173,
+case6_planetary_spur,planetary.meshing_12,driver,'gear1',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:122,
+case6_planetary_spur,planetary.meshing_12,driven,'gear2',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:123,
+case6_planetary_spur,planetary.meshing_12,label,'case6_planetary_spur:sun-planet',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,
+case6_planetary_spur,planetary.meshing_12,a,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:133,
+case6_planetary_spur,planetary.meshing_12,inv_alphatw,0.014904383867336446,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:159,
+case6_planetary_spur,planetary.meshing_12,alphatw,0.34906585039886606,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,
+case6_planetary_spur,planetary.meshing_12,al,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,
+case6_planetary_spur,planetary.meshing_12,x1,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:286,
+case6_planetary_spur,planetary.meshing_12,x2,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:147,
+case6_planetary_spur,planetary.meshing_12,u,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:162,
+case6_planetary_spur,planetary.meshing_12,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
+case6_planetary_spur,planetary.meshing_12,epslon_alpha,1.556838303374634,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:557,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,
+case6_planetary_spur,planetary.meshing_12,epslon_beta,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:561,
+case6_planetary_spur,planetary.meshing_12,epslon_gamma,1.556838303374634,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:564,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,galpha,9.191982586386262,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,ReqI,3.420201433256689,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:572,
+case6_planetary_spur,planetary.meshing_12,T1T2,13.680805733026757,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:575,
+case6_planetary_spur,planetary.meshing_12,T1E,11.436394159708046,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:577,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,T2A,11.436394159708046,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:579,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,T1A,2.244411573321784,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:581,"Q04, answer 10 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_12,T1B,5.5321312915209475,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:582,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,T1C,6.8404028665133785,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:583,
+case6_planetary_spur,planetary.meshing_12,T1D,8.148674441508883,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:584,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,T2E,2.244411573321784,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:585,"Q04, answer 10 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_12,T2B,8.148674441508883,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:586,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,T2C,6.8404028665133785,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:587,
+case6_planetary_spur,planetary.meshing_12,T2D,5.5321312915209475,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:588,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,AE,9.191982586386262,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:590,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,AB,3.2877197181991633,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:591,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,AC,4.595991293193132,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:592,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,AD,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:593,
+case6_planetary_spur,planetary.meshing_12,rA1,18.92739474767345,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:595,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,rB1,19.591155281157384,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:596,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,rD1,20.484379018595995,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:597,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,rA2,18.92739474767345,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:598,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,rB2,19.591155281157384,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:599,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,rD2,20.484379018595995,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:600,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,HV,0.20578514098502004,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:603,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,Ram,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:608,
+case6_planetary_spur,planetary.meshing_12,Rrms,1.4142135623730951,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:609,
+case6_planetary_spur,planetary.meshing_12,RzS,8.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:610,
+case6_planetary_spur,planetary.meshing_12,x_sum_from_al,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:171,
+case6_planetary_spur,planetary.meshing_12,x_sum_declared,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:174,
+case6_planetary_spur,planetary.meshing_12.gear1_w,label,'sun',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,mn,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,z,20,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,x,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,hand,0,,,new input row (Q08) (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,Ra,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,Rq,1.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,Rz,4.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,mt,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,alphat,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,betab,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,rhoF,0.76,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,pb,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,pt,6.283185307179586,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,pbt,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,d,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,r,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,db,37.58770483143634,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,rb,18.79385241571817,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,da,44.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12.gear1_w,ra,22.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12.gear1_w,df,35.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,rf,17.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,zn,20.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,de,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,al,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,alphatw,0.34906585039886606,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,dl,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:523,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,rl,20.000000000000004,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:525,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear1_w,alpha_a,0.5466590767387979,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:547,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12.gear1_w,epslon_a1,0.778419151687317,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:554,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12.gear1_w,galpha,4.595991293193127,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12.gear2_w,label,'planet',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:125,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,mn,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,z,20,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,x,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:560,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,hand,0,,,new input row (Q08) (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,Ra,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,Rq,1.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,Rz,4.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,mt,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,alphat,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,betab,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,rhoF,0.76,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,pb,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,pt,6.283185307179586,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,pbt,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,d,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,r,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,db,37.58770483143634,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,rb,18.79385241571817,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,da,44.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12.gear2_w,ra,22.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12.gear2_w,df,35.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,rf,17.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,zn,20.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,de,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:508,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,al,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:145,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,alphatw,0.34906585039886606,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:218,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,dl,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:523,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,rl,20.000000000000004,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:525,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_12.gear2_w,alpha_a,0.5466590767387979,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:547,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12.gear2_w,epslon_a2,0.778419151687317,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:555,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12.gear2_w,galpha,4.595991293193127,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:569,Q04 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,gear1.label,'sun',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py,reference gear 1
+case6_planetary_spur,planetary.meshing_12,gear2.label,'planet',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py,reference gear 2
+case6_planetary_spur,planetary.meshing_12,validate().len,0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:802,; empty list = no message
+case6_planetary_spur,planetary.meshing_12,validate_or_raise(),None,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:804,
+case6_planetary_spur,planetary.meshing_12,summary(),"'-- case6_planetary_spur:sun-planet -----------------\n  gear1     : z=20, mn=2.0, x=0.0, beta=0.0 deg\n  gear2     : z=20, mn=2.0, x=0.0, beta=0.0 deg\n  u         : 1.0000\n  a         : 40.0000 mm   (reference centre distance)\n  al        : 40.0000 mm   (working centre distance)\n  alpha_tw  : 20.0000 deg\n  dl1       : 40.0000 mm\n  dl2       : 40.0000 mm\n  eps_alpha : 1.5568\n  eps_beta  : 0.0000\n  eps_gamma : 1.5568\n----------------------------------------------------'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py:832,Q50 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_12,__repr__(),"'GearPair(z1=20, z2=20, mn=2.0, beta=0.0 deg, al=40.0000 mm, alpha_tw=20.0000 deg, eps_gamma=1.5568)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/spurhelical_meshing.py,Q50 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_23,driver,'gear1',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:144,
+case6_planetary_spur,planetary.meshing_23,driven,'gear2',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:145,
+case6_planetary_spur,planetary.meshing_23,label,'case6_planetary_spur:planet-ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,
+case6_planetary_spur,planetary.meshing_23,a,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:159,
+case6_planetary_spur,planetary.meshing_23,inv_alphatw,0.014904383867336446,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:178,
+case6_planetary_spur,planetary.meshing_23,alphatw,0.34906585039886606,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,
+case6_planetary_spur,planetary.meshing_23,al,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:164,
+case6_planetary_spur,planetary.meshing_23,x1,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:369,
+case6_planetary_spur,planetary.meshing_23,x2,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:166,
+case6_planetary_spur,planetary.meshing_23,u,-3.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:181,
+case6_planetary_spur,planetary.meshing_23,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects
+case6_planetary_spur,planetary.meshing_23,epslon_alpha,1.949662300052656,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:565,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:569,
+case6_planetary_spur,planetary.meshing_23,epslon_beta,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:570,
+case6_planetary_spur,planetary.meshing_23,epslon_gamma,1.949662300052656,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:572,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,galpha,11.511318723705138,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q22, Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,ReqI,10.260604299772375,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:583,Q22 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_23,T1T2,-13.680805733026757,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:586,
+case6_planetary_spur,planetary.meshing_23,T1E,11.436394159708046,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:588,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,T2A,-13.605881169032736,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:590,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,T1A,-0.07492456399709191,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:592,"Q04, Q27, Q21, answer 10 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,T1B,5.5321312915209475,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:593,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,T1C,6.8404028665133785,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:594,
+case6_planetary_spur,planetary.meshing_23,T1D,5.829338304190006,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:595,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,T2E,-25.117199892737872,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:596,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,T2B,-19.212937024550776,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:597,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,T2C,-20.52120859954013,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:598,
+case6_planetary_spur,planetary.meshing_23,T2D,-19.510144037219835,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:599,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,AE,11.511318723705138,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:601,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,AB,5.607055855518039,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:602,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,AC,6.915327430512008,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:603,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,AD,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:604,
+case6_planetary_spur,planetary.meshing_23,rA1,18.794001764235468,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:606,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,rB1,19.591155281157384,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:607,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,rD1,19.677145974162322,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:608,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,rA2,61.723202509801055,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:609,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,rB2,59.66176093585594,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:610,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,rD2,59.565232700993576,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:611,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,HV,0.10766076632422344,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:614,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,Ram,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:619,
+case6_planetary_spur,planetary.meshing_23,Rrms,1.4142135623730951,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:620,
+case6_planetary_spur,planetary.meshing_23,RzS,8.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:621,
+case6_planetary_spur,planetary.meshing_23,x_sum_from_al,-0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:189,"renamed, Q26 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,x_sum_declared,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:192,"renamed, Q26 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23.gear1_w,label,'planet',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,mn,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,z,20,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,Ca,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:173,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,Cf,0.0,?,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:174,unit not stated in the code (stored only); working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,x,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:569,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,hand,0,,,new input row (Q08) (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_23.gear1_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,Ra,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,Rq,1.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,Rz,4.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,mt,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,alphat,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,betab,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:192,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,rhoF,0.76,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:193,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,pb,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:194,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,pt,6.283185307179586,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,pbt,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,d,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,r,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,db,37.58770483143634,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,rb,18.79385241571817,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,da,44.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23.gear1_w,ra,22.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23.gear1_w,df,35.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,rf,17.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,zn,20.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:205,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,de,40.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:206,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,al,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:164,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,alphatw,0.34906585039886606,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,dl,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:532,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,rl,20.000000000000004,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:534,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear1_w,alpha_a,0.5466590767387979,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23.gear1_w,epslon_a1,0.778419151687317,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:562,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23.gear1_w,galpha,4.595991293193127,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23.gear2_w,label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:147,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,material_id,'',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:167,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,position,0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:168,stored only; axial centre of face width when used by GearElement; working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,mn,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:171,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,z,-60,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:172,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,x,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:175,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,b,20.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:569,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,alpha_n_deg,20.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:177,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,alpha,0.3490658503988659,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:178,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,beta_n_deg,0.0,deg,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:179,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,beta,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:180,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,hand,0,,,new input row (Q08) (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_23.gear2_w,haP,1.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:181,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,cP,0.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:182,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,hfP,1.25,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:183,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,rfP,0.38,-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:184,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,Ra,0.8,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:185,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,Rq,1.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:186,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,Rz,4.0,um,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:187,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,mt,2.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:190,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,mx,inf,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:192,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,pn,6.283185307179586,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:193,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,pt,6.283185307179586,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:195,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,pz,inf,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:195,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,px,inf,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:196,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,d,120.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:197,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,r,60.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:198,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,beta_b,0.0,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:201,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,db,112.76311449430901,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:199,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,rb,56.381557247154504,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:200,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,alphat,0.3490658503988658,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:191,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,tau,0.10471975511965977,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:206,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,pbt,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:196,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,pbn,5.904262868187098,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:209,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,dv,120.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:211,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,rv,60.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py:212,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,da,116.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:201,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23.gear2_w,ra,58.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:202,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23.gear2_w,df,125.0,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:203,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,rf,62.5,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/spur_helical_gear.py:204,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,k,0.0,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:517,dimensionless addendum-reduction coefficient on pair/working gears; number of planets on planetary objects; working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,al,40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:164,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,alphatw,0.34906585039886606,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:237,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,dl,120.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:532,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,rl,60.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:534,working copy (shallow copy + working data)
+case6_planetary_spur,planetary.meshing_23.gear2_w,alpha_a,0.23679076726893622,rad,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:554,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23.gear2_w,epslon_a2,-1.171243148365339,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:563,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23.gear2_w,galpha,-6.915327430512023,mm,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:578,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,gear1.label,'planet',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py,reference gear 1
+case6_planetary_spur,planetary.meshing_23,gear2.label,'ring',-,axisforge/core/machine_elements/gears/parallel_axis/gear_properties/internal_gear.py,reference gear 2
+case6_planetary_spur,planetary.meshing_23,validate().len,2,-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,"Q39+Q24, lead decision (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,validate()[0],"'Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the involute interference of SDP-SI Eq. (5-2).'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:779,"Q39+Q24, lead decision (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,validate()[1],'involute interference of the internal pair (SDP-SI Eq. (5.2)): 0.333333 < 0.336984',-,axisforge/core/machine_elements/gears/cylindrical.py:164,"second SDP Eq. (5-2) message, 255e7e7 (addendum B / G, JosÃ© 2026-10-24)"
+case6_planetary_spur,planetary.meshing_23,validate_or_raise()!exception,"'ValueError: Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the involute interference of SDP-SI Eq. (5-2).\ninvolute interference of the internal pair (SDP-SI Eq. (5.2)): 0.333333 < 0.336984'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:781,"Q39+Q24, lead decision (José 2026-10-15)"
+case6_planetary_spur,planetary.meshing_23,summary(),"'-- case6_planetary_spur:planet-ring ----------------\n  gear1     : z=20, mn=2.0, x=0.0, beta=0.0 deg\n  gear2     : z=-60, mn=2.0, x=0.0, beta=0.0 deg\n  u         : -3.0000\n  a         : 40.0000 mm   (reference centre distance)\n  al        : 40.0000 mm   (working centre distance)\n  alpha_tw  : 20.0000 deg\n  dl1       : 40.0000 mm\n  dl2       : 120.0000 mm\n  eps_alpha : 1.9497\n  eps_beta  : 0.0000\n  eps_gamma : 1.9497\n----------------------------------------------------'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py:811,Q50 (José 2026-10-15)
+case6_planetary_spur,planetary.meshing_23,__repr__(),"'GearPair(z1=20, z2=-60, mn=2.0, beta=0.0 deg, al=40.0000 mm, alpha_tw=20.0000 deg, eps_gamma=1.9497)'",-,axisforge/core/machine_elements/gears/parallel_axis/gear_meshing/internal_meshing.py,Q50 (José 2026-10-15)
+case6_planetary_spur,planetary,planet_phi_deg(0),0.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:410,
+case6_planetary_spur,planetary,planet_position(0).len,2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:428,
+case6_planetary_spur,planetary,planet_position(0)[0],40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:428,
+case6_planetary_spur,planetary,planet_position(0)[1],0.0,mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:428,
+case6_planetary_spur,planetary,planet_phi_deg(1),90.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:410,
+case6_planetary_spur,planetary,planet_position(1).len,2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:428,
+case6_planetary_spur,planetary,planet_position(1)[0],2.449293598294707e-15,mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:428,
+case6_planetary_spur,planetary,planet_position(1)[1],40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:428,
+case6_planetary_spur,planetary,planet_phi_deg(2),180.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:410,
+case6_planetary_spur,planetary,planet_position(2).len,2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:428,
+case6_planetary_spur,planetary,planet_position(2)[0],-40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:428,
+case6_planetary_spur,planetary,planet_position(2)[1],4.898587196589414e-15,mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:428,
+case6_planetary_spur,planetary,planet_phi_deg(3),270.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:410,
+case6_planetary_spur,planetary,planet_position(3).len,2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:428,
+case6_planetary_spur,planetary,planet_position(3)[0],-7.34788079488412e-15,mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:428,
+case6_planetary_spur,planetary,planet_position(3)[1],-40.00000000000001,mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:428,
+case6_planetary_spur,planetary,"willis_residual(1450.0, 0.0, 0.0)",1450.0,rpm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:458,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).omega_1",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:512,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).omega_2",-725.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:98,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).omega_3",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:513,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).omega_H",362.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:514,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).omega_1_rel",1087.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:585,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).omega_2_rel",-1087.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:518,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).omega_3_rel",-362.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:103,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).i_0",-3.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:390,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).F",1,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:477,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).fixed",'RING',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:580,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).willis_residual",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:587,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).prescribed.len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).prescribed[0].len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).prescribed[0][0]",'RING',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).prescribed[0][1]",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).prescribed[1].len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).prescribed[1][0]",'SUN',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).prescribed[1][1]",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).omega_carrier",362.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:134,(property)
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).omega_planet_abs",-725.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:119,(property)
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).omega_planet_rel",-1087.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:124,(property)
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).omega_ring",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:129,(property)
+case6_planetary_spur,planetary,"solve_kinematics({RING=0,SUN=n}).omega_sun",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:114,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).omega_1",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:512,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).omega_2",2175.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:98,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).omega_3",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:513,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).omega_H",1087.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:514,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).omega_1_rel",-1087.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:585,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).omega_2_rel",1087.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:518,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).omega_3_rel",362.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:103,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).i_0",-3.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:390,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).F",1,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:477,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).fixed",'SUN',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:580,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).willis_residual",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:587,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).prescribed.len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).prescribed[0].len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).prescribed[0][0]",'SUN',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).prescribed[0][1]",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).prescribed[1].len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).prescribed[1][0]",'RING',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).prescribed[1][1]",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).omega_carrier",1087.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:134,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).omega_planet_abs",2175.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:119,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).omega_planet_rel",1087.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:124,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).omega_ring",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:129,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=0,RING=n}).omega_sun",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:114,(property)
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).omega_1",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:512,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).omega_2",-1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:98,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).omega_3",-483.3333333333333,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:513,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).omega_H",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:514,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).omega_1_rel",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:585,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).omega_2_rel",-1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:518,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).omega_3_rel",-483.3333333333333,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:103,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).i_0",-3.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:390,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).F",1,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:477,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).fixed",'CARRIER',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:580,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).willis_residual",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:587,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).prescribed.len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).prescribed[0].len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).prescribed[0][0]",'CARRIER',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).prescribed[0][1]",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).prescribed[1].len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).prescribed[1][0]",'SUN',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).prescribed[1][1]",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).omega_carrier",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:134,(property)
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).omega_planet_abs",-1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:119,(property)
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).omega_planet_rel",-1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:124,(property)
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).omega_ring",-483.3333333333333,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:129,(property)
+case6_planetary_spur,planetary,"solve_kinematics({CARRIER=0,SUN=n}).omega_sun",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:114,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).omega_1",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:512,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).omega_2",-1250.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:98,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).omega_3",-350.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:513,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).omega_H",100.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:514,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).omega_1_rel",1350.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:585,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).omega_2_rel",-1350.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:518,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).omega_3_rel",-450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:103,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).i_0",-3.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:390,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).F",2,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:477,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).fixed",None,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:580,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).willis_residual",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:587,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).prescribed.len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).prescribed[0].len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).prescribed[0][0]",'SUN',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).prescribed[0][1]",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).prescribed[1].len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).prescribed[1][0]",'CARRIER',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).prescribed[1][1]",100.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).omega_carrier",100.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:134,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).omega_planet_abs",-1250.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:119,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).omega_planet_rel",-1350.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:124,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).omega_ring",-350.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:129,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,CARRIER=100}).omega_sun",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:114,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).omega_1",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:512,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).omega_2",-1175.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:98,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).omega_3",-300.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:513,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).omega_H",137.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:514,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).omega_1_rel",1312.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:585,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).omega_2_rel",-1312.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:518,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).omega_3_rel",-437.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:103,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).i_0",-3.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:390,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).F",2,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:477,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).fixed",None,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:580,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).willis_residual",0.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:587,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).prescribed.len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).prescribed[0].len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).prescribed[0][0]",'SUN',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).prescribed[0][1]",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).prescribed[1].len",2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).prescribed[1][0]",'RING',rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).prescribed[1][1]",-300.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:588,
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).omega_carrier",137.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:134,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).omega_planet_abs",-1175.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:119,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).omega_planet_rel",-1312.5,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:124,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).omega_ring",-300.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:129,(property)
+case6_planetary_spur,planetary,"solve_kinematics({SUN=n,RING=-300}).omega_sun",1450.0,rpm (as prescribed),axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:114,(property)
+case6_planetary_spur,planetary,solve_kinematics({SUN=n only (expected error)})!exception,"""ValueError: solve_kinematics: 1 velocity(ies) prescribed, 1 DoF still open. The PGT is a 2-DoF mechanism — prescribe exactly 2 of ['SUN', 'RING', 'CARRIER']. For the F=1 mode fix one element with omega=0.0 and drive another; for the F=2 differential give two live drive speeds.""",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:583,"EXCEPTION; traceback tail: ^^^^^^^^^^^^^^^^^^^ | File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\planetary_gear\planetary_gear_meshing.py"", line 542, in solve_kinematics | raise ValueError( | ValueError: solve_kinematics: 1 velocity(ies) prescribed, 1 DoF still open. The PGT is a 2-DoF mechanism — prescribe exactly 2 of ['SUN', 'RING', 'CARRIER']. For the F=1 mode fix one element with omega=0.0 and drive another; for the F=2 differential give two live drive speeds."
+case6_planetary_spur,planetary,solve_kinematics({PLANET=n (expected error)})!exception,"""ValueError: solve_kinematics: only ['SUN', 'RING', 'CARRIER'] can be prescribed, got ['PLANET']. The planet spin omega_2 is a dependent coordinate, not a degree of freedom.""",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:583,"EXCEPTION; traceback tail: ^^^^^^^^^^^^^^^^^^^ | File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\planetary_gear\planetary_gear_meshing.py"", line 534, in solve_kinematics | raise ValueError( | ValueError: solve_kinematics: only ['SUN', 'RING', 'CARRIER'] can be prescribed, got ['PLANET']. The planet spin omega_2 is a dependent coordinate, not a degree of freedom."
+case6_planetary_spur,planetary,"speed_ratio(SUN,CARRIER,RING)",4.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:689,
+case6_planetary_spur,planetary,"speed_ratio_equation(SUN,CARRIER,RING)",'7.3',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:706,
+case6_planetary_spur,planetary,"ratio(SUN,CARRIER,RING)",4.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:760,
+case6_planetary_spur,planetary,"mode_of_work(speed_ratio(SUN,CARRIER,RING))",'reducer',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:724,
+case6_planetary_spur,planetary,is_pseudo_pgt(RING),False,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:747,
+case6_planetary_spur,planetary,"speed_ratio(CARRIER,SUN,RING)",0.25,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:689,
+case6_planetary_spur,planetary,"speed_ratio_equation(CARRIER,SUN,RING)",'7.4',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:706,
+case6_planetary_spur,planetary,"ratio(CARRIER,SUN,RING)",0.25,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:760,
+case6_planetary_spur,planetary,"mode_of_work(speed_ratio(CARRIER,SUN,RING))",'multiplier',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:724,
+case6_planetary_spur,planetary,is_pseudo_pgt(RING),False,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:747,
+case6_planetary_spur,planetary,"speed_ratio(RING,CARRIER,SUN)",1.3333333333333333,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:689,
+case6_planetary_spur,planetary,"speed_ratio_equation(RING,CARRIER,SUN)",'7.5',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:706,
+case6_planetary_spur,planetary,"ratio(RING,CARRIER,SUN)",1.3333333333333333,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:760,
+case6_planetary_spur,planetary,"mode_of_work(speed_ratio(RING,CARRIER,SUN))",'reducer',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:724,
+case6_planetary_spur,planetary,is_pseudo_pgt(SUN),False,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:747,
+case6_planetary_spur,planetary,"speed_ratio(CARRIER,RING,SUN)",0.75,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:689,
+case6_planetary_spur,planetary,"speed_ratio_equation(CARRIER,RING,SUN)",'7.6',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:706,
+case6_planetary_spur,planetary,"ratio(CARRIER,RING,SUN)",0.75,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:760,
+case6_planetary_spur,planetary,"mode_of_work(speed_ratio(CARRIER,RING,SUN))",'multiplier',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:724,
+case6_planetary_spur,planetary,is_pseudo_pgt(SUN),False,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:747,
+case6_planetary_spur,planetary,"speed_ratio(SUN,RING,CARRIER)",-3.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:689,
+case6_planetary_spur,planetary,"speed_ratio_equation(SUN,RING,CARRIER)",'7.7',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:706,
+case6_planetary_spur,planetary,"ratio(SUN,RING,CARRIER)",-3.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:760,
+case6_planetary_spur,planetary,"mode_of_work(speed_ratio(SUN,RING,CARRIER))",'reducer',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:724,
+case6_planetary_spur,planetary,is_pseudo_pgt(CARRIER),True,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:747,
+case6_planetary_spur,planetary,"speed_ratio(RING,SUN,CARRIER)",-0.3333333333333333,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:689,
+case6_planetary_spur,planetary,"speed_ratio_equation(RING,SUN,CARRIER)",'7.8',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:706,
+case6_planetary_spur,planetary,"ratio(RING,SUN,CARRIER)",-0.3333333333333333,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:760,
+case6_planetary_spur,planetary,"mode_of_work(speed_ratio(RING,SUN,CARRIER))",'multiplier',-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:724,
+case6_planetary_spur,planetary,is_pseudo_pgt(CARRIER),True,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:747,
+case6_planetary_spur,planetary,"speed_ratio(SUN,PLANET,RING)!exception","""ValueError: speed_ratio: (A=SUN, B=PLANET, C=RING) is not one of the six F=1 modes. A/B/C must be a permutation of ['SUN', 'RING', 'CARRIER'] — the planet can be neither input, output nor fixed.""",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:689,"EXCEPTION; traceback tail: ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ | File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\planetary_gear\planetary_gear_meshing.py"", line 652, in _ratio_and_equation | raise ValueError( | ValueError: speed_ratio: (A=SUN, B=PLANET, C=RING) is not one of the six F=1 modes. A/B/C must be a permutation of ['SUN', 'RING', 'CARRIER'] — the planet can be neither input, output nor fixed."
+case6_planetary_spur,planetary,"speed_ratio_equation(SUN,PLANET,RING)!exception","""ValueError: speed_ratio: (A=SUN, B=PLANET, C=RING) is not one of the six F=1 modes. A/B/C must be a permutation of ['SUN', 'RING', 'CARRIER'] — the planet can be neither input, output nor fixed.""",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:706,"EXCEPTION; traceback tail: ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ | File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\planetary_gear\planetary_gear_meshing.py"", line 652, in _ratio_and_equation | raise ValueError( | ValueError: speed_ratio: (A=SUN, B=PLANET, C=RING) is not one of the six F=1 modes. A/B/C must be a permutation of ['SUN', 'RING', 'CARRIER'] — the planet can be neither input, output nor fixed."
+case6_planetary_spur,planetary,"ratio(SUN,PLANET,RING)!exception","""ValueError: speed_ratio: (A=SUN, B=PLANET, C=RING) is not one of the six F=1 modes. A/B/C must be a permutation of ['SUN', 'RING', 'CARRIER'] — the planet can be neither input, output nor fixed.""",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:760,"EXCEPTION; traceback tail: ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ | File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\planetary_gear\planetary_gear_meshing.py"", line 652, in _ratio_and_equation | raise ValueError( | ValueError: speed_ratio: (A=SUN, B=PLANET, C=RING) is not one of the six F=1 modes. A/B/C must be a permutation of ['SUN', 'RING', 'CARRIER'] — the planet can be neither input, output nor fixed."
+case6_planetary_spur,planetary,is_pseudo_pgt(RING),False,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:747,
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).T1",60.75,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:806,
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).T3",182.25,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:170,
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).TH",-243.0,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:171,
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).t",3.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:173,
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).Ft",759.375,N,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:174,
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).F_H2",1518.75,N,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:175,
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).T_mesh_sun",15.1875,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:810,
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).T_mesh_planet",15.1875,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:861,
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).k",4,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:353,
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).T_carrier",-243.0,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:222,(property)
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).T_planet_ring_mesh",15.1875,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:232,(property)
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).T_ring",182.25,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:217,(property)
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).T_sun",60.75,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:212,(property)
+case6_planetary_spur,planetary,"torques(T_in=60.75, SUN).T_sun_planet_mesh",15.1875,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:227,(property)
+case6_planetary_spur,planetary,torques(SUN).satisfies_torque_ordering(),True,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:243,
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).T1",20.25,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:806,
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).T3",60.75,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:170,
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).TH",-81.0,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:171,
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).t",3.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:173,
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).Ft",253.125,N,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:174,
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).F_H2",506.25,N,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:175,
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).T_mesh_sun",5.0625,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:810,
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).T_mesh_planet",5.0625,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:861,
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).k",4,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:353,
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).T_carrier",-81.0,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:222,(property)
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).T_planet_ring_mesh",5.0625,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:232,(property)
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).T_ring",60.75,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:217,(property)
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).T_sun",20.25,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:212,(property)
+case6_planetary_spur,planetary,"torques(T_in=60.75, RING).T_sun_planet_mesh",5.0625,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:227,(property)
+case6_planetary_spur,planetary,torques(RING).satisfies_torque_ordering(),True,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:243,
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).T1",-15.1875,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:806,
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).T3",-45.5625,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:170,
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).TH",60.75,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:171,
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).t",3.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:173,
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).Ft",-189.84375,N,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:174,
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).F_H2",-379.6875,N,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:175,
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).T_mesh_sun",-3.796875,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:810,
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).T_mesh_planet",-3.796875,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:861,
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).k",4,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:353,
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).T_carrier",60.75,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:222,(property)
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).T_planet_ring_mesh",-3.796875,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:232,(property)
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).T_ring",-45.5625,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:217,(property)
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).T_sun",-15.1875,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:212,(property)
+case6_planetary_spur,planetary,"torques(T_in=60.75, CARRIER).T_sun_planet_mesh",-3.796875,N m,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:227,(property)
+case6_planetary_spur,planetary,torques(CARRIER).satisfies_torque_ordering(),True,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:243,
+case6_planetary_spur,planetary,"torques(T_in=60.75, PLANET)!exception","""ValueError: torques: input_member must be one of ['SUN', 'RING', 'CARRIER'], got PLANET""",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:866,"EXCEPTION; traceback tail: ^^^^^^^^^^^^^^^^^^^ | File ""C:\Users\jmrap\Documents\GitHub\AxisForge-Shaft-Bearing-Gear-System-Analysis-Platform\axisforge\core\machine_elements\gears\parallel_axis\planetary_gear\planetary_gear_meshing.py"", line 841, in torques | raise ValueError( | ValueError: torques: input_member must be one of ['SUN', 'RING', 'CARRIER'], got PLANET"
+case6_planetary_spur,planetary,coaxiality_error(),0.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:897,
+case6_planetary_spur,planetary,assembly_condition().len,2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:910,
+case6_planetary_spur,planetary,assembly_condition()[0],True,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:910,
+case6_planetary_spur,planetary,assembly_condition()[1],20.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:910,
+case6_planetary_spur,planetary,neighbouring_condition().len,3,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:931,
+case6_planetary_spur,planetary,neighbouring_condition()[0],True,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:931,
+case6_planetary_spur,planetary,neighbouring_condition()[1],56.56854249492382,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:931,
+case6_planetary_spur,planetary,neighbouring_condition()[2],48.400000000000006,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:931,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary,validate().len,2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:1034,"Q39+Q24, lead decision (José 2026-10-15)"
+case6_planetary_spur,planetary,validate()[0],"'case6_planetary_spur:planet-ring: Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the involute interference of SDP-SI Eq. (5-2).'",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:1034,"Q39+Q24, lead decision (José 2026-10-15)"
+case6_planetary_spur,planetary,validate()[1],'case6_planetary_spur:planet-ring: involute interference of the internal pair (SDP-SI Eq. (5.2)): 0.333333 < 0.336984',-,axisforge/core/machine_elements/gears/cylindrical.py:164,"second SDP Eq. (5-2) message, 255e7e7 (addendum B / G, JosÃ© 2026-10-24)"
+case6_planetary_spur,planetary,validate_or_raise()!exception,"""ValueError: PlanetaryGearTrainMeshing 'case6_planetary_spur' validation failed:\n  - case6_planetary_spur:planet-ring: Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the involute interference of SDP-SI Eq. (5-2).\n  - case6_planetary_spur:planet-ring: involute interference of the internal pair (SDP-SI Eq. (5.2)): 0.333333 < 0.336984""",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:1036,"Q39+Q24, lead decision (José 2026-10-15)"
+case6_planetary_spur,planetary,summary(),"'── case6_planetary_spur ─────────────────────────────────\n  sun    : z=20, mn=2.0, x=0.0\n  planet : z=20, x=0.0   (k=4)\n  ring   : z=60, x=0.0\n  i_0    : -3.000000   (7.1, i_13(H))\n  t      : 3.000000   (6.7, torque ratio, |t|=|i_0|)\n  i_1H(3): 4.000000   (7.3, reducer)\n  al_12  : 40.0000 mm   al_23: 40.0000 mm   Δ=7.105e-15 mm\n  assembly    : OK  (z_r+z_s)/k = 20.0000\n  neighbouring: OK  56.569 vs 48.400 mm\n  εα (12/23)  : 1.5568 / 1.9497\n────────────────────────────────────────────────────'",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:1072,"Q04, Q27, Q21, answer 10 (José 2026-10-15)"
+case6_planetary_spur,planetary,neighbouring_condition(2.0).len,3,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:931,
+case6_planetary_spur,planetary,neighbouring_condition(2.0)[0],False,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:931,
+case6_planetary_spur,planetary,neighbouring_condition(2.0)[1],56.56854249492382,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:931,
+case6_planetary_spur,planetary,neighbouring_condition(2.0)[2],88.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:931,"Q04, Q27 (José 2026-10-15)"
+case6_planetary_spur,planetary,t (property),3.0,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:770,
+case6_planetary_spur,planetary,__repr__(),"'PlanetaryGearTrainMeshing(z_s=20, z_p=20, z_r=60, k=4, i_0=-3.0000, al=40.0000 mm)'",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:1076,
+case6_planetary_spur,addendum_reduction_12_and_23,"constructor ok: al_12, al_23","'40.00000000000106, 40.00000000000105'",mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:381,"Q21, answer 10 (José 2026-10-15)"
+case6_planetary_spur,addendum_reduction_12_and_23,validate().len,2,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:1034,"Q39+Q24, lead decision (José 2026-10-15)"
+case6_planetary_spur,addendum_reduction_12_and_23,validate()[0],"'addendum_reduction_12_and_23:planet-ring: Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the involute interference of SDP-SI Eq. (5-2).'",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:1034,"Q39+Q24, lead decision (José 2026-10-15)"
+case6_planetary_spur,addendum_reduction_12_and_23,validate()[1],'addendum_reduction_12_and_23:planet-ring: involute interference of the internal pair (SDP-SI Eq. (5.2)): 0.333333 < 0.336984',-,axisforge/core/machine_elements/gears/cylindrical.py:164,"second SDP Eq. (5-2) message, 255e7e7 (addendum B / G, JosÃ© 2026-10-24)"
+case6_planetary_spur,k3_assembly_violation,"constructor ok: al_12, al_23","'40.00000000000106, 40.00000000000105'",mm,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:381,"Q21, answer 10 (José 2026-10-15)"
+case6_planetary_spur,k3_assembly_violation,validate().len,3,-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:1034,"Q39+Q24, lead decision (José 2026-10-15)"
+case6_planetary_spur,k3_assembly_violation,validate()[0],"'k3_assembly_violation:planet-ring: Interference: the path of contact passes a base-tangent point (T1A = -0.0749 mm, s2 T2E = 25.1172 mm; both must be >= 0). For an internal pair T1A < 0 is the involute interference of SDP-SI Eq. (5-2).'",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:1034,"Q39+Q24, lead decision (José 2026-10-15)"
+case6_planetary_spur,k3_assembly_violation,validate()[1],'k3_assembly_violation:planet-ring: involute interference of the internal pair (SDP-SI Eq. (5.2)): 0.333333 < 0.336984',-,axisforge/core/machine_elements/gears/cylindrical.py:164,"second SDP Eq. (5-2) message, 255e7e7 (addendum B / G, JosÃ© 2026-10-24)"
+case6_planetary_spur,k3_assembly_violation,validate()[2],"'k3_assembly_violation: assembly condition violated — (z_ring + z_sun)/k = 26.6667 is not an integer (z_ring=60, z_sun=20, k=3). Equally-spaced planets cannot be assembled.'",-,axisforge/core/machine_elements/gears/parallel_axis/planetary_gear/planetary_gear_meshing.py:1034,"Q39+Q24, lead decision (José 2026-10-15)"

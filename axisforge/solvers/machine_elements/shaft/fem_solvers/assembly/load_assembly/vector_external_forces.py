@@ -7,7 +7,7 @@ beam element and is handled by ``TorsionSolver``). Used by ``RigidSupportFEMSolv
 from __future__ import annotations
 
 from axisforge.core.loads import LoadPlane
-from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
+from axisforge.core.mechanical_system.shaft_system import ShaftSystem
 
 
 def is_distributed(label: str, source: str, *,

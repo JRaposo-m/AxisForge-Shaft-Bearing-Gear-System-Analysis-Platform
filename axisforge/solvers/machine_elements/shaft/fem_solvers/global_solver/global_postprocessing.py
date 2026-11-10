@@ -22,7 +22,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from axisforge.solvers.machine_elements.shaft.fem_solvers.global_solver.rigid_support import (
         RigidSupportSolution,
     )
-    from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
+    from axisforge.core.mechanical_system.shaft_system import ShaftSystem
 
 
 def _find_node(x_nodes: list[float], x: float, tol: float = 1e-6) -> int:

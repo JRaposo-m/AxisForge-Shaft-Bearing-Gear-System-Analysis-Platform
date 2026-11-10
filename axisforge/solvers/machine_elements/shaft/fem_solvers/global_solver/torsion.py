@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from axisforge.core.mechanical_system.parallel_axis.spur_helical.shaft_system import ShaftSystem
+from axisforge.core.mechanical_system.shaft_system import ShaftSystem
 from axisforge.core.materials import get_material
 from axisforge.config import SOLVER_TOLERANCE
 

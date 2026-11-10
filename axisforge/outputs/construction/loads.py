@@ -1,5 +1,5 @@
 """Records and text of the loads of a ``ShaftSystem`` (``axisforge.core.loads``): the user loads
-and the loads injected by ``SpurHelicalGearSystem.resolve``.
+and the loads injected by ``Transmission.resolve``.
 
 The text is the ``__repr__`` of each load, so it always matches what AxisForge prints for them.
 """
@@ -8,7 +8,7 @@ from __future__ import annotations
 from axisforge.outputs._format import attribute_rows, kv_record
 
 # Unit of ``magnitude`` by load class. The classes document N for forces; TorqueLoad is in N m
-# (see SpurHelicalGearSystem.resolve). ExternalMoment is left empty: its unit is not stated in
+# (see Transmission.resolve). ExternalMoment is left empty: its unit is not stated in
 # axisforge.core.loads.
 MAGNITUDE_UNIT = {
     "RadialLoad": "N",

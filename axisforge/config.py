@@ -68,7 +68,7 @@ SUT_ENDURANCE_CAP_MPa: float = 1400.0
 MIN_FILLET_RADIUS_mm: float = 0.01
 
 # Geometric tolerance for boundary and coincidence checks [mm]. Read by core/.../shaft/shaft.py and
-# by SpurHelicalGearSystem._axial_alignment_errors (gear_system.py).
+# by PairStage.validate (transmission.py).
 TOL_GEOMETRY_mm: float = 1e-9
 
 # ---------------------------------------------------------------------------

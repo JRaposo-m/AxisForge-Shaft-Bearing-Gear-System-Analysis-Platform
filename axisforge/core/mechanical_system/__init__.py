@@ -1,13 +1,15 @@
 """
 Mechanical systems: assemblies of shafts, bearings and gears.
 
-Re-exports the parallel-axis (spur and helical) system classes. Planetary
-and perpendicular-axis systems do not exist (the
-``parallel_axis/planetary/`` folder is empty).
+Re-exports the single-shaft container (``ShaftSystem``, ``GearElement``) of ``shaft_system`` and
+the written power path of ``transmission``: ``PairStage``, ``Transmission``,
+``ResolvedTransmission`` and ``mesh_forces_to_shaft_loads``. Only parallel-axis systems of
+cylindrical gears exist.
 """
 from __future__ import annotations
 
-from .parallel_axis import *  # noqa: F401,F403
-from .parallel_axis import __all__ as _parallel_axis_names
+from .shaft_system import GearElement, ShaftSystem
+from .transmission import PairStage, ResolvedTransmission, Transmission, mesh_forces_to_shaft_loads
 
-__all__ = list(_parallel_axis_names)
+__all__ = ["GearElement", "ShaftSystem",
+           "mesh_forces_to_shaft_loads", "PairStage", "Transmission", "ResolvedTransmission"]
